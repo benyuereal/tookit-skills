@@ -1,6 +1,6 @@
 # Profiler source map
 
-Use the immutable [source contracts](../../../docs/upstream-source-contracts.md)
+Use the immutable [source contracts](../../../../../references/upstream-source-contracts.md)
 for the inspected revisions, HTTP payloads, output naming and version limits.
 Read the installed source before changing a deployment.
 

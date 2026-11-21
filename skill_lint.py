@@ -121,6 +121,31 @@ def _find_by_basename(root, base):
     return _BASENAME_CACHE[base]
 
 
+_SKILL_DIR_CACHE = {}
+
+
+def _skill_name_dirs(root):
+    """{skill 目录名: 绝对路径}，用于解析 `<skill-name>:<path>` 跨引用。"""
+    if root not in _SKILL_DIR_CACHE:
+        idx = {}
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [x for x in dirnames if x not in
+                           ('.git', '__pycache__', 'node_modules')]
+            if 'SKILL.md' in filenames:
+                idx.setdefault(os.path.basename(dirpath), dirpath)
+        _SKILL_DIR_CACHE[root] = idx
+    return _SKILL_DIR_CACHE[root]
+
+
+def _skill_ref_resolves(root, tgt):
+    """`dcu-vllm-source:references/x.md` → 找同名 skill 目录下的该相对路径。"""
+    name, _, rel = tgt.partition(':')
+    d = _skill_name_dirs(root).get(name)
+    if d is None:
+        return False
+    return os.path.exists(os.path.join(d, rel.split('#')[0]))
+
+
 def classify_kind(d):
     """从目录形态推断 kind —— 用于 SK001 的『声明 vs 实际』对照。"""
     has_s = os.path.isdir(os.path.join(d, 'scripts'))
@@ -263,15 +288,27 @@ def lint(root):
                 text = read(p)
             except OSError:
                 continue
+            # 围栏代码块里的链接是**引用内容**（如上游 PR 的 ```diff 片段），
+            # 不是本文档自己的链接，不能按本仓路径判死。
+            text = re.sub(r'(?ms)^```.*?^```', '', text)
             n = 0
             for m in re.finditer(r'\]\(([^)]+)\)', text):
                 tgt = m.group(1).strip().split('#')[0]
                 if (not tgt or tgt.startswith(('http', 'mailto:', '/', '<'))
                         or ' ' in tgt):
                     continue
-                if not os.path.exists(os.path.normpath(
-                        os.path.join(dirpath, tgt))):
-                    n += 1
+                # `<skill-name>:<path>` 是跨 skill 引用语法，不是文件系统路径。
+                # 按路径判死会把 91 条合法引用全报成死链（实测占 SK008 多数）。
+                if re.match(r'^[a-z0-9][a-z0-9_-]*:', tgt) and '//' not in tgt:
+                    n += 0 if _skill_ref_resolves(root, tgt) else 1
+                    continue
+                if os.path.exists(os.path.normpath(os.path.join(dirpath, tgt))):
+                    continue
+                # 裸 skill 目录名（`](dcu-kernel-dev)`）也是合法的跨 skill 引用
+                base = tgt.strip('./').split('/')[0]
+                if base in _skill_name_dirs(root):
+                    continue
+                n += 1
             if n:
                 v['SK008'].append(f'{rel}  {n} 条失效链接')
 

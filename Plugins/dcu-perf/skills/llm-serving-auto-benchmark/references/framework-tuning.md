@@ -75,7 +75,7 @@ Version-sensitive vLLM knob families to verify:
   those features
 
 vLLM should get a normal sweep, not one baseline command. See
-[references/framework-reference.md](references/framework-reference.md) for
+[references/framework-reference.md](framework-reference.md) for
 native command templates and cross-framework knob families. Confirm each flag on
 the target image's `--help` before a run.
 

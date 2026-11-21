@@ -155,7 +155,7 @@ Framework CLIs move quickly. For every real run:
 4. Record which frameworks were model-smoked and which only passed preflight.
 
 Historical validation from April 2026 used SGLang `0.5.10rc0`, vLLM `0.19.1`,
-and TensorRT-LLM `1.0.0`. The [source contracts](../../../docs/upstream-source-contracts.md) record the
+and TensorRT-LLM `1.0.0`. The [source contracts](../../../../../references/upstream-source-contracts.md) record the
 2026-09-18 inspected source revisions. Treat these as source evidence,
 not as a substitute for target-image `--help`. Since the prior refresh, vLLM PR
 `#46735` changed Triton/NVFP4 MoE CUDA graph capture behavior, and

@@ -38,7 +38,7 @@ Key semantics:
 - `available_gpu_memory`: currently free memory before allocating the KV pool
 - For this example, `57.01 - 93.58 * (1 - 0.60) ≈ 19.58 GiB`.
   Current sizing also accounts for model-specific reservations and post-capture
-  resizing; see [source contracts](../../../docs/upstream-source-contracts.md).
+  resizing; see [source contracts](../../../../../references/upstream-source-contracts.md).
 - `rest_memory`: actual memory reserved for KV pool (after subtracting framework buffers from `available_gpu_memory`)
 
 ### 4. SW KV Memory Calculation (SWA models)

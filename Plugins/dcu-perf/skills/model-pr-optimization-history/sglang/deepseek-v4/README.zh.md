@@ -12,8 +12,8 @@
 - **#39305**：由 DeepSelect 改写的精确 BF16 consumer top-k，融合 page transform；属于 attention token 选择，不是 MoE expert router。
 
 原始 PR 与 main `771c9d782d9e` 的当前调用条件分别核对。另见
-[mHC 融合范围](../../../skills/llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues)及
-[PDL、shared expert、WO-A 优化经验](../../../skills/llm-torch-profiler-analysis/references/heuristics.md#establish-dispatch-and-numerical-contracts)，
+[mHC 融合范围](../../../llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues)及
+[PDL、shared expert、WO-A 优化经验](../../../llm-torch-profiler-analysis/references/heuristics.md#establish-dispatch-and-numerical-contracts)，
 其中更新了 batch/阶段限制和 #39704、#39957 的 main 合入状态。本次为源码审阅，没有新增 GPU 性能或任务精度测量。
 
 ## 模型实现文件覆盖

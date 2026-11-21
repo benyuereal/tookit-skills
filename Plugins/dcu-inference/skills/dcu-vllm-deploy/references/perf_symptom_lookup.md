@@ -108,15 +108,15 @@
 
 | 案例主题 | 原理文档 |
 |---------|---------|
-| 进程模型 / API server / ZMQ | [vllm_engine_guide](docs/vllm_engine_guide.md) |
-| 调度 / token budget / 抢占 / chunked prefill | [vllm_scheduler_guide](docs/vllm_scheduler_guide.md) |
-| KV Cache / PagedAttention / 前缀缓存 | [vllm_kvcache_guide](docs/vllm_kvcache_guide.md) |
-| 量化 / W8A8 / AWQ / W4A8 / FP8 | [vllm_quantization_guide](docs/vllm_quantization_guide.md) |
-| 投机解码 / MTP / EAGLE / DFlash | [vllm_spec_decode_guide](docs/vllm_spec_decode_guide.md) |
-| Attention 后端 / MLA / flash | [vllm_attention_backend_guide](docs/vllm_attention_backend_guide.md) |
-| 编译 / CUDA Graph / 算子融合 | [vllm_compilation_guide](docs/vllm_compilation_guide.md) |
-| 并行 / TP / PP / EP / 通信 | [vllm_parallel_guide](docs/vllm_parallel_guide.md) |
-| MoE / 路由 / FusedMoE / EPLB | [vllm_fused_moe_guide](docs/vllm_fused_moe_guide.md) |
-| KV 传输 / P-D 分离 / KVConnector | [vllm_kv_transfer_guide](docs/vllm_kv_transfer_guide.md) |
-| Model Runner / V2 / 混合架构 | [vllm_model_runner_v2_guide](docs/vllm_model_runner_v2_guide.md) · [vllm_modelrunner_guide](docs/vllm_modelrunner_guide.md) |
-| 总览 / TTFT / TPOT / 生命周期 | [vllm_production_guide](docs/vllm_production_guide.md) |
+| 进程模型 / API server / ZMQ | [vllm_engine_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_engine_guide.md) |
+| 调度 / token budget / 抢占 / chunked prefill | [vllm_scheduler_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_scheduler_guide.md) |
+| KV Cache / PagedAttention / 前缀缓存 | [vllm_kvcache_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_kvcache_guide.md) |
+| 量化 / W8A8 / AWQ / W4A8 / FP8 | [vllm_quantization_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_quantization_guide.md) |
+| 投机解码 / MTP / EAGLE / DFlash | [vllm_spec_decode_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_spec_decode_guide.md) |
+| Attention 后端 / MLA / flash | [vllm_attention_backend_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_attention_backend_guide.md) |
+| 编译 / CUDA Graph / 算子融合 | [vllm_compilation_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_compilation_guide.md) |
+| 并行 / TP / PP / EP / 通信 | [vllm_parallel_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_parallel_guide.md) |
+| MoE / 路由 / FusedMoE / EPLB | [vllm_fused_moe_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_fused_moe_guide.md) |
+| KV 传输 / P-D 分离 / KVConnector | [vllm_kv_transfer_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_kv_transfer_guide.md) |
+| Model Runner / V2 / 混合架构 | [vllm_model_runner_v2_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_model_runner_v2_guide.md) · [vllm_modelrunner_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_modelrunner_guide.md) |
+| 总览 / TTFT / TPOT / 生命周期 | [vllm_production_guide](../../dcu-vllm-source/references/upstream-vllm-026/vllm_production_guide.md) |

@@ -16,7 +16,7 @@ kind: tool
 
 # SGLang Humanize Review
 
-Use the maintained [source contracts](../../references/upstream-source-contracts.md)
+Use the maintained [source contracts](../../../../references/upstream-source-contracts.md)
 when applying historical evidence to a current branch. The review/history
 corpora retain their own capture dates; they do not certify today's dispatch
 or numerical defaults. For kernel replacements, verify that the real model

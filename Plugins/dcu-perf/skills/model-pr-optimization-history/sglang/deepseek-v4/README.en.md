@@ -17,8 +17,8 @@ experiment pins below retain their original dates. Main still sets
 `SGLANG_FLASHINFER_MOE_FUSED_FINALIZE=False` and `SGLANG_DSV4_KV_LAYOUT=v4`.
 The WO-A caller still checks V4.1, BF16 weights, `(2,1024)` local group/rank
 shape and the token bound; `SGLANG_DSV41_FUSED_WO_A=True` is not dispatch proof.
-See the refreshed [mHC matrix](../../../skills/llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues) and
-[source contracts](../../../docs/upstream-source-contracts.md). No GPU rerun
+See the refreshed [mHC matrix](../../../llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues) and
+[source contracts](../../../../../../references/upstream-source-contracts.md). No GPU rerun
 or claim of numerical equivalence across these revisions is included.
 
 ### Choose the right operation
@@ -74,7 +74,7 @@ At the September 22 revision, defaults were `SGLANG_DSV4_KV_LAYOUT=v4` and
 GPU and a compatible installed FlashMLA reader. `auto` chooses V41 only when
 the device and reader support it; that revision checked the
 reader's advertised 528-byte format. The October 5 selector removed that probe
-and added HIP gfx950/AITER eligibility; use the [current storage contract](../../../skills/llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#paged-kv-storage-contract)
+and added HIP gfx950/AITER eligibility; use the [current storage contract](../../../llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#paged-kv-storage-contract)
 for current dispatch. Merely having the SGLang source does not
 upgrade the installed reader. Under V41, compressed `auto` uses FP4 for ratios
 1/2, whose latents already have the matching FP4 rounding contract, and FP8 for
@@ -340,12 +340,12 @@ These are shape- and revision-specific decisions, not universal CUDA rules.
 The September 18 experiment lessons below retain their pinned sources.
 **2026-09-22 update:** current SGLang main dispatch was inspected at
 [`771c9d782d9e`](https://github.com/sgl-project/sglang/commit/771c9d782d9ecf0324e70b7f5a08c32644d652c5);
-see the [source contracts](../../../docs/upstream-source-contracts.md).
+see the [source contracts](../../../../../../references/upstream-source-contracts.md).
 This documentation refresh did not rerun GPU performance or GSM8K/AIME.
 
 Read [DeepGEMM, FlashMLA and attention top-k integration](README.en.md#reviewed-kernel-integrations-2026-09-22)
 for the five diff-reviewed integration PRs, current dispatch and FP8 528 B /
-FP4 288 B KV storage contracts. Read [mHC fusion boundaries](../../../skills/llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues)
+FP4 288 B KV storage contracts. Read [mHC fusion boundaries](../../../llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues)
 for the current batch/phase eligibility matrix and stream handoff. DeepSelect
 consumer top-k selects attention tokens; it is separate from the MoE router.
 
@@ -357,8 +357,8 @@ experiment pins below retain their original dates. Main still sets
 `SGLANG_FLASHINFER_MOE_FUSED_FINALIZE=False` and `SGLANG_DSV4_KV_LAYOUT=v4`.
 The WO-A caller still checks V4.1, BF16 weights, `(2,1024)` local group/rank
 shape and the token bound; `SGLANG_DSV41_FUSED_WO_A=True` is not dispatch proof.
-See the refreshed [mHC matrix](../../../skills/llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues) and
-[source contracts](../../../docs/upstream-source-contracts.md). No GPU rerun
+See the refreshed [mHC matrix](../../../llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues) and
+[source contracts](../../../../../../references/upstream-source-contracts.md). No GPU rerun
 or claim of numerical equivalence across these revisions is included.
 
 ### Establish the experiment before interpreting a kernel
@@ -461,7 +461,7 @@ activation win need not reduce wall time.
   point (merged into historical `dsv4.1` on 2026-09-15); [#39704](https://github.com/sgl-project/sglang/pull/39704), merged into
   main on 2026-09-19, extends medium-batch post/combine, collective epilogues
   and prefill overlap, and incorporates the PDL guard. The
-  [current fusion matrix](../../../skills/llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues) distinguishes tiny, medium
+  [current fusion matrix](../../../llm-torch-profiler-analysis/references/fuse-overlap-catalog.md#residual-mixing-and-collective-epilogues) distinguishes tiny, medium
   and large-prefill paths: not all include RMSNorm or quantization.
   Preserve communicator buffer/counter bounds, graph replay ordering, and
   BF16 rounding boundaries. Cross-layer cached input must be invalidated when
@@ -497,7 +497,7 @@ zero batch, padding and nonfinite behavior separately. Top-k slot permutation
 and choosing a different tied expert set are different correctness questions.
 Random finite-input agreement alone is insufficient.
 
-Use the [paired validation protocol](../../../skills/llm-serving-auto-benchmark/references/paired-validation.md):
+Use the [paired validation protocol](../../../llm-serving-auto-benchmark/references/paired-validation.md):
 real acceptance for accuracy, exact matched questions and prompts, truncations
 kept in the denominator, paired wins/losses, and profiler evidence that the
 candidate actually executed. Similar task scores cannot validate an unused
@@ -516,7 +516,7 @@ Do not automatically reuse the old two-`mhc_post_tilelang`-per-layer anchor
 for V4.1: fusion can remove those launches and draft passes can add matches.
 The `dsv41` pipeline profile therefore requires a verified once-per-layer
 anchor. For presentation, use
-[torch-profiler-layer-track](../../../skills/torch-profiler-layer-track/SKILL.md): preserve
+[torch-profiler-layer-track](../../../torch-profiler-layer-track/SKILL.md): preserve
 timestamps, durations and original stream metadata. Its compact lanes are
 synthetic display tracks, not newly created or removed CUDA streams.
 

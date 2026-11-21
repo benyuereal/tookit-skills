@@ -3,7 +3,7 @@
 Source-refreshed catalog: PR states below belong to their dated audit, not a
 live status feed. Recheck head/base, merge status and actual caller guards before
 using a row. Frozen2026-10-05 source contracts and general analysis principles are maintained in
-[source contracts](../../../docs/upstream-source-contracts.md) and
+[source contracts](../../../../../references/upstream-source-contracts.md) and
 [dispatch and numerical contracts](heuristics.md#establish-dispatch-and-numerical-contracts). Mainline availability is not proof
 that a given deployment executes the path. A split trace is an eligibility or
 dispatch hypothesis: verify shape, dtype, platform and actual caller guards
@@ -2193,7 +2193,7 @@ summing overlapping kernels overstates the removable wall time.
 
 Quantized cache changes span writer, pool, reader and prefill dequantization.
 The following SGLang DeepSeek-V4-family example is pinned to the October 5
-source head in [source contracts](../../../docs/upstream-source-contracts.md).
+source head in [source contracts](../../../../../references/upstream-source-contracts.md).
 Other models and readers require their own payload/scale/alignment arithmetic.
 
 | Attention KV layout | Payload per stored token | Scales per token | Total before page padding | Page alignment |

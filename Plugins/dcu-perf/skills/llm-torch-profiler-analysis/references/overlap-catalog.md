@@ -3,7 +3,7 @@
 Source-refreshed catalog: PR states below belong to their dated audit, not a
 live status feed. Recheck head/base, merge status and actual caller guards before
 using a row. Frozen2026-10-05 source contracts and general analysis principles are maintained in
-[source contracts](../../../docs/upstream-source-contracts.md) and
+[source contracts](../../../../../references/upstream-source-contracts.md) and
 [dispatch and numerical contracts](heuristics.md#establish-dispatch-and-numerical-contracts). Mainline availability is not proof
 that a given deployment executes the path. A split trace is an eligibility or
 dispatch hypothesis: verify shape, dtype, platform and actual caller guards
