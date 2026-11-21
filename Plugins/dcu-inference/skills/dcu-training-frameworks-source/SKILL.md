@@ -14,7 +14,7 @@ license: MIT
 > 本 skill §3 记的是内网 `dcu_megatron 0.15.0+das.opt1.dtk2604`（海光自研 patch 层、无上游）——**迁移/对齐前先核对两者 commit 关系**；RL 强化学习训练（verl/slime/AReaL 等上游 HCU 套件）见 `training/dcu-train-cookbook`。
 > 相关开源：apex-das（PyTorch Apex 扩展，混合精度/分布式/HCU HIP kernel 融合）；**pytorch-das**（上游 PyTorch 二次开发：HCU 编译/测试/CI 全量单测，官方 PyTorch 下游主线锚点）；**TransformerEngine-das**（上游 TE 下游适配，与 Megatron-LM-das 的 `transformer-engine >= 2.4.0` 依赖对齐）；flash-train（训练算子库）；TileKernels-das（DeepSeek-AI/TileKernels 下游，用 `tilelang-hygon` 构建，见 `operators/dcu-tilelang-source`）。
 > **TE 部署铁三角（2026-10-14 实测 `TE_GPU_PASS`）**：TE **2.13.0**（`dtk2604.torch2100`）+ torch **2.10.0** + flash-attn **2.8.4**（torch2100 构建）组合跑通；TE 2.14.1 要更新 DTK-26.10 的 `GemmEpilogue` V1 构造器符号，常规容器跑不了。torch 升降级后 TE/flash-attn 必须同步换 torch 标记构建。详见 `env/dcu-software-adaptation-guide` §8。
-> 刷新：`python3 scripts/hygon-upstream-sync.py --check`（快照 `references/hygon-upstream/upstream-snapshot.json`，索引 `repos-index.md`）。
+> 刷新：`python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check`（快照 `../_dcu-toolkit-shared/references/hygon-upstream/upstream-snapshot.json`，索引 `repos-index.md`）。
 
 > 定位：**五个训练侧框架包的 DCU 适配合集**——deepspeed / megatron-core / dcu-megatron / apex / transformer-engine。本 skill 讲各包在 DCU 上的结构、适配形态、patch 机制。
 > 与 `dcu-train-precision` 的关系：那个讲**训练精度排查**（NaN/逐层比对）；本 skill 讲**训练框架在 DCU 上的包结构与适配落点**。

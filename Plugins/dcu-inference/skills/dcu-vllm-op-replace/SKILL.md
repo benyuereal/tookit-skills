@@ -83,7 +83,7 @@ pip install -e .                  # 重新编译 csrc/*，使新 kernel/绑定�
 常规流程（第 1–6 步）是改 csrc/ 重编译 vLLM。另有 **TileLang 路径**：用类 Triton 的 Python DSL 写算子、编译进 vLLM，**绕开 csrc 重编译**，开发周期约为手写 HIP 的 1/5。完整规范/安装/已知问题见 `dcu-kernel-dev`（路径 B）。
 
 端到端示例（GemmaRMSNorm 替换，源自 内部文档 主文档 file_id=<internal-file-id>）：
-1. 用 TileLang 写 fused 算子（参考 `dcu-kernel-dev/scripts/tl_gemma_rmsnorm_naive.py`），`tl.compile(..., target="hip")` **显式指定 hip 后端**（DCU 必选，否则出 CUDA 代码）。
+1. 用 TileLang 写 fused 算子（参考 `dcu-kernel-dev/../../../dcu-operators/skills/dcu-kernel-dev/scripts/tl_gemma_rmsnorm_naive.py`），`tl.compile(..., target="hip")` **显式指定 hip 后端**（DCU 必选，否则出 CUDA 代码）。
 2. 环境变量开关切原生 / tilelang：`os.environ["USE_TILELANG"] = "1"`，在 `vllm/model_executor/models/qwen3_5.py` 内按开关选实现。
 3. 注册为 torch 自定义 op（同官方 custom_op 机制）：`torch.ops.vllm.qwen3_5_rms_norm(...)`，配 `@register_fake`（漏写 torch.compile 图捕获失败）。
 4. 精度验证：单独起精度测试脚本（f32 参考 vs tilelang 实现，max diff < 0.02 视为安全），通过后再起服务对话。

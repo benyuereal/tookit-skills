@@ -20,12 +20,12 @@ license: MIT
 
 ```bash
 cd <agent-home>/skills/dcu
-python3 scripts/hygon-upstream-sync.py --check   # 快检版本锚点（~10 个 API 请求）
-python3 scripts/hygon-upstream-sync.py --full    # 全量 + 更新 cookbook 矩阵
+python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check   # 快检版本锚点（~10 个 API 请求）
+python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --full    # 全量 + 更新 cookbook 矩阵
 ```
 
 触发：做训练/RL 任务前先 `--check` 确认框架版本没变；`--full` 建议每周跑一次。
-快照/索引：`references/hygon-upstream/upstream-snapshot.json`、`repos-index.md`。
+快照/索引：`../_dcu-toolkit-shared/references/hygon-upstream/upstream-snapshot.json`、`repos-index.md`。
 
 ## 一、RL 强化学习（本地新域）
 
@@ -95,6 +95,6 @@ python3 scripts/hygon-upstream-sync.py --full    # 全量 + 更新 cookbook 矩�
 
 ## 六、使用须知
 
-- 先 `references/hygon-upstream/repos-index.md` 看每个仓库的最新基线/特性，再进对应仓库 README（缓存于 `<agent-home>/cache/hygon-upstream/`）。
+- 先 `../_dcu-toolkit-shared/references/hygon-upstream/repos-index.md` 看每个仓库的最新基线/特性，再进对应仓库 README（缓存于 `<agent-home>/cache/hygon-upstream/`）。
 - RL 框架版本锚点：verl(无固定 tag)、slime v0.3.0、AReaL v1.0.4、Megatron core_v0.18.2；上线前用 `--check` 复核。
 - 更换环境先核对 PyTorch/DTK/卡型，RL 框架对 DCU 软件栈版本敏感（`--no-deps` + 预装组件的原则）。

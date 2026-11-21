@@ -420,7 +420,7 @@ hipprof --hip-trace --output-type 0 bash -c '
 - `result_*.hipkernel.csv`：各 GPU kernel 调用次数 / 总耗时 / 平均 / 占比。
 - `result_*.hiptrace.csv`：HIP API 调用统计。
 
-> 也可以直接复用 `dcu-kernel-dev/scripts/tl_rmsnorm_benchmark.sh` 的思路（起服务 + 压测 + hipprof 包裹）做组合压测。
+> 也可以直接复用 `dcu-kernel-dev/../../../dcu-operators/skills/dcu-kernel-dev/scripts/tl_rmsnorm_benchmark.sh` 的思路（起服务 + 压测 + hipprof 包裹）做组合压测。
 
 ---
 
@@ -449,7 +449,7 @@ hipprof --hip-trace --output-type 0 bash -c '
 
 - 跑前环境摸底 → `dcu-env`；容器执行纪律 → `dcu-docker`；部署启动参数 → `dcu-vllm-deploy` / `dcu-inference-infra`。
 - 算子/kernel 级度量 → `dcu-hipprof`（父，路由 5 子 skill）/ `dcu-perf-profiling`（rocprof 系）。
-- TileLang 算子 bench 组合示例（hipprof 包 vllm bench）→ `dcu-kernel-dev/scripts/tl_rmsnorm_benchmark.sh`。
+- TileLang 算子 bench 组合示例（hipprof 包 vllm bench）→ `dcu-kernel-dev/../../../dcu-operators/skills/dcu-kernel-dev/scripts/tl_rmsnorm_benchmark.sh`。
 - 性能优化闭环/留痕 → `dcu-op-optimization`；度量口径 → `dcu-perf-profiling`。
 - 跨框架自动搜索最优部署命令（同模型比 SGLang/vLLM/TRT-LLM 吞吐）→ 通用互补 skill `llm-serving-auto-benchmark`（已整合进本仓库，注意它依赖 dcu-inference-cookbook，zip 未打包需自备）。
 

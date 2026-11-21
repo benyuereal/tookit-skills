@@ -444,7 +444,7 @@ ENTRYPOINT ["python", "/opt/adp/launch.py", "--bundle", "/model", "--port", "300
 - [ ] （docker run）`--shm-size=16G` 已设置
 
 ## References
-- 官方文档中心《DCU-Container-Toolkit》版本树 `5fca5126-16a8-11f1-a49f-0242ac150003`（12 叶：简介及安装/安装/运行时集成用法/命令行工具用法）。取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `references/sourcefind/doc-center-index.md`。
+- 官方文档中心《DCU-Container-Toolkit》版本树 `5fca5126-16a8-11f1-a49f-0242ac150003`（12 叶：简介及安装/安装/运行时集成用法/命令行工具用法）。取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `../_dcu-toolkit-shared/references/sourcefind/doc-center-index.md`。
 
 - CSDN 原文（步骤来源）：https://blog.csdn.net/weixin_45973213/article/details/134891512
 

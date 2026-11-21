@@ -19,11 +19,11 @@ license: MIT
 
 ```bash
 cd <agent-home>/skills/dcu
-python3 scripts/hygon-upstream-sync.py --check   # 快检版本（device-plugin/DRA/dcgm 等 tag）
-python3 scripts/hygon-upstream-sync.py --full    # 全量（含 README 缓存到 <agent-home>/cache/hygon-upstream/）
+python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check   # 快检版本（device-plugin/DRA/dcgm 等 tag）
+python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --full    # 全量（含 README 缓存到 <agent-home>/cache/hygon-upstream/）
 ```
 
-触发：部署/排查监控或 K8s 组件前先 `--check`；`--full` 建议每周跑。索引：`references/hygon-upstream/repos-index.md` §D。
+触发：部署/排查监控或 K8s 组件前先 `--check`；`--full` 建议每周跑。索引：`../_dcu-toolkit-shared/references/hygon-upstream/repos-index.md` §D。
 
 ## 一、集群监控（hcu-dcgm + hcu-exporter）
 
@@ -88,13 +88,13 @@ python3 scripts/hygon-upstream-sync.py --full    # 全量（含 README 缓存到
 - 让容器运行时（docker/containerd）正确挂载 HCU 设备节点与 hyhal 的 Runtime 对接工具；简化容器内使用 HCU。配合 `dcu-docker` 使用（容器需 `--device=/dev/kfd --device=/dev/dri` + 挂 `/opt/hyhal:ro`）。
 
 ## 四、使用须知
-- 先 `references/hygon-upstream/repos-index.md` §D 看版本/状态；README 全文在 `<agent-home>/cache/hygon-upstream/`。
+- 先 `../_dcu-toolkit-shared/references/hygon-upstream/repos-index.md` §D 看版本/状态；README 全文在 `<agent-home>/cache/hygon-upstream/`。
 - `hcu-dcgm`/`hcu-exporter` 与 `hy-smi` 互补：hy-smi 单机巡检，本套用于 Prometheus 集群监控 + Grafana。
 - 组件版本对软件栈敏感（Go/CGO/驱动版本），升级前 `--check` 复核 tag 与 README 前置条件。
 
 ## 五、HYGON-AI 公开 org 资源地图与境内取包（2026-10-14）
 
-> HYGON-AI GitHub org 共 45 个公开仓库（2026-10-14 复测；官网 codehub 只列 34 ⊂ 45，未列的含 pytorch-das / tensorflow-das / aiter-das / UltraEP-das / TransformerEngine-das / opencv 系 / faiss-das / spconv-das / FastPT / one-click-quant / cluster-manager-das / inference-cookbook-das / quality-gate 等——对照以 GitHub org 页为准，见 `references/hygon-upstream/repos-index.md`）。本 skill 主体讲其中"集群监控/K8s/容器对接"子集；下面是全 org 地图，取包或查配套组件时不再逐个搜。
+> HYGON-AI GitHub org 共 45 个公开仓库（2026-10-14 复测；官网 codehub 只列 34 ⊂ 45，未列的含 pytorch-das / tensorflow-das / aiter-das / UltraEP-das / TransformerEngine-das / opencv 系 / faiss-das / spconv-das / FastPT / one-click-quant / cluster-manager-das / inference-cookbook-das / quality-gate 等——对照以 GitHub org 页为准，见 `../_dcu-toolkit-shared/references/hygon-upstream/repos-index.md`）。本 skill 主体讲其中"集群监控/K8s/容器对接"子集；下面是全 org 地图，取包或查配套组件时不再逐个搜。
 > 刷新：org 仓库列表一条命令可现取（https://github.com/orgs/HYGON-AI/repositories）。下述清单仅作导航，确切以仓库页为准。
 
 ### 5.1 全 org 仓库一览（30 个，按用途分组）

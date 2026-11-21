@@ -84,6 +84,43 @@ def collect_skills(root):
     return out
 
 
+_BASENAME_CACHE = {}
+
+_caller_body = {'v': ''}
+
+
+def _is_upstream_ref(token):
+    """判断脚本引用是否明确指向上游仓库（而非本仓）。
+
+    判据：同一行里出现 `/path/to/`、`<sglang>`，或 `python/sglang/` 这类
+    上游目录前缀。这些不是本仓文件，SK007 不应要求它们存在。
+    """
+    body = _caller_body['v']
+    # 整篇 skill 明确是「上游仓库操作指南」时，其中的相对路径指上游，不是本仓
+    head = body[:1200].lower()
+    if 'upstream' in head and ('.github/workflows' in body or 'python/sglang' in body):
+        return True
+    for line in body.splitlines():
+        if token in line:
+            if '/path/to/' in line or 'python/sglang/' in line:
+                return True
+    return False
+
+
+def _find_by_basename(root, base):
+    """全仓按 basename 找文件（跳过 .git / __pycache__），结果进程内缓存。"""
+    if base not in _BASENAME_CACHE:
+        hit = None
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [x for x in dirnames
+                           if x not in ('.git', '__pycache__', 'node_modules')]
+            if base in filenames:
+                hit = os.path.join(dirpath, base)
+                break
+        _BASENAME_CACHE[base] = hit
+    return _BASENAME_CACHE[base]
+
+
 def classify_kind(d):
     """从目录形态推断 kind —— 用于 SK001 的『声明 vs 实际』对照。"""
     has_s = os.path.isdir(os.path.join(d, 'scripts'))
@@ -142,22 +179,44 @@ def lint(root):
         if missing:
             v['SK005'].append(f'{sk}  缺必填字段 {sorted(missing)}')
 
-        # SK006 寻址
-        if not re.search(r'_dcu-toolkit-shared', body):
-            hits = re.findall(r'(?<![\w/])(references|scripts|data)/[A-Za-z0-9_./-]+', body)
-            if hits:
+        # SK006 寻址：只报「指向包根共享层却没加双态前缀」的引用。
+        # skill 自己目录下的 references/scripts 是合法的，不能连带报——
+        # 早期版本按裸路径计数，把 547 处合法自引用也算成了违规。
+        # ops 卡豁免：卡里的 `scripts/opbench.py` 等按卡面约定指包根脚本，
+        # 由 Plugins/ops/tests/test_doc_links.py 的 CARD_RELATIVE_DIRS 单独校验。
+        if '/Plugins/ops/' in d.replace('\\', '/') + '/':
+            pass
+        elif not re.search(r'_dcu-toolkit-shared', body):
+            bad = []
+            for m in re.finditer(
+                    r'(?<![\w/.])((?:references|scripts|data|docs)/[A-Za-z0-9_./-]+)', body):
+                rel = m.group(1)
+                if os.path.exists(os.path.join(d, rel)):
+                    continue                      # 指向 skill 自身 → 合法
+                if os.path.exists(os.path.join(root, rel)):
+                    bad.append(rel)               # 指向包根却没加前缀 → 真违规
+            if bad:
                 v['SK006'].append(
-                    f'{sk}  {len(hits)} 处裸相对路径（缺 ../_dcu-toolkit-shared/）')
+                    f'{sk}  {len(bad)} 处指向包根却缺 ../_dcu-toolkit-shared/')
 
-        # SK007 脚本引用存在性
+        _caller_body['v'] = body
+
+        # SK007 脚本引用存在性。
+        # 判据是「这个脚本在仓库里存在」——路径写得相对不准属于 SK006 的范畴，
+        # 不在本条重复报。所以解析不到时回落到全仓按 basename 查找。
         for m in sorted(set(re.findall(
                 r'((?:\.\./)*scripts/[A-Za-z0-9_./-]+\.(?:py|sh))', body))):
+            base = os.path.basename(m)
             cands = [os.path.normpath(os.path.join(d, m)),
-                     os.path.normpath(os.path.join(d, '..', m)),
                      os.path.normpath(os.path.join(root, m)),
-                     os.path.join(root, 'scripts', os.path.basename(m))]
-            if not any(os.path.exists(c) for c in cands):
-                v['SK007'].append(f'{sk}  -> {m}（不存在）')
+                     os.path.join(root, 'scripts', base)]
+            if any(os.path.exists(c) for c in cands):
+                continue
+            if _find_by_basename(root, base) is not None:
+                continue                      # 仓内存在，只是路径没写全 → 交给 SK006
+            if _is_upstream_ref(m):
+                continue                      # 明确指向上游仓（sglang 等）的脚本
+            v['SK007'].append(f'{sk}  -> {m}（仓内不存在）')
 
         # SK009 description 语言
         m = re.search(r'^description\s*:\s*"?(.+)', fm, re.M)
@@ -226,8 +285,12 @@ def lint(root):
                 f = os.path.join(root, 'Plugins', plugin, 'SKILL.md')
                 if not os.path.isfile(f):
                     continue
-                m = re.search(r'版本[^\n]*?(\d+\.[0-9.]+)', read(f))
-                got = m.group(1) if m else None
+                # 只认「版本**：…」这种声明式写法；正文表格里「各版本 …（合并 0.15/…）」
+                # 是产品版本不是本包版本，不能当声明抓（早先的宽匹配在这里误报过）。
+                fm_v = re.search(r'^version\s*:\s*(\S+)', frontmatter(read(f)), re.M)
+                body_v = re.search(r'\*\*版本\*\*[：:][^\n（(]*[（(](\d+\.[0-9.]+)', read(f))
+                got = (fm_v.group(1) if fm_v else None) or \
+                      (body_v.group(1) if body_v else None)
                 if got is None:
                     continue
                 if got != ver:

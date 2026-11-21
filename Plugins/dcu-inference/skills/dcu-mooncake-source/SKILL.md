@@ -10,7 +10,7 @@ license: MIT
 
 > ## 🔗 开源上游锚点（mooncake-das）
 > 官方开源版 **mooncake-das**（`github.com/HYGON-AI/mooncake-das`，6⭐）基线 **Mooncake v0.3.13.post1**；另有 **LMCache-das**（`github.com/HYGON-AI/LMCache-das`）基线 LMCache `v0.3.13`（commit `fc031d4`，`dcu-lmcache` 用）。
-> 本 skill §0 基于 `mooncake_transfer_engine-0.3.10.post1+das185.dtk2604...` wheel，官方开源线版本见快照。刷新：`python3 scripts/hygon-upstream-sync.py --check`（快照 `references/hygon-upstream/upstream-snapshot.json`）。
+> 本 skill §0 基于 `mooncake_transfer_engine-0.3.10.post1+das185.dtk2604...` wheel，官方开源线版本见快照。刷新：`python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check`（快照 `../_dcu-toolkit-shared/references/hygon-upstream/upstream-snapshot.json`）。
 
 > 定位：**Mooncake Transfer Engine 是 KV cache 跨节点传输引擎**（disaggregated prefill/decode 的 PD 分离、KV cache 池化），海光移植到 DCU（HIP）。本 skill 讲 Mooncake 在 DCU 上的包结构、传输引擎、EP buffer、DTK 链接。
 > 与 `dcu-lmcache` 的关系：LMCache 讲 **KV cache 卸载/复用**（单机/多机缓存层）；Mooncake 讲 **KV cache 跨节点 RDMA 传输**（PD 分离的 prefill→decode KV 搬运）。两者常配合：LMCache 管缓存策略，Mooncake 管传输通道。

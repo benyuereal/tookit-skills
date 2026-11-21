@@ -17,7 +17,7 @@ license: MIT
 
 | skill | 定位 | 触发场景 |
 |---|---|---|
-| `dcu-orchestrator` | 多任务薄编排层：5 条内置工作流（model-deploy / fault-triage / op-optimize / infer-optimize / research-baseline，三段式串行，gate 落在改状态/占卡步）+ 16 个 task 契约 + `scripts/render_workflow.py`（依赖拓扑算就绪节点）/ `verify_evidence.py`（证据验收）/ `dcu_distill.py`（产物沉淀知识库） | 明确要按既定多步链走（部署验证/故障排查/算子优化/推理优化），需要门槛审批（proceed: ask）与 evidence 留痕 |
+| `dcu-orchestrator` | 多任务薄编排层：5 条内置工作流（model-deploy / fault-triage / op-optimize / infer-optimize / research-baseline，三段式串行，gate 落在改状态/占卡步）+ 16 个 task 契约 + `../dcu-orchestrator/scripts/render_workflow.py`（依赖拓扑算就绪节点）/ `verify_evidence.py`（证据验收）/ `dcu_distill.py`（产物沉淀知识库） | 明确要按既定多步链走（部署验证/故障排查/算子优化/推理优化），需要门槛审批（proceed: ask）与 evidence 留痕 |
 
 > 编排选型：编码类四意图（API 查询/代码迁移/CI 用例/Triton）走 §二 `dcu-dispatcher` 意图分发；跨域多步任务链（上表 4 条）走 `dcu-orchestrator`；单步任务直接点名七域 skill，不过编排器。多步链的路由决策见 §四。
 
@@ -50,7 +50,7 @@ license: MIT
 | `dcu-skill-router` | DCU 全部 skills 总入口路由 | 先查路由表再进具体 skill |
 | `dcu-skill-on-device-verification` | 技能库真机验证 / 哪些技能能在设备上实跑 / 技能内容准确性核对（分层 A-E + 验证循环 + 双版本对照定性；包根平铺，跨域方法论） | ✅ |
 | `inference/dcu-inference-infra` | 推理 infra 子域路由器 | 总入口，按场景分发 |
-| `inference/dcu-inference-infra-skill-builder` | 推理 infra 子域 skill 构建器（版本拆分/新增维护/包根一致性自检） | 新增/维护 infra 子域 skill（**未随本包分发**；包内替代：按 `docs/STANDARDS.md` + `inference/dcu-inference-infra` 约定直接新增） |
+| `inference/dcu-inference-infra-skill-builder` | 推理 infra 子域 skill 构建器（版本拆分/新增维护/包根一致性自检） | 新增/维护 infra 子域 skill（**未随本包分发**；包内替代：按 `../_dcu-toolkit-shared/docs/STANDARDS.md` + `inference/dcu-inference-infra` 约定直接新增） |
 | `perf/dcu-inference-optimization` | 通用推理优化方法论 | CNN/Transformer/LSTM 推理提速 |
 | `inference/dcu-vllm-source` | vLLM 各版本源码适配索引（合并 0.15/0.18/0.21/0.23/0.26） | 按目标版本查结构 |
 | `inference/dcu-vllm-hcu-source` | vllm-hcu 插件 patch 层源码（105 patch + HCUPlatform + 模块交换，0.21+ 时代独立包） | 查 0.21+ vLLM DCU 适配落点 / patch 机制 |
@@ -229,7 +229,7 @@ license: MIT
 ## 三、使用须知
 
 - 遇 DCU 任务：单步明确（查配方/查版本/直接用某 skill 方法）**直接点名叶子 skill**，不经本表；跨 ≥2 域、多步不确定或拿不准时**先查本路由表**定位，再进具体 skill 读方法。
-- **官方开源上游（HYGON-AI GitHub org）**：35 个仓库索引/版本锚点见 `references/hygon-upstream/repos-index.md`；刷新命令 `python3 scripts/hygon-upstream-sync.py --check|--full`。涉及部署/适配/训练/监控任务、且任务面涉及这些上游时，先跑 `--check` 确认版本没变。
+- **官方开源上游（HYGON-AI GitHub org）**：35 个仓库索引/版本锚点见 `../_dcu-toolkit-shared/references/hygon-upstream/repos-index.md`；刷新命令 `python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check|--full`。涉及部署/适配/训练/监控任务、且任务面涉及这些上游时，先跑 `--check` 确认版本没变。
 - 本 skill 不含方法本身；方法是各 skill 的正文。
 - 本 skill 与 `dcu-inference-infra`（推理域路由器）互补：infra 更细，本表更全。
 - 若某 skill 内容被上下文压缩/截断丢失，先完整重读该 skill 再继续。

@@ -179,7 +179,7 @@ hy-smi -a            # 驱动/设备可见（依赖 dcu-driver 已装）
 
 ## References
 - 官方文档中心《DTK 使用手册》版本树 `4fd79e96-ad7c-11f0-afac-2e5fc4af73a0`（60 叶：DTK 软件栈简介/使用 C++ 编写 DCU 程序/Fortran/AI 应用）。
-- 官方文档中心《AI 框架使用手册》版本树 `5f2cd48c-ad7c-11f0-afac-2e5fc4af73a0`（10 叶：MIGraphX 安装、TensorFlow/PyTorch 常见网络使用/调试优化/框架扩展、第三方库转码）——此前报告记"HPC"系章名误读，已按叶名改正。取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `references/sourcefind/doc-center-index.md`。
+- 官方文档中心《AI 框架使用手册》版本树 `5f2cd48c-ad7c-11f0-afac-2e5fc4af73a0`（10 叶：MIGraphX 安装、TensorFlow/PyTorch 常见网络使用/调试优化/框架扩展、第三方库转码）——此前报告记"HPC"系章名误读，已按叶名改正。取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `../_dcu-toolkit-shared/references/sourcefind/doc-center-index.md`。
 
 - DTK 下载：`https://download.sourcefind.cn:65024/1/main/latest`
 - DTK 文档：`https://download.sourcefind.cn:65024/1/main/latest/Document`

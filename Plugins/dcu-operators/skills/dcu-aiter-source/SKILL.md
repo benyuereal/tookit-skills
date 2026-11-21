@@ -9,7 +9,7 @@ license: MIT
 # AITER 源码适配索引（dcu-aiter-source）
 
 > ## 🔗 开源上游锚点（aiter-das）
-> 官方开源版 **aiter-das**（`github.com/HYGON-AI/aiter-das`）上游参考 commit `552f4b8`（ROCm/aiter `main` 分支，**非 v0.1.3 tag**——可据此修正本 skill §3「das184 可能不是严格对齐 v0.1.3」的待核验项）。AITER 依赖的 hipc MoE 算子库另见 **Moe** 仓（`github.com/HYGON-AI/Moe`）。刷新：`python3 scripts/hygon-upstream-sync.py --check`（快照 `references/hygon-upstream/upstream-snapshot.json`）。
+> 官方开源版 **aiter-das**（`github.com/HYGON-AI/aiter-das`）上游参考 commit `552f4b8`（ROCm/aiter `main` 分支，**非 v0.1.3 tag**——可据此修正本 skill §3「das184 可能不是严格对齐 v0.1.3」的待核验项）。AITER 依赖的 hipc MoE 算子库另见 **Moe** 仓（`github.com/HYGON-AI/Moe`）。刷新：`python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check`（快照 `../_dcu-toolkit-shared/references/hygon-upstream/upstream-snapshot.json`）。
 
 > 基于 `aiter-0.1.3-das184.dtk2604.zip`（海光 DAS 适配版，dtk2604）实测。上游对照基线：`ROCm/aiter` v0.1.3 tag（curl 拉取，实测 diff 见 §3）。
 > 完整中文算子说明（海光自写）见 `references/aiter-operator-reference.md`（785 行，含 MoE/Norm/Activation/Quant/MQA 全部参数表）。本 skill 提炼结构、机制与适配点，不照抄参数表。
@@ -71,7 +71,7 @@ aiter-0.1.3-das184.dtk2604/
 
 ## §3 海光适配点（diff 实测，对照 ROCm/aiter v0.1.3）
 
-> 方法同 `dcu-vllm-source/scripts/diff-hygon-release.sh`：`diff -rq` + 行级计数。上游 tarball 已缓存于 `<local_src_cache>/aiter-v0.1.3-upstream.tar.gz`，解压于 `<local_src_cache>/aiter-0.1.3`。
+> 方法同 `dcu-vllm-source/../../../dcu-inference/skills/dcu-vllm-source/scripts/diff-hygon-release.sh`：`diff -rq` + 行级计数。上游 tarball 已缓存于 `<local_src_cache>/aiter-v0.1.3-upstream.tar.gz`，解压于 `<local_src_cache>/aiter-0.1.3`。
 
 实测结论（aiter-0.1.3-das184 vs 上游 v0.1.3）：
 - **Python 层大面积改动**：`aiter/` 几乎全改——`dist/`（通信重写）、`jit/`（工具链适配）、`configs/`（GPU 调优表标识）、`ops/` 各算子接口、`__init__.py`（加 torch._dynamo.ignore_logger_methods）。
@@ -141,4 +141,4 @@ aiter-0.1.3-das184.dtk2604/
 - `references/aiter-operator-reference.md`：海光自写中文算子文档（785 行，MoE/Norm/Activation/Quant/MQA 完整参数表与调用树）。从发布包 `aiter-operator-reference.md` 归档。
 - 上游基线（已缓存）：`<local_src_cache>/aiter-v0.1.3-upstream.tar.gz` → 解压 `<local_src_cache>/aiter-0.1.3`。
 - 海光发布版（已解压）：`<local_src_cache>/aiter-0.1.3-das184.dtk2604/`。
-- diff 方法：复用 `dcu-vllm-source/scripts/diff-hygon-release.sh`（本 skill §3 结论用其方法得出）。
+- diff 方法：复用 `dcu-vllm-source/../../../dcu-inference/skills/dcu-vllm-source/scripts/diff-hygon-release.sh`（本 skill §3 结论用其方法得出）。

@@ -369,5 +369,5 @@ ssh dcu-node-01 "echo OK"
 - [ ] DTK环境变量已加载（如需要；hy-smi 不需要）
 - [ ] 长命令使用后台+轮询模式
 - [ ] 结果文件已下载到本地（如需要）
-- [ ] **跨系统验证**：DCU 服务器混用 Ubuntu(5.15) 与 Kylin V10(4.19) 老内核，命令行为差异大（nproc/numactl/lspci 等）。脚本改动需在两种系统都验证，双机 harness 见仓库根 `references/dual-machine-verification.md`
+- [ ] **跨系统验证**：DCU 服务器混用 Ubuntu(5.15) 与 Kylin V10(4.19) 老内核，命令行为差异大（nproc/numactl/lspci 等）。脚本改动需在两种系统都验证，双机 harness 见仓库根 `../_dcu-toolkit-shared/references/dual-machine-verification.md`
 - [ ] 多行脚本传远端前已确认 LF 换行（CRLF 报 `$'\r': command not found`）——见 pitfall 15

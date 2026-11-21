@@ -29,4 +29,4 @@ license: MIT
 - **单 skill 使用**：Agent 按上表选定 skill 后，读取 `skills/<skill>/SKILL.md` 并按其流程执行（子 skill 自包含，含 scripts/ 与 references/）。
 - **统一路由**：跨域任务优先读仓库根 `SKILL.md`（包级路由表）或 `dcu-core/skills/dcu-skill-router`（全量索引）。
 - **安装**：见仓库根 `README.md` / `install.sh`（支持 Claude Code / OpenCode / Codex 等多框架，项目级或全局）。
-- **版本**：与包根 SKILL.md 一致（1.5.1）；升级以包内版本为准。
+- **版本**：与包根 SKILL.md 一致（1.6.0）；升级以包内版本为准。

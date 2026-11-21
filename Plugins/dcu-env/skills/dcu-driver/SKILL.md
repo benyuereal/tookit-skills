@@ -172,7 +172,7 @@ source /opt/hyhal/env.sh
 7. **`-A` 参数**：非虚拟（裸金属）场景推荐 `./rock*.run -A`（具体含义见 `./rock*.run -h`，通常与虚拟化/直通相关）；虚拟化/云场景按 -h 说明决定是否加。
 8. **驱动自带的 hy-smi**：装驱动后 `hy-smi` 位于 `/opt/hyhal/bin/hy-smi`（宿主机与容器内均有，不一定在 PATH）——见 dcu-hy-smi skill。
 9. **重装驱动后必须重启物理机**：驱动升级（尤其带 vbios 更新，见注意事项第 4 条）后，必须重启设备驱动才完全生效；不重启直接跑 rccl-test 会因驱动状态不一致导致带宽异常或设备不可用。来自内部测试手册"基本环境准备"。
-10. **BIOS 关闭 IOMMU/ACS（rccl-test 前置，仅 PCIe 卡适用）**：关闭 IOMMU/ACS 的要求**主要针对 PCIe 形态卡**（K100-AI、BW10、BW100、BW150 等）——这类卡走 PCIe P2P 拓扑，BIOS 须关闭 ACS 和 IOMMU（或内核 `iommu=off amd_iommu=off`），否则通信带宽不达标。**OAM 形态产品（BW1000、BW1100）基本无影响，无需为此改 BIOS/内核**。检测见 dcu-env `scripts/check_iommu_acs.sh`。
+10. **BIOS 关闭 IOMMU/ACS（rccl-test 前置，仅 PCIe 卡适用）**：关闭 IOMMU/ACS 的要求**主要针对 PCIe 形态卡**（K100-AI、BW10、BW100、BW150 等）——这类卡走 PCIe P2P 拓扑，BIOS 须关闭 ACS 和 IOMMU（或内核 `iommu=off amd_iommu=off`），否则通信带宽不达标。**OAM 形态产品（BW1000、BW1100）基本无影响，无需为此改 BIOS/内核**。检测见 dcu-env `../dcu-env/scripts/check_iommu_acs.sh`。
 11. **重启后驱动可能未自动加载**：部分设备装驱动并重启物理机后，驱动未自动加载，`hy-smi` 报设备不可用；需手动执行 `hy-smi --loaddriver` 重新加载驱动，再 `hy-smi -a` 验证设备可见。
 12. **`/opt/hyhal` 与 `/usr/local/hyhal` 双路径**：部分机器（<device-A> 实测）两个目录并存且 bin 清单一致，常驻服务（hfm/hymgr）实际跑在 `/usr/local/hyhal/bin/` 下。排障时确认服务真实路径（`ps aux | grep -E "hfm|hymgr"`），工具两边都能用，但**版本以实际运行路径为准**。
 13. **hyhal 工具不 source env.sh 报缺库**：`hfmtool`/`hdms`/`hymgr`/`criu` 等依赖 `/opt/hyhal/lib` 下的 `libhfmlib.so`/`libhydmi.so`/`libhydrm.so`/`libprotobuf-c`，直接跑报 `error while loading shared libraries`。先 `source /opt/hyhal/env.sh`（或 `LD_LIBRARY_PATH=/opt/hyhal/lib`）再跑。`hy-smi`/`drvdiag`/`mmio_rw`/`hlinkmanager` 不受影响。
@@ -183,7 +183,7 @@ source /opt/hyhal/env.sh
 
 - **dcu-env**：安装前用 dcu-env 检测 OS / kernel / 已装驱动版本，确定该装哪个驱动
 - **dcu-hy-smi**：装完驱动后第一件事——`hy-smi -a` 验证设备可见；`/opt/hyhal/bin/hy-smi --showtoponuma` 验拓扑
-- **dcu-topology**：驱动加载正常后，`dcu-topology/scripts/collect_topology.sh` 才能拿到真实卡↔NUMA（依赖 hy-smi）
+- **dcu-topology**：驱动加载正常后，`dcu-topology/../dcu-topology/scripts/collect_topology.sh` 才能拿到真实卡↔NUMA（依赖 hy-smi）
 - **dcu-docker**：容器内用 DCU 必须挂 `/dev/kfd` `/dev/dri` 且 6.3.x 额外挂 `/sys/kernel/debug`
 
 ## References

@@ -45,7 +45,7 @@ Don't use for：纯推理性能测评（见 dcu-docker 测评章节）；容器�
 ## ⚠️ 基本环境准备（来自内部测试手册，测前必查）
 
 1. **BIOS 关闭 ACS 和 IOMMU（仅 PCIe 卡适用）** —— 否则 PCIe P2P 受限、通信带宽不达标。**此要求主要针对 PCIe 形态卡**（K100-AI、BW10、BW100、BW150 等）；**OAM 产品（BW1000、BW1100）基本不受影响，无需为此改 BIOS/内核**。
-   用 dcu-env 的 `scripts/check_iommu_acs.sh` 检测；未全关则提示用户先关再测（见 dcu-env）。
+   用 dcu-env 的 `../dcu-env/scripts/check_iommu_acs.sh` 检测；未全关则提示用户先关再测（见 dcu-env）。
 2. **多机测试需设免密通信** —— 双机/多机 mpirun 依赖节点间 root 免密（物理机或容器免密，见 dcu-ssh / dcu-docker）。
 3. **重装驱动后需重启设备** —— 驱动升级（尤其带 vbios 更新）必须重启物理机，否则驱动未完全生效。
 

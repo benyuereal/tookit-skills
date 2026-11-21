@@ -86,7 +86,7 @@ license: MIT
 
 **新版本接入流程（标准动作）**：
 1. 解压发布包到 `~/dcu-src/vllm-<版本>/`，与上游同版本并排。
-2. 跑 `dcu-vllm-source/scripts/diff-hygon-release.sh <上游> <海光发布版>` 定位真实差异（海光发布版往往 Python 层零差异、仅 CMakeLists.txt 裁 gfx）。
+2. 跑 `dcu-vllm-source/../dcu-vllm-source/scripts/diff-hygon-release.sh <上游> <海光发布版>` 定位真实差异（海光发布版往往 Python 层零差异、仅 CMakeLists.txt 裁 gfx）。
 3. 在 `dcu-vllm-source` 合并版内**新增一个版本分区小节**：先写「版本变更要点（来自发布说明/素材）」，源码级路径等真实包到位后填；路径复用上一版本的探查命令。
 4. 包根 `dcu/SKILL.md`：related_skills + 路由表 + 版本号升位；`dcu-skill-router/SKILL.md` 六域路由表 + 计数（⚠ 4.0.0 起根 SKILL.md 不再维护「子 skill 清单」表格，计数源迁到 `dcu-skill-router`），各方一致。
 
@@ -110,7 +110,7 @@ license: MIT
 ## 通用纪律（子类共享）
 - 不存性能数据/基线/日志：数据用 `dcu-op-optimization` 模板留痕。
 - 容器必挂 `/opt/hyhal:/opt/hyhal:ro`；gfx 用物理机 `rocminfo`；指定卡用 `HIP_VISIBLE_DEVICES`。
-- 海光发布版的"真实改动"已用 `dcu-vllm-source/scripts/diff-hygon-release.sh` 验证方法闭合（0.18 实证：Python 层零差异、仅 CMakeLists.txt 裁 gfx）。新版本到手先跑该脚本，不要臆测适配点；sourcefind 克隆用 PAT 而非密码。
+- 海光发布版的"真实改动"已用 `dcu-vllm-source/../dcu-vllm-source/scripts/diff-hygon-release.sh` 验证方法闭合（0.18 实证：Python 层零差异、仅 CMakeLists.txt 裁 gfx）。新版本到手先跑该脚本，不要臆测适配点；sourcefind 克隆用 PAT 而非密码。
 - 高危操作谨慎，优先测试机验证。
 
 ## 使用须知

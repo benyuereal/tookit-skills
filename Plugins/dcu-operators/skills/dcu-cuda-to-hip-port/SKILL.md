@@ -90,7 +90,7 @@ HIP_VISIBLE_DEVICES=<空闲卡> ./app
 - 纯 host 的 .cpp（无 CUDA 符号）也可用 g++ 编，但统一走 hipcc 更省事（hipcc 会透传 host 编译）。
 
 ### 3.2 编译目标 gfx 现查，不写死
-- 用 `dcu-kernel-dev` §13 的 `scripts/dcu_detect_arch.sh` 在目标机现查（如 `gfx936`）。
+- 用 `dcu-kernel-dev` §13 的 `../dcu-kernel-dev/scripts/dcu_detect_arch.sh` 在目标机现查（如 `gfx936`）。
 - hipcc 默认 offload-arch 是 `gfx928/gfx906/gfx926`（**不是**你的卡），必须显式 `--offload-arch=<探测值>`，否则编译目标错。
 
 ## 四、hipify 策略（sed 优先，hipify-perl 兜底）

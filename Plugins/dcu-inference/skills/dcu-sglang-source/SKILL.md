@@ -11,7 +11,7 @@ license: MIT
 > ## 🔗 开源上游锚点（sglang-das）
 > 官方开源版 **sglang-das**（`github.com/HYGON-AI/sglang-das`，44⭐）主线 tag **v0.5.15.post1**。本地实测基于 0.5.12 海光 fork + DTK 26.04；
 > 0.5.15 起 DCU 术语全面演进为 HCU。`v0.5.15+` 的 fork 路径/函数名可能与本地 0.5.12 快照不同，跨版本先比对。
-> 刷新：`python3 scripts/hygon-upstream-sync.py --check`（快照 `references/hygon-upstream/upstream-snapshot.json`）。
+> 刷新：`python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check`（快照 `../_dcu-toolkit-shared/references/hygon-upstream/upstream-snapshot.json`）。
 
 本 skill 沉淀 **SGLang 在 DCU（海光）上的源码结构与海光适配点**，并给出算子/backend 开发的扩展入口。
 与 [`dcu-vllm-source-*`](../dcu-vllm-source/) 平行，但 SGLang **不按大版本拆独立 skill**（海光适配以 fork 构建形式随版本推进，见 §四实测），故单一 `dcu-sglang-source` 覆盖。
@@ -144,7 +144,7 @@ python3 -m sglang.launch_server --model <model> --attention-backend dcu_mla --tp
 
 ## 离线参考代码（DTK 镜像内，未随本包分发）
 
-海光 SGLang 0.5.12(+g9a3a3e5f9) 海光 fork 的 DCU 专属适配源码位于 DTK26.04 镜像（`dsv4-flash-<ver>` 系列）容器内 `/usr/local/lib/python3.10/dist-packages/sglang`，**未随本包分发**（上游代码合规红线见 `docs/STANDARDS.md`）。需要查看原文时自行 `docker cp <容器>:/usr/local/lib/python3.10/dist-packages/sglang <目标目录>` 抽取，保持源码原样。
+海光 SGLang 0.5.12(+g9a3a3e5f9) 海光 fork 的 DCU 专属适配源码位于 DTK26.04 镜像（`dsv4-flash-<ver>` 系列）容器内 `/usr/local/lib/python3.10/dist-packages/sglang`，**未随本包分发**（上游代码合规红线见 `../_dcu-toolkit-shared/docs/STANDARDS.md`）。需要查看原文时自行 `docker cp <容器>:/usr/local/lib/python3.10/dist-packages/sglang <目标目录>` 抽取，保持源码原样。
 
 > 本节只记录源码位置与结构，不内联长代码、不存性能基线/逐行日志。
 

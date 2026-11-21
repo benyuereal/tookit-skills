@@ -16,7 +16,7 @@ license: MIT
 
 1. **架构作用域隔离**：DCU 有多种架构（K100/Z100→gfx906、K100-AI→gfx928 等）。
    每条知识必须标注适用的 `gfx` / 卡型，默认查询结果只返回当前作用域内的事实。
-   > ⚠️ 来源：你本机/容器里**不要假设某代卡**。编译前用 `dcu-kernel-dev/scripts/dcu_detect_arch.sh` 现查。
+   > ⚠️ 来源：你本机/容器里**不要假设某代卡**。编译前用 `dcu-kernel-dev/../dcu-kernel-dev/scripts/dcu_detect_arch.sh` 现查。
 2. **溯源 + 证据**：每条"已验证事实"必须挂来源（内部文档 文件 ID / 上游 commit / 实测日期 + 设备 + DTK 版本）。
    不收"听说""可能"。模糊结论标 `unverified`。
 3. **真机验证纪律**：凡涉及数值/性能/指令布局的结论，必须在挂载 `/opt/hyhal:ro` 且有 `/dev/kfd` 的
@@ -49,7 +49,7 @@ license: MIT
 > 三代 928/936/938 的 L2 均为 8MB（四卡实测）；L1 代际不同（928=16KB、936=32KB、938 待补）。
 > BW1100 镜像内 rocminfo 缺 libhsa-runtime64.so.1 跑不了，L1/SIMD-per-CU 待补（HIP 结构体字段已全）。
 > K100-AI "每 block 512 线程" 是 XDZS2025 实践值，硬件 max = 1024 线程/block（maxThreadsPerBlock 实测）。
-> 方法与三宿主编译/运行配方见 `wiki/hwprobe_p0_20261020.md`；性能数字（HBM/launch/LDS 带宽）→ `dcu-perf-cases`（`perf/dcu-perf-cases/references/hwprobe-baseline-20261020.md`）；型号规格总表 → 包根 `references/dcu-models.md`。
+> 方法与三宿主编译/运行配方见 `wiki/hwprobe_p0_20261020.md`；性能数字（HBM/launch/LDS 带宽）→ `dcu-perf-cases`（`perf/dcu-perf-cases/references/hwprobe-baseline-20261020.md`）；型号规格总表 → 包根 `../_dcu-toolkit-shared/references/dcu-models.md`。
 
 ## 三、已验证事实索引（wiki/ 目录）
 

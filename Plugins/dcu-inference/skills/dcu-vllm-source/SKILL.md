@@ -14,7 +14,7 @@ license: MIT
 > `apply_platform_patches()` + `apply_worker_patches()` 两阶段打补丁，`patch_report()` 报角色/符号/状态，`vllm-hcu-doctor` 诊断，
 > 兼容门仅收 `0.25.x`；`VLLM_PLUGINS=hcu,hcu_model,hcu_ops`（留空则全载）。目录 `patch/`（import_coordinator + module_exchange + platform/worker）、
 > `model_executor/layers/`（linear + fused_moe 配 DeepEP/DeepGEMM + quantization compressed-tensor/SlimQuant）、`models/`（DeepSeek/HY/GLM）、`platforms/hcu.py`。
-> 刷新：`python3 scripts/hygon-upstream-sync.py --check`（快照 `references/hygon-upstream/upstream-snapshot.json`，索引 `repos-index.md`）。
+> 刷新：`python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check`（快照 `../_dcu-toolkit-shared/references/hygon-upstream/upstream-snapshot.json`，索引 `repos-index.md`）。
 
 > 定位：**合并 vLLM 0.15/0.18/0.21.0/0.23.0/0.26 五版源码适配索引**。原五版 split 为独立 skill，内容高度重复，此处合并为单 skill 覆盖多版本，供 agent 按目标版本查结构/适配点。
 > 适用方式：查「某版本 vLLM 的 DCU 适配落点」时，在本 skill 内按版本段取路径/适配结论，再与 `dcu-vllm-op-replace` / `dcu-vllm-custom-op` 组合走算子开发闭环。

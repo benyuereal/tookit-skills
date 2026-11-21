@@ -342,4 +342,4 @@ ssh root@<HOST> "rm -rf /tmp/dcuprofiletools /tmp/dcu_env_out"
 - 机型基础环境部署（BW 系列/K100-AI/Z100L·K100）版本树 `d9126ccd-226f-11f1-b0c2-0242ac150003`（13 叶）。
 - DCU 硬件环境部署手册/服务器适配列表 `678457f6-268f-11f1-b0c3-0242ac150003`（5 叶）。
 - DTK 环境安装/常用命令与作业调度/HPC 应用 `5b77899d-ad7c-11f0-afac-2e5fc4af73a0`（21 叶）。
-- 取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `references/sourcefind/doc-center-index.md`。
+- 取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `../_dcu-toolkit-shared/references/sourcefind/doc-center-index.md`。

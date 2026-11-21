@@ -105,4 +105,4 @@ DCU 型号 → gfx 架构（`hipcc --offload-arch` 用）：
 
 - 《DCU 编程实战（2026 版）》版本树 `a2e964e8-a67d-11f0-909a-b6dd5499a79e`（25 叶：概述/软硬件架构/编程方法/应用移植与优化/AI 应用/附录）；配套示例代码在 z-file Cat7「DCU编程实战 代码」SampleChapter3-6.zip（download.sourcefind.cn:65024）。
 - DCC 编译器深水区（编译选项/-mllvm/GCVM/LingShu 后端）见 `dcu-triton-source/references/dcc-compiler-docs.md`。
-- 取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `references/sourcefind/doc-center-index.md`。
+- 取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `../_dcu-toolkit-shared/references/sourcefind/doc-center-index.md`。

@@ -41,7 +41,7 @@ license: MIT
 如果 trace/profile 目录不可写，使用 `/tmp/llm_torch_profiler_analysis/<模型或trace目录名>/`。
 
 最终报告必须包含模型结构图章节。使用 `model-architecture-diagram` skill 的
-`scripts/model_architecture_diagram.py "<model name>"`（跨 skill 引用：该脚本在 `model-architecture-diagram/scripts/` 下，非本 skill 内）生成公开原始模型结构图 Markdown，
+`../model-architecture-diagram/scripts/model_architecture_diagram.py "<model name>"`（跨 skill 引用：该脚本在 `model-architecture-diagram/scripts/` 下，非本 skill 内）生成公开原始模型结构图 Markdown，
 并嵌入 `torch_profiler_analysis.md`。如果没有匹配到公开原始结构图，也要在报告里记录
 `no_match` 结果，不能静默省略。
 

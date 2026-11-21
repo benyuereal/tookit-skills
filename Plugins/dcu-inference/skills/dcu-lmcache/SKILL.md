@@ -22,7 +22,7 @@ license: MIT
 | 0.4.1 | vLLM 0.15.1 | 对应 dcu-vllm-source 的 DAS 发布版体系 |
 | 0.4.2 | vLLM 0.18.1 | 对应 dcu-vllm-source 的 DAS 发布版体系 |
 
-> 上游锚点（2026-10-12）：`HYGON-AI/LMCache-das` 官方下游锚点已升到 **0.4.2**（原 v0.3.13/fc031d4），与本表 0.4.2 行一致；⚠️ 但 pypi 源（`/nightly/dtk/`）最新构建仍是 **0.3.13**（torch2100，<device-A> 实测 import 通过，2026-10-14），GitHub 锚点与源构建不同步，部署以源上实际构建为准。做 LMCache 适配/排障前先 `python3 scripts/hygon-upstream-sync.py --check` 核对（快照 `references/hygon-upstream/upstream-snapshot.json`）。
+> 上游锚点（2026-10-12）：`HYGON-AI/LMCache-das` 官方下游锚点已升到 **0.4.2**（原 v0.3.13/fc031d4），与本表 0.4.2 行一致；⚠️ 但 pypi 源（`/nightly/dtk/`）最新构建仍是 **0.3.13**（torch2100，<device-A> 实测 import 通过，2026-10-14），GitHub 锚点与源构建不同步，部署以源上实际构建为准。做 LMCache 适配/排障前先 `python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --check` 核对（快照 `../_dcu-toolkit-shared/references/hygon-upstream/upstream-snapshot.json`）。
 
 > 主文档实测基础镜像示例：`<internal_registry>/dcu/admin/base/vllm:0.9.2-ubuntu22.04-dtk25.04.2-1226-das1.7-py3.10-20251226`（vLLM 0.9.2 + DTK 25.04.2）。LMCache 以 pip 从源码编译安装（见 §3），非预装。
 > 海光适配落点：LMCache 编译需 `BUILD_WITH_HIP=1` + `PYTORCH_ROCM_ARCH=gfx936`（BW100 系；K100/Z100 系按实际 gfx 填）+ `CXX=hipcc`——走 ROCm 兼容路径，无 hygon 专属分支。

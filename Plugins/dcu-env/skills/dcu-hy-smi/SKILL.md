@@ -69,7 +69,7 @@ sshpass -e ssh -o StrictHostKeyChecking=no root@<device_ip> "/opt/hyhal/bin/hy-s
 
 > ⚠️ **`--showtoponuma` 是获取卡↔NUMA 亲和性的唯一可信源**。`lspci -vvv` 在海光上所有 PCI
 > 设备都报 `NUMA node: 0`，失真（实测跨 NUMA 机型的 card4-7 实际在 NUMA4，lspci 却报 0）。
-> 详见 dcu-topology skill 的 Pitfall #6/#7。dcu-topology 的 `dcu-topology/scripts/collect_topology.sh` 已内置
+> 详见 dcu-topology skill 的 Pitfall #6/#7。dcu-topology 的 `dcu-topology/../dcu-topology/scripts/collect_topology.sh` 已内置
 > 用 hy-smi 采集，无需手动跑。
 
 ## 带宽相关
@@ -251,9 +251,9 @@ bash scripts/hy_smi_query.sh <任意hy-smi参数>   # 透传，如 --showpids --
 > 参考源：https://github.com/rookie-J/hy-smi （本 skill 命令参考基于此仓库，已补充多机型实测与本包集成封装）
 
 ## References
-- 官方文档中心《HY-SMI CTL 使用手册》版本树 `74da671f-1b65-11f1-a4a0-0242ac150003`（22 叶）。取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `references/sourcefind/doc-center-index.md`。
+- 官方文档中心《HY-SMI CTL 使用手册》版本树 `74da671f-1b65-11f1-a4a0-0242ac150003`（22 叶）。取全文：`GET /api-doc/document/TreeDocument?VersionUUID=<树uuid>` 列目录、`DetailDocument?UUID=<叶uuid>`（匿名，2026-10-14 实测）；总索引见包内 `../_dcu-toolkit-shared/references/sourcefind/doc-center-index.md`。
 
 - 原 skill 仓库：https://github.com/rookie-J/hy-smi （含完整选项参考 + examples.sh，本 skill 的 `scripts/examples.sh` 即来源于此）
-- 关联：dcu-topology（拓扑采集已内置 hy-smi，`dcu-topology/scripts/collect_topology.sh` 用 --showtoponuma 为权威源）、dcu-rccl-test（集合通信绑核，hops/亲和性为 NCCL 映射依据）
+- 关联：dcu-topology（拓扑采集已内置 hy-smi，`dcu-topology/../dcu-topology/scripts/collect_topology.sh` 用 --showtoponuma 为权威源）、dcu-rccl-test（集合通信绑核，hops/亲和性为 NCCL 映射依据）
 - 互补：`hy-smi-tool`（skills-dcu-autoopt 整合，2026-08-19）——通用 hy-smi 巡检/工作流（健康检查/性能监控/拓扑/进程/JSON 采集五套 workflow + RAS/固件/错误处理），偏「通用工具手册」；本 skill 偏「DCU 实测坑 + 按容器反查 + 封装脚本」。两者命令集高度重叠，按需取用，不冲突。
 

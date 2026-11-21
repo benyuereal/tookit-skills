@@ -11,7 +11,7 @@ license: MIT
 适用场景：理解/调优海光 DTK RCCL 的 **PCIe 混合链路**（在 xHCL + PCIe 并存拓扑下，如何通过环境变量控制 channel 数量与缓冲区放置，把通信 traffic 引导到 PCIe link memory 路径）。本文是**源码级地图**，回答"代码在哪、为什么这么设计、怎么调"。
 
 > **来源**：内部文档《深入理解 DTK RCCL 的 PCIe 混合链路优化》（file_id `<internal-file-id>`，DTK 26.04，20260325，纯自包含已全文抓取）。
-> ⚠ **源码纪律**：本文源码片段基于 **DTK 26.04.2 的 custom-rccl（海光 RCCL fork）**，行号（如 `src/init.cc:1638`、`src/transport/p2p.cc:119-120`、`src/transport/p2p.cc:996-1010`）**随版本可能漂移**，但本 skill 新增了 **`references/dtk-26.04.2-rccl-source-map.md`**（真实源码树地图 + RCCL 专属环境变量总表 + PCIe 混合链路关键代码真实行号），实际改代码/查逻辑时**优先以该 reference 的行号核验**。行号漂移时，用 `grep -n` 在目标分支源码中实时定位。与 `dcu-vllm-source-*` 同源分析纪律一致。**源码树未随本包分发**（上游代码合规红线见 `docs/STANDARDS.md`）；核行号前请先自行获取 DTK 26.04.2 的 RCCL 源码（custom-rccl）。
+> ⚠ **源码纪律**：本文源码片段基于 **DTK 26.04.2 的 custom-rccl（海光 RCCL fork）**，行号（如 `src/init.cc:1638`、`src/transport/p2p.cc:119-120`、`src/transport/p2p.cc:996-1010`）**随版本可能漂移**，但本 skill 新增了 **`references/dtk-26.04.2-rccl-source-map.md`**（真实源码树地图 + RCCL 专属环境变量总表 + PCIe 混合链路关键代码真实行号），实际改代码/查逻辑时**优先以该 reference 的行号核验**。行号漂移时，用 `grep -n` 在目标分支源码中实时定位。与 `dcu-vllm-source-*` 同源分析纪律一致。**源码树未随本包分发**（上游代码合规红线见 `../_dcu-toolkit-shared/docs/STANDARDS.md`）；核行号前请先自行获取 DTK 26.04.2 的 RCCL 源码（custom-rccl）。
 > ⚠ **不存性能数字**：本文是机制解析，无基准/逐行日志；调优效果请用 `dcu-rccl-test` 实测。
 
 ## 0. 一句话机制
@@ -159,7 +159,7 @@ if (connIndex == 0) {
 
 ## 使用须知
 - 本文源码片段基于 **DTK 26.04.2 custom-rccl**，行号可能随版本漂移；实际改代码拉海光 fork 实时核验。
-- DTK-26.04.2 的完整 RCCL 源码树（custom-rccl：src/ 源码主体 + CMakeLists/Makefile/build_ut.sh 等构建文件，含 msccl 算法 XML 与拓扑测试数据）**未随本包分发**（上游代码合规红线见 `docs/STANDARDS.md`）；需引源码原文/编译时，请先自行获取 DTK 26.04.2 的 RCCL 源码。
+- DTK-26.04.2 的完整 RCCL 源码树（custom-rccl：src/ 源码主体 + CMakeLists/Makefile/build_ut.sh 等构建文件，含 msccl 算法 XML 与拓扑测试数据）**未随本包分发**（上游代码合规红线见 `../_dcu-toolkit-shared/docs/STANDARDS.md`）；需引源码原文/编译时，请先自行获取 DTK 26.04.2 的 RCCL 源码。
 - 搭配 **references/dtk-26.04.2-rccl-source-map.md**：该地图给出 26.04.2 真实源码树 + RCCL 环境变量总表 + PCIe 混合链路关键代码行号，改代码/查逻辑优先用它核验。
 - 搭配 **references/build_ut.sh-compile-path.md**：在 DCU 上编译 RCCL 动态库/UT 用例时，核对 hipcc/ROCM 路径与 BUILD_TESTS=ON 是否命中。
 - 不存性能基线/逐行日志；调优效果用 `dcu-rccl-test` 实测留痕。

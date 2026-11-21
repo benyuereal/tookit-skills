@@ -42,7 +42,7 @@ HyQual 是海光官方压力验收/稳定性测试工具包（z-file Cat5「基�
 
 ## 官方文档中心 hyqual 手册树
 
-版本树 `5ce53abd-1b65-11f1-a4a0-0242ac150003`（12 叶）：hyqual-BW1000系列 / hyqual-BW1100系列 / hyqual-k100-ai 三系列 × 修改记录/概述/HyQual安装与配置/使用指南。取全文 `GET https://developer.sourcefind.cn/api-doc/document/DetailDocument?UUID=<叶uuid>`（匿名）。**K100/Z100L 机型文档只在 z-file 包内 PDF**，文档中心无对应叶。23 树总索引见 dcu-toolkit-skills 包 `references/sourcefind/doc-center-index.md`。
+版本树 `5ce53abd-1b65-11f1-a4a0-0242ac150003`（12 叶）：hyqual-BW1000系列 / hyqual-BW1100系列 / hyqual-k100-ai 三系列 × 修改记录/概述/HyQual安装与配置/使用指南。取全文 `GET https://developer.sourcefind.cn/api-doc/document/DetailDocument?UUID=<叶uuid>`（匿名）。**K100/Z100L 机型文档只在 z-file 包内 PDF**，文档中心无对应叶。23 树总索引见 dcu-toolkit-skills 包 `../_dcu-toolkit-shared/references/sourcefind/doc-center-index.md`。
 
 ## 使用须知
 

@@ -37,11 +37,11 @@ license: MIT
 
 两种取数路径，脚本自动选：
 
-1. **直接读 dcu-topology 的采集 JSON**（推荐）：`dcu-topology/scripts/collect_topology.sh -j` 输出，字段：
+1. **直接读 dcu-topology 的采集 JSON**（推荐）：`dcu-topology/../dcu-topology/scripts/collect_topology.sh -j` 输出，字段：
    - `dcu_devices[].{pci_slot, numa_node}` — 卡↔NUMA
    - `numa_cpus.{node: "cpulist"}` — 各 NUMA 节点的 CPU 列表
    - `dcu_source` — 数据来源（必须 `hy-smi` 才可信）
-2. **直接用 hy-smi 现场采集**（无 JSON 时）：`dcu-hy-smi` 的 `dcu-hy-smi/scripts/hy_smi_query.sh topo` 拿 `--showtoponuma`，
+2. **直接用 hy-smi 现场采集**（无 JSON 时）：`dcu-hy-smi` 的 `dcu-hy-smi/../dcu-hy-smi/scripts/hy_smi_query.sh topo` 拿 `--showtoponuma`，
    NUMA cpulist 从 `/sys/devices/system/node/nodeX/cpulist` 读
 
 ## 输出（绑定方案）
@@ -72,7 +72,7 @@ GPU4 (PCI 87:00.0) -> NUMA 4  cpus: 64-79,192-207
 
 ```bash
 # 1. 先用 dcu-topology 采拓扑（或 dcu-hy-smi 现场采）
-bash dcu-topology/scripts/collect_topology.sh -j > /tmp/topology.json
+bash dcu-topology/../dcu-topology/scripts/collect_topology.sh -j > /tmp/topology.json
 
 # 2. 生成绑定方案（默认 dry-run，只打印）
 bash dcu-cpu-affinity/scripts/gen_affinity.sh --topo-json /tmp/topology.json
@@ -117,6 +117,6 @@ bash dcu-cpu-affinity/scripts/gen_affinity.sh --topo-json /tmp/topology.json --a
 
 ## References
 
-- 关联：dcu-topology（`dcu-topology/scripts/collect_topology.sh` 采拓扑，本 skill 的输入）、dcu-hy-smi（`--showtoponuma` 拓扑源）、
+- 关联：dcu-topology（`dcu-topology/../dcu-topology/scripts/collect_topology.sh` 采拓扑，本 skill 的输入）、dcu-hy-smi（`--showtoponuma` 拓扑源）、
   dcu-rccl-test（可选验证带宽）
 - 设计参考：autobinder（Hygon CPU 绑核思路，本 skill 仅取"NUMA 距离感知 + 默认不启用"纪律，不做 daemon 自动绑）

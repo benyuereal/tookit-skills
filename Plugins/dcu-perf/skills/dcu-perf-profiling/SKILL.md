@@ -126,7 +126,7 @@ profile/<run_name>/
   - 已验证计数器：`SQ_INSTS_MMOP`（MMAC 活动）。
   - 读法：=0 → matmul 类 kernel 几乎总是漏优化；>0 但<<50% → 没喂饱（数据没及时到 Dim 6 或 tile 不对）；>50% → 做得不错重点放别处。
   - 修复：0% 且矩阵乘形状 → 围绕 MFMA 重设计（`v_mmac`/`tl.dot`，见 `dcu-kernel-dev`），通常 2–10×。
-  - DCU 注意：不同 gfx 的 MFMA 指令集不同（gfx928 有 `__builtin_amdgcn_mmac_f32_16x16x8f32` 等；gfx936 的 BW150/BW100 **不是** 928 那套 MC intrinsic）。先 `dcu-kernel-dev/scripts/dcu_detect_arch.sh` 现查 gfx，别假设。
+  - DCU 注意：不同 gfx 的 MFMA 指令集不同（gfx928 有 `__builtin_amdgcn_mmac_f32_16x16x8f32` 等；gfx936 的 BW150/BW100 **不是** 928 那套 MC intrinsic）。先 `dcu-kernel-dev/../../../dcu-operators/skills/dcu-kernel-dev/scripts/dcu_detect_arch.sh` 现查 gfx，别假设。
 - **Dim 5 — 时间线形态**：CU 利用率随 kernel 生命周期怎么变？
   - 工具：hipprof Perfetto trace（`--hip-trace` 导出，`https://ui.perfetto.dev/` 读）。
   - 形态读法见 D.3。
