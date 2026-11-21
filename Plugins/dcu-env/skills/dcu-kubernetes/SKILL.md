@@ -4,6 +4,7 @@ description: "DCU在K8s上的组件部署与Device-Plugin三模式资源调度"
 version: 1.2.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # 海光 DCU Kubernetes 部署与资源调度（dcu-kubernetes）

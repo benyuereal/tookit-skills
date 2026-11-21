@@ -4,6 +4,7 @@ description: GDN prefill kernel 优化。优化 DCU 上 GDN prefill TTFT 时加�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # GDN 线性注意力 Prefill Kernel 优化（dcu-gdn-prefill-kernel-opt）

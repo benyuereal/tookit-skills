@@ -4,6 +4,7 @@ description: "DCU真实性能优化案例库：跨平台对标+根因定位+量�
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 真实性能优化案例库

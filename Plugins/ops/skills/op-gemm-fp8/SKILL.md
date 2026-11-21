@@ -4,6 +4,7 @@ description: "FP8 GEMM（含 batched/分组）在 DCU gfx938 上的实现选型�
 version: 0.1.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: card
 ---
 
 # FP8 GEMM（op-gemm-fp8）· draft

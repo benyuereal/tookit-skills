@@ -4,6 +4,7 @@ description: "用 SGLang 人类 review 语料（至 2026-07-27）做 PR 审查"
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 > ⚠ **来源与平台标注**：本 skill 整包吸纳自 BBuf/AI-Infra-Auto-Driven-SKILLS v0.1.5（2026-10-05 tag，MIT）。

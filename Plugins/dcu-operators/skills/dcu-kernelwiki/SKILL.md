@@ -4,6 +4,7 @@ description: "海光DCU kernel优化知识库，agent可查询的可复用方法
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # 海光 DCU Kernel 优化知识库（dcu-kernelwiki）

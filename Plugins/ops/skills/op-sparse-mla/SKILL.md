@@ -4,6 +4,7 @@ description: "稀疏 MLA 前向（DeepSeek Sparse Attention / DSA）：q[S,H,576
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: card
 ---
 
 # 稀疏 MLA 前向（op-sparse-mla）

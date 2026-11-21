@@ -4,6 +4,7 @@ description: SGLang DCU源码结构与海光适配点索引
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # SGLang 源码适配点索引（dcu-sglang-source）

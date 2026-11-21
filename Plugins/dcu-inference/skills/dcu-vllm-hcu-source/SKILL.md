@@ -4,6 +4,7 @@ description: vllm-hcu 包源码结构——vLLM 在 DCU/HCU 上的插件式 patc
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # vllm-hcu 源码适配索引（dcu-vllm-hcu-source）

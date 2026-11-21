@@ -4,6 +4,7 @@ description: 海光DCU HyQual 官方压力验收工具：5 卡型镜像版本矩
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU HyQual 官方压力验收与环境自检

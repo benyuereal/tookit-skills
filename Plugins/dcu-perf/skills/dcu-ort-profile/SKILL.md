@@ -4,6 +4,7 @@ description: "ORT在DCU上的Profile机制解析+MOE显存雪崩HIP流修复"
 version: 1.0.0
 author: DCU Engineer（整理自<internal-author> 内部文档 文档）
 license: MIT
+kind: tool
 ---
 
 # ORT 1.19.2 Profile 机制解析与 DCU/ROCm MOE 显存优化

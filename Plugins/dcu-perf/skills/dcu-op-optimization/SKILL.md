@@ -4,6 +4,7 @@ description: "DCU算子优化闭环：profile→定位→改kernel→验证正�
 version: 1.2.3
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 算子优化标准闭环（dcu-op-optimization）

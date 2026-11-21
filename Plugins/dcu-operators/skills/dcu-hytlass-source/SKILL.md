@@ -4,6 +4,7 @@ description: "hytlass（HYGON HCU Templates for Linear Algebra Subroutines）源
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: knowledge
 ---
 
 # hytlass 源码与用法索引（dcu-hytlass-source）

@@ -4,6 +4,7 @@ description: "DCU 多任务薄编排层（公开版）。依据 workflow YAML �
 version: 1.1.3
 author: DCU Toolkit Contributors
 license: MIT
+kind: composite
 ---
 
 # dcu-orchestrator — 公开版薄编排层

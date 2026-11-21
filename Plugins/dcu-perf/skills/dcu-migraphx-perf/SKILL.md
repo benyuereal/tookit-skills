@@ -4,6 +4,7 @@ description: "海光DCU上MIGraphX推理引擎性能优化最佳实践（测量/
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DCU MIGraphX 最佳性能实践（dcu-migraphx-perf）

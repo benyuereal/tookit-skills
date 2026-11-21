@@ -4,6 +4,7 @@ description: hip-dsa / hip-dsa-kernels / hipdnn DCU 适配——cudnn.DSA（Deep
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # hip-dsa / hipdnn DCU 适配源码索引（dcu-hipdsa-source）

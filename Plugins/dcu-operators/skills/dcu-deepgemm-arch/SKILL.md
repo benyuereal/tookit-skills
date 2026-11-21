@@ -4,6 +4,7 @@ description: DeepGEMM三路径架构与MODE调优机制：masked/contiguous/ll�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DeepGEMM 三路径架构与调优机制（dcu-deepgemm-arch）

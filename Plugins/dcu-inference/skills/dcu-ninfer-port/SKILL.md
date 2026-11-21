@@ -4,6 +4,7 @@ description: "NInfer to DCU(gfx936) port: SIMT-first + 4-layer quant."
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # dcu-ninfer-port — NInfer 移植到海光 DCU

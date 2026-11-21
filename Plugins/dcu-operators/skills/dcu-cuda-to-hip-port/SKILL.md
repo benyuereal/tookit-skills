@@ -4,6 +4,7 @@ description: "Port a standalone CUDA C++ project to Hygon DCU/HIP."
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # CUDA C++ 工程 → DCU/HIP 移植（dcu-cuda-to-hip-port）

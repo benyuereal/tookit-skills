@@ -4,6 +4,7 @@ description: Apply SGLang environment-variable conventions and lifecycle checks 
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Environment Variables — Conventions

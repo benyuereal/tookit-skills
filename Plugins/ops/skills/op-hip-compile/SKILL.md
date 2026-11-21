@@ -4,6 +4,7 @@ description: "手写 HIP kernel 的编译调优：为什么用 aicc 而不是 hi
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: tool
 ---
 
 # 手写 HIP 的编译调优（op-hip-compile）

@@ -4,6 +4,7 @@ description: Use when writing or understanding LightOp fusion kernels.
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # LightOp 算子融合方法论（dcu-lightop-fusion）

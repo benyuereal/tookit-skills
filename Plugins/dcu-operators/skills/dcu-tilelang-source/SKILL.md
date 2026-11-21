@@ -4,6 +4,7 @@ description: TileLang DCU 适配源码结构——TVM 系 DSL 编译器（contri
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # TileLang DCU 适配源码索引（dcu-tilelang-source）

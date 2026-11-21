@@ -4,6 +4,7 @@ description: "DCU 模型部署目录：100 个已验证模型（LLM/VLM/Embeddin
 version: 1.0.2
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 模型部署目录（dcu-model-deploy-catalog）

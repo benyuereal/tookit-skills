@@ -4,6 +4,7 @@ description: Integrate an image or video diffusion model from Diffusers or a ref
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # SGLang Diffusion Add Model

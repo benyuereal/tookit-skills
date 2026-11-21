@@ -4,6 +4,7 @@ description: 排查 CUDA/HIP graph 下"每 batch 变化的 Python 标量被烧�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # CUDA Graph 烧死 Python 标量：排查与修复

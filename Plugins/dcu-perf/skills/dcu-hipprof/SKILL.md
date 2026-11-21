@@ -4,6 +4,7 @@ description: "hipprof性能分析总纲：Trace/PMC/RCCL/MPI/泄漏/CoreDump（�
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # hipprof 性能分析最佳实践（dcu-hipprof）

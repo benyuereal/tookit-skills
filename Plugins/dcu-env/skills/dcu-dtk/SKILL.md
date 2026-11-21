@@ -4,6 +4,7 @@ description: DCU DTK开发工具包下载、安装与激活；仅物理机需装
 version: 1.3.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # dcu-dtk — 海光 DCU DTK 开发工具包安装与激活

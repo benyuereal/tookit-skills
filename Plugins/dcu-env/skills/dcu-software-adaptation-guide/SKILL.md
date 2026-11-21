@@ -4,6 +4,7 @@ description: DCU 软件适配通用参考——拿到任意新软件包，按 5 
 version: 1.1.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 软件适配通用参考（dcu-software-adaptation-guide）

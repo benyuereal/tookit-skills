@@ -4,6 +4,7 @@ description: "海光DCU机密计算CSV+PCIE设备直通虚拟机部署与踩坑"
 version: 1.2.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # 海光 DCU 机密计算 + DCU 直通加密虚拟机（dcu-csv-passthrough）

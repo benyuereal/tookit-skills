@@ -4,6 +4,7 @@ description: AITER MoE融合算子四后端调度与适配索引
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # AITER MoE 算子深度索引（dcu-aiter-moe）

@@ -4,6 +4,7 @@ description: "Write a DCU HIP fusion kernel for unsupported model configs."
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 自定义融合 kernel：填补框架融合缺口（dcu-custom-fusion-kernel）

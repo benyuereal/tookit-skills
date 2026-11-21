@@ -4,6 +4,7 @@ description: "Run a resumable evidence-driven LLM inference (serving/整模型) 
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Run an Evidence-Driven Optimization Loop

@@ -4,6 +4,7 @@ description: DCU 适配总览——版本兼容矩阵（DTK×torch×框架×算�
 version: 1.2.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 适配总览（dcu-adaptation-overview）

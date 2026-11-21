@@ -4,6 +4,7 @@ description: 反推 DCU 镜像为可重建的 Dockerfile（内网源换公网源
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 镜像反推重建（Image Reverse-Rebuild）

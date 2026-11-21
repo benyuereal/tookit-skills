@@ -4,6 +4,7 @@ description: Validate, dispatch, and monitor SGLang bot cherry-picks of merged P
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # SGLang Cherry-Pick

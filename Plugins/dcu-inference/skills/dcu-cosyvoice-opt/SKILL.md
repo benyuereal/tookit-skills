@@ -4,6 +4,7 @@ description: "CosyVoice2(0.5B TTS)在DCU上的部署与推理优化"
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # CosyVoice2 TTS 部署与优化（dcu-cosyvoice-opt）

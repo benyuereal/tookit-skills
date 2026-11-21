@@ -4,6 +4,7 @@ description: vLLM DCU版自定义算子替换原生算子流程
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # 自定义算子替换 vLLM 原生算子（dcu-vllm-op-replace）

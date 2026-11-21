@@ -4,6 +4,7 @@ description: ONNX Runtime DCU 适配源码结构——ROCm EP 链接 DTK libgala
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # ONNX Runtime DCU 适配源码索引（dcu-ort-source）

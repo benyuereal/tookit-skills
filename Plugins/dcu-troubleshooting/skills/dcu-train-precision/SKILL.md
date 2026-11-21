@@ -4,6 +4,7 @@ description: "DCU训练精度排查：NV对齐、逐层定位异常层、NaN修�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DCU 训练精度排查（dcu-train-precision）

@@ -4,6 +4,7 @@ description: Debug stalls and hangs in distributed SGLang inference across TP, P
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Debugging Distributed Hangs in SGLang

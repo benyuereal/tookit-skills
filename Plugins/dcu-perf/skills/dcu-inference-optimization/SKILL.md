@@ -4,6 +4,7 @@ description: DCU通用模型推理优化方法论
 version: 1.2.4
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 通用模型推理优化（dcu-inference-optimization）

@@ -4,6 +4,7 @@ description: "DCU上C++LibTorch推理部署：libtorch_hip+dcc编译与TorchScri
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # 海光 DCU LibTorch C++ 推理部署（dcu-libtorch）

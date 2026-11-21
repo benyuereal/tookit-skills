@@ -4,6 +4,7 @@ description: "算子优化的搜索循环：队列 → 单个实验 → 机器�
 version: 1.0.1
 author: DCU Toolkit Contributors
 license: MIT
+kind: tool
 ---
 
 # 算子优化循环（单模型可执行版）

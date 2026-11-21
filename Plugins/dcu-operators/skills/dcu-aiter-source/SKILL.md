@@ -4,6 +4,7 @@ description: AITER算子库DCU源码结构与适配点索引
 version: 1.1.2
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # AITER 源码适配索引（dcu-aiter-source）

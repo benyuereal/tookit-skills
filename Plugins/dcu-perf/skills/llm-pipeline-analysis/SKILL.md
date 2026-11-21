@@ -4,6 +4,7 @@ description: Decompose LLM serving traces into mutually exclusive latency groups
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Analyze an LLM Pipeline Trace

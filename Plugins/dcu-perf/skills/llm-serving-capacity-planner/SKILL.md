@@ -4,6 +4,7 @@ description: Plan and audit LLM serving memory capacity from startup logs, model
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # LLM Serving Capacity Planner

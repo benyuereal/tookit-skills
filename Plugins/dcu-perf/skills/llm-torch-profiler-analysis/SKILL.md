@@ -4,6 +4,7 @@ description: "面向 `sglang`、`vllm` 和 `TensorRT-LLM` 的统一 LLM torch-pr
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 统一 LLM Torch Profiler 分析

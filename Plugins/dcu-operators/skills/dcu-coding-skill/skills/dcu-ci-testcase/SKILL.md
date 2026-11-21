@@ -2,6 +2,7 @@
 name: dcu-ci-testcase
 version: 1.0.1
 license: MIT
+kind: tool
 description: CI 测试用例管理，支持测试用例创建、验证和组织，覆盖 unit/integration 场景
 author: DCU Team
 

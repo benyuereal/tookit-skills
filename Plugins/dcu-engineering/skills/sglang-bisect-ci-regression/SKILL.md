@@ -4,6 +4,7 @@ description: Investigate repeatable SGLang CI failures by normalizing the signat
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # SGLang Bisect CI Regression

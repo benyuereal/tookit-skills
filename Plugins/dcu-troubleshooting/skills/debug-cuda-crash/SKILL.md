@@ -4,6 +4,7 @@ description: Debug CUDA or HIP kernel crashes in SGLang and vLLM with pre-call l
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Tutorial: Debugging CUDA Crashes with Kernel API Logging

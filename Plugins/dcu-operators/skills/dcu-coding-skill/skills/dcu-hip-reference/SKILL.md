@@ -4,6 +4,7 @@ version: 1.0.1
 description: HIP runtime / 基础 API 查询与示例，承接 api-lookup 意图，可作为其他 core skill 的共同知识基础
 author: DCU Team
 license: MIT
+kind: tool
 ---
 
 # DCU HIP Reference Skill

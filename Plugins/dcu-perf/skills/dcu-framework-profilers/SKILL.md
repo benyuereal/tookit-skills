@@ -4,6 +4,7 @@ description: 六大框架在DCU上Profiler实战：PT/TF/ORT/MIGraphX/vLLM/Megat
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # 框架级 Profiler 实战（六大框架）

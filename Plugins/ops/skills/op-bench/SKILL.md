@@ -4,6 +4,7 @@ description: "算子微基准的口径与判据：先答口径三问（测什么
 version: 1.0.1
 author: DCU Toolkit Contributors
 license: MIT
+kind: knowledge
 ---
 
 # 算子微基准：口径与判据

@@ -4,6 +4,7 @@ description: DCU 性能分析全栈总纲：五层体系（框架/引擎/算子/
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 性能分析全栈总纲

@@ -4,6 +4,7 @@ description: Add a heavyweight upstream sgl-kernel AOT CUDA/C++ operator with re
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Tutorial: Adding a New Kernel to `sgl-kernel` (AOT / Heavyweight)

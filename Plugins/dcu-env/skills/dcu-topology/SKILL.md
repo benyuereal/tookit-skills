@@ -4,6 +4,7 @@ description: 海光DCU多卡多节点拓扑优化
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU Topology 拓扑与绑核

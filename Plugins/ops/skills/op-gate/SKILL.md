@@ -4,6 +4,7 @@ description: "算子改动的判定门：四道门（执行身份 / 正确性 / 
 version: 1.0.1
 author: DCU Toolkit Contributors
 license: MIT
+kind: tool
 ---
 
 # 算子改动的判定门（四闸四档）

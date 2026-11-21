@@ -4,6 +4,7 @@ description: Triton DCU/HCU 源码结构——独立 hcu backend（DTK 特化：
 version: 1.1.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Triton DCU/HCU 源码适配索引（dcu-triton-source）

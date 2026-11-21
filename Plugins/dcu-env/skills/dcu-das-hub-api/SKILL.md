@@ -4,6 +4,7 @@ description: 查 DCU 源(pypi.sourcefind.cn)包版本/下 wheel 的 JSON API 用
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU DAS Hub 包源 API（dcu-das-hub-api）

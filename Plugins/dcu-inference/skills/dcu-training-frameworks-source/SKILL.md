@@ -4,6 +4,7 @@ description: DCU 训练框架适配合集——deepspeed（wheel 带 14 个 .hip
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 训练框架适配合集索引（dcu-training-frameworks-source）

@@ -4,6 +4,7 @@ description: vLLM DCU版从零开发自定义算子流程
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DCU 版 vLLM 自定义算子开发流程（dcu-vllm-custom-op）

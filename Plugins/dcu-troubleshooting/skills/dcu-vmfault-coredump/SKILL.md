@@ -4,6 +4,7 @@ description: Locate the faulting kernel and the offending memory value from a Hy
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU HSA VMFault Coredump 定位

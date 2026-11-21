@@ -4,6 +4,7 @@ description: "算子优化的机器模型：把「试一个改动、量一次」
 version: 1.1.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: tool
 ---
 
 # 机器模型：先算，再写

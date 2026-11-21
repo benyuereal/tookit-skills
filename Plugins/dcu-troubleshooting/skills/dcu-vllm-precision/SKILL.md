@@ -4,6 +4,7 @@ description: 定位 vLLM 推理精度问题到具体算子。输入模型路径�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, WebFetch
 ---
 

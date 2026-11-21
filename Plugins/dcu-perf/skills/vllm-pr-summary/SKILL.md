@@ -4,6 +4,7 @@ description: Fetch and analyze a Pull Request from the vllm-project/vllm GitHub 
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # vllm PR Summary

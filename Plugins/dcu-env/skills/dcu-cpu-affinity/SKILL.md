@@ -4,6 +4,7 @@ description: 海光DCU CPU绑核优化（NUMA亲和性调度）
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # dcu-cpu-affinity — 海光 DCU CPU 绑核优化（NUMA 亲和性）

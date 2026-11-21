@@ -4,6 +4,7 @@ description: "DCU 上 vLLM 运行时 monkey-patch 注入专用 kernel 的标准�
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU vLLM 运行时 monkey-patch 注入范式

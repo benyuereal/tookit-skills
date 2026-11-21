@@ -4,6 +4,7 @@ description: Return public original model architecture diagrams for user-specifi
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Model Architecture Diagram

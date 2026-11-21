@@ -4,6 +4,7 @@ description: Replay-first debug flow for SGLang serving problems. Use when a liv
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # SGLang Serving Debug

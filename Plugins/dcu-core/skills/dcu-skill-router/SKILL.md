@@ -4,6 +4,7 @@ description: DCU 系列 skills 路由与链路手册：按部署/推理/算子�
 version: 2.2.2
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 系列 skills 统一入口路由（dcu-skill-router）

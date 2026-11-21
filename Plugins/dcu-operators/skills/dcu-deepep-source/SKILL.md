@@ -4,6 +4,7 @@ description: DeepEP DCU 适配源码结构——MoE 专家并行 dispatch/combin
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DeepEP DCU 适配源码索引（dcu-deepep-source）

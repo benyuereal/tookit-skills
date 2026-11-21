@@ -4,6 +4,7 @@ description: 把 DCU 镜像复刻为物理机原生 conda 环境（非 Dockerfil
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 镜像环境 → 物理机原生 conda 环境复刻

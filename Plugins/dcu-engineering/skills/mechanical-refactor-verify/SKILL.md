@@ -4,6 +4,7 @@ description: Verify file splits, function moves, renames, and module extractions
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Mechanical Refactor — Reproducible Verification

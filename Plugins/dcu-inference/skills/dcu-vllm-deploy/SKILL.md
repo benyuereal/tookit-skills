@@ -4,6 +4,7 @@ description: DCU 上 vLLM 部署与调优经验速查：容器启动硬约束、
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 上 vLLM 部署调优经验速查（dcu-vllm-deploy）

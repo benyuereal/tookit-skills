@@ -4,6 +4,7 @@ description: "在 DCU 主机上用 Docker 跑 DCU 容器：docker run 设备挂�
 version: 1.2.2
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU Docker 操作 — 容器 SSH 免密配置

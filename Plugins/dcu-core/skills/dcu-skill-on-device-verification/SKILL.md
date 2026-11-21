@@ -4,6 +4,7 @@ description: "在真机/容器实跑DCU技能自带脚本，对照SKILL.md基线
 version: 1.0.0
 author: <maintainer>
 license: MIT
+kind: tool
 ---
 
 # DCU 技能库真机验证（dcu-skill-on-device-verification）

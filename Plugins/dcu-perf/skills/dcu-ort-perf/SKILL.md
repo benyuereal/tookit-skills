@@ -4,6 +4,7 @@ description: "海光DCU上ONNX Runtime推理引擎性能优化最佳实践（per
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DCU ONNX Runtime 最佳性能实践（dcu-ort-perf）

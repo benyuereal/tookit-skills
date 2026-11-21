@@ -4,6 +4,7 @@ description: DCU推理infra子域路由器，分发到各skill
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 推理 Infra 总入口（dcu-inference-infra）

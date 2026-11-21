@@ -4,6 +4,7 @@ description: "海光DCU驱动安装、版本兼容、加载验证与排障"
 version: 1.2.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # dcu-driver — 海光 DCU 驱动安装与验证

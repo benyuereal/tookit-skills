@@ -4,6 +4,7 @@ version: 1.1.0
 description: DCU Coding Skill 统一入口，纯路由层：意图分类 → 路由分发 → 多 skill 工作流编排（migrate-and-test）；跨域多步任务链（部署/故障/算子/推理/调研 5 条工作流 + 任务契约）见 dcu-orchestrator；不持有知识分片
 author: DCU Team
 license: MIT
+kind: composite
 ---
 
 # DCU Dispatcher

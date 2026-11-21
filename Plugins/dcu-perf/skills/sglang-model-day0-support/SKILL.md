@@ -4,6 +4,7 @@ description: "SGLang 新模型 Day-0 接入：支持范围/架构缺口/PR DAG/�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 > ⚠ **来源与平台标注**：本 skill 整包吸纳自 BBuf/AI-Infra-Auto-Driven-SKILLS v0.1.5（2026-10-05 tag，MIT）。

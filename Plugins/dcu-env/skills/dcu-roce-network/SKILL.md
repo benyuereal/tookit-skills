@@ -4,6 +4,7 @@ description: 海光 DCU 集群 RoCEv2 网络环境搭建：IP/MTU 规划、静�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 集群 RoCEv2 网络配置

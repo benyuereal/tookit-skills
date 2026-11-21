@@ -4,6 +4,7 @@ description: "DCU/HCU 官方开源平台与运维组件：集群监控（hcu-dcg
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU/HCU 官方开源平台与运维组件（dcu-opensource-platform）

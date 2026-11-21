@@ -4,6 +4,7 @@ description: RCCL 多卡互联带宽测试：单/多节点 AllReduce 性能测�
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU RCCL 集合通信测试

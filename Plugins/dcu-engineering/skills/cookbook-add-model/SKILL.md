@@ -4,6 +4,7 @@ description: Add a new model to the config-driven SGLang Mintlify cookbook with 
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Add a model to the SGLang Cookbook

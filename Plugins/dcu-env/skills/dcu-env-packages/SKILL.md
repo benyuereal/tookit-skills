@@ -4,6 +4,7 @@ description: DCU(海光)适配版软件包清单与安装排查指南
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 适配软件包清单与安装排查（dcu-env-packages）

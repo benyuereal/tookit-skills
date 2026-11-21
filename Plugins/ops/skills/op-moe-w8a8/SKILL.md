@@ -4,6 +4,7 @@ description: "FP8 MoE 前向（routed experts w8a8）：GEMM1(gate/up) → silu-
 version: 0.1.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: card
 ---
 
 # FP8 MoE 前向（op-moe-w8a8）· draft

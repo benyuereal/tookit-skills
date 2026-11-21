@@ -4,6 +4,7 @@ description: hy-smi查询监控：温度/功耗/显存/拓扑/进程，DCU巡检
 version: 1.2.3
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # dcu-hy-smi — 海光 DCU 系统管理接口

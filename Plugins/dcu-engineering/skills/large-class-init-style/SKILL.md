@@ -4,6 +4,7 @@ description: Structure SGLang Scheduler, TokenizerManager, and ModelRunner const
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # `__init__` Style for Scheduler / TokenizerManager / ModelRunner

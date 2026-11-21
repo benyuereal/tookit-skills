@@ -4,6 +4,7 @@ description: Navigate project evidence for vLLM and SGLang adaptation on DCU, HC
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU vLLM Project Wiki

@@ -4,6 +4,7 @@ description: LightOp MoE 融合算子多量化路径与适配索引
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # LightOp MoE 算子深度索引（dcu-lightop-moe）

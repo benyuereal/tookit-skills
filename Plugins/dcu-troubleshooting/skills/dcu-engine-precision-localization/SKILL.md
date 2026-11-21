@@ -4,6 +4,7 @@ description: 自定义C++推理引擎DCU精度定位到算子。引擎能跑通�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # dcu-engine-precision-localization — 自定义推理引擎精度定位（DCU）

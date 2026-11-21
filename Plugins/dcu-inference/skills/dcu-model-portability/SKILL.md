@@ -4,6 +4,7 @@ description: "评估任意PyTorch模型能否即插即用部署到海光DCU并�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 模型适配可行性评估与部署手册（dcu-model-portability）

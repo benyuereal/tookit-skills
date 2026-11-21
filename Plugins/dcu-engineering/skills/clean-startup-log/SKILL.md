@@ -4,6 +4,7 @@ description: Clean noisy SGLang startup logs without suppressing actionable comp
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Clean Up SGLang Server Startup Logs

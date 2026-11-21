@@ -4,6 +4,7 @@ description: "Build an operator-level compute template for an LLM and estimate F
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Model Compute Simulation

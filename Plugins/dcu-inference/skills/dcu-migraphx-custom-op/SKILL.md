@@ -4,6 +4,7 @@ description: "海光DCU上用MIGraphX写自定义算子（C+++HIP核函数）"
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DCU MIGraphX 自定义算子（dcu-migraphx-custom-op）

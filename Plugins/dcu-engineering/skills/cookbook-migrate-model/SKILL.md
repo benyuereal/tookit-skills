@@ -4,6 +4,7 @@ description: Migrate an existing legacy SGLang cookbook page to the config-drive
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Cookbook Migrate Model

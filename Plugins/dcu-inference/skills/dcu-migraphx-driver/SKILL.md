@@ -4,6 +4,7 @@ description: "海光DCU上MIGraphX命令行工具migraphx-driver源码解析与�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DCU MIGraphX Driver 工具扩展（dcu-migraphx-driver）

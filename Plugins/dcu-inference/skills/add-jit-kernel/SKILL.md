@@ -4,6 +4,7 @@ description: Add a lightweight upstream SGLang JIT CUDA kernel with bindings, co
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # Add a JIT Kernel to SGLang

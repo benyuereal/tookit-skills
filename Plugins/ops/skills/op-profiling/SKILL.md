@@ -4,6 +4,7 @@ description: "算子性能剖析：PMC 计数器采回来以后怎么读、怎�
 version: 3.1.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: tool
 ---
 
 # 性能剖析：把计数器读成判据

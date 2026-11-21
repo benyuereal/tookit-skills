@@ -4,6 +4,7 @@ description: DCU大模型推理压测 + W8A8 INT8 首字慢归因、tune-cache �
 version: 1.2.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 大模型推理性能测试（dcu-llm-benchmark）

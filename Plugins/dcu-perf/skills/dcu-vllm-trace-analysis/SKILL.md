@@ -4,6 +4,7 @@ description: 解析 vLLM V1 torch.profiler trace（.pt.trace.json[.gz]），定�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # vLLM Trace Analysis

@@ -4,6 +4,7 @@ description: "Use when an offline DCU container lacks a Python package."
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Offline DCU Container: Installing Missing Python Deps

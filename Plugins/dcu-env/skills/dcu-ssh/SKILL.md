@@ -4,6 +4,7 @@ description: "宿主机级 SSH：远程连 DCU 服务器执行命令、传文件
 version: 1.1.6
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU SSH 远程连接管理

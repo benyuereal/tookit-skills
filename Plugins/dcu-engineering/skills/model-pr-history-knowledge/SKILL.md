@@ -4,6 +4,7 @@ description: Build and query an evidence-backed history of model and runtime dec
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Model PR History Knowledge

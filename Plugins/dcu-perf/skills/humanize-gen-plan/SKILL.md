@@ -4,6 +4,7 @@ description: Convert an LLM inference optimization request into a pre-registered
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Humanize Gen Plan

@@ -4,6 +4,7 @@ description: DeepGEMM通用GEMM库DCU源码结构与适配
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DeepGEMM 源码适配索引（dcu-deepgemm-source）

@@ -4,6 +4,7 @@ description: DCU 故障排查速查：按报错关键词反查根因与规避手
 version: 1.2.3
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 故障排查经验速查（dcu-ontrack-experience）

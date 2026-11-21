@@ -2,6 +2,7 @@
 name: dcu-triton-kernel
 version: 1.0.1
 license: MIT
+kind: tool
 description: Triton kernel 开发助手，支持 CUDA/Triton 到 DCU HIP/TileLang 的 kernel 迁移与开发
 author: DCU Team
 

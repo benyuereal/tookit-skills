@@ -4,6 +4,7 @@ description: Modify and diagnose upstream SGLang CI orchestration, including sta
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # SGLang CI Workflow Orchestration Guide

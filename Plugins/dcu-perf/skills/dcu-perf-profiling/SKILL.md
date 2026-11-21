@@ -4,6 +4,7 @@ description: "DCU性能剖析方法论：rocprof/rocTracer命令模板与瓶颈�
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU 性能剖析方法论（dcu-perf-profiling）

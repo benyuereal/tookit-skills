@@ -4,6 +4,7 @@ description: "DCU模型部署：先真机实测跑通再写文档，含PyTorch�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 # DCU 模型部署验证纪律与实战范式（dcu-model-deploy-verify）
 

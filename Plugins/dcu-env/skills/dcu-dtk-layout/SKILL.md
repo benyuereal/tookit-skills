@@ -4,6 +4,7 @@ description: "DCU DTK目录结构与自带工具脚本速查"
 version: 1.3.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # dcu-dtk-layout — DTK 目录结构与自带工具脚本速查

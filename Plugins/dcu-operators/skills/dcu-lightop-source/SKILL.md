@@ -4,6 +4,7 @@ description: LightOp海光融合算子库源码结构与适配
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # LightOp 源码适配索引（dcu-lightop-source）

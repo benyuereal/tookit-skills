@@ -4,6 +4,7 @@ description: "Detect DCU server env (CPU/NUMA/DTK/driver) pre-tuning."
 version: 1.1.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # dcu-env — 海光 DCU 环境检测（OS / kernel / 驱动 / 拓扑）

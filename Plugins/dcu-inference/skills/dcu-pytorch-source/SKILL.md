@@ -4,6 +4,7 @@ description: DCU源码编译低版本PyTorch与LibTorch提取
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU PyTorch 源码编译适配与算子验证（dcu-pytorch-source）

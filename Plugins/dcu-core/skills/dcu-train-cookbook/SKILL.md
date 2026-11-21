@@ -4,6 +4,7 @@ description: "DCU/HCU 训练域 skill：训练/微调/RL 强化学习配方速�
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU/HCU 训练域（dcu-train-cookbook）

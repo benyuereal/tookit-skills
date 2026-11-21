@@ -4,6 +4,7 @@ description: vLLM 各版本 DCU 源码结构与适配点索引（合并 0.15/0.1
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # vLLM 各版本源码结构与 DCU 适配点索引（dcu-vllm-source）

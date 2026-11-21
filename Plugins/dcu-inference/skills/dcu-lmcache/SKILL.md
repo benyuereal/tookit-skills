@@ -4,6 +4,7 @@ description: "海光DCU上用LMCache做KV Cache卸载优化推理的方法论与
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DCU LMCache KV Cache 卸载优化（dcu-lmcache）

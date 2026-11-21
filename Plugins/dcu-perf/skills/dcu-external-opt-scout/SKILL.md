@@ -4,6 +4,7 @@ description: "Vet GitHub GPU/DCU optimization projects for DCU testing."
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 外部优化项目侦察与筛选

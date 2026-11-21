@@ -4,6 +4,7 @@ description: Review an SGLang Mintlify cookbook PR for config-driven structure, 
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Cookbook Review PR

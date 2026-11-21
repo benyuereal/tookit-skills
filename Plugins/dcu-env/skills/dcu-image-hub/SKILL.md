@@ -4,6 +4,7 @@ description: 查光合开发者社区(sourcefind.cn) DCU 镜像仓库：Web API 
 version: 1.1.2
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 镜像仓库查询（sourcefind 光合开发者社区）

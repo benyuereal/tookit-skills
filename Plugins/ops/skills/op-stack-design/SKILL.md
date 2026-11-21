@@ -4,6 +4,7 @@ description: "算子优化的选型层：先认库、再排流水线、最后才
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
+kind: tool
 ---
 
 # 算子选型与流水线（先选对库，再谈快）

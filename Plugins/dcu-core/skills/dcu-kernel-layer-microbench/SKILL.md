@@ -4,6 +4,7 @@ description: "DCU 上 LLM 推理 kernel 层微基准方法论：profiler 定位�
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # DCU kernel-layer micro-benchmark methodology

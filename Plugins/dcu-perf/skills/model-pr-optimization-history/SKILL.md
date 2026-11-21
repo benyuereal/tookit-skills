@@ -4,6 +4,7 @@ description: Use when an SGLang, vLLM, or TensorRT-LLM serving/model optimizatio
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 > ⚠ **来源标注**：本 skill 整包吸纳自 BBuf/AI-Infra-Auto-Driven-SKILLS v0.1.5（2026-10-05 tag，MIT License，https://github.com/BBuf/AI-Infra-Auto-Driven-SKILLS）。

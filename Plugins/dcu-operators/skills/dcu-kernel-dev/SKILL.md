@@ -4,6 +4,7 @@ description: "DCU算子开发规范：HIP kernel开发与TileLang DSL写算子�
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU 算子开发规范（dcu-kernel-dev）

@@ -4,6 +4,7 @@ description: "Use when writing/optimizing Triton kernels on DCU (Hygon BW1000), 
 version: "1.0.0"
 author: <internal-user>
 license: MIT
+kind: tool
 ---
 
 # DCU Triton Kernel 优化（dcu-triton-kernels）

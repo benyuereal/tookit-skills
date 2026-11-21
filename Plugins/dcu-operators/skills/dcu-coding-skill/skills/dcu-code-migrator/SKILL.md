@@ -41,6 +41,7 @@ author: DCU Team
   cost: medium
   description: 在 HIP/DTK 知识分片中做关键词/语义检索
 license: MIT
+kind: tool
 ---
 ---
 

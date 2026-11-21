@@ -4,6 +4,7 @@ description: Framework-independent LLM serving benchmark skill for comparing SGL
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # LLM Serving Auto Benchmark

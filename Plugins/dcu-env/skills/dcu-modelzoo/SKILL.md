@@ -4,6 +4,7 @@ description: 查光合开发者社区 ModelZoo（GitLab group modelzoo，626 个
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU ModelZoo 模型适配仓库查询（sourcefind 光合开发者社区）

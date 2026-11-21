@@ -4,6 +4,7 @@ description: fastsafetensors DCU 适配源码结构——safetensors 并行加�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # fastsafetensors DCU 适配源码索引（dcu-fastsafetensors-source）

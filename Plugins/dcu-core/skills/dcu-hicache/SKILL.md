@@ -4,6 +4,7 @@ description: "SGLang HiCache 三层缓存（L1 GPU/L2 host/L3 磁盘）在 DCU �
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # SGLang HiCache 三层缓存 DCU 部署（dcu-hicache）

@@ -4,6 +4,7 @@ description: Design and review SGLang scripted-runtime tests and harness APIs wh
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Scripted Runtime — Notes

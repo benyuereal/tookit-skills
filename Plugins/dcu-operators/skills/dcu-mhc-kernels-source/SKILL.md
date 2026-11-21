@@ -4,6 +4,7 @@ description: MHC/线性注意力 kernel 包 DCU 适配——causal-conv1d + fast
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # MHC/线性注意力 kernel 包 DCU 适配索引（dcu-mhc-kernels-source）

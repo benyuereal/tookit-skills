@@ -4,6 +4,7 @@ description: Mooncake Transfer Engine DCU 适配源码结构——KV cache 跨�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Mooncake Transfer Engine DCU 适配源码索引（dcu-mooncake-source）

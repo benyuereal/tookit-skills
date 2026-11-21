@@ -4,6 +4,7 @@ description: flash-attn 海光 DCU 适配源码索引：三层适配结构 + FA3
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # flash-attn 海光 DCU 适配源码索引（dcu-flashattn-source）

@@ -4,6 +4,7 @@ description: "算子契约（contract.yaml）规范：把「这个算子怎么�
 version: 1.0.1
 author: DCU Toolkit Contributors
 license: MIT
+kind: knowledge
 ---
 
 # 算子契约（contract.yaml）规范

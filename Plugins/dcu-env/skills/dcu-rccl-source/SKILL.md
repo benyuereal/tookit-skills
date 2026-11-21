@@ -4,6 +4,7 @@ description: DTK RCCL源码级分析：PCIe混合链路优化
 version: 1.0.1
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # 海光 DTK RCCL 源码分析：PCIe 混合链路优化（dcu-rccl-source）

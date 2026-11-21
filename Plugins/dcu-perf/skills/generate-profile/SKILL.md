@@ -4,6 +4,7 @@ description: Capture reproducible SGLang or vLLM serving profiles on CUDA, HIP, 
 version: 1.0.0
 author: DCU Engineer
 license: MIT
+kind: knowledge
 ---
 
 # Generate an LLM Serving Profile

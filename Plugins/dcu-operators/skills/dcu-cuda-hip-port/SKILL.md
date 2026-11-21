@@ -4,6 +4,7 @@ description: "Port CUDA code to DCU/HIP on DTK. Use for CUDA→HIP porting."
 version: 1.1.0
 author: DCU Engineer
 license: MIT
+kind: tool
 ---
 
 # DCU CUDA→HIP 移植
