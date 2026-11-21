@@ -602,7 +602,14 @@ class TestCandidatesFile(unittest.TestCase):
         self.assertIn("待做 0", buf.getvalue())
 
     def test_report_renders_table(self):
-        loop.append_record(self.card, _record())
+        # 默认 report 只渲染 claimable；给一条三门全过的记录
+        rec = _record()
+        rec.update({
+            "caliber": {"what": "op_call", "alloc": "false", "thermal": "hot",
+                        "shape": "s128k32768", "device": "gfx938"},
+            "significant": True, "acc_ok": True,
+        })
+        loop.append_record(self.card, rec)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             loop.cmd_report(SimpleNamespace(card=self.card))
@@ -651,6 +658,16 @@ class TestDoneWhen(unittest.TestCase):
         self._td = tempfile.TemporaryDirectory()
         self.card = Path(self._td.name)
         (self.card / "candidates.yaml").write_text(CARD_YAML, encoding="utf-8")
+        # 主张门的前置：adopted 必须有够格的 run 记录。
+        # 这里放一条「三门全过」的记录，让本类专注测 done_when 机制本身；
+        # 主张门自己的行为由 TestClaimGate 覆盖。
+        _good = _record()
+        _good.update({
+            "caliber": {"what": "op_call", "alloc": "false", "thermal": "hot",
+                        "shape": "s128k32768", "device": "gfx938"},
+            "significant": True, "acc_ok": True,
+        })
+        loop.append_record(self.card, _good)
 
     def tearDown(self):
         self._td.cleanup()

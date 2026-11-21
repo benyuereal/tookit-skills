@@ -213,7 +213,35 @@ def append_record(card, rec):
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
 
-# ---------------------------------------------------------------- 判定
+# ---------------------------------------------------------------- 主张门（薄约束的核心）
+
+CALIBER_KEYS = ("what", "alloc", "thermal", "shape", "device")
+
+
+def claim_gate(rec):
+    """这条记录能不能变成「交付结论」。返回 (claimable, [reasons])。
+
+    **只在「主张结论」的入口调用**（report / verify / adopt / close / distill），
+    run 永不拒绝。这是「薄约束」的全部含义：
+        约束面 = 断言面，不是动作面。
+    探索期任何实验都能跑（包括用 --no-acc 快速筛方向），
+    只是它产出的记录不能升级成「快了 x%」。
+
+    三条硬门各封一个谎言：
+      caliber_incomplete  封「分母漂移」——本项目最贵的一类错
+      not_significant     封「跑两次看着差不多」
+      accuracy_missing    封「快了但算错了」
+    """
+    reasons = []
+    cal = rec.get("caliber") or {}
+    if not all(cal.get(k) and cal.get(k) != "unstated" for k in CALIBER_KEYS):
+        reasons.append("caliber_incomplete")
+    if not rec.get("significant"):
+        reasons.append("not_significant")
+    if not rec.get("acc_ok"):
+        reasons.append("accuracy_missing")
+    return (not reasons), reasons
+
 
 def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
     """返回 (decision, why)。
@@ -514,6 +542,13 @@ def cmd_run(a):
             decision, why = decide(
                 {"median_ms": run["base_ms"], "mad_ms": run.get("base_mad", 0.0)},
                 v, acc.get("base"), acc.get(v["tag"]), tol, primary, stress_mult)
+            # 显著性：与 decide 内部同一判据（3×max(MAD)），只是单独取出来给主张门用
+            _sig, _ratio, _why = _significant(
+                {"median_ms": run["base_ms"], "mad_ms": run.get("base_mad", 0.0)},
+                {"median_ms": v.get("ms"), "mad_ms": v.get("mad", 0.0)})
+            sig = bool(_sig)
+            shape_key = "s%dk%d" % (ab.get("shape", {}).get("S") or a.s or 0,
+                                    run["skv"])
             if decision == "ACCEPTED_NUMERICS":
                 decision = "ACCEPTED_NUMERICS_PENDING_E2E"
             if order.index(decision) < order.index(worst):
@@ -536,6 +571,17 @@ def cmd_run(a):
                 # 完成判定的裁决码：run 不跑 done_when（那是 verify 的事），记 None 让
                 # 流水里字段恒在，消费方不必按记录类型分叉。
                 "done_when_rc": None,
+                # ---- 主张门的三项输入（run 只记录，不拒绝）
+                "caliber": {
+                    "what": ab.get("caliber", {}).get("what", "unstated"),
+                    "alloc": ab.get("caliber", {}).get("alloc", "unstated"),
+                    "thermal": ab.get("caliber", {}).get("thermal", "unstated"),
+                    "shape": shape_key,
+                    "device": ab.get("caliber", {}).get("device", "unstated"),
+                },
+                "significant": bool(sig),
+                # --no-acc 时 acc_ok 恒为 False：比较可以跑，主张不许下
+                "acc_ok": bool(acc.get(v["tag"])) and not a.no_acc,
             })
     print("\n合计判定：%s" % worst)
     if worst.startswith("ACCEPTED_NUMERICS"):
@@ -557,13 +603,31 @@ def cmd_report(a):
         key = (r["skv"], r["tag"])
         if key not in best or r["cand_ms"] < best[key]["cand_ms"]:
             best[key] = r
-    print("| SKV | tag | base | cand | Δ | vs fm | maxdiff | 判定 |")
-    print("|---|---|---|---|---|---|---|---|")
+    rows, held = [], []
     for (skv, tag), r in sorted(best.items()):
-        print("| %d | %s | %.4f | %.4f | %+.1f%% | %s | %.2e | %s |" % (
-            skv, tag, r["base_ms"], r["cand_ms"], r["delta_pct"],
-            "%.2fx" % r["fm_ratio"] if r.get("fm_ratio") else "-",
-            r.get("maxdiff") or 0.0, r["decision"]))
+        ok, reasons = claim_gate(r)
+        (rows if ok or getattr(a, "all", False) else held).append((skv, tag, r, reasons))
+
+    if rows:
+        print("| SKV | tag | base | cand | Δ | vs fm | maxdiff | 判定 |")
+        print("|---|---|---|---|---|---|---|---|")
+        for skv, tag, r, reasons in rows:
+            tail = r["decision"] if not reasons else "%s (held: %s)" % (
+                r["decision"], ",".join(reasons))
+            print("| %d | %s | %.4f | %.4f | %+.1f%% | %s | %.2e | %s |" % (
+                skv, tag, r["base_ms"], r["cand_ms"], r["delta_pct"],
+                "%.2fx" % r["fm_ratio"] if r.get("fm_ratio") else "-",
+                r.get("maxdiff") or 0.0, tail))
+
+    if held:
+        print("\n### 未达主张门槛（不计入交付结论）%d 条" % len(held))
+        print("这些实验可以跑，但不能升级成「快了 x%%」。补齐后重跑 report。\n")
+        for skv, tag, r, reasons in held:
+            print("- %s @skv%d：%s" % (tag, skv, ", ".join(reasons)))
+        print("\n补齐方法：")
+        print("  caliber_incomplete → bench/ab.py 的 JSON 顶层加 caliber{what,alloc,thermal,device}")
+        print("  not_significant    → 加 --rounds（默认 3，建议 ≥5），让 MAD 收敛")
+        print("  accuracy_missing   → 去掉 --no-acc 并确认 bench/acc_probe.py 能跑")
     return 0
 
 
@@ -858,6 +922,20 @@ def cmd_verify(a):
                  "给它写一条命令（写法见 op-optimize/SKILL.md §七）" % a.tag, WARN))
         return 2
 
+    # 主张门：adopted 是在主张「这个改动可交付」，必须有够格的记录支撑
+    recs = [r for r in read_records(card) if r.get("tag") == a.tag and "cand_ms" in r]
+    if recs:
+        ok, reasons = claim_gate(recs[-1])
+        if not ok:
+            print(_c("拒绝 adopted：%s 的最新记录未达主张门槛（%s）。"
+                     "用 report --all 看补齐方法；补齐后重跑 verify。"
+                     % (a.tag, ", ".join(reasons)), WARN))
+            return 2
+    elif not getattr(a, "allow_no_record", False):
+        print(_c("拒绝 adopted：%s 没有任何 run 记录 —— adopted 是「已测且够格」，"
+                 "不是「我觉得行」。先 loop.py run %s。" % (a.tag, a.tag), WARN))
+        return 2
+
     print("$ " + cmd, flush=True)
     rc, out = run_done_when(cmd, card)
     tail = "\n".join(out.splitlines()[-VERIFY_TAIL_LINES:])
@@ -909,7 +987,8 @@ def main():
 
     sub.add_parser("status", help="当前最强 + 待做 + 记录数")
     sub.add_parser("queue", help="打印候选队列与已证伪清单")
-    sub.add_parser("report", help="从记录渲染交付表")
+    rp = sub.add_parser("report", help="从记录渲染交付表（默认只出 claimable）")
+    rp.add_argument("--all", action="store_true", help="也显示未达主张门槛的记录")
 
     e = sub.add_parser("enumerate", help="列出攻击面（direction 只能从这挑），标出已封的")
     e.add_argument("--new", action="store_true", help="只打印可用的 candidates.yaml 片段")
@@ -944,6 +1023,8 @@ def main():
 
     v = sub.add_parser("verify", help="跑候选的 done_when；rc=0 才允许 adopted")
     v.add_argument("--tag", required=True)
+    v.add_argument("--allow-no-record", action="store_true",
+                   help="允许没有 run 记录也 verify（仅用于纯构建/契约类候选）")
 
     a2 = sub.add_parser("adopt", help="旧名，等价于 verify（完成判定由命令裁决）")
     a2.add_argument("tag")
