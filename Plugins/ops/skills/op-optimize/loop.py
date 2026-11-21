@@ -215,7 +215,43 @@ def append_record(card, rec):
 
 # ---------------------------------------------------------------- 主张门（薄约束的核心）
 
-CALIBER_KEYS = ("what", "alloc", "thermal", "shape", "device")
+# 口径五问的字段名以既有契约为准（op-bench/SKILL.md:65 与 bench_long.py:67
+# 用的都是 "state"，不是 "thermal"）。改这里前先看那两处。
+CALIBER_KEYS = ("what", "alloc", "state", "shape", "device")
+# 兼容旧写法：adapter 若写 thermal，等同 state
+_CALIBER_ALIASES = {"thermal": "state"}
+
+
+def _caliber_get(cal, key):
+    """读口径字段，容忍 thermal/state 两种写法与布尔值。"""
+    if key in cal:
+        return cal[key]
+    for alias, canon in _CALIBER_ALIASES.items():
+        if canon == key and alias in cal:
+            return cal[alias]
+    return None
+
+
+def _record_caliber(rec):
+    """把记录里的口径补齐成一个 dict。
+
+    adapter 的写法不统一（有的写 caliber.device，多数把设备信息放在
+    env_fingerprint 的 env 里）。这里做一次归一，避免因为位置不同就判
+    「口径不全」——那会把合规记录误杀。
+    """
+    cal = dict(rec.get("caliber") or {})
+    env = rec.get("env") or {}
+    if _caliber_get(cal, "device") in (None, "", "unstated"):
+        dev = env.get("gfx") or env.get("device")
+        if dev and dev != "cpu":
+            cal["device"] = dev
+    if _caliber_get(cal, "shape") in (None, "", "unstated"):
+        sh = rec.get("shape")
+        if isinstance(sh, dict) and sh:
+            cal["shape"] = ",".join("%s=%s" % (k, sh[k]) for k in sorted(sh))
+        elif sh:
+            cal["shape"] = str(sh)
+    return cal
 
 
 def claim_gate(rec):
@@ -233,8 +269,10 @@ def claim_gate(rec):
       accuracy_missing    封「快了但算错了」
     """
     reasons = []
-    cal = rec.get("caliber") or {}
-    if not all(cal.get(k) and cal.get(k) != "unstated" for k in CALIBER_KEYS):
+    cal = _record_caliber(rec)
+    missing = [k for k in CALIBER_KEYS
+               if _caliber_get(cal, k) in (None, "", "unstated")]
+    if missing:
         reasons.append("caliber_incomplete")
     if not rec.get("significant"):
         reasons.append("not_significant")
@@ -573,15 +611,20 @@ def cmd_run(a):
                 "done_when_rc": None,
                 # ---- 主张门的三项输入（run 只记录，不拒绝）
                 "caliber": {
-                    "what": ab.get("caliber", {}).get("what", "unstated"),
-                    "alloc": ab.get("caliber", {}).get("alloc", "unstated"),
-                    "thermal": ab.get("caliber", {}).get("thermal", "unstated"),
+                    # adapter（bench/ab.py）的输出优先；它没写的才标 unstated。
+                    # 字段名沿用 op-bench 契约：what / alloc / state / shape / device
+                    "what": _caliber_get(ab.get("caliber") or {}, "what") or "unstated",
+                    "alloc": _caliber_get(ab.get("caliber") or {}, "alloc"),
+                    "state": _caliber_get(ab.get("caliber") or {}, "state") or "unstated",
                     "shape": shape_key,
-                    "device": ab.get("caliber", {}).get("device", "unstated"),
+                    "device": (ab.get("caliber") or {}).get("device") or "unstated",
                 },
                 "significant": bool(sig),
                 # --no-acc 时 acc_ok 恒为 False：比较可以跑，主张不许下
                 "acc_ok": bool(acc.get(v["tag"])) and not a.no_acc,
+                # adapter 的环境指纹原样保留：claim_gate 在 caliber 缺 device 时
+                # 从这里回落取 gfx/device，避免位置不同就误判口径不全。
+                "env": ab.get("env") or {},
             })
     print("\n合计判定：%s" % worst)
     if worst.startswith("ACCEPTED_NUMERICS"):

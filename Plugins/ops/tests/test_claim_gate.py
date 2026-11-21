@@ -23,7 +23,7 @@ from types import SimpleNamespace
 REPO = Path(__file__).resolve().parents[3]
 LOOP = REPO / "Plugins/ops/skills/op-optimize/loop.py"
 
-GOOD_CALIBER = {"what": "op_call", "alloc": "false", "thermal": "hot",
+GOOD_CALIBER = {"what": "op_call", "alloc": "false", "state": "hot",
                 "shape": "s128k32768", "device": "gfx938"}
 
 
@@ -55,7 +55,7 @@ class TestClaimGate(unittest.TestCase):
         self.assertEqual(reasons, [])
 
     def test_missing_caliber_blocks(self):
-        for key in ("what", "alloc", "thermal", "shape", "device"):
+        for key in ("what", "alloc", "state", "shape", "device"):
             cal = dict(GOOD_CALIBER)
             cal.pop(key)
             ok, reasons = self.loop.claim_gate(_rec(caliber=cal))
@@ -63,7 +63,7 @@ class TestClaimGate(unittest.TestCase):
             self.assertIn("caliber_incomplete", reasons)
 
     def test_unstated_caliber_blocks(self):
-        cal = dict(GOOD_CALIBER, thermal="unstated")
+        cal = dict(GOOD_CALIBER, state="unstated")
         ok, reasons = self.loop.claim_gate(_rec(caliber=cal))
         self.assertFalse(ok)
         self.assertIn("caliber_incomplete", reasons)
@@ -132,3 +132,44 @@ class TestReportHeld(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCaliberNormalisation(unittest.TestCase):
+    """口径字段位置不统一时的归一：不能因为放错地方就判「口径不全」。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.loop = _load_loop()
+
+    def test_device_falls_back_to_env_fingerprint(self):
+        rec = _rec(caliber={"what": "op_call", "alloc": True, "state": "hot"},
+                   env={"gfx": "gfx938:sramecc+", "device": "BW1100"},
+                   shape={"s": 128, "skv": 32768})
+        ok, reasons = self.loop.claim_gate(rec)
+        self.assertTrue(ok, reasons)
+
+    def test_shape_falls_back_to_record_shape(self):
+        rec = _rec(caliber={"what": "op_call", "alloc": True, "state": "hot",
+                            "device": "gfx938"}, shape={"s": 128, "skv": 32768})
+        ok, reasons = self.loop.claim_gate(rec)
+        self.assertTrue(ok, reasons)
+
+    def test_env_cpu_does_not_count_as_device(self):
+        rec = _rec(caliber={"what": "op_call", "alloc": True, "state": "hot"},
+                   env={"device": "cpu"}, shape={"s": 1})
+        ok, reasons = self.loop.claim_gate(rec)
+        self.assertFalse(ok)
+        self.assertIn("caliber_incomplete", reasons)
+
+    def test_thermal_alias_still_accepted(self):
+        rec = _rec(caliber={"what": "op_call", "alloc": True, "thermal": "hot",
+                            "device": "gfx938"}, shape={"s": 1})
+        ok, reasons = self.loop.claim_gate(rec)
+        self.assertTrue(ok, reasons)
+
+    def test_alloc_false_is_a_valid_statement(self):
+        """alloc=False 是「明确不含分配」，不是「没写」。"""
+        rec = _rec(caliber={"what": "op_call", "alloc": False, "state": "hot",
+                            "device": "gfx938"}, shape={"s": 1})
+        ok, reasons = self.loop.claim_gate(rec)
+        self.assertTrue(ok, reasons)
