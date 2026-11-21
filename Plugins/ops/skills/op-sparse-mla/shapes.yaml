@@ -1,0 +1,199 @@
+# 形状档位表 —— 一档一个顶层键，`load_shape("decode-glm53")` 取同名段。
+#
+# 为什么合并成一个文件（2026-10-28）：原先 shapes/<name>.yaml 一档一文件，7 个档位
+# 共用同一份 schema（regime/desc/params/caliber/focus/notes），改一处字段要改 7 个文件，
+# 漂了也看不出来。现在 schema 只有一份，键名只有一处定义。
+#
+# 口径纪律：`caliber` 段描述的是「这个档位测出来的数是单次 op_call 还是整步」，
+# `pool` 决定跨实现比较是否成立（见 decode-s128 的 notes）。跨实现比站位一律 pool=full。
+
+decode-glm53:
+  regime: decode
+  desc: "GLM5.3 flash 吸收式 MLA 解码：d_qk == d_v == 512（无 rope 尾），32 个 query token，128k 上下文"
+  params:
+    S: 32
+    H: 64
+    SKV: 131072
+    kv_group: 1
+    topk: 2048
+    q_start_s_index: 131040
+    d_v: 512
+    tail_dim: 0
+    pool: full            # ledger §二 22 站位表就是真随机池口径；A/B 也用 full，免得 L2 帮两边一起作弊
+  caliber:
+    what: "op_call（单次算子调用，不是一步 decode 的全部层调用之和）"
+    alloc: true
+    state: hot
+  focus:
+    - "tail_dim=0 档位：q/kv 只有 512 宽（比 DSA 的 576 少读 12.5% 字节），out 也是 512"
+    - "H=64 走 REPLICATE_H=4（max_block_m=16），KV 复读 4 次；真正的 lever 是 block_m=32"
+    - "sm_scale = 1/sqrt(d_qk + tail_dim) = 1/sqrt(512)，不是 1/sqrt(640)"
+  notes:
+    - "q_start=131040 >= topk，故 indices 全有效，effective_topk == 名义 topk"
+    - "与 DeepSeek DSA 档位（576 宽）不可混算带宽：每 token 少 64*2B"
+    - "tilelang 需 dev 树支持 tail_dim=0（2026-10-27 起支持；旧版在 wrapper 硬 assert 576）"
+
+decode-v41:
+  regime: decode
+  desc: "DeepSeek V4.1 Flash 生产 decode（档位已立案，尚无实现）：H=64，d_qk=576（512 latent + 64 rope tail），d_v=512，topk=512，320k 上下文"
+  params:
+    S: 1
+    H: 64
+    SKV: 327680
+    kv_group: 1
+    topk: 512
+    q_start_s_index: 327679
+    d_v: 512
+    tail_dim: 64
+    pool: full
+  caliber:
+    what: "op_call（单次算子调用，不是一步 decode 的全部层调用之和）"
+    alloc: true
+    state: hot
+  focus:
+    - "形状依据是权重实测：num_attention_heads=64 / head_dim=512 / qk_rope_head_dim=64 / index_topk=512 / num_key_value_heads=1（DeepSeek-V4.1-Flash-1017 的 text_config），与 DeepSeek-V4-Flash-0731 同形"
+    - "H=64 ⇒ REPLICATE_H=2（同 GLM5.3 档）；宽度 576 比 GLM 档多读 12.5% 字节，但 topk=512 只有 GLM 档的 1/4 行 ⇒ 每 CTA 工作量小、更易撞 launch 平底"
+    - "topk=512 会撞 tilelang 的 num_split 整除断言（ledger §二 23）；实现前先确认 wrapper 的 clamp 生效"
+  notes:
+    - "sm_scale：本卡 576 宽档的约定是 1/sqrt(640)，DeepSeek 常规是 1/sqrt(head_dim + qk_rope)=1/sqrt(576)，两者差 5.4%。**这个值不能由 fp32 稠密参考「实测判定」**——它只是 logits 的乘性常数，参考与实现传同一个值即自洽。2026-11-13 / gfx938 实测（fp32 稠密参考）：S=128/SKV=32k 时 tilelang 1.63e-3(640) vs 2.14e-3(576)、flash_mla 1.30e-3 vs 1.77e-3；S=1/320k 时 tilelang 1.01e-3 vs 1.04e-3、flash_mla 1.13e-3 vs 1.11e-3。差异是 bf16 数值条件（scale 小 ⇒ logits 小 ⇒ softmax 更平），不是语义证据。⇒ 横向对比两实现必须传同一个值；沿用本卡 1/sqrt(640) 与 GLM 档口径一致，绝对值的模型语义待模型侧确认"
+    - "flash_mla 在本档**正常，可当基线**。旧记录「flash_mla 在 topk=512 档结果错误」是**条件特定**的：条件是 [d_qk=512（无 rope 尾）+ topk=512 + SKV ≥ 32768] 三者同时成立，与本档 d_qk=576 无关。2026-11-13 / gfx938 fp32 稠密参考实测：本档 topk=512 在 S=1/8/128 × SKV=8192/32768/131072/327680 × 全有效与 50% -1 垫尾 × 1/sqrt(640) 与 1/sqrt(576) 各组合下 flash_mla max_abs=1.03e-3~1.77e-3（cos ≥ 0.999998）；而 d_qk=512 + topk=512 在 SKV=32768 与 65536 下 max_abs=5.3e-1~1.4e+0（cos≈0.26~0.27，两个 seed 均复现），SKV=8192/12288/16384/24576 正常。同一 SKV=32768 下 d_qk=512 的 topk=256/384/640/1024/2048 全部正常 ⇒ 不是单纯的索引位宽越界（topk=1024 的索引范围相同），根因在 flash_mla 的内核选择/调度，未定位；生产形状 topk=512 不会撞 d_qk=512，不必追。注：ledger 坑表里 topk=2016 那条未复测"
+    - "改造路径：hip-glm 的 H=64 + split/combine 结构，加上 576 宽的 rope-tail 路径（已随 1.6.0 提交，后移出，git 历史可取）"
+
+decode-m1:
+  regime: decode
+  desc: "极小 batch 解码：1 个 query token，超长上下文"
+  params:
+    S: 1
+    H: 16
+    SKV: 327680
+    kv_group: 1
+    topk: 2048
+    q_start_s_index: 327679
+    pool: window          # q_start = SKV - S ⇒ 窗口铺满整个 320k 池，window ≈ full（不是 4.8MB 热档）
+  caliber:
+    what: "op_call（单次算子调用，不是一步 decode 的全部层调用之和）"
+    alloc: true
+    state: hot
+  focus:
+    - "纯访存型：只看带宽达成率，不看 TFLOPS"
+    - "gather 随机性最伤，topk 越大越明显"
+    - "S=1 会触发部分实现的小 S 地板，跨实现比较要标注这一点"
+  notes:
+    - "生产一步 decode 每层调用一次；单次结论要乘调用次数才是 step 级占比"
+    - "本档位当前无可信实测（见 ledger.md）"
+
+decode-m32:
+  regime: decode
+  desc: "常规 batch 解码：32 个 query token，超长上下文（⚠ H=16 是 tilelang 示例测试形状；生产模型 H=64，见 decode-glm53 / V4.1=H64+d576+topk512）"
+  params:
+    S: 32
+    H: 16
+    SKV: 327680
+    kv_group: 1
+    topk: 2048
+    q_start_s_index: 327648
+    pool: window          # q_start = SKV - S ⇒ 窗口铺满整个 320k 池，window ≈ full（不是 4.8MB 热档）
+  caliber:
+    what: "op_call（单次算子调用）"
+    alloc: true
+    state: hot
+  focus:
+    - "tilelang 示例测试档（H=16，无对应生产模型）：结论优先在本档收敛"
+    - "生产档请看 decode-glm53（GLM5.3-Flash）与 V4.1 Flash（H=64/d_qk=576/topk=512，尚无专用档位）"
+    - "看带宽达成率与 effective_topk（短上下文时 -1 填充会拉低有效量）"
+    - "对比时记录各实现实际选到的 num_split / SplitKV"
+  notes:
+    - "实测用的是 S=128/SKV=65536 的近似档（见 ledger.md），本档待补"
+
+decode-s128:
+  regime: decode
+  desc: "中 batch 解码：128 个 query token，64k 上下文（2026-10-27 实测基准档）"
+  params:
+    S: 128
+    H: 16
+    SKV: 65536
+    kv_group: 1
+    topk: 2048
+    q_start_s_index: 4096
+    pool: window          # 历史实测口径（池 4.8~9.4 MB 全在 L2）；比站位必须改 full，见 notes 末条
+  caliber:
+    what: "op_call（含 wrapper 分配）"
+    alloc: true
+    state: hot
+  focus:
+    - "跨实现对比的主档：H=16 / H=64、topk=2048 / 4096、SKV 8k / 64k 都在此档上扫"
+    - "本档 S 足够大，不受小 S 地板影响"
+  notes:
+    - "q_start=4096 >= topk，故 indices 全有效，effective_topk == 名义 topk"
+    - "与 SKV 无关：SKV 8k 与 64k 输入逐位相同时耗时差 <=0.2%"
+    - "⚠️ pool: window 是历史口径：池只有 ~4.8 MB 全在 L2，flash_mla 免付内存费，跨实现比值系统性低估 tilelang（缩池 377MB→2.4MB，fm 快 1.83×、tl 只快 1.03×，见 ledger §二 18）。本档只用于「同实现内部比改动」，跨实现比站位用 bench/bench_long.py（写死 pool=full）。"
+
+prefill-320k:
+  regime: prefill
+  desc: "长上下文 prefill：4k query 每 chunk，320k 上下文"
+  params:
+    S: 4096
+    H: 16
+    SKV: 327680
+    kv_group: 1
+    topk: 2048
+    q_start_s_index: 323584
+    pool: window          # q_start = SKV - S ⇒ 窗口铺满整个池；语义（因果）+ 口径（≈full）都对
+  caliber:
+    what: "op_call（单 chunk；整段 prefill 是多个 chunk 之和）"
+    alloc: true
+    state: hot
+  focus:
+    - "受 KV 抓取限制：每 chunk 的 ke_max 随 chunk 推进增长，耗时不恒定"
+    - "结论必须写明是第几个 chunk 或给出 ke_max 口径"
+    - "chunk 粒度本身是旋钮（bt=4096 之类），不是算子内部参数"
+  notes:
+    - "本档未实测（见 ledger.md）"
+    - "生产长上下文 prefill 的真实瓶颈常在 KV 抓取与 indexer 侧，不在本算子本身"
+
+prefill-8k:
+  regime: prefill
+  desc: "prefill：8k query token，8k 上下文"
+  params:
+    S: 8192
+    H: 16
+    SKV: 8192
+    kv_group: 1
+    topk: 2048
+    q_start_s_index: 0
+    pool: window          # prefill 是因果的，只该看前 t 行；window 在这里语义正确，不是热档作弊
+  caliber:
+    what: "op_call（单次大 kernel）"
+    alloc: true
+    state: hot
+  focus:
+    - "算力档：看 TFLOPS 与 tile 利用率，不看带宽"
+    - "大 S 时 M 维足够，应当能摊销；摊销不了说明实现有问题"
+    - "计时用 event，不用 wall clock（单次可能几十 ms）"
+  notes:
+    - "本档未实测（见 ledger.md）；prefill 实测用的是 S=512/S=2048 的缩小档"
+
+prefill-glm53:
+  regime: prefill
+  desc: "GLM5.3 flash 吸收式 MLA prefill：d_qk == d_v == 512（无 rope 尾），4k query 每 chunk，128k 上下文"
+  params:
+    S: 4096
+    H: 64
+    SKV: 131072
+    kv_group: 1
+    topk: 2048
+    q_start_s_index: 126976
+    d_v: 512
+    tail_dim: 0
+    pool: window          # 因果语义；q_start=126976 已铺满 128k 池 ⇒ window ≈ full
+  caliber:
+    what: "op_call（单 chunk；整段 prefill 是多个 chunk 之和）"
+    alloc: true
+    state: hot
+  focus:
+    - "大 S 档：tilelang 受 REPLICATE_H=4 限制（每 CTA 只算 16 个 head 但复读整份 gather），落后 flash_mla"
+    - "flash_mla 在 H=64 时有跨 head KV 复用；比值随 S 增大单调恶化，必须挂 S 记结论"
+    - "sm_scale = 1/sqrt(512)"
+  notes:
+    - "q_start=126976 使 S=4096 全部落在 SKV 内，indices 全有效"
+    - "本档 ratio 见 ledger.md §一；绝对耗时进 kb"

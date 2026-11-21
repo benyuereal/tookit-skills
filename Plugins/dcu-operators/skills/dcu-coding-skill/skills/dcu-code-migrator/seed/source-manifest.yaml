@@ -1,0 +1,12 @@
+source_policy:
+  mappings_key: mappings
+  require_source_or_default: true
+  require_explicit_source: false
+  fail_on_unknown_source: true
+default_source: online_kb_extraction_v1
+allowed_sources:
+- id: online_kb_extraction_v1
+  label: online_kb_extraction_v1
+- id: internal_bootstrap_v2026_04
+  label: internal_bootstrap_v2026_04
+source_schema_version: '1'

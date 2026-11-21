@@ -1,0 +1,4 @@
+interface:
+  display_name: "Large Class Init Style"
+  short_description: "Help with Large Class Init Style tasks"
+  default_prompt: "Use $large-class-init-style to handle this task with evidence-backed validation."

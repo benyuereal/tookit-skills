@@ -1,0 +1,29 @@
+{
+  "skill": "dcu-modelzoo",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对要点；false=形似但应路由他处（只给 id+prompt）。",
+  "cases": [
+    {
+      "id": "dcu-modelzoo-t1",
+      "prompt": "查一下 Qwen3 在 DCU 上有没有官方适配仓库，用的什么 DTK 版本和推荐镜像？",
+      "expect": "命中本 skill：GitLab API v4 匿名查 modelzoo group（search 参数）或本地 data/modelzoo_index.json 快照搜索；DTK 基线/推荐镜像/卡数从 README 环境依赖表与 model.properties 提取，两者不一致以 README 为准。"
+    },
+    {
+      "id": "dcu-modelzoo-t2",
+      "prompt": "一个 2025 年的老项目（DTK 25.04 镜像）要上新的 26.04 生态设备，直接跑老镜像行不行？",
+      "expect": "命中 §5 适配警示：DTK≤25.04 的老项目上 26.04 新设备需重新适配/验证（老镜像 tag 还能拉，但框架+DTK 组合与新驱动生态可能不兼容）；可用 §1 第二个查询脚本批量筛出 DTK<26.04 的项目。"
+    },
+    {
+      "id": "dcu-modelzoo-t3",
+      "prompt": "帮我脚本化拉取 ModelZoo 全量仓库列表和每个仓库的 model.properties 元数据。",
+      "expect": "命中 §2/§3：GET /groups/modelzoo/projects?per_page=100&page=N 翻页（响应头 X-Total/X-Total-Pages），或直接跑 scripts/fetch_modelzoo.py（--with-readme 加抓 README 提取 hints）；注意约 5% 仓库无 properties（404 靠 README 兜底）、path 大小写敏感、ref 用 default_branch。"
+    },
+    {
+      "id": "dcu-modelzoo-f1",
+      "prompt": "vllm 框架的 DCU 镜像有哪些 tag 可以拉？给我 docker pull 命令。"
+    },
+    {
+      "id": "dcu-modelzoo-f2",
+      "prompt": "dcu 源里 torch 对应版本的 wheel 包怎么查怎么下？"
+    }
+  ]
+}

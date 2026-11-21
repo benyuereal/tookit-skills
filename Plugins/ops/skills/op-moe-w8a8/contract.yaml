@@ -1,0 +1,75 @@
+# op-moe-w8a8 契约（draft：门已定义，脚本待补）
+# 状态 draft —— required=false 的 gate 表示「尚不可执行」，补完后改 true。
+
+op: moe-w8a8
+version: 1
+math: "out = sum_e(w2_e @ quant(silu(w1_e_gate @ x) * (w1_e_up @ x))) + shared(x)；按 topk 路由加权"
+
+shapes:
+  x: [M, H]
+  w1: [E, 2I, H]
+  w2: [E, H, I]
+  topk_ids: [M, K]
+  out: [M, H]
+
+dtypes:
+  x: bfloat16
+  w1: float8_e4m3
+  w2: float8_e4m3
+  acc: float32
+  out: bfloat16
+
+layout_constraints:
+  - "M 是决定性变量：decode(M=1~64) 与 prefill(M>=1024) 是两个算子形态，结论不可互换"
+  - "生产有两条 MoE 路径：routed 走 lightop，shared 走 triton+Cijk；只测 routed 会漏掉一半耗时"
+  - "ASM 变体（mode>=1000）在混合专家 batch 下串读其他 token 数据，禁止使用；安全区是 mode 500-525"
+  - "带宽随激活 expert 数线性变化，不能用低激活数下的达成率推断还有多少余量"
+
+tolerance:
+  vs_fp32_ref:
+    max_abs: 1.0e-2
+    cosine: 0.9995
+    note: "FP8 权重 + bf16 激活；具体容差待用 dequant 参考实测后收紧"
+  variant_vs_variant:
+    mode: bit_exact
+    note: "同配置重复调用必须逐位一致（decode 路径曾出现非确定性 race）"
+
+invariants:
+  - name: batch_independence
+    mode: bit_exact
+    note: "自洽性：同一 token 的输出不得依赖 batch 内其他样本。ASM mode>=1000 就死在这一项"
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+  - name: expert_permutation_invariance
+    mode: tolerance
+    note: "打乱 expert 排列（权重同步换位）结果应等价"
+
+gates:
+  - name: correctness
+    template: correctness
+    required: false
+    skip_reason: "缺 adapter（卡内还没有 _common.py：build_inputs / reference / get_runner）；补上后改 required: true 即可跑 scripts/opcheck.py correctness"
+  - name: invariants
+    template: invariants
+    required: false
+    skip_reason: "缺 adapter，同上"
+  - name: layout_capability
+    template: padding
+    required: false
+    skip_reason: "缺 adapter，同上"
+  - name: perf
+    script: bench/bench.py
+    required: false
+    require: "median_ms <= baseline_ms * 1.02"
+    repeats: 3
+    skip_reason: "待按 M 分档建 bench"
+
+floor:
+  metric: hbm_bandwidth
+  peak: 1724
+  unit: GB/s
+  basis: "GEMM1 读 w1(2*I*H*1B)*激活expert数 + GEMM2 读 w2；M 很小时权重读取主导，达成率按激活 expert 折算。峰值用本机流式只读实测（不是型号标称 1100，用标称会把 955 GB/s 算成 87% 而误判「已到顶」）"
+  source: "本机流式只读实测 1712~1724 GB/s，与 sclk 锁频无关；见 op-roofline/constants.yaml:conflicts:peak-bw-definition"
+  status: measured
+  at_floor_threshold: 0.85

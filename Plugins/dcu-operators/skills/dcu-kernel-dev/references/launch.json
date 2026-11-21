@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python 调试程序: 当前文件",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/usr/local/lib/python3.10/dist-packages/vllm/example/basic.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "HIP_VISIBLE_DEVICES": "1"
+            }
+        }
+    ]
+}

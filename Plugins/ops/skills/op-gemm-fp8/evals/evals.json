@@ -1,0 +1,32 @@
+{
+  "skill": "op-gemm-fp8",
+  "description": "路由评测：true=FP8 GEMM 的 dtype 判据（fn vs fnuz、max_abs=0）、tilelang 写法（warp_size/k_pack）与实现选型（_scaled_mm 无方案、M 分档地板）这类「单算子 GEMM 本身」的问题应命中本 skill；false=MoE 两条路径与融合判据、手写 HIP 的编译 flag 镜像应由 op-moe-w8a8 / op-hip-compile 接手。",
+  "cases": [
+    {
+      "id": "op-gemm-fp8-t1",
+      "prompt": "gfx938 上 fp8 该用 float8_e4m3fn 还是 float8_e4m3fnuz？我拿 512³ 的 fp8 GEMM 对 A.float() @ B.float().T 比，max_abs 不为 0，是不是调一下 scale 就行？",
+      "expect": "命中§三「fp8 dtype 判据」：本机组合 float8_e4m3fn 逐位精确；float8_e4m3fnuz 是整体比例偏差——cosine 仍是 1.0 但 max_abs 明显，不能靠 scale 修正。判据是 512³ fp8 GEMM 对 A.float() @ B.float().T 的 max_abs 必须为 0，不为 0 就换 dtype，别调 scale；cosine=1.0 不算通过。「ROCm 上 determine_fp8_type() 返回 fnuz」这条在本机组合上不成立。",
+      "forbid": ["用 fp8 时不用管 fn/fnuz 的区别", "cosine 是 1.0 就说明精度没问题"]
+    },
+    {
+      "id": "op-gemm-fp8-t2",
+      "prompt": "用 tilelang 写 FP8 GEMM，target=\"hip\" 已经设了，结果错但不报错。warp_size 和 k_pack 该怎么取？",
+      "expect": "命中§三/§六：warp_size 必须显式 64（shfl 默认 32 会越界返回自身值导致归约错，错而不报）；k_pack=2（CDNA 系/gfx938；gfx936/RDNA 取 1）；gfx938 不提供 fp8-insts 目标特性，裸 cvt_pk_fp8_f32 不可用，须走 cast_to_f8 / cast_from_f8。",
+      "forbid": ["warp_size 用默认值就行"]
+    },
+    {
+      "id": "op-gemm-fp8-t3",
+      "prompt": "gfx938 上 torch._scaled_mm 报找不到可用方案，还有哪条路？另外 M=16 和 M=256 能共用同一套地板判据吗？",
+      "expect": "命中§二/§一：gfx938 上 hipBLASLt 没有 FP8 方案，走 tilelang（MatrixCorePreshuffle、warp_size=64）或 aiter；M≤32 是带宽型，地板按读权重字节/峰值带宽算，M≥128 是算力型，按峰值 TFLOPS 算——两档地板不可互换，低 M 的带宽达成率不能推高 M。",
+      "forbid": ["低 M 的达成率可以外推到高 M"]
+    },
+    {
+      "id": "op-gemm-fp8-f1",
+      "prompt": "lightop 的 ASM mode 1000 在混合专家 batch 下能不能上生产？profile 里 moe_sum 有 84 次调用，看着冗余，能删吗？"
+    },
+    {
+      "id": "op-gemm-fp8-f2",
+      "prompt": "手写 HIP 输出位级一致，但比同体 tilelang 慢 1.16×/CTA，aicc 的 -mllvm 集该怎么定？"
+    }
+  ]
+}

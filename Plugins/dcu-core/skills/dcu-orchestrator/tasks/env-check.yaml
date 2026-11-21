@@ -1,0 +1,48 @@
+# 任务：env-check —— 环境指纹探测（probe 只读）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: probe            # 只读、不改状态
+  goal: "采集本机/设备环境指纹（设备型号、DTK 版本、镜像 tag、模型版本），作为后续基准与量化的可复现上下文。"
+
+  # 执行用到的 skill（装配知识包时读取其 SKILL.md/references）
+  executor_skills:
+    - dcu-env              # 环境检测
+    - dcu-dtk              # DTK 版本
+    - dcu-docker           # 容器/镜像
+    - dcu-hy-smi           # 设备监控/型号
+    - dcu-model-deploy-catalog  # 模型版本/配方
+
+  approach:
+    - "用 hy-smi 读设备型号与每卡显存/温度/功耗，记 device 指纹。"
+    - "读容器/宿主 DTK 版本（/opt/dtk 或镜像自带），记 dtk 指纹。"
+    - "查运行镜像 tag（docker images / 容器 cmdline），记 image 指纹。"
+    - "确认为待优化模型与量化配置，记 model 指纹。"
+    - "把采集结果写入 runs/infer-optimize/env-check/result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/infer-optimize/env-check/result.json"
+    fingerprint:
+      device: "<device-model>"        # 占位：设备型号
+      dtk: "<dtk-version>"            # 占位：DTK 版本
+      image: "<image-tag>"    # 占位：运行时镜像 tag
+      model: "<model-name>"      # 占位：模型版本
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "device / dtk / image / model 四类指纹均已填写，非空且非占位符 <...>。"
+    - "result.json 可被 JSON 解析，且含 fingerprint 对象。"
+    - "环境检测无异常（hy-smi 能读到设备、DTK 路径存在）。"
+
+  # 明确不做的事（防越界）
+  out_of_scope:
+    - "不修改任何环境配置、不安装/卸载任何包。"
+    - "不做基准测量（那是 baseline 任务）。"
+    - "不改设备状态、不写回重量化结果。"
+
+  # 是否需用户审批放行
+  proceed: auto
+  # 重试耗尽后的处理（probe 失败可 continue）
+  on_exhaust: continue

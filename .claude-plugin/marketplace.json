@@ -1,0 +1,171 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dcu-toolkit-marketplace",
+  "description": "DCU Toolkit Marketplace — 海光 DCU（Hygon DCU）测试调优技能集，覆盖基础环境、性能剖析、推理框架适配、算子开发与算子卡、故障排查与工程实践，面向 Claude Code 和 OpenCode 的 Agent Skills 插件包",
+  "version": "1.6.0",
+  "owner": {
+    "name": "DCU Toolkit Contributors"
+  },
+  "license": "MIT",
+  "homepage": "https://developer.sourcefind.cn/codes/jixx/dcu-toolkit-skills",
+  "plugins": [
+    {
+      "name": "dcu-core",
+      "description": "核心路由与通用能力 — 全量 skill 统一入口路由（dcu-skill-router）、HiCache 三层缓存适配、自定义融合 kernel、kernel 层微基准、训练手册、薄编排层（dcu-orchestrator：workflow 契约+证据验收）",
+      "category": "infrastructure",
+      "source": "./Plugins/dcu-core",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "dcu",
+        "hygon",
+        "router",
+        "hicache",
+        "kernel",
+        "training",
+        "orchestrator",
+        "workflow"
+      ]
+    },
+    {
+      "name": "dcu-env",
+      "description": "基础环境与连接 — SSH 远程、环境检测、DTK 安装激活、驱动、容器、hy-smi 监控、NUMA 亲和、RCCL 通测、RoCEv2 网络、镜像反推重建",
+      "category": "environment",
+      "source": "./Plugins/dcu-env",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "dcu",
+        "dtk",
+        "driver",
+        "docker",
+        "numa",
+        "rccl",
+        "roce",
+        "hy-smi"
+      ]
+    },
+    {
+      "name": "dcu-perf",
+      "description": "性能剖析与优化 — hipprof/rocprof 方法论、算子优化闭环、推理优化（torch.compile/NHWC/精度/GEMM 寻优）、LLM benchmark、torch profiler 分析、模型 PR 优化史",
+      "category": "performance",
+      "source": "./Plugins/dcu-perf",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "performance",
+        "profiling",
+        "optimization",
+        "benchmark",
+        "torch",
+        "vllm",
+        "sglang"
+      ]
+    },
+    {
+      "name": "dcu-inference",
+      "description": "推理框架部署与适配 — vLLM 部署调优/精度/自定义算子/runtime patch/trace 分析、模型部署目录、LibTorch、MIGraphX、LMCache、HiCache、CosyVoice 优化",
+      "category": "inference",
+      "source": "./Plugins/dcu-inference",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "inference",
+        "vllm",
+        "migraphx",
+        "libtorch",
+        "lmcache",
+        "deploy",
+        "precision"
+      ]
+    },
+    {
+      "name": "dcu-operators",
+      "description": "算子开发 — CUDA-to-HIP 移植、Triton kernels、kernel 开发规范、kernel wiki（rmsnorm/tilelang 已知问题）、LightOp/AITER MoE 融合",
+      "category": "kernel-dev",
+      "source": "./Plugins/dcu-operators",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "kernel",
+        "hip",
+        "triton",
+        "moe",
+        "fusion",
+        "porting"
+      ]
+    },
+    {
+      "name": "dcu-troubleshooting",
+      "description": "故障排查 — XID/SXID 错误码、VM fault coredump 解析、CUDA crash 调试、分布式 hang 诊断、训练精度问题、vLLM 精度定位",
+      "category": "troubleshooting",
+      "source": "./Plugins/dcu-troubleshooting",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "debugging",
+        "xid",
+        "sxid",
+        "vmfault",
+        "hang",
+        "precision",
+        "nan"
+      ]
+    },
+    {
+      "name": "dcu-engineering",
+      "description": "工程与发布实践 — CI 回归 bisect、sglang cherry-pick、模型 PR 历史知识、代码规范（env-var/large-class）、cookbook 系列",
+      "category": "engineering",
+      "source": "./Plugins/dcu-engineering",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "ci",
+        "cherry-pick",
+        "code-review",
+        "conventions",
+        "workflow"
+      ]
+    },
+    {
+      "name": "ops",
+      "description": "算子卡域 — 一算子一目录（op-*）：contract.yaml 机器可读契约 + variants.yaml 实现变体矩阵 + shapes/ 形状档位 + bench/ 微基准 + tests/ 正确性与不变量 + ledger.md 结论台账；配 op-contract / op-bench / op-gate 三篇方法论。回答「这个算子是什么、有哪几种实现、哪个档位用哪个、判据是什么、上次结论是什么」",
+      "category": "kernel-dev",
+      "source": "./Plugins/ops",
+      "version": "1.6.0",
+      "platforms": [
+        "claude",
+        "opencode"
+      ],
+      "tags": [
+        "operator",
+        "contract",
+        "benchmark",
+        "gate",
+        "registry",
+        "ledger"
+      ]
+    }
+  ]
+}

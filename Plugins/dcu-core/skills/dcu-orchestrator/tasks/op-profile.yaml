@@ -1,0 +1,51 @@
+# 任务：op-profile —— 算子/profiler 数据采集（probe 只读）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: probe            # 只读采集
+  goal: "对目标算子/服务段做可复算的采集：op-bench 口径计时 + PMC 计数器 CSV，产出按 kernel 汇总的热点与原始证据，供 op-roofline 节点判定瓶颈。"
+
+  executor_skills:
+    - op-profiling             # PMC CSV 怎么读（选行/噪声排除/TA 跨 SE 求和/CU 来源）+ §六 参考实现；判据按 §四
+    - op-bench                 # 计时口径（median + MAD、同窗 A/B），禁止单次/均值冒充
+    - op-contract              # 采集前先定 shapes/dtypes/tolerance，口径先冻结
+
+  approach:
+    - "按 op-contract 固定被测形状/dtypes/容差并写入 run 目录（口径先定，采集后不再改）。"
+    - "计时走 op-bench 口径：opbench.py 采 median_ms + mad_ms；单次或均值不得当结论用。"
+    - "PMC 用 hipprof/rocprof 采 CSV；解析照抄 op-profiling/SKILL.md §六 的参考实现，只出机械原值（选行/噪声排除/计数器原值/TA 跨 SE 求和/CU 来源）；派生口径（FLOPs / 每个 MMA 的 FLOPs / 发射率 / 每次 miss 字节 / CU）必须显式给，探测不到写 unknown。"
+    - "解析代码不产出 bound/facts/ratios 结论字段；贴顶判断须由人补齐四个分母后按 op-profiling/SKILL.md §四 计算，口径不全时不得写「到顶」。"
+    - "记录采集负载（并发/输入形状/迭代数/频率档），保证他人可复现。"
+    - "把热点汇总、PMC CSV 路径、计时双值写入 runs/op-optimize/profile/result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/op-optimize/profile/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"        # 算子场景填 "<op-name>@<shape-id>"，模型无关时写 n/a
+      op: "<op-name>"              # 占位：被测算子
+      shapes: "<shape-id>"         # 占位：被测形状（与 contract.yaml 一致）
+      measured_ms: "<median-ms>"   # 占位：opbench median
+      mad_ms: "<mad-ms>"           # 占位：opbench MAD
+      pmc_csv: "<path-to-csv>"     # 占位：PMC 原始数据路径
+      top_kernel: "<kernel-name>"  # 占位：最热 kernel
+      top_ratio: "<time-ratio>"    # 占位：热点耗时占比
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "计时为 median_ms + mad_ms 双值（op-bench 口径），非单次/非均值。"
+    - "PMC 原始 CSV 已落盘且路径写入 result.json，可复算（同参数重跑得同结论）。"
+    - "热点汇总含 Top kernel 名、耗时占比、调用次数，非占位符。"
+    - "采集负载与频率档已记录，可复现。"
+
+  out_of_scope:
+    - "不做瓶颈定论（bound 判定与 ceiling 计算属 op-roofline 节点）。"
+    - "不做任何优化改动（那是 op-optimize 节点）。"
+    - "不边采边改参数（负载固定，保证前后可比）。"
+
+  proceed: auto
+  on_exhaust: continue   # 采集失败可降级重试，不阻塞分析决策

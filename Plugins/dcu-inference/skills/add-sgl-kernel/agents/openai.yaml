@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add Sgl Kernel"
+  short_description: "Help with Add Sgl Kernel tasks"
+  default_prompt: "Use $add-sgl-kernel to handle this task with evidence-backed validation."

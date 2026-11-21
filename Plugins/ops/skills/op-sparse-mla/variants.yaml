@@ -1,0 +1,135 @@
+# 实现变体矩阵：DCU 上一个算子通常有多条实现路径，必须并列记录，不能只写"推荐用 X"
+# 字段：id / source / dtypes / constraints / best_for / status / padding_support / mutates_inputs
+# status: active（现役）| usable（可用）| reference（只做正确性参考）| broken（不可用，写明原因）
+# padding_support: both（-1 位置无关）| suffix_only（只支持队尾填充）| unknown（未测）
+#   由 scripts/opcheck.py padding 校验；declared 与实际不符即判 fail
+# mutates_inputs: 调用后会被原地改写的输入（none | indices | ... | unknown）
+#   共用同一份输入做多变体对比前必须先知道这条，否则先跑的那个会改掉后跑那个的输入
+
+op: sparse-mla
+version: 1
+
+variants:
+  - id: prod-vllm
+    source: "vLLM 生产路径 sparse_attn_fwd（aiter AOT ASM，无源码）"
+    dtypes: bfloat16
+    constraints: "只能通过生产安装树调用；不可改、不可加日志；调参只能改上层 wrapper"
+    best_for: "生产 decode / 长上下文"
+    status: active
+    padding_support: unknown
+    mutates_inputs: unknown
+
+  - id: tilelang
+    source: "tilelang-hygon perf/sparse_mla/sparse_mla_fwd.py :: tilelang_sparse_fwd"
+    dtypes: bfloat16, float16
+    constraints: "topk % block_I == 0；is_causal 仅 True；dim 必须是 2 的幂，tail_dim 支持 0 或 2 的幂（0 = GLM5.3 吸收式 MLA，宽度 512）；S 或 H 变化触发重新 JIT（首次 20~30s）；**-1 只能垫在队尾**（valid_NI 按块首计数截断循环）"
+    best_for: "需要改 kernel 内部、需要 SplitKV 自动配置的实验；GLM5.3（tail_dim=0，d_qk=d_v=512）现可直接调用"
+    status: usable
+    padding_support: suffix_only
+    mutates_inputs: "none"   # 实测：q/kv/indices 均未被改写
+    note: "num_split 由 get_best_config(batch, seq_len, heads) 自动选；结论必须记录当时选到的 num_split。队尾填充是厂商用例的唯一布局，现网安全。**GLM5.3 `tail_dim=0` 已支持**：4 个 kernel body 共 20 处 tail 语句改成 `if D_tail > 0:` 编译期条件编译（不留零长 fragment）；已用 d_v=512/S=32/S=512/S=4096/H=64/topk=2048 验过，576 路径逐位不变（max_abs=0.0）。`sm_scale` 默认值随形状变：576 宽度 → 1/sqrt(640)，512 宽度 → 1/sqrt(512)，跨形状比较必须显式传同一个值。`num_split` 现在会被夹紧到 `topk/block_I` 的最大因子（`get_best_config` 在 S=1/topk=512 会给 32 → 夹到 16），否则撞 `topk % (num_split*block_I)` 断言"
+
+  - id: tilelang-prefetch
+    source: "由 bench/prefetch.py 对 tilelang 变体做源码改写生成（下一块 gather 提前到本次 GEMM 之前，寄存器当预取缓冲）"
+    dtypes: bfloat16, float16
+    constraints: "继承 tilelang 全部前置条件；只对 `T.Pipelined(valid_NI[0], ...)` 主循环生效（4 个内核对全部被改写）；厂商文件结构变了脚本会直接报「改写 0 处」退出"
+    best_for: "长上下文（ctx≥128k）ns=1 路径；比原版快 5~6%，输出逐位一致"
+    status: usable
+    padding_support: suffix_only
+    mutates_inputs: "none"
+    note: "不能通过 vLLM 生产安装树生效——生产走 aiter AOT ASM；这条是 tilelang 参考实现内部的改进，用来回答「差距有多少是结构性的」"
+
+  - id: hip-glm
+    source: "dev/sparse_mla_hip_glm.hip（手写 HIP；body 为 tilelang `get_kernel_source()` 导出体逐字搬入）→ 本地 aicc 编译成 libsparse_mla_hip_glm.so 后由 _common.get_runner 加载"
+    dtypes: bfloat16
+    constraints: "仅 GLM5.3 吸收式档（H=64、d_qk=d_v=512、tail_dim=0）；3 kernel（split4/split/nosplit）+ combine，split 分派 S≤16→ns4 / 17≤S≤35→ns2 / S≥36→nosplit；必须用 aicc + 11 条 -mllvm flag（命令见 dev/COMPILE.md，或让 op-hip-compile/derive_flags.py 复算）；.so 是本地产物不入库，换机/换 DTK 要重编译"
+    best_for: "GLM5.3 320k 小 S（≤32）：领先 flash_mla 1.57~2.88×，且全 S 比 tilelang 快 0.4~24%"
+    status: usable
+    padding_support: both
+    mutates_inputs: "none"
+    note: "大 S（≥64）落后 flash_mla 1.13~1.19×，是结构天花板（REPLICATE_H=2 + occupancy=1 CTA/CU），不是调参能消——根因与破局条件见 candidates.yaml: large_s_ceiling_structure。输出与 tilelang 同体路径位级一致（同 body 同 flag 时）"
+
+  - id: tilelang-example
+    source: "tilelang-hygon examples/deepseek_v32/sparse_mla_fwd.py、examples/dsa_sparse_finetune/sparse_mla_fwd.py"
+    dtypes: bfloat16, float16
+    constraints: "示例代码，配置不自动；接口与 perf/ 版本基本同源"
+    best_for: "读算法参考"
+    status: reference
+    padding_support: unknown
+    mutates_inputs: unknown
+
+  - id: flash_mla
+    source: "flash_mla.flash_mla_sparse_fwd（v1.2.0+dtk2604.torch2110）"
+    dtypes: bfloat16
+    constraints: "d_v 仅支持 512；indices 的无效值可以是 -1 或 >= s_kv；返回 (out, max_logits, lse)"
+    best_for: "对标基线；H 较大时跨 head KV 复用做得好"
+    status: usable
+    padding_support: both
+    mutates_inputs: indices   # 实测：把 indices 规范化后原地写回（有效索引前移、-1 后移到队尾，幂等）；q/kv 不动
+
+  - id: ref-fp32
+    source: "tilelang 模块内 ref_sparse_mla_fwd_interface（torch fp32）"
+    dtypes: float32
+    constraints: "一次性构造 [S, SKV] 分数矩阵，大 shape 会 OOM；必须按 query 分块"
+    best_for: "只做正确性判定，禁止进入性能对比"
+    status: reference
+    padding_support: both
+    mutates_inputs: "none"
+
+# ── 实测记录（口径 + 相对值；绝对耗时一律不进本文件，见 data/kb/README.md 条目纪律第 3 条）──
+measured:
+  date: 2026-10-27
+  device: "BW1100 gfx938，cu_count=69，单卡独占"
+  caliber: "op_call（含 wrapper 分配），hot；do_bench warmup=25ms rep=100ms event 计时，3 轮取中位数；eager 与 graph 差 <=2%"
+  inputs: "q/kv 正态初始化 bf16，indices 每行随机选取且 q_start=4096，故有效 topk == 名义 topk（无 -1 padding）"
+  relative:
+    - params: "S=128 SKV=8192 H=16 topk=2048"
+      shape_file: decode-s128
+      note: "fm/tl = 0.81（fm = flash_mla 用时，tl = tilelang 用时；<1 表示 flash_mla 更快）"
+    - params: "S=128 SKV=65536 H=16 topk=2048"
+      shape_file: decode-s128
+      note: "fm/tl = 0.80"
+    - params: "S=512 SKV=65536 H=16 topk=2048"
+      shape_file: decode-s128
+      note: "fm/tl = 0.65"
+    - params: "S=2048 SKV=65536 H=16 topk=2048"
+      shape_file: prefill-8k
+      note: "fm/tl = 0.61"
+    - params: "S=128 SKV=65536 H=64 topk=2048"
+      shape_file: decode-s128
+      note: "fm/tl = 0.35"
+    - params: "S=512 SKV=65536 H=64 topk=2048"
+      shape_file: decode-s128
+      note: "fm/tl = 0.30"
+    - params: "S=128 SKV=65536 H=16 topk=4096"
+      shape_file: decode-s128
+      note: "fm/tl = 0.62"
+    - params: "S=32 SKV=65536 H=16 topk=2048"
+      shape_file: decode-m32
+      note: "fm/tl = 2.40（tilelang 唯一胜出档）"
+    - params: "S=32 SKV=131072 H=64 topk=2048 d512（GLM5.3，tail_dim=0，indices 铺满 128k）"
+      shape_file: decode-glm53
+      note: "fm/tl = 1.03（tilelang 略快）；tilelang+预取/tl = 0.97。另：真 512 相比「576 尾部补零」等价法 = 0.96×（快 4%），逐位一致"
+    - params: "S=4096 SKV=131072 H=64 topk=2048 d512（GLM5.3，tail_dim=0，indices 铺满 128k）"
+      shape_file: prefill-glm53
+      note: "fm/tl = 0.50（flash_mla 快 2.0×）；tilelang+预取/tl = 0.97。真 512 vs 576 零尾 = 0.95×"
+  correctness:
+    note: "两者 vs fp32 分块参考 max_abs 均在 6e-4 ~ 1.3e-3，cos >= 0.9999969；tl vs fm 最大 2e-3。无精度理由偏好任一实现。GLM5.3 档（tail_dim=0、sm_scale=1/sqrt(512)）：tl vs fp32 S=32 max_abs=1.100e-3/cos=0.9999980，S=512 1.074e-3/0.9999982，队尾 -1 半填充 1.263e-3/0.9999977；tl vs fm 1.953e-3/0.9999978"
+
+findings:
+  - "tilelang 版吞吐平坦在 27~30 TF：每 query-head 约 150~163ns，不随 S(32->2048) 与 H(16->64) 变化，工作量增大也不摊销"
+  - "flash_mla 随 H 摊销明显：H 从 16 到 64 工作量 4x，用时仅 1.6x，TF 从 34 升到 99 —— 说明它有跨 head 的 KV 复用；tilelang 平坦则说明每个 head 重复读同一批 gather 结果。这是当前最大结构短板"
+  - "tilelang 唯一胜出档 S=32 的来源是 flash_mla 的小 S 地板（S 32->128 它只多花 11%），不是 tilelang 扩展性更好"
+  - "SKV 从 8k 到 64k 两者均无变化（±0.2%，且输入逐位相同）—— 两者都不受 KV 张量规模限制，只受 gather 量限制"
+  - "本机 cu_count=69 未命中 get_best_streamk_config 的 72/64 策表，S>=128 全部回落到 num_split=1；2026-10-27 强制扫描已证伪『SplitKV 能提速』：S>=128 时 num_split 1->16 单调变慢，S=32 时配置表已选 4 且那正是峰值"
+  - "带宽受限而非计算受限：算术强度 ~30 FLOP/B，交叉点 ~143 FLOP/B；同一份 GEMM 工作量下，KV 表进缓存时快 4.9x（135~138 TF ≈ 55% bf16 峰值），出缓存即掉到 28 TF 且 4.6MB 与 72MB 无差别 —— 约 79% 时间在等 gather。故『GEMM 效率低』不是主因"
+  - "H>=32 时 REPLICATE_H=H/16 让每个 CTA 复读整份 gather 结果，实测耗时与 REPLICATE_H 严格 1:1（1x/2x/4x）；这是 H>=32 档 ~3x 差距的唯一来源。生产档均为 H=16"
+  - "H=16 时与 flash_mla 的差距约 1.25x，来源是 gather 有效带宽（~53% vs ~69% 流式峰值）；随机 vs 顺序索引只差 8%，所以差在流水/在途请求数，不在局部性"
+  - "**gather 已到访存物理极限**：mem-only 变体（去掉 5 个 GEMM 与 softmax，只留 gather + shared 累加）在 ctx=320k 无跨 query 复用时达流式峰值的 94%（S=128）/97%（S=4096）；同一个整 kernel 只有 ~55%。⇒ 访存模式/向量化/num_split 都没有空间了"
+  - "**不重叠的根因是 gather 与 GEMM 串行**（不是 occupancy）——2026-11-13 更正：本条原写「occupancy=1 CTA/CU，靠 64K 寄存器堆算出来」，那是**常数错**（本项目 kernel 走 `-mllvm=-support-768-vgprs=true`，寄存器堆是 4 SIMD×64 lane×768 = 196608，不是 65536）。实测：基线 **2 CTA/CU**；用动态 LDS 探针（28672→40960 强制 1 CTA，输出位级一致）量出 1 CTA/CU 会慢 67~69%。所以「缺第二个 CTA」不是本档差距的成因，REPLICATE_H 与跨 head KV 复用才是。"
+  - "**寄存器预取有效且无损**：把下一块 gather 提前到本次 GEMM 之前，长上下文整 kernel 快 5~6%，输出逐位一致（`bench/prefetch.py`）"
+  - "**把 spilt3/tail 也搬进 shared 做预取 → 慢 1.7×**（VGPR 231、未 spill，纯 LDS 流水代价）：spilt3 原本寄存器直喂 MMA。⇒ LDS 带宽是共存瓶颈，不能拿它换寄存器"
+  - "**长上下文交叉点在 ~128k**：flash_mla 随 ctx 退化（S=4096 从 128k 到 320k 慢 53%），tilelang 平坦（+0.9%）。ctx=320k tilelang 全档领先（1.1~3.1×），128k 上 S≥128 仍略慢（0.93~0.95×，预取后 ≈1.00×）"
+  - "冷编译期告警 legalize_vectorized_loop.cc:85：combine 归约循环 extent=8 被降级为 serial，疑与平坦吞吐相关（未验证，未改源码）"
+  - "tilelang 内部 lru_cache 的 key 不含 seq_len，跨 S 复用已验证安全（S=128 后跑 S=512 结果正确）"
+  - "**flash_mla 的比值依赖 indices 的工作集大小**：同一 S=4096 档，indices 铺满 128k（~128MB，出缓存）时 fm/tl = 0.50；只落在前 8k 行（~8MB，可驻缓存）时 fm/tl = 0.25（它自己快 2.1×）。tilelang 两种分布只差 2~3%。⇒ 引用历史 fm 比值必须先确认 indices 分布，不能跨分布比"

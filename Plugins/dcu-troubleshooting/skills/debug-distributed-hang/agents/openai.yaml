@@ -1,0 +1,4 @@
+interface:
+  display_name: "Debug Distributed Hang"
+  short_description: "Help with Debug Distributed Hang tasks"
+  default_prompt: "Use $debug-distributed-hang to handle this task with evidence-backed validation."

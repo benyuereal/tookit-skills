@@ -1,0 +1,42 @@
+# 任务契约：env-reproduce —— 按调研要点在 DCU 上复现部署（gate，占卡起服务需审批）
+# 契约字段说明见 tasks/research-collect.yaml 头部注释。
+task:
+  type: gate
+  goal: "把调研要点落成 DCU 上的可用推理服务/运行环境：拉镜像或用现成环境、起服务、确认健康端点；与调研要点的差异逐条记录。"
+
+  executor_skills:
+    - dcu-model-deploy-catalog # 先查现成配方（有则优先按配方）
+    - dcu-docker               # 容器/镜像操作
+    - dcu-env                  # 环境探测
+    - dcu-vllm-deploy          # vLLM 部署调优
+    - dcu-model-engine-runbook # 按格式选引擎（SGLang/NInfer 等非 vLLM 场景）
+    - dcu-software-adaptation-guide # 调研结论与现成配方有缺口时的适配 SOP
+
+  approach:
+    - "先查 dcu-model-deploy-catalog：目标模型已有配方则按配方执行，无则按调研要点组环境。"
+    - "起容器/服务前向用户报命令与占卡计划，获批后执行（gate；共享机器绝不擅自动别人的服务/容器）。"
+    - "记录最终镜像 tag、DTK 版本、启动命令、与调研要点的每处差异及原因。"
+    - "健康检查通过（端点至少 1 条冒烟推理成功）即写入 result.json。"
+
+  evidence:
+    path: "runs/research-baseline/env-reproduce/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      serve_endpoint: "<host:port>"
+      launch_cmd_sha: "<启动命令 sha256 前 8 位>"
+
+  acceptance:
+    - "服务健康端点可推理（至少 1 条冒烟请求成功）。"
+    - "镜像 tag / DTK / 启动命令已记录，与调研要点差异已逐条注明。"
+    - "fingerprint 齐全非占位符。"
+
+  out_of_scope:
+    - "不改宿主驱动/DTK 安装与系统配置（需要时转 model-deploy 工作流的 deploy-precheck/deploy-launch）。"
+    - "不做性能压测与调优（那是 baseline-run 及后续 infer-optimize）。"
+    - "不做量化/改精度。"
+
+  proceed: ask
+  on_exhaust: exit

@@ -1,0 +1,32 @@
+{
+  "skill": "op-roofline",
+  "description": "路由评测：true=先出预测与绑定约束（derive.py）、残差大回去修模型、寄存器活集合编译前否掉设计（R1/hipbudget.py）这类「算出来再写代码」的问题应命中本 skill；false=PMC 计数器怎么读、四闸四档判定应由 op-profiling / op-gate 接手。",
+  "cases": [
+    {
+      "id": "op-roofline-t1",
+      "prompt": "sparse-mla 的 S=128/H=64/topk=2048 这档，还没上卡也没编译：用 derive.py 怎么先出预测和绑定约束？输出里最该看的是哪个量？",
+      "expect": "命中§二/§三/§五：用 derive.py sparse-mla --s 128 --h 64 --topk 2048 …，按 constants.yaml → rules → models/<op>.py 三层走；输出核心是绑定约束（预测 X ms、绑定约束=非 MMA 指令发射、内存侧还有 N× 富余），不是一个孤立的 ms；硬规则是写不出预测不许写代码，测量只用来给模型打分。",
+      "forbid": ["没有预测也可以先写代码试出来"]
+    },
+    {
+      "id": "op-roofline-t2",
+      "prompt": "同一个设计，我按模型预测 0.40 ms、实测 1.20 ms，残差这么大，是不是换个变体再试一次比较快？",
+      "expect": "命中§一/§六：预测与实测差 >30% 说明模型错了，应回去修模型并写清是常数/规则/算子模型哪一层错，不是换变体再试；「没有预测、试完记一笔这个不行」是赌博；别用调参把残差压小（那是拟合噪声）。绑定约束对不对比数值误差更严重：预测卡指令发射而 PMC 显示卡内存属结构性错误。",
+      "forbid": ["预测和实测差得多就换个变体再试"]
+    },
+    {
+      "id": "op-roofline-t3",
+      "prompt": "按 R1 估出来活集合 300 VGPR/线程（每线程上限 256），能直接判这个设计编译前就否掉吗？hipbudget.py 该怎么用？",
+      "expect": "命中§四 R1/§五：活集合 ≥ 每线程上限（gfx938 768-VGPR 模式 256）⇒ 保证溢出，编译前即可否掉；hipbudget.py 是作用域感知的——同作用域相加、兄弟块/分支取 max，不能平铺求和；未超限不保证不溢出（临时量不进声明段，实测可多出 ~148 VGPR），绝对量以编译产物 vgpr_count / vgpr_spill_count 为准，可靠的是两个设计之间的相对比较。",
+      "forbid": ["活集合没超上限就一定不会溢出"]
+    },
+    {
+      "id": "op-roofline-f1",
+      "prompt": "PMC CSV 里 TA_TA_BUSY 有 16 个实例列，汇总时求和、取 max 还是平均？首次 launch 的数能直接用吗？"
+    },
+    {
+      "id": "op-roofline-f2",
+      "prompt": "微基准快了 40%，但端到端 step 耗时没变；不变量那组也还没跑，这次能不能直接判 ACCEPTED？"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+# 任务：op-optimize —— 算子/kernel 优化改动（gate，写代码/编译需审批）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: gate            # 改代码/换 kernel/重编译，高风险
+  goal: "在 op-constrain 允许的动作集合内实施优化改动（kernel 替换/融合/参数调优/编译开关），每次只动一个优化点，改动可回退，并跑完 opverify 自检后才交给验证节点。"
+
+  executor_skills:
+    - op-optimize              # 优化循环方法论（候选队列 → 实现 → 自检），loop.py 驱动
+    - dcu-kernel-dev           # HIP/TileLang kernel 开发
+    - dcu-triton-kernels       # Triton 算子优化
+    - dcu-vllm-runtime-patch   # 不改源码的运行时注入（可选路径）
+    - dcu-vllm-custom-op       # vLLM 自定义算子（可选路径）
+    # 另需按目标算子装配对应算子卡：op-sparse-mla / op-moe-w8a8 / op-gemm-fp8（三选一）
+
+  approach:
+    - "装配目标算子的 op-<算子> 卡（op-sparse-mla / op-moe-w8a8 / op-gemm-fp8 之一），按其 variants.yaml 的档位与 shapes/ 的已知边界选候选实现。"
+    - "候选只能取自 op-constrain 的 allowed_actions；越界方案（如 memory 天花板下仍调 tile）直接退回，不进入实施。"
+    - "用 op-optimize/loop.py 驱动候选队列，每轮只动一个优化点，写明预期收益与验证口径（对比基线、测什么指标）。"
+    - "实施改动并记录全部 diff（文件/env 开关/编译产物），确保可一键回退。"
+    - "先做正确性自测（opverify.py 三闸四档），ACCEPTED 才可交下游；INCONCLUSIVE 不进下一轮。"
+    - "REJECTED 必须归因「方向错」还是「实现错」：方向错→退回 op-roofline 重判，实现错→留在本节点修，不得把实现 bug 记成方向证伪。"
+    - "把改动清单、自测结论、归因写入 runs/op-optimize/optimize/result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/op-optimize/optimize/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      op: "<op-name>"                                         # 占位：目标算子
+      shapes: "<shape-id>"                                    # 占位：目标形状
+      change_path: "<triton|hip|runtime-patch|compile-flag>"  # 占位：改动路径
+      diff_summary: "<changed-files-or-env>"                  # 占位：改动清单摘要
+      allowed_action: "<reduce_bytes|reduce_flops|restructure>"  # 占位：本改动属于允许集合中的哪一类
+      candidate_id: "<candidate-id>"                          # 占位：候选编号（可回溯到 constrain）
+      verdict: "<accepted|rejected|inconclusive>"             # 占位：opverify 四档结论
+      correctness: "<pass|fail>"                              # 占位：正确性自测
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "正确性自测通过（opverify.py 返回 ACCEPTED），结论写入 result.json。"
+    - "改动的 allowed_action 在 op-constrain 的允许集合内。"
+    - "全部改动可回退（diff/env 开关清单完整）。"
+    - "一轮只动一个优化点，归因可分离。"
+    - "独立 verifier 复核通过，或用户已审批放行。"
+
+  out_of_scope:
+    - "不做性能结论宣布（端到端数字以 op-validate 为准）。"
+    - "不同时改多个不相关热点（一次一个优化点，归因才干净）。"
+    - "不引入无 license 保障的第三方 kernel 源码。"
+    - "不把实现 bug 归因为方向证伪。"
+
+  proceed: ask           # 高风险（改代码/编译/注入），必须经用户审批
+  on_exhaust: rollback   # 改动回退，恢复原实现

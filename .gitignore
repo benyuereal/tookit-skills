@@ -1,0 +1,21 @@
+# 第三方 vendor 工具（自带 .git / 二进制，不进仓库）
+**/vendor_*/
+**/test_runs/
+# 工作流运行态证据目录（agent 运行时产生，不入库）
+**/runs/
+# 真实凭证与设备清单（运行时生成，仓库内只有占位模板）
+**/credentials.json
+**/devices.json
+data/credentials.json
+data/devices.json
+# Python 缓存
+__pycache__/
+*.pyc
+.DS_Store
+*.swp
+# 手写 HIP kernel 编译产物（.so/.o/备份，运行时本地生成，不入库；源 .hip 入库）
+*.so
+*.o
+*.so.*.bak
+# ops 门禁 hook 的本地接线（用户态，install.sh 不装 .claude/）
+.claude/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add Jit Kernel"
+  short_description: "Help with Add Jit Kernel tasks"
+  default_prompt: "Use $add-jit-kernel to handle this task with evidence-backed validation."

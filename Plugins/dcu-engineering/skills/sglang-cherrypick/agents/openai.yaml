@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sglang Cherrypick"
+  short_description: "Help with Sglang Cherrypick tasks"
+  default_prompt: "Use $sglang-cherrypick to handle this task with evidence-backed validation."

@@ -1,0 +1,58 @@
+generated_at: '2026-04-23T21:03:16.938532'
+source: online_kb_extraction_v1
+source_schema_version: '1'
+default_source: online_kb_extraction_v1
+mappings:
+- name: torch
+  kind: triton_module
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__dasTools__dcu-das-tools.md__7aa84de0a0.md
+- name: tl.constexpr
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__dcu-triton-kernel-escalation.md__ebb18feaea.md
+- name: tl.program_id
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__dcu-triton-kernel-escalation.md__ebb18feaea.md
+- name: tl.arange
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__dcu-triton-kernel-escalation.md__ebb18feaea.md
+- name: tl.load
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__dcu-triton-kernel-escalation.md__ebb18feaea.md
+- name: tl.store
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__dcu-triton-kernel-escalation.md__ebb18feaea.md
+- name: tl.sigmoid
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__dcu-triton-kernel-escalation.md__ebb18feaea.md
+- name: tl.cdiv
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__triton-kernels.md__d33ac0f64d.md
+- name: tl.zeros
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__triton-kernels.md__d33ac0f64d.md
+- name: tl.dot
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__05-advanced__custom-kernels__triton-kernels.md__d33ac0f64d.md
+- name: tl.max
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__compilers__triton-on-rocm.md__5dfa6cb54b.md
+- name: tl.exp
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__compilers__triton-on-rocm.md__5dfa6cb54b.md
+- name: tl.sum
+  kind: triton_op
+  source: online_kb_extraction_v1
+  provenance: dcu-knowledge__triton__compilers__triton-on-rocm.md__5dfa6cb54b.md
+relations: []

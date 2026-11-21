@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sglang Bisect CI Regression"
+  short_description: "Help with Sglang Bisect CI Regression tasks"
+  default_prompt: "Use $sglang-bisect-ci-regression to handle this task with evidence-backed validation."

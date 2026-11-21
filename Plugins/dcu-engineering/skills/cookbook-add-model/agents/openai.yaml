@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cookbook Add Model"
+  short_description: "Help with Cookbook Add Model tasks"
+  default_prompt: "Use $cookbook-add-model to handle this task with evidence-backed validation."

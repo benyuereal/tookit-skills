@@ -1,0 +1,25 @@
+{
+  "name": "dcu-core",
+  "version": "1.4.0",
+  "description": "核心路由与通用能力 — skill 统一入口路由、HiCache 三层缓存 DCU 适配、自定义融合 kernel、kernel 层微基准、训练手册",
+  "author": {
+    "name": "DCU Toolkit Contributors"
+  },
+  "homepage": "https://developer.sourcefind.cn/codes/jixx/dcu-toolkit-skills/-/tree/open-source/Plugins/dcu-core",
+  "license": "MIT",
+  "keywords": [
+    "dcu",
+    "hygon",
+    "aarch64",
+    "skills",
+    "router",
+    "hicache",
+    "kernel",
+    "microbench",
+    "training"
+  ],
+  "platforms": [
+    "claude",
+    "opencode"
+  ]
+}

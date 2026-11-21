@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generate Profile"
+  short_description: "Help with Generate Profile tasks"
+  default_prompt: "Use $generate-profile to handle this task with evidence-backed validation."

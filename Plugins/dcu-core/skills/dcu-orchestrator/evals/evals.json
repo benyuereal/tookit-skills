@@ -1,0 +1,34 @@
+{
+  "skill": "dcu-orchestrator",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对编排语义要点；false=单步/异构意图应走别的入口（只给 id+prompt）。",
+  "cases": [
+    {
+      "id": "dcu-orchestrator-t1",
+      "prompt": "按 前置检查→起推理服务→真机验证 三步把模型部署上 DCU，起服务占卡前要先问我一声。",
+      "expect": "命中 model-deploy 工作流（workflows/model-deploy.yaml）：deploy-precheck(probe 只读采卡位/镜像/权重/配方指纹) → deploy-launch(gate，proceed: ask 需用户审批放行) → deploy-verify(normal 对比参照实现)；用 scripts/render_workflow.py 依赖拓扑算就绪节点与执行批次。"
+    },
+    {
+      "id": "dcu-orchestrator-t2",
+      "prompt": "算子优化做完且 A/B 验证通过了，把这次的收益和手法沉淀进知识库台账。",
+      "expect": "命中 op-optimize 工作流尾段 op-validate → op-distill（gate 需审批）：scripts/dcu_distill.py 以 runs/op-optimize/validate/result.json 为唯一数字来源生成台账骨架，跨项目可复用事实标注 scope/status，晋升提案写明拟并入 skill 文件路径与不并入项。"
+    },
+    {
+      "id": "dcu-orchestrator-t3",
+      "prompt": "workflow YAML 里 depends_on、retries、proceed、on_exhaust 这些字段到底怎么执行？某个节点失败了会怎样？",
+      "expect": "命中 §一 编排循环 10 步：依赖满足即就绪、max_parallel 限执行批次、task type 三类语义（normal 完成 acceptance 即解锁下游 / probe 只读不 gate / gate 高风险走独立 verifier 或用户审批）、失败按 retries 重试、耗尽后按 on_exhaust（exit|continue|rollback）处理。"
+    },
+    {
+      "id": "dcu-orchestrator-f1",
+      "prompt": "hy-smi 看下 0 号卡温度和显存占用。"
+    },
+    {
+      "id": "dcu-orchestrator-f2",
+      "prompt": "hipMemcpy 的参数顺序和 DCU 上的坑是什么？"
+    },
+    {
+      "id": "dcu-orchestrator-t4",
+      "prompt": "把 GitHub 上这个新推理项目的思路在我们的 DCU 环境里复现出来，并先给一份可信的基线数字。",
+      "expect": "命中 research-baseline 工作流：research-collect（probe，web-tools-guide/anysearch/github-repo-deep-dive + dcu-modelzoo 采要点）→ env-reproduce（gate，占卡起服务需用户审批，dcu-model-deploy-catalog/dcu-vllm-deploy）→ baseline-run（normal，dcu-llm-benchmark 出吞吐/TTFT/TPOT 基线）；evidence fingerprint 含 device/dtk/image/model + serving 指标。"
+    }
+  ]
+}

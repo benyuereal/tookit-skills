@@ -1,0 +1,4 @@
+interface:
+  display_name: "Scripted Runtime Notes"
+  short_description: "Help with Scripted Runtime Notes tasks"
+  default_prompt: "Use $scripted-runtime-notes to handle this task with evidence-backed validation."

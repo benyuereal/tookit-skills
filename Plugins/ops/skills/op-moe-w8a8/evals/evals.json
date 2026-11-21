@@ -1,0 +1,32 @@
+{
+  "skill": "op-moe-w8a8",
+  "description": "路由评测：true=MoE 前向的 ASM 正确性缺陷与自洽性判据、融合收益（moe_sum epilogue）、routed/shared 两条路径这类「MoE 整体形态」的问题应命中本 skill；false=单发 FP8 GEMM 的 dtype 与 tilelang 写法、稀疏注意力的 num_split/-1 语义应由 op-gemm-fp8 / op-sparse-mla 接手。",
+  "cases": [
+    {
+      "id": "op-moe-w8a8-t1",
+      "prompt": "lightop 的 ASM mode 1000 能不能上生产？MoE 的无损性该怎么判——能拿自己写的 torch 参考对比通过就算无损吗？",
+      "expect": "命中§三：mode ≥ 1000 的 Marlin ASM 在混合专家 batch 下串读其他 token/专家数据，不可用；判据是自洽性 batch_independence——同一 token 的输出不得依赖它的 batch 同伴，(16,0) bit-exact 自洽而 (32,1000) 不自洽（max_diff 量级 1e5）；不能依赖自写 torch 参考（参考写错会同时放过 bug）；安全区是 mode 500–525。",
+      "forbid": ["用自己的 torch 参考对比通过就算无损"]
+    },
+    {
+      "id": "op-moe-w8a8-t2",
+      "prompt": "GEMM2 的 epilogue 直接融 moe_sum（atomicAdd）值不值得做？GEMM1 那边融 silu-mul + fp8 量化呢？",
+      "expect": "命中§四：GEMM2 epilogue 融 moe_sum 慢 2.5–3×（全局 RMW + 写冲突）；g1f（GEMM1+silu-mul+fp8 量化）结构不可行——mode 0 decode 的 BLOCK_N=16，gate 列 [0,512) 与 up 列 [512,1024) 跨 block，纯 epilogue 融不到一起，要融必须拉宽 BLOCK_N 等于动 GEMM 主体；默认假设融合净负，要推翻必须同时证明收益不被搬移吃回去且端到端真有收益。",
+      "forbid": ["epilogue 融 moe_sum 是净收益"]
+    },
+    {
+      "id": "op-moe-w8a8-t3",
+      "prompt": "profile 里 moe_sum 一共 84 次调用，看着像冗余；另外我只优化 routed 路径是不是就够了？",
+      "expect": "命中§二/§六：84 = 42+42，分属 routed（lightop）与 shared（triton+Cijk）两条路径，不是冗余，不能省；生产有两条 MoE 路径，只做 routed 会漏掉一半耗时；moe_sum 用 triton 替代慢 8×（bit-exact 但无收益）。",
+      "forbid": ["moe_sum 的 84 次调用是冗余的"]
+    },
+    {
+      "id": "op-moe-w8a8-f1",
+      "prompt": "用 tilelang 写 FP8 GEMM 时 warp_size 和 k_pack 怎么设？结果错但不报错，一般是哪里漏了？"
+    },
+    {
+      "id": "op-moe-w8a8-f2",
+      "prompt": "topk=512、S=1 时 sparse fwd 起不来，报 must be divisible by num_split*block_I，num_split 该怎么配？"
+    }
+  ]
+}

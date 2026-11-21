@@ -1,0 +1,24 @@
+shard_id: dcu-code-migrator-native
+owner_skill: dcu-code-migrator
+source_type: official
+priority: 1.2
+domains:
+  - ai
+  - algorithm
+  - blas
+  - collective
+  - environment
+  - fft
+  - migration
+  - random
+  - runtime
+  - solver
+  - sparse
+  - therock
+embedding:
+  model: qwen3-embedding
+  dim: 1024
+stats:
+  chunk_count: 113
+  doc_count: 71
+source_layer: native

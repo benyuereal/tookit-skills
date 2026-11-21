@@ -1,0 +1,29 @@
+{
+  "skill": "op-bench",
+  "description": "路由评测：true=口径三问、A/B 噪声判定、跨卡比法这类「怎么量」问题应命中本 skill；false=契约字段、PMC 读数解读应由 op-contract / op-profiling 接手。",
+  "cases": [
+    {
+      "id": "op-bench-t1",
+      "prompt": "给一张算子卡写 bench 脚本，动手之前要先定哪些口径？",
+      "expect": "命中§一：口径三问——测什么（kernel 单发 / 算子调用含 wrapper / 端到端 step）、含不含分配（预分配 vs torch.empty）、冷还是热（首轮含 JIT/编译不能进结论）；三问答案必须写在报告头，否则视为无效数据；并用 scripts/opbench.py（bench_fn/significant/floor_status），不手搓 time.time()。"
+    },
+    {
+      "id": "op-bench-t2",
+      "prompt": "给算子卡的 bench 脚本做 A/B：同一个 kernel 改完后连跑两次，一次快 2%，下次又不快，怎么判断这是不是噪声？",
+      "expect": "命中铁律 4：DCU 抖动可达 5%；跑 3 轮各取中位数，用 |Δ| > 3×MAD（opbench.significant(k=3)）判定；过不了门的结论标 INCONCLUSIVE，写成「在噪声内」，不许写成「快了 x%」。"
+    },
+    {
+      "id": "op-bench-t3",
+      "prompt": "我在两块 DCU 上分别跑了同一个算子 kernel 的 bench，把两次的绝对耗时相减说快了 1.5 倍，这个结论能直接用吗？",
+      "expect": "命中铁律 2：跨卡只比 ratio，不比绝对 µs（曾出现卡 0–5 钉 600MHz、卡 6–9 跑 1150MHz 导致的 1.5× 假收益）；每个变体要在同一张卡、同一进程、交替执行（interleaved），跨卡只做 sanity check。"
+    },
+    {
+      "id": "op-bench-f1",
+      "prompt": "contract.yaml 里 floor.peak 我直接填刚才实测到的 1020 GB/s 行不行？"
+    },
+    {
+      "id": "op-bench-f2",
+      "prompt": "hipprof 采到的 PMC 里 TA_* 和 L1 的指标怎么读，能判断卡在内存还是算力吗？"
+    }
+  ]
+}

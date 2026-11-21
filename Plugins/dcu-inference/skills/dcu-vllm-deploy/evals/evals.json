@@ -1,0 +1,29 @@
+{
+  "skill": "dcu-vllm-deploy",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对要点；false=形似但应路由他处（只给 id+prompt）。",
+  "cases": [
+    {
+      "id": "dcu-vllm-deploy-t1",
+      "prompt": "我起的容器里跑 vLLM 报看不到 DCU 设备（DEVCOUNT=0），docker run 时漏了什么？",
+      "expect": "命中本 skill §1：必挂 -v /opt/hyhal:/opt/hyhal:ro；挑卡用 HIP_VISIBLE_DEVICES 而非 -g。"
+    },
+    {
+      "id": "dcu-vllm-deploy-t2",
+      "prompt": "DCU 上 vLLM 开了 MTP 投机解码后，约 10% 的 tool call 参数 JSON 结尾畸形报 Invalid tool parameters，不想关 MTP 怎么绕？",
+      "expect": "命中 §4.1：MTP 结尾 {} 顶掉收尾引号致 JSON 未闭合；给 references/mtp_toolcall_drift.md 与 templates/openai_repair_proxy.py 旁路修复代理。"
+    },
+    {
+      "id": "dcu-vllm-deploy-t3",
+      "prompt": "在 DCU 上起 vLLM 还需要显式传 --device rocm 吗？",
+      "expect": "命中 §2：0.15.1+/0.18.1 起已废弃，platform plugin 自动激活 hcu，无需再传。"
+    },
+    {
+      "id": "dcu-vllm-deploy-f1",
+      "prompt": "帮我在 NVIDIA A100 上用 vLLM 起一个 Qwen 服务并做 tensor parallel 调优。"
+    },
+    {
+      "id": "dcu-vllm-deploy-f2",
+      "prompt": "把 vLLM 0.26 上游源码里 sampler 模块的逻辑逐行讲解一遍。"
+    }
+  ]
+}

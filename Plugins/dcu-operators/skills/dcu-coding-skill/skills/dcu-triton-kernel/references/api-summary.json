@@ -1,0 +1,2541 @@
+{
+  "generated_at": "2026-04-22T08:04:08+00:00",
+  "symbol_count": 143,
+  "family_count": 12,
+  "families": {
+    "hip": [
+      "hipArrayLayered",
+      "hipArray_t",
+      "hipBLAS",
+      "hipBLASLt",
+      "hipBLAS锛屾繁搴",
+      "hipCUB",
+      "hipChannelFormatDesc",
+      "hipCheckError",
+      "hipCreateChannelDesc",
+      "hipCreateTextureObject",
+      "hipDNN",
+      "hipDeviceCanAccessPeer",
+      "hipDeviceDisablePeerAccess",
+      "hipDeviceEnablePeerAccess",
+      "hipDeviceGet",
+      "hipDeviceGetAttribute",
+      "hipDeviceGetName",
+      "hipDeviceGetStreamPriorityRange",
+      "hipDeviceProp_t",
+      "hipDeviceReset",
+      "hipDeviceSynchronize",
+      "hipDeviceTotalMem",
+      "hipDriverGetVersion",
+      "hipDynamicParallelism",
+      "hipError_t",
+      "hipEventCreate",
+      "hipEventDestroy",
+      "hipEventElapsedTime",
+      "hipEventRecord",
+      "hipEventSynchronize",
+      "hipEvent_t",
+      "hipFFT",
+      "hipFFT锛屽師鐢熻兘鍔涗紭鍏",
+      "hipFree",
+      "hipGetDeviceCount",
+      "hipGetDeviceProperties",
+      "hipGetErrorName",
+      "hipGetErrorString",
+      "hipGetLastError",
+      "hipGetParameterBufferV2",
+      "hipGraph",
+      "hipGraphAddKernelNode",
+      "hipGraphAddMemcpyNode1D",
+      "hipGraphConditionIfNode",
+      "hipGraphConditionWhileNode",
+      "hipGraphCreate",
+      "hipGraphDeviceLaunch",
+      "hipGraphInstantiate",
+      "hipGraphLaunch",
+      "hipGraphSetConditional",
+      "hipGraphStreamCapture",
+      "hipGraphTest",
+      "hipGraphTest_largeOfKernels",
+      "hipHostAllocMapped",
+      "hipHostAllocPortable",
+      "hipHostAllocWriteCombined",
+      "hipHostFree",
+      "hipHostMalloc",
+      "hipHostMallocDefault",
+      "hipHostRegister",
+      "hipInit",
+      "hipLaunchCooperativeKernel",
+      "hipLaunchKernelGGL",
+      "hipMalloc",
+      "hipMalloc3DArray",
+      "hipMallocArray",
+      "hipMallocManaged",
+      "hipMallocPitch",
+      "hipMemcpy",
+      "hipMemcpy2D",
+      "hipMemcpy2DToArray",
+      "hipMemcpy3D",
+      "hipMemcpy3DParms",
+      "hipMemcpyAsync",
+      "hipMemcpyDeviceToDevice",
+      "hipMemcpyDeviceToHost",
+      "hipMemcpyFromSymbol",
+      "hipMemcpyHostToDevice",
+      "hipMemcpyKind",
+      "hipMemcpyParam2D",
+      "hipMemcpyPeer",
+      "hipMemcpyPeerAsync",
+      "hipMemcpyToSymbol",
+      "hipMemset",
+      "hipMemsetAsync",
+      "hipModuleGetFunction",
+      "hipModuleGetTexRef",
+      "hipModuleLaunchKernel",
+      "hipModuleLoad",
+      "hipOccupancyMaxActiveBlocksPerMultiprocessor",
+      "hipOccupancyMaxPotentialBlockSize",
+      "hipRAND",
+      "hipResourceDesc",
+      "hipSOLVER",
+      "hipSPARSE",
+      "hipSPARSELt",
+      "hipSetDevice",
+      "hipSharedMem",
+      "hipSolver",
+      "hipStreamBeginCapture",
+      "hipStreamCreate",
+      "hipStreamCreateWithPriority",
+      "hipStreamDestroy",
+      "hipStreamEndCapture",
+      "hipStreamSynchronize",
+      "hipStreamWaitEvent",
+      "hipStream_t",
+      "hipSuccess",
+      "hipTexRefSetAddressMode",
+      "hipTexRefSetArray",
+      "hipTexRefSetFilterMode",
+      "hipTexRefSetFormat",
+      "hipTextureDesc",
+      "hipTextureObject_t"
+    ],
+    "miopen": [
+      "miopenConvAlgoPerf_t",
+      "miopenConvolution",
+      "miopenConvolutionDescriptor_t",
+      "miopenConvolutionForward",
+      "miopenConvolutionForwardGetWorkSpaceSize",
+      "miopenCreate",
+      "miopenCreateConvolutionDescriptor",
+      "miopenCreateTensorDescriptor",
+      "miopenDestroy",
+      "miopenFindConvolutionForwardAlgorithm",
+      "miopenFloat",
+      "miopenGetConvolutionForwardOutputDim",
+      "miopenHandle_t",
+      "miopenInitConvolutionDescriptor",
+      "miopenSet4dTensorDescriptor",
+      "miopenTensorDescriptor_t",
+      "miopen_convolution"
+    ],
+    "rccl": [
+      "rccl_allreduce",
+      "rccl_allreduce_mpi",
+      "rccl_example"
+    ],
+    "rocalute": [
+      "rocALUTE"
+    ],
+    "rocblas": [
+      "rocBLAS"
+    ],
+    "rocfft": [
+      "rocFFT"
+    ],
+    "rocprim": [
+      "rocPRIM"
+    ],
+    "rocrand": [
+      "rocRAND"
+    ],
+    "rocsolver": [
+      "rocSOLVER"
+    ],
+    "rocsparse": [
+      "rocSPARSE"
+    ],
+    "rocthrust": [
+      "rocThrust"
+    ],
+    "rocwmma": [
+      "rocWMMA"
+    ]
+  },
+  "symbols": [
+    {
+      "symbol": "hipArrayLayered",
+      "doc_ids": [
+        "layered_texture_normalized_md_e8d2c4cf"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "layered_texture_normalized_md_e8d2c4cf_c0000"
+      ]
+    },
+    {
+      "symbol": "hipArray_t",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "texture_object_array_normalized_md_0d9cf3a5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "texture_object_array_normalized_md_0d9cf3a5_c0000"
+      ]
+    },
+    {
+      "symbol": "hipBLAS",
+      "doc_ids": [
+        "hipblas_usage_md_ba53fcd1",
+        "dtk_md_71e1e878",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_library_mapping_md_31834cb4",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hipblas_usage_md_ba53fcd1_c0000",
+        "dtk_md_71e1e878_c0001",
+        "dtk_md_71e1e878_c0003",
+        "dtk_md_71e1e878_c0006",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "dcu_library_mapping_md_31834cb4_c0008",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipBLASLt",
+      "doc_ids": [
+        "rocm_libraries_usage_md_d2acd0a4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001"
+      ]
+    },
+    {
+      "symbol": "hipBLAS锛屾繁搴",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0003"
+      ]
+    },
+    {
+      "symbol": "hipCUB",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipChannelFormatDesc",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002"
+      ]
+    },
+    {
+      "symbol": "hipCheckError",
+      "doc_ids": [
+        "md_90d007e3"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "md_90d007e3_c0000"
+      ]
+    },
+    {
+      "symbol": "hipCreateChannelDesc",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002"
+      ]
+    },
+    {
+      "symbol": "hipCreateTextureObject",
+      "doc_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5_c0000"
+      ]
+    },
+    {
+      "symbol": "hipDNN",
+      "doc_ids": [
+        "rocm_repositories_md_caea7bf7",
+        "therock_overview_md_fef8291f"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocm_repositories_md_caea7bf7_c0000",
+        "therock_overview_md_fef8291f_c0000",
+        "therock_overview_md_fef8291f_c0001"
+      ]
+    },
+    {
+      "symbol": "hipDeviceCanAccessPeer",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "dcu_env_build_md_319f787c",
+        "driver_device_query_baseline_md_a42c15f4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "dcu_env_build_md_319f787c_c0001",
+        "driver_device_query_baseline_md_a42c15f4_c0000"
+      ]
+    },
+    {
+      "symbol": "hipDeviceDisablePeerAccess",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005"
+      ]
+    },
+    {
+      "symbol": "hipDeviceEnablePeerAccess",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "peer2peer_minimal_md_311f6acc"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "peer2peer_minimal_md_311f6acc_c0000"
+      ]
+    },
+    {
+      "symbol": "hipDeviceGet",
+      "doc_ids": [
+        "dcu_env_build_md_319f787c",
+        "driver_device_query_baseline_md_a42c15f4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_env_build_md_319f787c_c0001",
+        "driver_device_query_baseline_md_a42c15f4_c0000"
+      ]
+    },
+    {
+      "symbol": "hipDeviceGetAttribute",
+      "doc_ids": [
+        "dcu_env_build_md_319f787c",
+        "driver_device_query_baseline_md_a42c15f4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_env_build_md_319f787c_c0001",
+        "driver_device_query_baseline_md_a42c15f4_c0000"
+      ]
+    },
+    {
+      "symbol": "hipDeviceGetName",
+      "doc_ids": [
+        "dcu_env_build_md_319f787c"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_env_build_md_319f787c_c0001"
+      ]
+    },
+    {
+      "symbol": "hipDeviceGetStreamPriorityRange",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "stream_priority_overlap_compare_md_d6e69db7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0000",
+        "stream_priority_overlap_compare_md_d6e69db7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipDeviceProp_t",
+      "doc_ids": [
+        "cuda_to_hip_porting_md_b8ba120d"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "cuda_to_hip_porting_md_b8ba120d_c0001"
+      ]
+    },
+    {
+      "symbol": "hipDeviceReset",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005"
+      ]
+    },
+    {
+      "symbol": "hipDeviceSynchronize",
+      "doc_ids": [
+        "rocfft_usage_md_722ea9ea",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134",
+        "hip_thread_synchronization_md_045cfaa5",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocfft_usage_md_722ea9ea_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "dtk_md_71e1e878_c0006",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0001",
+        "hip_memory_management_md_de0d2134_c0000",
+        "hip_thread_synchronization_md_045cfaa5_c0001",
+        "dcu_library_mapping_md_31834cb4_c0000"
+      ]
+    },
+    {
+      "symbol": "hipDeviceTotalMem",
+      "doc_ids": [
+        "dcu_env_build_md_319f787c"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_env_build_md_319f787c_c0001"
+      ]
+    },
+    {
+      "symbol": "hipDriverGetVersion",
+      "doc_ids": [
+        "dcu_env_build_md_319f787c"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_env_build_md_319f787c_c0001"
+      ]
+    },
+    {
+      "symbol": "hipDynamicParallelism",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0007"
+      ]
+    },
+    {
+      "symbol": "hipError_t",
+      "doc_ids": [
+        "cuda_to_hip_porting_md_b8ba120d",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000"
+      ]
+    },
+    {
+      "symbol": "hipEventCreate",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hip_memory_management_md_de0d2134",
+        "rocm_profiling_md_77939b57"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "dtk_md_71e1e878_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "hip_memory_management_md_de0d2134_c0001",
+        "rocm_profiling_md_77939b57_c0000"
+      ]
+    },
+    {
+      "symbol": "hipEventDestroy",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "rocm_profiling_md_77939b57"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "rocm_profiling_md_77939b57_c0000"
+      ]
+    },
+    {
+      "symbol": "hipEventElapsedTime",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "hip_memory_management_md_de0d2134",
+        "rocm_profiling_md_77939b57"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "hip_memory_management_md_de0d2134_c0001",
+        "rocm_profiling_md_77939b57_c0000"
+      ]
+    },
+    {
+      "symbol": "hipEventRecord",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hip_memory_management_md_de0d2134",
+        "rocm_profiling_md_77939b57"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "hip_memory_management_md_de0d2134_c0001",
+        "rocm_profiling_md_77939b57_c0000"
+      ]
+    },
+    {
+      "symbol": "hipEventSynchronize",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "hip_memory_management_md_de0d2134",
+        "rocm_profiling_md_77939b57"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "hip_memory_management_md_de0d2134_c0001",
+        "rocm_profiling_md_77939b57_c0000"
+      ]
+    },
+    {
+      "symbol": "hipEvent_t",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hip_memory_management_md_de0d2134",
+        "rocm_profiling_md_77939b57"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "hip_memory_management_md_de0d2134_c0001",
+        "rocm_profiling_md_77939b57_c0000"
+      ]
+    },
+    {
+      "symbol": "hipFFT",
+      "doc_ids": [
+        "dtk_md_71e1e878",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_library_mapping_md_31834cb4",
+        "readme_md_b4b85ea6",
+        "hipfft_roundtrip_md_2ae5be1c",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_md_71e1e878_c0001",
+        "dtk_md_71e1e878_c0003",
+        "dtk_md_71e1e878_c0006",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_library_mapping_md_31834cb4_c0000",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "dcu_library_mapping_md_31834cb4_c0009",
+        "readme_md_b4b85ea6_c0000",
+        "hipfft_roundtrip_md_2ae5be1c_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipFFT锛屽師鐢熻兘鍔涗紭鍏",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0003"
+      ]
+    },
+    {
+      "symbol": "hipFree",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "hipblas_usage_md_ba53fcd1",
+        "rocblas_usage_md_627052b9",
+        "rccl_usage_md_586d2597",
+        "rocfft_usage_md_722ea9ea",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134",
+        "md_90d007e3",
+        "rocrand_usage_md_4ed980e7",
+        "rocsolver_usage_md_f9315676",
+        "rocsparse_usage_md_9c948c69"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0000",
+        "hipblas_usage_md_ba53fcd1_c0000",
+        "rocblas_usage_md_627052b9_c0000",
+        "rccl_usage_md_586d2597_c0000",
+        "rocfft_usage_md_722ea9ea_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0000",
+        "dtk_md_71e1e878_c0006",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_memory_management_md_de0d2134_c0000",
+        "md_90d007e3_c0001",
+        "rocrand_usage_md_4ed980e7_c0000",
+        "rocsolver_usage_md_f9315676_c0000",
+        "rocsparse_usage_md_9c948c69_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGetDeviceCount",
+      "doc_ids": [
+        "rccl_usage_md_586d2597",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "md_90d007e3",
+        "dcu_library_mapping_md_31834cb4",
+        "rocm_stack_overview_md_270046a9"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rccl_usage_md_586d2597_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0001",
+        "md_90d007e3_c0001",
+        "dcu_library_mapping_md_31834cb4_c0007",
+        "rocm_stack_overview_md_270046a9_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGetDeviceProperties",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "cuda_to_hip_porting_md_b8ba120d"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001"
+      ]
+    },
+    {
+      "symbol": "hipGetErrorName",
+      "doc_ids": [
+        "hip_debugging_md_c585a552"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_debugging_md_c585a552_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGetErrorString",
+      "doc_ids": [
+        "dtk_md_71e1e878",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "md_90d007e3"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_md_71e1e878_c0006",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "md_90d007e3_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGetLastError",
+      "doc_ids": [
+        "dtk_md_71e1e878",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hip_debugging_md_c585a552"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_md_71e1e878_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "hip_debugging_md_c585a552_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGetParameterBufferV2",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0007"
+      ]
+    },
+    {
+      "symbol": "hipGraph",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hipgraph_capture_launch_md_e04443b9"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0007",
+        "hipgraph_capture_launch_md_e04443b9_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGraphAddKernelNode",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002"
+      ]
+    },
+    {
+      "symbol": "hipGraphAddMemcpyNode1D",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002"
+      ]
+    },
+    {
+      "symbol": "hipGraphConditionIfNode",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0007"
+      ]
+    },
+    {
+      "symbol": "hipGraphConditionWhileNode",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0007"
+      ]
+    },
+    {
+      "symbol": "hipGraphCreate",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002"
+      ]
+    },
+    {
+      "symbol": "hipGraphDeviceLaunch",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0007"
+      ]
+    },
+    {
+      "symbol": "hipGraphInstantiate",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "hipgraph_capture_launch_md_e04443b9"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "hipgraph_capture_launch_md_e04443b9_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGraphLaunch",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "hipgraph_capture_launch_md_e04443b9"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "hipgraph_capture_launch_md_e04443b9_c0000"
+      ]
+    },
+    {
+      "symbol": "hipGraphSetConditional",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipGraphStreamCapture",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipGraphTest",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipGraphTest_largeOfKernels",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipHostAllocMapped",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001"
+      ]
+    },
+    {
+      "symbol": "hipHostAllocPortable",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001"
+      ]
+    },
+    {
+      "symbol": "hipHostAllocWriteCombined",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001"
+      ]
+    },
+    {
+      "symbol": "hipHostFree",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001"
+      ]
+    },
+    {
+      "symbol": "hipHostMalloc",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "dtk_md_71e1e878_c0006"
+      ]
+    },
+    {
+      "symbol": "hipHostMallocDefault",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0000"
+      ]
+    },
+    {
+      "symbol": "hipHostRegister",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001"
+      ]
+    },
+    {
+      "symbol": "hipInit",
+      "doc_ids": [
+        "dcu_env_build_md_319f787c",
+        "driver_device_query_baseline_md_a42c15f4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_env_build_md_319f787c_c0001",
+        "driver_device_query_baseline_md_a42c15f4_c0000"
+      ]
+    },
+    {
+      "symbol": "hipLaunchCooperativeKernel",
+      "doc_ids": [
+        "hip_thread_synchronization_md_045cfaa5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_thread_synchronization_md_045cfaa5_c0001"
+      ]
+    },
+    {
+      "symbol": "hipLaunchKernelGGL",
+      "doc_ids": [
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "vector_add_md_91be52db",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "vector_add_md_91be52db_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_memory_management_md_de0d2134_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMalloc",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "hipblas_usage_md_ba53fcd1",
+        "rocblas_usage_md_627052b9",
+        "rccl_usage_md_586d2597",
+        "rocfft_usage_md_722ea9ea",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134",
+        "md_90d007e3",
+        "miopen_usage_md_3932581a",
+        "rocrand_usage_md_4ed980e7",
+        "rocm_profiling_md_77939b57",
+        "rocsolver_usage_md_f9315676",
+        "rocsparse_usage_md_9c948c69"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0000",
+        "hipblas_usage_md_ba53fcd1_c0000",
+        "rocblas_usage_md_627052b9_c0000",
+        "rccl_usage_md_586d2597_c0000",
+        "rocfft_usage_md_722ea9ea_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0000",
+        "dtk_md_71e1e878_c0006",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0001",
+        "hip_memory_management_md_de0d2134_c0000",
+        "hip_memory_management_md_de0d2134_c0001",
+        "md_90d007e3_c0001",
+        "miopen_usage_md_3932581a_c0000",
+        "rocrand_usage_md_4ed980e7_c0000",
+        "rocm_profiling_md_77939b57_c0000",
+        "rocsolver_usage_md_f9315676_c0000",
+        "rocsparse_usage_md_9c948c69_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMalloc3DArray",
+      "doc_ids": [
+        "layered_texture_normalized_md_e8d2c4cf"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "layered_texture_normalized_md_e8d2c4cf_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMallocArray",
+      "doc_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMallocManaged",
+      "doc_ids": [
+        "hip_memory_management_md_de0d2134"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_memory_management_md_de0d2134_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMallocPitch",
+      "doc_ids": [
+        "pitch_layout_correctness_md_5bb1e50c"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "pitch_layout_correctness_md_5bb1e50c_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpy",
+      "doc_ids": [
+        "rocblas_usage_md_627052b9",
+        "rccl_usage_md_586d2597",
+        "rocfft_usage_md_722ea9ea",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134",
+        "md_90d007e3",
+        "rocrand_usage_md_4ed980e7",
+        "rocsolver_usage_md_f9315676",
+        "rocsparse_usage_md_9c948c69"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocblas_usage_md_627052b9_c0000",
+        "rccl_usage_md_586d2597_c0000",
+        "rocfft_usage_md_722ea9ea_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0000",
+        "dtk_md_71e1e878_c0006",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0001",
+        "hip_memory_management_md_de0d2134_c0000",
+        "md_90d007e3_c0001",
+        "rocrand_usage_md_4ed980e7_c0000",
+        "rocsolver_usage_md_f9315676_c0000",
+        "rocsparse_usage_md_9c948c69_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpy2D",
+      "doc_ids": [
+        "pitch_layout_correctness_md_5bb1e50c"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "pitch_layout_correctness_md_5bb1e50c_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpy2DToArray",
+      "doc_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpy3D",
+      "doc_ids": [
+        "layered_texture_normalized_md_e8d2c4cf"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "layered_texture_normalized_md_e8d2c4cf_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpy3DParms",
+      "doc_ids": [
+        "layered_texture_normalized_md_e8d2c4cf"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "layered_texture_normalized_md_e8d2c4cf_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyAsync",
+      "doc_ids": [
+        "hip_performance_optimization_md_dddc2074",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "driver_runtime_stream_mixed_md_add900a9",
+        "stream_and_events_md_66e6663f",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "rocm_profiling_md_77939b57"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_performance_optimization_md_dddc2074_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "driver_runtime_stream_mixed_md_add900a9_c0000",
+        "stream_and_events_md_66e6663f_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "rocm_profiling_md_77939b57_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyDeviceToDevice",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134",
+        "rocrand_usage_md_4ed980e7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_memory_management_md_de0d2134_c0000",
+        "rocrand_usage_md_4ed980e7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyDeviceToHost",
+      "doc_ids": [
+        "hip_performance_optimization_md_dddc2074",
+        "rocblas_usage_md_627052b9",
+        "rccl_usage_md_586d2597",
+        "rocfft_usage_md_722ea9ea",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134",
+        "md_90d007e3",
+        "rocrand_usage_md_4ed980e7",
+        "rocsolver_usage_md_f9315676",
+        "rocsparse_usage_md_9c948c69"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_performance_optimization_md_dddc2074_c0000",
+        "rocblas_usage_md_627052b9_c0000",
+        "rccl_usage_md_586d2597_c0000",
+        "rocfft_usage_md_722ea9ea_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0001",
+        "hip_memory_management_md_de0d2134_c0000",
+        "md_90d007e3_c0001",
+        "rocrand_usage_md_4ed980e7_c0000",
+        "rocsolver_usage_md_f9315676_c0000",
+        "rocsparse_usage_md_9c948c69_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyFromSymbol",
+      "doc_ids": [
+        "symbol_copy_md_6c7327ea",
+        "rocfft_load_callback_md_71677418",
+        "rocfft_store_callback_md_d0a66793"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "symbol_copy_md_6c7327ea_c0000",
+        "rocfft_load_callback_md_71677418_c0000",
+        "rocfft_store_callback_md_d0a66793_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyHostToDevice",
+      "doc_ids": [
+        "hip_performance_optimization_md_dddc2074",
+        "rocblas_usage_md_627052b9",
+        "rccl_usage_md_586d2597",
+        "rocfft_usage_md_722ea9ea",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "cuda_to_hip_vector_add_md_d7a495c4",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134",
+        "md_90d007e3",
+        "rocrand_usage_md_4ed980e7",
+        "rocsolver_usage_md_f9315676",
+        "rocsparse_usage_md_9c948c69"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_performance_optimization_md_dddc2074_c0000",
+        "rocblas_usage_md_627052b9_c0000",
+        "rccl_usage_md_586d2597_c0000",
+        "rocfft_usage_md_722ea9ea_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "cuda_to_hip_vector_add_md_d7a495c4_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0001",
+        "hip_memory_management_md_de0d2134_c0000",
+        "md_90d007e3_c0001",
+        "rocrand_usage_md_4ed980e7_c0000",
+        "rocsolver_usage_md_f9315676_c0000",
+        "rocsparse_usage_md_9c948c69_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyKind",
+      "doc_ids": [
+        "md_90d007e3"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "md_90d007e3_c0001"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyParam2D",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyPeer",
+      "doc_ids": [
+        "peer2peer_minimal_md_311f6acc"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "peer2peer_minimal_md_311f6acc_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyPeerAsync",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002"
+      ]
+    },
+    {
+      "symbol": "hipMemcpyToSymbol",
+      "doc_ids": [
+        "symbol_copy_md_6c7327ea",
+        "hip_memory_management_md_de0d2134",
+        "md_90d007e3"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "symbol_copy_md_6c7327ea_c0000",
+        "hip_memory_management_md_de0d2134_c0000",
+        "md_90d007e3_c0001"
+      ]
+    },
+    {
+      "symbol": "hipMemset",
+      "doc_ids": [
+        "dtk_md_71e1e878",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_memory_management_md_de0d2134"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_md_71e1e878_c0006",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0001",
+        "hip_memory_management_md_de0d2134_c0000"
+      ]
+    },
+    {
+      "symbol": "hipMemsetAsync",
+      "doc_ids": [
+        "hip_gpu_programming_fundamentals_md_ad0c4088"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000"
+      ]
+    },
+    {
+      "symbol": "hipModuleGetFunction",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "driver_runtime_stream_mixed_md_add900a9",
+        "module_api_vector_add_md_1c3ec898"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "driver_runtime_stream_mixed_md_add900a9_c0000",
+        "module_api_vector_add_md_1c3ec898_c0000"
+      ]
+    },
+    {
+      "symbol": "hipModuleGetTexRef",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipModuleLaunchKernel",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "driver_runtime_stream_mixed_md_add900a9",
+        "module_api_vector_add_md_1c3ec898"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "driver_runtime_stream_mixed_md_add900a9_c0000",
+        "module_api_vector_add_md_1c3ec898_c0000"
+      ]
+    },
+    {
+      "symbol": "hipModuleLoad",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "driver_runtime_stream_mixed_md_add900a9",
+        "module_api_vector_add_md_1c3ec898"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006",
+        "driver_runtime_stream_mixed_md_add900a9_c0000",
+        "module_api_vector_add_md_1c3ec898_c0000"
+      ]
+    },
+    {
+      "symbol": "hipOccupancyMaxActiveBlocksPerMultiprocessor",
+      "doc_ids": [
+        "cuda_to_hip_porting_md_b8ba120d"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "cuda_to_hip_porting_md_b8ba120d_c0001"
+      ]
+    },
+    {
+      "symbol": "hipOccupancyMaxPotentialBlockSize",
+      "doc_ids": [
+        "hip_performance_optimization_md_dddc2074"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_performance_optimization_md_dddc2074_c0000"
+      ]
+    },
+    {
+      "symbol": "hipRAND",
+      "doc_ids": [
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_library_mapping_md_31834cb4",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipResourceDesc",
+      "doc_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5_c0000"
+      ]
+    },
+    {
+      "symbol": "hipSOLVER",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipSPARSE",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipSPARSELt",
+      "doc_ids": [
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipSetDevice",
+      "doc_ids": [
+        "rccl_usage_md_586d2597",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "md_90d007e3",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rccl_usage_md_586d2597_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "md_90d007e3_c0001",
+        "dcu_library_mapping_md_31834cb4_c0007",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "hipSharedMem",
+      "doc_ids": [
+        "dtk_md_71e1e878"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_md_71e1e878_c0003"
+      ]
+    },
+    {
+      "symbol": "hipSolver",
+      "doc_ids": [
+        "dtk_md_71e1e878"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_md_71e1e878_c0001",
+        "dtk_md_71e1e878_c0003"
+      ]
+    },
+    {
+      "symbol": "hipStreamBeginCapture",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "hipgraph_capture_launch_md_e04443b9"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "hipgraph_capture_launch_md_e04443b9_c0000"
+      ]
+    },
+    {
+      "symbol": "hipStreamCreate",
+      "doc_ids": [
+        "hip_performance_optimization_md_dddc2074",
+        "rccl_usage_md_586d2597",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_thread_synchronization_md_045cfaa5",
+        "rocrand_usage_md_4ed980e7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_performance_optimization_md_dddc2074_c0000",
+        "rccl_usage_md_586d2597_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "dtk_md_71e1e878_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0005",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_thread_synchronization_md_045cfaa5_c0001",
+        "rocrand_usage_md_4ed980e7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipStreamCreateWithPriority",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0000"
+      ]
+    },
+    {
+      "symbol": "hipStreamDestroy",
+      "doc_ids": [
+        "rccl_usage_md_586d2597",
+        "hip_thread_synchronization_md_045cfaa5",
+        "rocrand_usage_md_4ed980e7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rccl_usage_md_586d2597_c0000",
+        "hip_thread_synchronization_md_045cfaa5_c0001",
+        "rocrand_usage_md_4ed980e7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipStreamEndCapture",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "hipgraph_capture_launch_md_e04443b9"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0002",
+        "hipgraph_capture_launch_md_e04443b9_c0000"
+      ]
+    },
+    {
+      "symbol": "hipStreamSynchronize",
+      "doc_ids": [
+        "rccl_usage_md_586d2597",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+        "dtk_md_71e1e878",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "stream_and_events_md_66e6663f",
+        "hip_thread_synchronization_md_045cfaa5",
+        "rocrand_usage_md_4ed980e7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rccl_usage_md_586d2597_c0000",
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001",
+        "dtk_md_71e1e878_c0006",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "stream_and_events_md_66e6663f_c0000",
+        "hip_thread_synchronization_md_045cfaa5_c0001",
+        "rocrand_usage_md_4ed980e7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipStreamWaitEvent",
+      "doc_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e_c0001"
+      ]
+    },
+    {
+      "symbol": "hipStream_t",
+      "doc_ids": [
+        "hip_performance_optimization_md_dddc2074",
+        "rccl_usage_md_586d2597",
+        "cuda_to_hip_porting_md_b8ba120d",
+        "dcu_cuda_to_hip_porting_md_a9a98d76",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "hip_thread_synchronization_md_045cfaa5",
+        "rocrand_usage_md_4ed980e7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hip_performance_optimization_md_dddc2074_c0000",
+        "rccl_usage_md_586d2597_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0002",
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0003",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "hip_thread_synchronization_md_045cfaa5_c0001",
+        "rocrand_usage_md_4ed980e7_c0000"
+      ]
+    },
+    {
+      "symbol": "hipSuccess",
+      "doc_ids": [
+        "cuda_to_hip_porting_md_b8ba120d",
+        "hip_debugging_md_c585a552",
+        "hip_gpu_programming_fundamentals_md_ad0c4088",
+        "md_90d007e3"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "cuda_to_hip_porting_md_b8ba120d_c0000",
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "hip_debugging_md_c585a552_c0000",
+        "hip_gpu_programming_fundamentals_md_ad0c4088_c0000",
+        "md_90d007e3_c0000"
+      ]
+    },
+    {
+      "symbol": "hipTexRefSetAddressMode",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipTexRefSetArray",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipTexRefSetFilterMode",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipTexRefSetFormat",
+      "doc_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_cuda_to_hip_porting_md_a9a98d76_c0006"
+      ]
+    },
+    {
+      "symbol": "hipTextureDesc",
+      "doc_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5_c0000"
+      ]
+    },
+    {
+      "symbol": "hipTextureObject_t",
+      "doc_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "texture_object_array_normalized_md_0d9cf3a5_c0000"
+      ]
+    },
+    {
+      "symbol": "miopenConvAlgoPerf_t",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0003"
+      ]
+    },
+    {
+      "symbol": "miopenConvolution",
+      "doc_ids": [
+        "miopen_usage_md_3932581a"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000"
+      ]
+    },
+    {
+      "symbol": "miopenConvolutionDescriptor_t",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenConvolutionForward",
+      "doc_ids": [
+        "md_90d007e3",
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "md_90d007e3_c0000",
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenConvolutionForwardGetWorkSpaceSize",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenCreate",
+      "doc_ids": [
+        "md_90d007e3",
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "md_90d007e3_c0000",
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenCreateConvolutionDescriptor",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenCreateTensorDescriptor",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenDestroy",
+      "doc_ids": [
+        "md_90d007e3"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "md_90d007e3_c0000"
+      ]
+    },
+    {
+      "symbol": "miopenFindConvolutionForwardAlgorithm",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenFloat",
+      "doc_ids": [
+        "miopen_usage_md_3932581a"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000"
+      ]
+    },
+    {
+      "symbol": "miopenGetConvolutionForwardOutputDim",
+      "doc_ids": [
+        "miopen_usage_md_3932581a"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000"
+      ]
+    },
+    {
+      "symbol": "miopenHandle_t",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenInitConvolutionDescriptor",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopenSet4dTensorDescriptor",
+      "doc_ids": [
+        "miopen_usage_md_3932581a"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000"
+      ]
+    },
+    {
+      "symbol": "miopenTensorDescriptor_t",
+      "doc_ids": [
+        "miopen_usage_md_3932581a",
+        "dcu_library_mapping_md_31834cb4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "miopen_usage_md_3932581a_c0000",
+        "dcu_library_mapping_md_31834cb4_c0008"
+      ]
+    },
+    {
+      "symbol": "miopen_convolution",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4",
+        "miopen_convolution_md_8f767a41"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0008",
+        "miopen_convolution_md_8f767a41_c0000"
+      ]
+    },
+    {
+      "symbol": "rccl_allreduce",
+      "doc_ids": [
+        "rccl_allreduce_md_bde34827"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rccl_allreduce_md_bde34827_c0000"
+      ]
+    },
+    {
+      "symbol": "rccl_allreduce_mpi",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4",
+        "rccl_allreduce_mpi_md_389bad8c"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0008",
+        "rccl_allreduce_mpi_md_389bad8c_c0000"
+      ]
+    },
+    {
+      "symbol": "rccl_example",
+      "doc_ids": [
+        "rccl_usage_md_586d2597"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rccl_usage_md_586d2597_c0000"
+      ]
+    },
+    {
+      "symbol": "rocALUTE",
+      "doc_ids": [
+        "md_90d007e3"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "md_90d007e3_c0000"
+      ]
+    },
+    {
+      "symbol": "rocBLAS",
+      "doc_ids": [
+        "hipblas_usage_md_ba53fcd1",
+        "rocblas_usage_md_627052b9",
+        "hip_native_examples_guide_md_bc10895f",
+        "rocrand_usage_md_4ed980e7",
+        "dcu_library_mapping_md_31834cb4",
+        "readme_md_b4b85ea6",
+        "rocblas_gemm_bf16_f32_pointer_batched_md_bbfe49ff",
+        "rocblas_gemm_bf16_f32_strided_batched_md_5efecfbc",
+        "rocblas_gemm_bf16_f32_md_340b6e4e",
+        "rocblas_gemm_bf16_md_122a91a3",
+        "rocblas_gemm_fp16_md_7176a711",
+        "rocblas_gemm_md_c5b1709d",
+        "rocblas_tf32_probe_md_d9a53cae",
+        "rocblas_xf32_math_mode_md_c456ed88",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_systems_usage_md_b098f7f4",
+        "rocm_docker_images_md_4ae9bfb3",
+        "rocm_repositories_md_caea7bf7",
+        "rocm_stack_overview_md_270046a9",
+        "therock_overview_md_fef8291f"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "hipblas_usage_md_ba53fcd1_c0000",
+        "rocblas_usage_md_627052b9_c0000",
+        "hip_native_examples_guide_md_bc10895f_c0000",
+        "rocrand_usage_md_4ed980e7_c0000",
+        "dcu_library_mapping_md_31834cb4_c0000",
+        "dcu_library_mapping_md_31834cb4_c0002",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "dcu_library_mapping_md_31834cb4_c0008",
+        "readme_md_b4b85ea6_c0000",
+        "rocblas_gemm_bf16_f32_pointer_batched_md_bbfe49ff_c0000",
+        "rocblas_gemm_bf16_f32_strided_batched_md_5efecfbc_c0000",
+        "rocblas_gemm_bf16_f32_md_340b6e4e_c0000",
+        "rocblas_gemm_bf16_md_122a91a3_c0000",
+        "rocblas_gemm_fp16_md_7176a711_c0000",
+        "rocblas_gemm_md_c5b1709d_c0000",
+        "rocblas_tf32_probe_md_d9a53cae_c0000",
+        "rocblas_xf32_math_mode_md_c456ed88_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_systems_usage_md_b098f7f4_c0001",
+        "rocm_docker_images_md_4ae9bfb3_c0000",
+        "rocm_repositories_md_caea7bf7_c0000",
+        "rocm_repositories_md_caea7bf7_c0001",
+        "rocm_stack_overview_md_270046a9_c0000",
+        "therock_overview_md_fef8291f_c0000",
+        "therock_overview_md_fef8291f_c0001"
+      ]
+    },
+    {
+      "symbol": "rocFFT",
+      "doc_ids": [
+        "rocfft_usage_md_722ea9ea",
+        "dcu_library_mapping_md_31834cb4",
+        "readme_md_b4b85ea6",
+        "rocfft_1d_md_5080a6fb",
+        "rocfft_load_callback_md_71677418",
+        "rocfft_store_callback_md_d0a66793",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_systems_usage_md_b098f7f4",
+        "rocm_docker_images_md_4ae9bfb3",
+        "rocm_repositories_md_caea7bf7",
+        "rocm_stack_overview_md_270046a9",
+        "therock_overview_md_fef8291f"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocfft_usage_md_722ea9ea_c0000",
+        "dcu_library_mapping_md_31834cb4_c0000",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "readme_md_b4b85ea6_c0000",
+        "rocfft_1d_md_5080a6fb_c0000",
+        "rocfft_load_callback_md_71677418_c0000",
+        "rocfft_store_callback_md_d0a66793_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_systems_usage_md_b098f7f4_c0001",
+        "rocm_docker_images_md_4ae9bfb3_c0000",
+        "rocm_repositories_md_caea7bf7_c0000",
+        "rocm_repositories_md_caea7bf7_c0001",
+        "rocm_stack_overview_md_270046a9_c0000",
+        "therock_overview_md_fef8291f_c0001"
+      ]
+    },
+    {
+      "symbol": "rocPRIM",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "rocRAND",
+      "doc_ids": [
+        "cuda_to_hip_porting_md_b8ba120d",
+        "rocrand_usage_md_4ed980e7",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_docker_images_md_4ae9bfb3",
+        "rocm_repositories_md_caea7bf7",
+        "rocm_stack_overview_md_270046a9",
+        "therock_overview_md_fef8291f"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "cuda_to_hip_porting_md_b8ba120d_c0001",
+        "rocrand_usage_md_4ed980e7_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_docker_images_md_4ae9bfb3_c0000",
+        "rocm_repositories_md_caea7bf7_c0000",
+        "rocm_stack_overview_md_270046a9_c0000",
+        "therock_overview_md_fef8291f_c0000",
+        "therock_overview_md_fef8291f_c0001"
+      ]
+    },
+    {
+      "symbol": "rocSOLVER",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4",
+        "readme_md_b4b85ea6",
+        "rocsolver_lu_solve_batched_pivot_md_3500a79c",
+        "rocsolver_lu_solve_pivot_md_9ec87c29",
+        "rocsolver_qr_md_d5b39a76",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_docker_images_md_4ae9bfb3",
+        "rocm_repositories_md_caea7bf7",
+        "rocm_stack_overview_md_270046a9",
+        "rocsolver_usage_md_f9315676",
+        "therock_overview_md_fef8291f"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0000",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "readme_md_b4b85ea6_c0000",
+        "rocsolver_lu_solve_batched_pivot_md_3500a79c_c0000",
+        "rocsolver_lu_solve_pivot_md_9ec87c29_c0000",
+        "rocsolver_qr_md_d5b39a76_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_docker_images_md_4ae9bfb3_c0000",
+        "rocm_repositories_md_caea7bf7_c0000",
+        "rocm_stack_overview_md_270046a9_c0000",
+        "rocsolver_usage_md_f9315676_c0000",
+        "therock_overview_md_fef8291f_c0000",
+        "therock_overview_md_fef8291f_c0001"
+      ]
+    },
+    {
+      "symbol": "rocSPARSE",
+      "doc_ids": [
+        "dcu_library_mapping_md_31834cb4",
+        "readme_md_b4b85ea6",
+        "rocsparse_spmv_md_81e3d72f",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_docker_images_md_4ae9bfb3",
+        "rocm_repositories_md_caea7bf7",
+        "rocm_stack_overview_md_270046a9",
+        "rocsparse_usage_md_9c948c69",
+        "therock_overview_md_fef8291f"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "dcu_library_mapping_md_31834cb4_c0000",
+        "dcu_library_mapping_md_31834cb4_c0003",
+        "readme_md_b4b85ea6_c0000",
+        "rocsparse_spmv_md_81e3d72f_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_docker_images_md_4ae9bfb3_c0000",
+        "rocm_repositories_md_caea7bf7_c0000",
+        "rocm_stack_overview_md_270046a9_c0000",
+        "rocsparse_usage_md_9c948c69_c0000",
+        "therock_overview_md_fef8291f_c0000",
+        "therock_overview_md_fef8291f_c0001"
+      ]
+    },
+    {
+      "symbol": "rocThrust",
+      "doc_ids": [
+        "rocthrust_usage_md_4f9a01b8",
+        "rocm_libraries_usage_md_d2acd0a4",
+        "rocm_repositories_md_caea7bf7"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocthrust_usage_md_4f9a01b8_c0000",
+        "rocthrust_usage_md_4f9a01b8_c0001",
+        "rocm_libraries_usage_md_d2acd0a4_c0000",
+        "rocm_libraries_usage_md_d2acd0a4_c0001",
+        "rocm_repositories_md_caea7bf7_c0000"
+      ]
+    },
+    {
+      "symbol": "rocWMMA",
+      "doc_ids": [
+        "rocm_libraries_usage_md_d2acd0a4"
+      ],
+      "domains": [
+        "general"
+      ],
+      "chunk_ids": [
+        "rocm_libraries_usage_md_d2acd0a4_c0000"
+      ]
+    }
+  ]
+}

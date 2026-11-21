@@ -1,0 +1,70 @@
+# ===== Kits Platform 共享 Skill CI（multi-Tool 父/子流水线） =====
+# 见 tsoc/kits-platform/kits-doc tool-owner-guide §4.3 / §5.3。
+# 7 个插件域 = 7 个 Skill Tool（平台单 skill 归档上限 512 文件，各域均在上限内）。
+stages:
+  - tool-pipelines
+
+include:
+  - project: "tsoc/kits-platform/kits-common"
+    ref: main
+    file: "/ci/multi-tool-parent.yml"
+    rules:
+      - if: $KITS_PLATFORM_CI == "true"
+
+dcu-core:
+  extends: .skill_tool_child_pipeline
+  variables:
+    PACKAGE_ENV: "package.env"
+dcu-env:
+  extends: .skill_tool_child_pipeline
+  variables:
+    PACKAGE_ENV: "tools/dcu-env/package.env"
+
+dcu-perf:
+  extends: .skill_tool_child_pipeline
+  variables:
+    PACKAGE_ENV: "tools/dcu-perf/package.env"
+
+dcu-inference:
+  extends: .skill_tool_child_pipeline
+  variables:
+    PACKAGE_ENV: "tools/dcu-inference/package.env"
+
+dcu-operators:
+  extends: .skill_tool_child_pipeline
+  variables:
+    PACKAGE_ENV: "tools/dcu-operators/package.env"
+
+dcu-troubleshooting:
+  extends: .skill_tool_child_pipeline
+  variables:
+    PACKAGE_ENV: "tools/dcu-troubleshooting/package.env"
+
+dcu-engineering:
+  extends: .skill_tool_child_pipeline
+  variables:
+    PACKAGE_ENV: "tools/dcu-engineering/package.env"
+
+# ===== 本分支脱敏门禁（父流水线，任意 runner；与平台共享 CI 独立） =====
+sanitize-gate:
+  stage: tool-pipelines
+  image: python:3.12-alpine
+  tags: []
+  script:
+    - python sanitize.py --selftest
+    - printf '%s\n' "$CI_COMMIT_MESSAGE" > .ci_commit_msg.txt
+    - python sanitize.py --msg-file .ci_commit_msg.txt
+    - python sanitize.py .
+  rules:
+    - if: $CI_COMMIT_BRANCH == "open-source"
+
+# ===== 算子卡域质量层（evals 静态检查 + ops 单测；与平台共享 CI 独立，任意 runner，不需要 DCU） =====
+ops-quality-gate:
+  stage: tool-pipelines
+  image: python:3.12-alpine
+  tags: []
+  script:
+    # 单测里 candidates.yaml 的读写走 PyYAML；装不上则该组用例自动 skip，不阻塞流水线
+    - pip install --quiet pyyaml || true
+    - python3 -I scripts/run_evals.py
+    - python3 -I -m unittest discover -s Plugins/ops/tests -p 'test_*.py'

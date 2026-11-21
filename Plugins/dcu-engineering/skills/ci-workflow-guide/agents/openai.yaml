@@ -1,0 +1,4 @@
+interface:
+  display_name: "CI Workflow Guide"
+  short_description: "Help with CI Workflow Guide tasks"
+  default_prompt: "Use $ci-workflow-guide to handle this task with evidence-backed validation."

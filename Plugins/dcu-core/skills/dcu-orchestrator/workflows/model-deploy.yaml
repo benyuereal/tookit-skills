@@ -1,0 +1,27 @@
+# 工作流：model-deploy —— 模型部署验证主线（脱敏命名）
+# 契约：name / max_parallel / nodes[]（id + task + depends_on + retries + proceed）
+# 链路：deploy-precheck（probe）→ deploy-launch（gate，ask）→ deploy-verify（normal）
+# 脱敏要求：设备号/模型/镜像均为公开占位，无内部实测数据、无内网地址、无工单号。
+name: model-deploy
+
+# 同时最多执行的节点数（本工作流为串行链路：检查 → 起服务 → 验证）
+max_parallel: 1
+
+nodes:
+  - id: deploy-precheck
+    task: deploy-precheck      # 对应 tasks/deploy-precheck.yaml
+    depends_on: []             # 无依赖，最先就绪
+    retries: 2
+    proceed: auto              # probe，只读，无需用户审批
+
+  - id: deploy-launch
+    task: deploy-launch        # 对应 tasks/deploy-launch.yaml
+    depends_on: [deploy-precheck]  # 前置检查通过才占卡起服务
+    retries: 1
+    proceed: ask               # gate 高风险（占卡、改容器状态），需用户审批
+
+  - id: deploy-verify
+    task: deploy-verify        # 对应 tasks/deploy-verify.yaml
+    depends_on: [deploy-launch]    # 服务健康后才能做一致性验证
+    retries: 1
+    proceed: auto              # 验证只读（推理请求），低风险

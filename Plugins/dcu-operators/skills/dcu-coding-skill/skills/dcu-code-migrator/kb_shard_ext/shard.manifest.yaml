@@ -1,0 +1,27 @@
+shard_id: dcu-coding-migrator-ext
+owner_skill: dcu-code-migrator
+source_type: official
+priority: 1.0
+domains:
+- cuda-hip-mapping
+- migration
+- migration-perf
+- migration-debug
+embedding:
+  model: qwen2-embedding
+  dim: 1024
+stats:
+  chunk_count: 125
+  doc_count: 79
+source_layer: ext
+graph_mvp:
+  version: 1
+  enabled: true
+  owner_skill: dcu-code-migrator
+  default:
+    max_hops: 2
+    rel_type_allowlist:
+    - maps_to
+    - depends_on
+    - see_also
+    decay: 0.5

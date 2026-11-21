@@ -1,0 +1,29 @@
+{
+  "skill": "op-contract",
+  "description": "路由评测：true=写/补算子契约、填 floor 与 manifest、定容差这类「约定」问题应命中本 skill；false=噪声判定、编译 flag 等应由 op-bench / op-gate / op-hip-compile 接手。",
+  "cases": [
+    {
+      "id": "op-contract-t1",
+      "prompt": "新加一张算子卡，想把这个算子「算多快算够」变成机器可读的验收，contract.yaml 的 floor 段该怎么填？",
+      "expect": "命中§二/§五：floor.peak 填硬件物理常数（规格书/rocminfo 峰值带宽或峰值算力），不填实测值（实测=循环论证）；basis 必须能被人用计算器复算；at_floor_threshold 默认 0.85，达成率 ≥85% 才判 at_floor；结论只写达成率与状态，绝对数进 kb/op-opt/。"
+    },
+    {
+      "id": "op-contract-t2",
+      "prompt": "契约里 manifest 段我只写了 required_roles: [source]，这样够不够？",
+      "expect": "命中§六：不够，build 与 loaded 至少要有一个——只钉源码时源码没变、产物被覆盖照样测错；loaded 必须在运行时抓（不能事后按名字 grep 缓存）；env_keys 的每个值都不能是占位符（unknown/unavailable 算没记录）；用 scripts/opmanifest.py record/validate。"
+    },
+    {
+      "id": "op-contract-t3",
+      "prompt": "写 contract.yaml 时，同一个算子的 tilelang 实现和手写 HIP 实现，两个变体之间的容差用 2e-3 行不行？",
+      "expect": "命中§三 tolerance：变体之间默认 variant_vs_variant: bit_exact，不是沿用 vs_fp32_ref 的宽松容差；做不到逐位一致必须在契约里写明理由与具体容差；vs_fp32_ref 只用来检数值正确。"
+    },
+    {
+      "id": "op-contract-f1",
+      "prompt": "A/B 两次改动快了 3%，但重复跑的 MAD 是 5%，这个算不算收益？"
+    },
+    {
+      "id": "op-contract-f2",
+      "prompt": "hipcc 编译手写 kernel，加 -mllvm 那组 flag 报 unknown argument，应该用什么编译器和命令？"
+    }
+  ]
+}

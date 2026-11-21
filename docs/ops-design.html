@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算子卡域 ops · 设计演示 | dcu-toolkit 1.6.0</title>
+<style>
+:root{
+  --bg:#0b1016; --panel:#131a24; --panel2:#1a2432; --line:#243044;
+  --text:#e6edf3; --muted:#8b9bad; --dim:#5c6b80;
+  --blue:#4f8cff; --green:#3fb950; --amber:#d29922; --red:#f85149;
+  --purple:#a371f7; --cyan:#39d2c0;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);line-height:1.7;overflow-x:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(900px 500px at 15% -10%, rgba(79,140,255,.10), transparent 60%),
+    radial-gradient(800px 500px at 85% 5%, rgba(163,113,247,.08), transparent 60%),
+    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+  background-size:auto,auto,48px 48px,48px 48px;
+}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px;position:relative;z-index:1}
+
+nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(14px);background:rgba(11,16,22,.85);border-bottom:1px solid var(--line)}
+.nav-inner{max-width:1120px;margin:0 auto;padding:11px 28px;display:flex;align-items:center;gap:20px}
+.brand{font-weight:700;font-size:15px;white-space:nowrap}
+.brand b{color:var(--blue)}
+.nav-links{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:13px;padding:6px 10px;border-radius:8px;white-space:nowrap;transition:.2s}
+.nav-links a:hover{color:var(--text);background:var(--panel2)}
+
+.hero{padding:88px 0 60px;text-align:center}
+.hero-tag{display:inline-block;font-size:12px;letter-spacing:2px;color:var(--cyan);border:1px solid rgba(57,210,192,.35);border-radius:999px;padding:5px 16px;margin-bottom:20px;background:rgba(57,210,192,.06)}
+.hero h1{font-size:clamp(32px,4.8vw,54px);line-height:1.15;letter-spacing:-1px;margin-bottom:12px}
+.hero h1 em{font-style:normal;background:linear-gradient(100deg,var(--blue),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{color:var(--muted);font-size:16px}
+.principle{margin:32px auto 0;max-width:760px;padding:20px 28px;border-radius:16px;background:linear-gradient(135deg,rgba(79,140,255,.12),rgba(163,113,247,.08));border:1px solid rgba(79,140,255,.28)}
+.principle .k{color:var(--muted);font-size:12px;letter-spacing:2px;margin-bottom:8px}
+.principle .v{font-size:clamp(18px,2.2vw,24px);font-weight:700}
+.principle .v .a{color:var(--blue)} .principle .v .b{color:var(--purple)}
+
+section{padding:66px 0;position:relative}
+.sec-head{margin-bottom:32px}
+.sec-num{font-family:var(--mono);font-size:13px;color:var(--blue);letter-spacing:2px;margin-bottom:8px}
+.sec-head h2{font-size:clamp(23px,3.2vw,34px);letter-spacing:-.5px;margin-bottom:10px}
+.sec-head .sub{color:var(--muted);font-size:15px;max-width:780px}
+
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s cubic-bezier(.2,.7,.3,1),transform .7s cubic-bezier(.2,.7,.3,1)}
+.reveal.in{opacity:1;transform:none}
+
+/* pain */
+.pain-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.pain{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;transition:.25s;position:relative}
+.pain:hover{transform:translateY(-4px);border-color:rgba(248,81,73,.45)}
+.pain::after{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red),transparent)}
+.pain h3{font-size:16px;margin-bottom:8px}
+.pain p{color:var(--muted);font-size:13.5px}
+.answer{margin-top:22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:linear-gradient(90deg,rgba(63,185,80,.10),rgba(57,210,192,.06));border:1px solid rgba(63,185,80,.3);border-radius:14px;padding:18px 24px}
+.answer .t{font-size:14px;color:var(--muted)}
+.answer .big{font-size:18px;font-weight:700}
+.answer .big span{color:var(--green)}
+
+/* domains */
+.domain-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}
+.dom{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:12px 14px;transition:.2s;position:relative}
+.dom:hover{transform:translateY(-2px);border-color:var(--dim)}
+.dom .name{font-family:var(--mono);font-size:12.5px;color:var(--cyan);margin-bottom:3px}
+.dom .sum{font-size:11.5px;color:var(--muted);line-height:1.5}
+.dom.new{border-color:rgba(63,185,80,.55);background:linear-gradient(180deg,rgba(63,185,80,.12),rgba(63,185,80,.03))}
+.dom.new .name{color:var(--green)}
+.badge-new{position:absolute;top:-8px;right:9px;font-size:9px;letter-spacing:1px;background:var(--green);color:#06240f;font-weight:700;padding:1px 7px;border-radius:999px}
+.zoom{background:var(--panel);border:1px solid rgba(63,185,80,.35);border-radius:14px;padding:22px}
+.zoom-title{font-size:13px;color:var(--muted);letter-spacing:1px;margin-bottom:14px}
+.zoom-title b{color:var(--green)}
+.zoom-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.col-head{font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:8px}
+.chip-row{display:flex;flex-wrap:wrap;gap:7px}
+.chip{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:7px;background:var(--panel2);border:1px solid var(--line)}
+.chip.method{border-color:rgba(163,113,247,.35);color:#d8c7ff}
+.chip.card{border-color:rgba(57,210,192,.35);color:#b6fff7}
+.rel{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+.rel-item{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+.rel-item .t{font-family:var(--mono);font-size:11.5px;color:var(--cyan);margin-bottom:4px}
+.rel-item .h{font-size:13.5px;font-weight:700;margin-bottom:4px}
+.rel-item .d{font-size:12px;color:var(--muted)}
+
+/* card */
+.anatomy{display:grid;grid-template-columns:330px 1fr;gap:22px;align-items:start}
+.dir-tree{background:#0e141d;border:1px solid var(--line);border-radius:13px;overflow:hidden;font-family:var(--mono);font-size:12.5px}
+.dir-head{padding:11px 15px;background:var(--panel2);color:var(--muted);font-size:11.5px;letter-spacing:1px;border-bottom:1px solid var(--line)}
+.file-row{display:flex;align-items:center;gap:9px;padding:10px 15px;cursor:pointer;border-bottom:1px solid rgba(36,48,68,.55);transition:.18s}
+.file-row:hover{background:rgba(79,140,255,.08)}
+.file-row .dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex:none}
+.file-row .nm{flex:1}
+.file-row .star{color:var(--amber);font-size:11px}
+.file-row.active{background:rgba(79,140,255,.12)}
+.file-row.active .dot{background:var(--blue);box-shadow:0 0 10px var(--blue)}
+.file-row.key .dot{background:var(--green)} .file-row.key .nm{color:var(--green)}
+.file-desc{padding:0 16px;max-height:0;overflow:hidden;transition:max-height .35s ease,padding .35s ease;background:rgba(0,0,0,.22);font-size:12.5px;color:var(--muted)}
+.file-row.active + .file-desc{max-height:200px;padding:12px 16px 14px}
+.anatomy-side{display:flex;flex-direction:column;gap:12px}
+.anat-card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:17px 20px}
+.anat-card h4{font-size:14px;margin-bottom:6px}
+.anat-card p{font-size:12.5px;color:var(--muted)}
+.anat-card.contract{border-left:3px solid var(--green)}
+.anat-card.variants{border-left:3px solid var(--blue)}
+.anat-card.ledger{border-left:3px solid var(--amber)}
+.snippet{margin-top:10px;background:#0e141d;border:1px solid var(--line);border-radius:9px;padding:11px 13px;font-family:var(--mono);font-size:11.5px;line-height:1.65;color:#c9d6e5;overflow-x:auto}
+.snippet .c{color:#6b7a8f} .snippet .s{color:#8ee6c8} .snippet .k{color:#9db8ff}
+
+/* vertical flow */
+.vflow{position:relative;padding-left:60px}
+.vflow::before{content:"";position:absolute;left:23px;top:10px;bottom:10px;width:2px;background:linear-gradient(180deg,var(--blue),var(--purple) 55%,var(--green))}
+.vstep{position:relative;margin-bottom:8px}
+.vstep .num{position:absolute;left:-60px;top:2px;width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--panel2);border:1px solid var(--line);font-family:var(--mono);font-size:12px;color:var(--cyan);transition:.3s}
+.vstep .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 18px;transition:.3s}
+.vstep .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:5px}
+.vstep .who{font-size:10.5px;padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);letter-spacing:.5px}
+.vstep .who.router{color:var(--cyan);border-color:rgba(57,210,192,.4)}
+.vstep .who.script{color:var(--purple);border-color:rgba(163,113,247,.4)}
+.vstep .who.human{color:var(--amber);border-color:rgba(210,153,34,.45)}
+.vstep .who.state{color:#7fd8ff;border-color:rgba(127,216,255,.4);background:rgba(127,216,255,.07)}
+.vstep .tt{font-size:14px;font-weight:700}
+.vstep .ds{font-size:12.5px;color:var(--muted)}
+.vstep .out{font-family:var(--mono);font-size:11.5px;color:var(--cyan);margin-top:7px}
+.vstep.ask .card{border-color:rgba(210,153,34,.45);background:linear-gradient(90deg,rgba(210,153,34,.07),transparent)}
+.vstep.ask .num{border-color:rgba(210,153,34,.55);color:var(--amber)}
+.vstep.gate .card{border-color:rgba(163,113,247,.42)}
+.vstep.active .card{border-color:var(--blue);box-shadow:0 0 0 1px rgba(79,140,255,.3),0 0 26px rgba(79,140,255,.15);transform:translateX(4px)}
+.vstep.active .num{border-color:var(--blue);color:var(--blue);box-shadow:0 0 18px rgba(79,140,255,.3)}
+.vlink{position:relative;padding:2px 0 2px 8px;margin-bottom:8px;font-family:var(--mono);font-size:11px;color:var(--dim)}
+.vlink span{color:var(--cyan)}
+
+.vflow-meta{display:grid;grid-template-columns:1.15fr .85fr;gap:14px;margin-top:22px}
+.meta-card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:18px 20px}
+.meta-card h4{font-size:13.5px;margin-bottom:8px}
+.meta-card p{font-size:12.5px;color:var(--muted)}
+.meta-tree{font-family:var(--mono);font-size:11.5px;line-height:1.85;color:#b8c6d8;white-space:pre;overflow-x:auto;margin-top:8px}
+.meta-tree .f{color:var(--cyan)} .meta-tree .v{color:var(--amber)} .meta-tree .d{color:var(--dim)}
+.roles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.role{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.role h5{font-size:13px;margin-bottom:5px}
+.role p{font-size:12px;color:var(--muted)}
+.role.agent{border-color:rgba(79,140,255,.35)} .role.agent h5{color:var(--blue)}
+.role.script{border-color:rgba(163,113,247,.35)} .role.script h5{color:var(--purple)}
+.role.human{border-color:rgba(210,153,34,.35)} .role.human h5{color:var(--amber)}
+
+/* gates */
+.gate-stage{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 24px}
+.gate-controls{display:flex;gap:12px;align-items:center;margin-bottom:22px;flex-wrap:wrap}
+select,button{font-family:inherit;font-size:14px;padding:9px 15px;border-radius:9px;cursor:pointer;background:var(--panel2);color:var(--text);border:1px solid var(--line);outline:none}
+select:hover,button:hover{border-color:var(--dim)}
+button.run{background:linear-gradient(135deg,var(--blue),#3568d4);border:none;color:#fff;font-weight:700;box-shadow:0 6px 20px rgba(79,140,255,.35)}
+.gate-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.gate{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:16px 14px;text-align:center;transition:.35s;position:relative}
+.gate .gno{font-family:var(--mono);font-size:10.5px;color:var(--dim);letter-spacing:1px}
+.gate .gt{font-size:13.5px;font-weight:700;margin:5px 0 3px}
+.gate .gd{font-size:11px;color:var(--muted);line-height:1.5;min-height:32px}
+.gate.active{border-color:var(--blue);background:rgba(79,140,255,.12);transform:translateY(-3px)}
+.gate.failed{border-color:var(--red);background:rgba(248,81,73,.1)}
+.gate.failed .gt{color:var(--red)}
+.gate.passed{border-color:rgba(63,185,80,.4)} .gate.passed .gno{color:var(--green)}
+.gate .mark{position:absolute;top:9px;right:11px;font-size:13px;opacity:0;transition:.25s}
+.gate.active .mark,.gate.failed .mark,.gate.passed .mark{opacity:1}
+.verdict{margin-top:20px;display:flex;align-items:center;gap:16px;min-height:70px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px 20px;transition:.35s}
+.verdict .vt{font-family:var(--mono);font-size:18px;font-weight:700;min-width:185px}
+.verdict .vr{font-size:12.5px;color:var(--muted);flex:1}
+.verdict.v-accepted{border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.08)} .verdict.v-accepted .vt{color:var(--green)}
+.verdict.v-rejected{border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.08)} .verdict.v-rejected .vt{color:var(--red)}
+.verdict.v-inconclusive{border-color:rgba(210,153,34,.5);background:rgba(210,153,34,.08)} .verdict.v-inconclusive .vt{color:var(--amber)}
+.verdict.v-diagnostic{border-color:rgba(139,155,173,.4)} .verdict.v-diagnostic .vt{color:var(--muted)}
+.verdict .idle{color:var(--dim);font-family:var(--mono);font-size:13.5px}
+
+/* ledger */
+.ledger-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.lg{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 14px;transition:.25s}
+.lg:hover{transform:translateY(-3px);border-color:var(--dim)}
+.lg .idx{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-bottom:6px}
+.lg h4{font-size:13.5px;margin-bottom:6px}
+.lg p{font-size:12px;color:var(--muted)}
+.lg.hot{border-color:rgba(210,153,34,.5);background:linear-gradient(180deg,rgba(210,153,34,.10),rgba(210,153,34,.02))}
+.lg.hot h4,.lg.hot .idx{color:var(--amber)}
+.ledger-sample{margin-top:18px;background:#0e141d;border:1px solid var(--line);border-radius:12px;padding:16px 20px;font-family:var(--mono);font-size:11.5px;line-height:1.8;color:#c9d6e5;overflow-x:auto}
+.ledger-sample .h{color:var(--cyan)} .ledger-sample .note{color:var(--dim)} .ledger-sample .hl{color:var(--amber)}
+
+/* field */
+.ft-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.ft-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 16px}
+.ft-panel:last-child{border-color:rgba(63,185,80,.35)}
+.ft-shape{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.ft-shape .sname{font-weight:700;font-size:14.5px}
+.ft-shape .stime{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.ft-scale{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);margin-bottom:10px}
+.ft-row{margin-bottom:11px}
+.ft-row .lbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+.ft-row .lbl .v{font-family:var(--mono);font-weight:700;color:var(--text)}
+.ft-track{position:relative;height:8px;background:rgba(255,255,255,.045);border-radius:5px}
+.ft-track::before{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:rgba(139,155,173,.55)}
+.ft-bar{position:absolute;top:0;height:8px;border-radius:5px;transition:width .6s ease}
+.ft-bar.slow{background:var(--red);opacity:.8}
+.ft-bar.tile{background:var(--amber);opacity:.8}
+.ft-bar.fast{background:var(--green);opacity:.8}
+.ft-table{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel);border-radius:12px;overflow:hidden;margin-bottom:18px}
+.ft-table th{text-align:right;padding:11px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11px;letter-spacing:1px;background:rgba(255,255,255,.02)}
+.ft-table th:first-child{text-align:left}
+.ft-table td{text-align:right;padding:11px 14px;border-bottom:1px solid rgba(36,48,68,.55);font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.ft-table td:first-child{text-align:left;font-family:inherit;color:var(--text);font-weight:700}
+.ft-table tr:last-child td{border-bottom:none}
+.ft-table .best{color:var(--green);font-weight:700}
+.ft-table .bad{color:var(--red);font-weight:700}
+.ft-table .mid{color:var(--amber);font-weight:700}
+
+/* standing spectrum */
+.spec{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:18px}
+.spec-head{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);letter-spacing:1px;margin-bottom:6px}
+.spec-row{display:grid;grid-template-columns:150px 1fr 110px;gap:14px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(36,48,68,.35)}
+.spec-row:last-child{border-bottom:none}
+.spec-label{font-size:12.5px;color:var(--text)}
+.spec-label small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:1px}
+.spec-track{position:relative;height:10px;background:rgba(255,255,255,.04);border-radius:6px}
+.spec-track::before{content:"";position:absolute;left:62.5%;top:-4px;bottom:-4px;width:1px;background:rgba(139,155,173,.65)}
+.spec-fill{position:absolute;top:0;height:10px;border-radius:6px}
+.spec-fill.fast{background:var(--green);opacity:.75}
+.spec-fill.slow{background:var(--red);opacity:.75}
+.spec-dot{position:absolute;top:-3px;width:16px;height:16px;border-radius:50%;transform:translateX(-50%);border:2px solid rgba(255,255,255,.25)}
+.spec-dot.fast{background:var(--green);box-shadow:0 0 12px rgba(63,185,80,.55)}
+.spec-dot.slow{background:var(--red);box-shadow:0 0 12px rgba(248,81,73,.55)}
+.spec-val{font-family:var(--mono);font-size:11.5px;text-align:right}
+.spec-val .lead{color:var(--green)} .spec-val .lag{color:var(--red)}
+.ft-bar.parity{background:var(--amber);width:2px!important}
+.ft-legend{display:flex;justify-content:center;gap:16px;font-size:11px;color:var(--dim);margin-top:14px}
+.ft-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.ft-callout{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+.ft-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:17px 19px}
+.ft-box.bad{border-color:rgba(248,81,73,.4);background:linear-gradient(180deg,rgba(248,81,73,.07),transparent)}
+.ft-box.good{border-color:rgba(63,185,80,.4);background:linear-gradient(180deg,rgba(63,185,80,.07),transparent)}
+.ft-box .tt{font-size:11px;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px}
+.ft-box .hh{font-size:16px;font-weight:700;margin-bottom:6px}
+.ft-box.bad .hh{color:var(--red)} .ft-box.good .hh{color:var(--green)}
+.ft-box p{font-size:12.5px;color:var(--muted)}
+
+/* use */
+.sc-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.sc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 14px;transition:.25s}
+.sc:hover{transform:translateY(-4px);border-color:rgba(79,140,255,.45)}
+.sc .k{font-family:var(--mono);font-size:10.5px;color:var(--blue);margin-bottom:6px}
+.sc h4{font-size:13px;margin-bottom:6px;line-height:1.4}
+.sc p{font-size:11.5px;color:var(--muted)}
+
+/* status */
+.status-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.st{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.st .k{font-size:11.5px;color:var(--muted);margin-bottom:6px}
+.st .v{font-size:15px;font-weight:700}
+.st.warn{border-color:rgba(210,153,34,.4)} .st.warn .v{color:var(--amber)}
+.st.ok{border-color:rgba(63,185,80,.35)} .st.ok .v{color:var(--green)}
+.st.info{border-color:rgba(79,140,255,.35)} .st.info .v{color:var(--blue)}
+
+/* peer */
+.cmp-trees{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.cmp-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+.cmp-panel.cann{border-color:rgba(163,113,247,.35)}
+.cmp-panel.ops{border-color:rgba(63,185,80,.35)}
+.cmp-panel .ph{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.cmp-panel .pn{font-weight:700;font-size:14.5px}
+.cmp-panel.cann .pn{color:var(--purple)} .cmp-panel.ops .pn{color:var(--green)}
+.cmp-panel .ps{font-size:11.5px;color:var(--muted)}
+.cmp-tree{font-family:var(--mono);font-size:11.5px;line-height:1.85;color:#b8c6d8;white-space:pre;overflow-x:auto}
+.cmp-tree .d{color:var(--dim)} .cmp-tree .hl{color:var(--amber)} .cmp-tree .g{color:var(--green)}
+.cmp-table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--panel);border-radius:12px;overflow:hidden}
+.cmp-table th{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11px;letter-spacing:1.2px;background:rgba(255,255,255,.02)}
+.cmp-table td{padding:10px 14px;border-bottom:1px solid rgba(36,48,68,.55);vertical-align:top;color:var(--muted)}
+.cmp-table td:first-child{color:var(--text);font-weight:600;white-space:nowrap}
+.cmp-table tr:last-child td{border-bottom:none}
+.cmp-table tr:hover td{background:rgba(79,140,255,.05)}
+.cmp-table .cb{color:#c9b0ff} .cmp-table .dk{color:#8fe6a8}
+.cmp-two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+.cmp-box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:17px 19px}
+.cmp-box.purple{border-color:rgba(163,113,247,.35)}
+.cmp-box.green{border-color:rgba(63,185,80,.35)}
+.cmp-box .hh{font-size:15px;font-weight:700;margin-bottom:6px}
+.cmp-box.purple .hh{color:var(--purple)} .cmp-box.green .hh{color:var(--green)}
+.cmp-box ul{margin-top:6px;padding-left:16px;font-size:12.5px;color:var(--muted);line-height:1.85}
+
+footer{padding:44px 0 60px;text-align:center;color:var(--dim);font-size:12px;border-top:1px solid var(--line);margin-top:30px}
+
+@media (max-width:960px){
+  .pain-grid,.domain-grid,.ledger-grid,.sc-grid,.status-grid,.role-grid{grid-template-columns:repeat(2,1fr)}
+  .zoom-cols,.anatomy,.vflow-meta,.ft-callout,.ft-grid,.cmp-trees,.cmp-two,.rel{grid-template-columns:1fr}
+  .gate-row{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <div class="brand">dcu-toolkit <b>1.6.0</b> · ops</div>
+    <div class="nav-links">
+      <a href="#why">为什么</a>
+      <a href="#arch">工具箱架构</a>
+      <a href="#card">算子卡架构</a>
+      <a href="#runtime">怎么运转</a>
+      <a href="#gate">四闸判定</a>
+      <a href="#ledger">五段台账</a>
+      <a href="#field">实战数据</a>
+      <a href="#use">上手</a>
+      <a href="#peer">对比 cannbot</a>
+    </div>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="hero-tag">第 8 个插件域 · 以算子为对象</div>
+    <h1>把「一个算子」<br>变成一个<em>可验收的目录</em></h1>
+    <p>机器可读的契约 · 机器可执行的判定 · 人类可读的台账</p>
+    <div class="principle reveal">
+      <div class="k">DESIGN PRINCIPLE</div>
+      <div class="v"><span class="a">模型负责判断</span>，<span class="b">脚本负责事实</span>。</div>
+    </div>
+  </div>
+
+  <!-- 01 WHY -->
+  <section id="why">
+    <div class="sec-head reveal">
+      <div class="sec-num">01 / WHY</div>
+      <h2>三个反复发生的事故</h2>
+      <p class="sub">旧 7 个域回答「怎么做」。真正卡住人的是另一类问题：这个算子是什么、有几种实现、哪个档位用哪个、上次结论是什么。</p>
+    </div>
+    <div class="pain-grid reveal">
+      <div class="pain"><h3>重走老路</h3><p>半年前已证伪的方向，又花一周重测一遍。结论散在聊天记录和 /tmp 里。</p></div>
+      <div class="pain"><h3>口径打架</h3><p>600MHz 与 1150MHz 相减，得出过 1.5× 假收益。换个卡、换个频率档，结论就反转。</p></div>
+      <div class="pain"><h3>模型自己拍板</h3><p>AI 说「优化通过了」，但没人知道判据是什么——容差是拍的，不变量没测。</p></div>
+    </div>
+    <div class="answer reveal">
+      <div class="t">算子卡域的答案</div>
+      <div class="big">一算子一目录：<span>契约 + 判定 + 台账</span></div>
+      <div class="t">让「通过」变成可复算的事实</div>
+    </div>
+  </section>
+
+  <!-- 02 TOOLKIT ARCH -->
+  <section id="arch">
+    <div class="sec-head reveal">
+      <div class="sec-num">02 / TOOLKIT ARCHITECTURE</div>
+      <h2>dcu-toolkit：8 个插件域</h2>
+      <p class="sub">前 7 个按「能力」组织；第 8 个 ops 按「对象」组织——一个算子一个目录。</p>
+    </div>
+    <div class="domain-grid reveal">
+      <div class="dom"><div class="name">dcu-core</div><div class="sum">路由与编排 · workflow 契约</div></div>
+      <div class="dom"><div class="name">dcu-env</div><div class="sum">环境 · 驱动 · 容器 · 网络</div></div>
+      <div class="dom"><div class="name">dcu-perf</div><div class="sum">性能剖析 · 优化闭环</div></div>
+      <div class="dom"><div class="name">dcu-inference</div><div class="sum">推理框架部署适配</div></div>
+      <div class="dom"><div class="name">dcu-operators</div><div class="sum">算子开发 · HIP/Triton</div></div>
+      <div class="dom"><div class="name">dcu-troubleshooting</div><div class="sum">故障 · 精度 · crash</div></div>
+      <div class="dom"><div class="name">dcu-engineering</div><div class="sum">CI · 规范 · cookbook</div></div>
+      <div class="dom new"><span class="badge-new">NEW</span><div class="name">ops</div><div class="sum">算子卡 · 契约/变体/台账</div></div>
+    </div>
+    <div class="zoom reveal">
+      <div class="zoom-title">展开 <b>ops</b></div>
+      <div class="zoom-cols">
+        <div>
+          <div class="col-head">方法论（共享规则）</div>
+          <div class="chip-row">
+            <span class="chip method">op-contract</span>
+            <span class="chip method">op-bench</span>
+            <span class="chip method">op-gate</span>
+          </div>
+        </div>
+        <div>
+          <div class="col-head">算子卡（一算子一目录）</div>
+          <div class="chip-row">
+            <span class="chip card">op-sparse-mla</span>
+            <span class="chip card">op-moe-w8a8</span>
+            <span class="chip card">op-gemm-fp8</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="rel reveal">
+      <div class="rel-item"><div class="t">dcu-operators</div><div class="h">怎么写 kernel</div><div class="d">源码索引、CUDA→HIP、Triton</div></div>
+      <div class="rel-item"><div class="t">dcu-perf</div><div class="h">怎么剖析、怎么闭环</div><div class="d">profile 方法论、优化流程</div></div>
+      <div class="rel-item"><div class="t">ops</div><div class="h">怎么判、怎么记</div><div class="d">改动算不算通过、上次结论</div></div>
+    </div>
+  </section>
+
+  <!-- 03 OPERATOR CARD ARCH -->
+  <section id="card">
+    <div class="sec-head reveal">
+      <div class="sec-num">03 / OPERATOR CARD</div>
+      <h2>算子卡：固定七件套</h2>
+      <p class="sub">点左边任意一行看说明。★ 是决定判定结果的三份文件。</p>
+    </div>
+    <div class="anatomy reveal">
+      <div class="dir-tree">
+        <div class="dir-head">Plugins/ops/skills/op-sparse-mla/</div>
+        <div class="file-row"><span class="dot"></span><span class="nm">SKILL.md</span></div>
+        <div class="file-desc">这张卡怎么用：适用场景、变体选择、常见坑。</div>
+        <div class="file-row key"><span class="dot"></span><span class="nm">contract.yaml</span><span class="star">★</span></div>
+        <div class="file-desc"><b style="color:var(--green)">opverify.py 唯一事实来源。</b>数学定义、形状、dtype、布局约束、容差、不变量。容差必须带实测依据。</div>
+        <div class="file-row key"><span class="dot"></span><span class="nm">variants.yaml</span><span class="star">★</span></div>
+        <div class="file-desc"><b style="color:var(--blue)">所有实现路径并列记录。</b>status 状态机 draft→measured→tuned→at_floor；padding_support 与 mutates_inputs 必填。</div>
+        <div class="file-row"><span class="dot"></span><span class="nm">candidates.yaml</span></div>
+        <div class="file-desc">可证伪候选清单，由 op-constrain 生成。</div>
+        <div class="file-row"><span class="dot"></span><span class="nm">shapes/</span></div>
+        <div class="file-desc">具体档位：S / ctx / topk / H。</div>
+        <div class="file-row"><span class="dot"></span><span class="nm">bench/</span></div>
+        <div class="file-desc">微基准脚本 + PMC 数据，统一走 opbench.py。</div>
+        <div class="file-row"><span class="dot"></span><span class="nm">tests/</span></div>
+        <div class="file-desc">正确性 / 不变量 / 布局测试，opverify 直接执行。</div>
+        <div class="file-row key"><span class="dot"></span><span class="nm">ledger.md</span><span class="star">★</span></div>
+        <div class="file-desc"><b style="color:var(--amber)">档位 × 变体 × 相对值 × 状态。</b>每行能回到一次可复跑的 run；作废结论划掉写理由。</div>
+        <div class="file-row"><span class="dot"></span><span class="nm">references/</span></div>
+        <div class="file-desc">算法论文、上游实现、历史讨论。</div>
+      </div>
+      <div class="anatomy-side">
+        <div class="anat-card contract">
+          <h4>contract.yaml：把「算对」变成验收对象</h4>
+          <p>没有契约时，「优化通过了」= 模型自己觉得。</p>
+          <div class="snippet">tolerance:
+  vs_fp32_ref: { max_abs: 2.0e-3, cosine: 0.9999 }
+  variant_vs_variant: { max_abs: 3.0e-3 }  <span class="c"># 实测 1.95e-3</span>
+invariants:
+  - determinism            <span class="c"># bit_exact ×5</span>
+  - index_permutation_invariance
+  - split_invariance</div>
+        </div>
+        <div class="anat-card variants">
+          <h4>variants.yaml：所有实现并列</h4>
+          <p>哪条能改、哪条受限于生产安装树、哪条只做参考，必须写清楚。</p>
+          <div class="snippet">variants:
+  - id: prod-vllm       <span class="c"># 生产 AOT ASM</span>
+    status: active
+  - id: tilelang        <span class="c"># 可改</span>
+    status: usable
+  - id: tilelang-prefetch
+    status: usable</div>
+        </div>
+        <div class="anat-card ledger">
+          <h4>ledger.md：只写可复跑的东西</h4>
+          <p>只写档位/变体/相对值/状态。绝对耗时写环境专属知识库。作废结论保留——那是最有价值的反面证据。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 RUNTIME (vertical) -->
+  <section id="runtime">
+    <div class="sec-head reveal">
+      <div class="sec-num">04 / RUNTIME</div>
+      <h2>它是怎么跑起来的</h2>
+      <p class="sub">一次请求从进来到沉淀，经过 12 站。<b>每一站只干一件事，交出固定格式的文件；下一站不认聊天记录，只认文件。</b></p>
+    </div>
+
+    <div class="vflow reveal" id="vflow">
+      <div class="vstep" data-v="0">
+        <div class="num">01</div>
+        <div class="card">
+          <div class="top"><span class="who human">人</span><span class="tt">提问</span></div>
+          <div class="ds">「sparse-mla 这次改动算不算通过？」——此时还没有任何技能被加载。</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 自然语言请求</div>
+
+      <div class="vstep" data-v="1">
+        <div class="num">02</div>
+        <div class="card">
+          <div class="top"><span class="who router">router</span><span class="tt">路由 / 转发</span></div>
+          <div class="ds">
+            两条真实机制：<b>dcu-skill-router</b>（`SKILL.md` 里的七域路由表，覆盖约 140 个技能）+ <b>dcu-dispatcher</b>（`intent_classifier.py` 程序化意图分类，管编码类四意图）。<br>
+            <b>算子优化</b> → ops 域（op-sparse-mla / op-gate / op-optimize 工作流）；<b>模型适配</b> → dcu-inference 域（model-deploy / infer-optimize 工作流）。
+          </div>
+          <div class="out">→ skill 集合 + 工作流选择</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 选中的技能</div>
+
+      <div class="vstep" data-v="2">
+        <div class="num">03</div>
+        <div class="card">
+          <div class="top"><span class="who router">orchestrator</span><span class="tt">规划：出计划</span><span class="who state">state: init</span></div>
+          <div class="ds">读 workflow 契约：节点、依赖、并行度、哪些节点要人批。建 run 目录，并用 <code>workflow_state.py init</code> 生成状态文件。</div>
+          <div class="out">→ 节点 DAG + runs/op-optimize/ + workflow-state.json</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 节点计划</div>
+
+      <div class="vstep" data-v="3">
+        <div class="num">04</div>
+        <div class="card">
+          <div class="top"><span class="who script">op-profile</span><span class="tt">采集（只读）</span><span class="who state">state: mark done</span></div>
+          <div class="ds">按 op-bench 口径计时，采 PMC 证据，产出热点。不改任何代码。</div>
+          <div class="out">→ profile/result.json（含环境指纹）</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 结果 + 指纹</div>
+
+      <div class="vstep gate" data-v="4">
+        <div class="num">05</div>
+        <div class="card">
+          <div class="top"><span class="who script">verify_evidence</span><span class="tt">门禁：只信文件</span><span class="who state">state: verify</span></div>
+          <div class="ds">核对 path 存在、指纹字段齐全且非占位；<code>workflow_state.py verify</code> 重算产物 sha256，内容变了就降级 <b>stale</b>。缺一项，链条就停。</div>
+          <div class="out">→ pass / stop（stale 节点必须重跑）</div>
+        </div>
+      </div>
+      <div class="vlink">↓ pass</div>
+
+      <div class="vstep" data-v="5">
+        <div class="num">06</div>
+        <div class="card">
+          <div class="top"><span class="who script">op-roofline</span><span class="tt">推天花板</span><span class="who state">state: mark done</span></div>
+          <div class="ds">判 memory/compute bound，算出理论天花板与地板达成率。</div>
+          <div class="out">→ roofline/result.json</div>
+        </div>
+      </div>
+      <div class="vlink">↓ cost_bound</div>
+
+      <div class="vstep" data-v="6">
+        <div class="num">07</div>
+        <div class="card">
+          <div class="top"><span class="who script">op-constrain</span><span class="tt">硬约束</span><span class="who state">state: mark done</span></div>
+          <div class="ds">把判定映射成 allowed_actions。越界方案（memory bound 下仍调 tile）直接退回。</div>
+          <div class="out">→ candidates.yaml</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 候选清单</div>
+
+      <div class="vstep ask" data-v="7">
+        <div class="num">08</div>
+        <div class="card">
+          <div class="top"><span class="who human">人</span><span class="tt">⏸ 审批 ①</span></div>
+          <div class="ds">改代码 / 编译 / 注入属高风险。YAML 里写死 proceed: ask，agent 必须停下等你批准。</div>
+          <div class="out">→ 人工决策</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 批准</div>
+
+      <div class="vstep" data-v="8">
+        <div class="num">09</div>
+        <div class="card">
+          <div class="top"><span class="who script">op-optimize</span><span class="tt">实施</span><span class="who state">state: mark done</span></div>
+          <div class="ds">在允许集合内单点改动，opverify 自检，保留可一键回退的 diff。一轮只动一个点。</div>
+          <div class="out">→ optimize/result.json</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 改动 + 自检</div>
+
+      <div class="vstep" data-v="9">
+        <div class="num">10</div>
+        <div class="card">
+          <div class="top"><span class="who script">op-validate</span><span class="tt">判定：四闸四档</span><span class="who state">state: mark done</span></div>
+          <div class="ds">verdict 只认 opverify 的 --json 输出。ACCEPTED 才放行；INCONCLUSIVE 补采样重判。</div>
+          <div class="out">→ validate/result.json（verdict）</div>
+        </div>
+      </div>
+      <div class="vlink">↓ ACCEPTED</div>
+
+      <div class="vstep ask" data-v="10">
+        <div class="num">11</div>
+        <div class="card">
+          <div class="top"><span class="who human">人</span><span class="tt">⏸ 审批 ②</span></div>
+          <div class="ds">写持久知识属高风险：一旦进台账，就会被下一个人复用。</div>
+          <div class="out">→ 人工决策</div>
+        </div>
+      </div>
+      <div class="vlink">↓ 批准</div>
+
+      <div class="vstep" data-v="11">
+        <div class="num">12</div>
+        <div class="card">
+          <div class="top"><span class="who script">op-distill</span><span class="tt">沉淀 → 复用</span><span class="who state">state: finish</span></div>
+          <div class="ds">只收 ACCEPTED，写五段台账。下次路由先检索台账，直接给出上次结论与已证伪方向。</div>
+          <div class="out">→ kb/op-opt/*.md → 下次秒回</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="vflow-meta reveal">
+      <div class="meta-card">
+        <h4>数据接力：一站传一站</h4>
+        <div class="meta-tree">runs/op-optimize/
+├── <span class="f">workflow-state.json</span>  <span class="d">← 节点状态 + 产物 sha256</span>
+├── <span class="f">profile/result.json</span>   <span class="d">← 指纹 + 热点</span>
+├── <span class="f">roofline/result.json</span>  <span class="d">← 天花板</span>
+├── <span class="f">constrain/candidates.yaml</span>
+├── <span class="f">optimize/result.json</span>  <span class="d">← diff + 自检</span>
+├── <span class="f">validate/result.json</span>  <span class="v">← verdict</span>
+└── <span class="f">distill/…</span>             <span class="d">→ 知识库</span></div>
+        <p style="margin-top:10px">交接契约：<b>path + fingerprint（gfx/dtk/image/model）+ status</b>。上一站没产出或指纹对不上，下一站不启动。</p>
+      </div>
+      <div class="meta-card">
+        <h4>三个角色</h4>
+        <p style="margin-bottom:10px">分工写死在流程里，不靠自觉。</p>
+        <div class="roles" style="grid-template-columns:1fr;margin-top:0">
+          <div class="role agent"><h5>Agent</h5><p>理解意图、出计划、写代码、总结——不决定数字</p></div>
+          <div class="role script"><h5>Script</h5><p>计时、判定、校验指纹——所有事实的来源</p></div>
+          <div class="role human"><h5>人</h5><p>只在两处审批：改代码前 / 写知识前</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="meta-card reveal" style="margin-top:14px">
+      <h4>状态轨：workflow-state.json 管什么</h4>
+      <div class="meta-tree">workflow_state.py init    → 建状态文件，登记节点清单
+                  mark    → 节点完成时写 status + 产物 {sha256, size, mtime}
+                  verify  → 重算哈希；内容变了 → 降级 stale（退出码非零）
+                  inspect → 查看进度（人类可读 / --json）
+                  finish  → 收尾门禁，三选一不过就拒绝</div>
+      <p style="margin-top:10px">收尾门禁：<b>MISSING_ROOFLINE_EVIDENCE</b>（缺 roofline 证据）· <b>UNRESOLVED_CEILING</b>（measured &gt; ceiling×1.5）· <b>UNFINISHED_NODES</b>（还有节点没跑完）。</p>
+      <p>两个价值：<b>断点续跑</b>——跑到一半断了不用从头来；<b>产物不留白</b>——结果被改过会被判 stale，强制重跑。</p>
+      <p style="color:var(--dim);font-size:11.5px">实现：<code>Plugins/dcu-core/skills/dcu-orchestrator/scripts/workflow_state.py</code>（纯标准库，带文件锁 + 原子写）</p>
+    </div>
+  </section>
+
+  <!-- 05 GATES -->
+  <section id="gate">
+    <div class="sec-head reveal">
+      <div class="sec-num">05 / GATES</div>
+      <h2>判定只有一种答案：脚本输出的四档结论</h2>
+      <p class="sub">选一个场景，点「运行」，看它停在第几关。</p>
+    </div>
+    <div class="gate-stage reveal">
+      <div class="gate-controls">
+        <select id="scenario">
+          <option value="allpass">全部通过</option>
+          <option value="gate0">产物 sha256 与采集时不一致</option>
+          <option value="gate1">与 fp32 参考超出容差</option>
+          <option value="gate2">不变量 fail（split 不变性超差）</option>
+          <option value="gate3">性能差落在 MAD 噪声内</option>
+          <option value="diag">只做诊断，不判收益</option>
+        </select>
+        <button class="run" id="runGate">▶ 运行</button>
+        <span style="font-size:12px;color:var(--dim)">gate0 最便宜，也最常被跳过</span>
+      </div>
+      <div class="gate-row">
+        <div class="gate"><div class="mark">✓</div><div class="gno">GATE 0</div><div class="gt">执行身份</div><div class="gd">源码/产物/实际加载的 .so<br>sha256 一致</div></div>
+        <div class="gate"><div class="mark">✓</div><div class="gno">GATE 1</div><div class="gt">正确性</div><div class="gd">对 fp32 参考<br>容差 + cosine</div></div>
+        <div class="gate"><div class="mark">✓</div><div class="gno">GATE 2</div><div class="gt">不变量</div><div class="gd">确定性 / 索引乱序<br>split / padding</div></div>
+        <div class="gate"><div class="mark">✓</div><div class="gno">GATE 3</div><div class="gt">A-B 性能</div><div class="gd">同卡同进程交替<br>MAD 显著性</div></div>
+      </div>
+      <div class="verdict" id="verdict">
+        <div class="vt idle">等待运行</div>
+        <div class="vr">ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 LEDGER -->
+  <section id="ledger">
+    <div class="sec-head reveal">
+      <div class="sec-num">06 / KNOWLEDGE</div>
+      <h2>结论只落在一个地方：五段台账</h2>
+      <p class="sub">缺任何一段都会被脚本标红——历史条目不回补，新条目按这五段写。</p>
+    </div>
+    <div class="ledger-grid reveal">
+      <div class="lg"><div class="idx">01</div><h4>结论</h4><p>改了什么、收益多少、正确性如何</p></div>
+      <div class="lg"><div class="idx">02</div><h4>前提</h4><p>设备/版本/形状，任一改变可能反转</p></div>
+      <div class="lg hot"><div class="idx">03 ★</div><h4>已证伪</h4><p>排除了哪些方向——最有价值</p></div>
+      <div class="lg"><div class="idx">04</div><h4>复现命令</h4><p>能重现对比数字的命令</p></div>
+      <div class="lg"><div class="idx">05</div><h4>口径</h4><p>计时/频率档/分母/指标定义</p></div>
+    </div>
+    <div class="ledger-sample reveal">
+<span class="h">## 已证伪</span>
+- <span class="hl">热工作集口径不能用于跨实现比站位</span>：索引池缩到 2.4MB 全在 L2，
+  flash_mla 快 1.83×、tilelang 仅 1.03× → 系统性低估 memory-bound 一方
+- 前置 -1 布局：tilelang 按块首计数截断循环，前置哨兵会静默算错
+
+<span class="h">## 口径</span>
+- 计时: opbench 多轮中位数 + MAD · 频率档: 实测 sclk 1150MHz
+    </div>
+    <div class="answer reveal" style="margin-top:18px;background:linear-gradient(90deg,rgba(210,153,34,.10),transparent);border-color:rgba(210,153,34,.3)">
+      <div class="t">生成纪律</div>
+      <div class="big" style="font-size:15px;color:var(--amber)">推不出的段留空占位，<b>不编造</b></div>
+      <div class="t">每个数字必须能回溯到 result.json</div>
+    </div>
+  </section>
+
+  <!-- 07 FIELD -->
+  <section id="field">
+    <div class="sec-head reveal">
+      <div class="sec-num">07 / FIELD TEST</div>
+      <h2>实战：HIP 版 flash_mla 的真实站位</h2>
+      <p class="sub">GLM5.3 架构，ctx=320k（SKV=327680），<b>H=16</b>，pool=full，同进程交替执行。右侧两列 = 该实现耗时 / flash_mla 耗时，<b>&gt;1 表示更慢</b>。</p>
+    </div>
+
+    <div class="spec reveal">
+      <div class="spec-head"><span>← 更快（HIP 耗时更短）</span><span>flash_mla 基准 1.00×</span><span>更慢 →</span></div>
+      <div class="spec-row" data-v="0.28">
+        <div class="spec-label">S = 1 <small>ctx 128k</small></div>
+        <div class="spec-track"><div class="spec-fill"></div><div class="spec-dot"></div></div>
+        <div class="spec-val"><span class="lead">0.28 · 领先 3.6×</span></div>
+      </div>
+      <div class="spec-row" data-v="0.36">
+        <div class="spec-label">S = 16 <small>ctx 128k</small></div>
+        <div class="spec-track"><div class="spec-fill"></div><div class="spec-dot"></div></div>
+        <div class="spec-val"><span class="lead">0.36 · 领先 2.8×</span></div>
+      </div>
+      <div class="spec-row" data-v="0.67">
+        <div class="spec-label">S = 32 <small>decode-glm53 主档 · ctx 128k</small></div>
+        <div class="spec-track"><div class="spec-fill"></div><div class="spec-dot"></div></div>
+        <div class="spec-val"><span class="lead">0.67 · 领先 1.49×</span></div>
+      </div>
+      <div class="spec-row" data-v="1.33">
+        <div class="spec-label">S = 64 <small>ctx 128k</small></div>
+        <div class="spec-track"><div class="spec-fill"></div><div class="spec-dot"></div></div>
+        <div class="spec-val"><span class="lag">1.33 · 落后</span></div>
+      </div>
+      <div class="spec-row" data-v="1.32">
+        <div class="spec-label">S = 128 <small>ctx 320k</small></div>
+        <div class="spec-track"><div class="spec-fill"></div><div class="spec-dot"></div></div>
+        <div class="spec-val"><span class="lag">1.32 · 落后</span></div>
+      </div>
+      <div class="spec-row" data-v="1.34">
+        <div class="spec-label">S = 256 <small>ctx 320k</small></div>
+        <div class="spec-track"><div class="spec-fill"></div><div class="spec-dot"></div></div>
+        <div class="spec-val"><span class="lag">1.34 · 落后</span></div>
+      </div>
+      <div class="spec-row" data-v="1.38">
+        <div class="spec-label">S = 512 <small>ctx 320k（目标区间）</small></div>
+        <div class="spec-track"><div class="spec-fill"></div><div class="spec-dot"></div></div>
+        <div class="spec-val"><span class="lag">1.38 · 落后</span></div>
+      </div>
+      <p style="font-size:11.5px;color:var(--dim);margin-top:10px">hip/flash 为耗时倍率：&lt;1 表示 HIP 更快，&gt;1 表示更慢。decode 档领先，长上下文大 S 档落后。</p>
+    </div>
+
+    <table class="ft-table reveal">
+      <thead>
+        <tr><th>S</th><th>hip-glm</th><th>flash_mla</th><th>tilelang</th><th>hip / flash</th><th>tile / flash</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>128</td><td>0.9520 ms</td><td class="best">0.7238 ms</td><td>0.8402 ms</td><td class="bad">1.315</td><td class="mid">1.161</td></tr>
+        <tr><td>256</td><td>1.8806 ms</td><td class="best">1.4077 ms</td><td>1.6203 ms</td><td class="bad">1.336</td><td class="mid">1.151</td></tr>
+        <tr><td>512</td><td>3.6813 ms</td><td class="best">2.6627 ms</td><td>3.1478 ms</td><td class="bad">1.383</td><td class="mid">1.182</td></tr>
+      </tbody>
+    </table>
+
+    <div class="ft-grid reveal">
+      <div class="ft-panel">
+        <div class="ft-shape"><div class="sname">S = 128</div><div class="stime">flash 0.7238 ms</div></div>
+        <div class="ft-scale"><span>慢</span><span>flash 基准</span><span>快</span></div>
+        <div class="ft-row"><div class="lbl"><span>hip-glm</span><span class="v" style="color:var(--red)">0.76×（慢 1.32×）</span></div><div class="ft-track"><div class="ft-bar" data-v="0.760"></div></div></div>
+        <div class="ft-row"><div class="lbl"><span>tilelang</span><span class="v" style="color:var(--amber)">0.86×（慢 1.16×）</span></div><div class="ft-track"><div class="ft-bar tile" data-v="0.861"></div></div></div>
+      </div>
+      <div class="ft-panel">
+        <div class="ft-shape"><div class="sname">S = 256</div><div class="stime">flash 1.4077 ms</div></div>
+        <div class="ft-scale"><span>慢</span><span>flash 基准</span><span>快</span></div>
+        <div class="ft-row"><div class="lbl"><span>hip-glm</span><span class="v" style="color:var(--red)">0.75×（慢 1.34×）</span></div><div class="ft-track"><div class="ft-bar" data-v="0.749"></div></div></div>
+        <div class="ft-row"><div class="lbl"><span>tilelang</span><span class="v" style="color:var(--amber)">0.87×（慢 1.15×）</span></div><div class="ft-track"><div class="ft-bar tile" data-v="0.869"></div></div></div>
+      </div>
+      <div class="ft-panel">
+        <div class="ft-shape"><div class="sname">S = 512</div><div class="stime">flash 2.6627 ms</div></div>
+        <div class="ft-scale"><span>慢</span><span>flash 基准</span><span>快</span></div>
+        <div class="ft-row"><div class="lbl"><span>hip-glm</span><span class="v" style="color:var(--red)">0.72×（慢 1.38×）</span></div><div class="ft-track"><div class="ft-bar" data-v="0.723"></div></div></div>
+        <div class="ft-row"><div class="lbl"><span>tilelang</span><span class="v" style="color:var(--amber)">0.85×（慢 1.18×）</span></div><div class="ft-track"><div class="ft-bar tile" data-v="0.846"></div></div></div>
+      </div>
+    </div>
+    <div class="ft-legend reveal">
+      <span><i style="background:var(--red)"></i>HIP-GLM</span>
+      <span><i style="background:var(--amber)"></i>tilelang</span>
+      <span><i style="background:var(--dim)"></i>中线 = flash_mla 基准</span>
+    </div>
+    <div style="margin-top:18px;background:#0e141d;border:1px solid var(--line);border-radius:12px;padding:16px 20px" class="reveal">
+      <div style="font-size:11px;letter-spacing:2px;color:var(--dim);margin-bottom:8px">REPRODUCE</div>
+      <div class="snippet" style="margin-top:0">python3 bench/bench_long.py \
+    --s 128,256,512 --ctx 327680 --h 16 --topk 2048 \
+    --variants hip,flash_mla,tilelang \
+    --pool=full --repeats=5 --warmup=40ms</div>
+    </div>
+    <div class="ft-callout reveal">
+      <div class="ft-box bad">
+        <div class="tt">TARGET ZONE · 目标区间</div>
+        <div class="hh">ctx 320k，S ≥ 128 → 落后</div>
+        <p>比 flash_mla 慢 <b>1.32~1.38×</b>，比 tilelang 也慢约 <b>13%~17%</b>。S=64 同样落后（1.33×）。这一段正是目标区间。</p>
+      </div>
+      <div class="ft-box good">
+        <div class="tt">DECODE ZONE · 小 S</div>
+        <div class="hh">ctx 128k，S ≤ 32 → 领先</div>
+        <p>S=1 领先 <b>3.6×</b>、S=16 领先 <b>2.8×</b>、decode 主档 S=32 领先 <b>1.49×</b>。长上下文是短板，decode 是长板。</p>
+      </div>
+    </div>
+    <div class="reveal" style="margin-top:20px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="font-size:11.5px;letter-spacing:2px;color:var(--dim)">ARCHIVE · H=16 早期一轮（保留）</span>
+        <span style="font-size:10.5px;padding:1px 8px;border-radius:999px;border:1px solid rgba(139,155,173,.35);color:var(--muted)">已被最新一轮取代</span>
+      </div>
+      <div class="ft-grid" style="margin-top:6px">
+        <div class="ft-panel">
+          <div class="ft-shape"><div class="sname">S = 128</div><div class="stime">0.424 → 0.327 ms</div></div>
+          <div class="ft-scale"><span>落后</span><span>flash 1.00×</span><span>领先</span></div>
+          <div class="ft-row"><div class="lbl"><span>仅 skill · 标量</span><span class="v" style="color:var(--red)">0.87× 落后</span></div><div class="ft-track"><div class="ft-bar" data-v="0.87"></div></div></div>
+          <div class="ft-row"><div class="lbl"><span>+ buffer_load</span><span class="v" style="color:var(--amber)">1.00× 持平</span></div><div class="ft-track"><div class="ft-bar" data-v="1.00"></div></div></div>
+          <div class="ft-row"><div class="lbl"><span>+ aicc + mllvm</span><span class="v" style="color:var(--green)">1.13× 领先</span></div><div class="ft-track"><div class="ft-bar" data-v="1.13"></div></div></div>
+        </div>
+        <div class="ft-panel">
+          <div class="ft-shape"><div class="sname">S = 256</div><div class="stime">0.840 → 0.651 ms</div></div>
+          <div class="ft-scale"><span>落后</span><span>flash 1.00×</span><span>领先</span></div>
+          <div class="ft-row"><div class="lbl"><span>仅 skill · 标量</span><span class="v" style="color:var(--green)">1.27× 领先</span></div><div class="ft-track"><div class="ft-bar" data-v="1.27"></div></div></div>
+          <div class="ft-row"><div class="lbl"><span>+ buffer_load</span><span class="v" style="color:var(--dim)">—</span></div><div class="ft-track"><div class="ft-bar" data-v="1.00" style="opacity:.25"></div></div></div>
+          <div class="ft-row"><div class="lbl"><span>+ aicc + mllvm</span><span class="v" style="color:var(--green)">1.64× 领先</span></div><div class="ft-track"><div class="ft-bar" data-v="1.64"></div></div></div>
+        </div>
+        <div class="ft-panel">
+          <div class="ft-shape"><div class="sname">S = 512</div><div class="stime">1.655 → 1.291 ms</div></div>
+          <div class="ft-scale"><span>落后</span><span>flash 1.00×</span><span>领先</span></div>
+          <div class="ft-row"><div class="lbl"><span>仅 skill · 标量</span><span class="v" style="color:var(--green)">1.28× 领先</span></div><div class="ft-track"><div class="ft-bar" data-v="1.28"></div></div></div>
+          <div class="ft-row"><div class="lbl"><span>+ buffer_load</span><span class="v" style="color:var(--dim)">—</span></div><div class="ft-track"><div class="ft-bar" data-v="1.00" style="opacity:.25"></div></div></div>
+          <div class="ft-row"><div class="lbl"><span>+ aicc + mllvm</span><span class="v" style="color:var(--green)">1.65× 领先</span></div><div class="ft-track"><div class="ft-bar" data-v="1.65"></div></div></div>
+        </div>
+      </div>
+      <div class="ft-legend" style="margin-top:12px">
+        <span><i style="background:var(--red)"></i>落后 flash_mla</span>
+        <span><i style="background:var(--green)"></i>领先 flash_mla</span>
+        <span><i style="background:var(--amber)"></i>本轮口径：&gt;1 即领先</span>
+      </div>
+      <p style="font-size:11.5px;color:var(--dim);margin-top:8px">保留作演进记录。<b>仅走 skill 时，S=256 / S=512 已领先（1.27× / 1.28×），只有 S=128 落后（0.87×）</b>；加编译后三个档位全部领先。<b>本轮 &gt;1 = 更快，与上表 &gt;1 = 更慢相反，不可混比。</b></p>
+    </div>
+
+    <div class="answer reveal" style="margin-top:18px;border-color:rgba(248,81,73,.3);background:linear-gradient(90deg,rgba(248,81,73,.07),transparent)">
+      <div class="t">仓库意义</div>
+      <div class="big" style="font-size:15px">这组数据会原样进 <span style="color:var(--amber)">variants.yaml + ledger</span>：状态 <b>draft</b>，而不是"已完成"</div>
+      <div class="t">下一步：gather 访存与预取 / tile 策略 / split 配置 · 诚实记录，才有下一次的起点</div>
+    </div>
+  </section>
+
+  <!-- 08 USE -->
+  <section id="use">
+    <div class="sec-head reveal">
+      <div class="sec-num">08 / GET STARTED</div>
+      <h2>你可能是这 5 种人</h2>
+      <p class="sub">每种都只需要看一个地方。</p>
+    </div>
+    <div class="sc-grid reveal">
+      <div class="sc"><div class="k">A</div><h4>现在哪个实现最好</h4><p>读台账：档位 × 变体 × 相对值 × 证据 run。</p></div>
+      <div class="sc"><div class="k">B</div><h4>改完算不算通过</h4><p>跑 opverify，看四档结论。ACCEPTED 才算过。</p></div>
+      <div class="sc"><div class="k">C</div><h4>跑完整优化流程</h4><p>走工作流，两处 ASK 会停下来等你。</p></div>
+      <div class="sc"><div class="k">D</div><h4>新增一张算子卡</h4><p>先写契约，再补变体与测例，CI 查缺什么。</p></div>
+      <div class="sc"><div class="k">E</div><h4>写一个新实现</h4><p>进 variants 当 draft，测完升 measured。</p></div>
+    </div>
+  </section>
+
+  <!-- 09 STATUS -->
+  <section>
+    <div class="sec-head reveal">
+      <div class="sec-num">09 / STATUS</div>
+      <h2>当前状态</h2>
+    </div>
+    <div class="status-grid reveal">
+      <div class="st ok"><div class="k">已完成</div><div class="v">方法论 + 三张卡</div></div>
+      <div class="st info"><div class="k">实测</div><div class="v">sparse-mla 多档位</div></div>
+      <div class="st info"><div class="k">HIP 站位</div><div class="v">decode 领先 · 320k 落后</div></div>
+      <div class="st warn"><div class="k">待办</div><div class="v">分支未 commit</div></div>
+      <div class="st warn"><div class="k">缺口</div><div class="v">prod-vllm 未纳基准</div></div>
+    </div>
+  </section>
+
+  <!-- 10 PEER -->
+  <section id="peer">
+    <div class="sec-head reveal">
+      <div class="sec-num">10 / PEER COMPARISON</div>
+      <h2>和 cannbot 比：同样是「一算子一目录」</h2>
+      <p class="sub">一方记「怎么生产」，另一方记「怎么验收」。</p>
+    </div>
+    <div class="cmp-trees reveal">
+      <div class="cmp-panel cann">
+        <div class="ph"><div class="pn">cannbot</div><div class="ps">生成流水线 · Ascend NPU</div></div>
+        <div class="cmp-tree">archive_tasks/
+└── <span class="hl">flash_attention/</span>
+    ├── design/
+    ├── <span class="hl">kernel/</span>
+    │   ├── op_host/ op_kernel/ utils/
+    │   ├── CMakeLists.txt  build.sh
+    │   └── ops.h  register.cpp
+    ├── model.py
+    ├── model_new_ascendc.py
+    └── model_new_tilelang.py</div>
+      </div>
+      <div class="cmp-panel ops">
+        <div class="ph"><div class="pn">dcu-toolkit · ops</div><div class="ps">验收与沉淀 · Hygon DCU</div></div>
+        <div class="cmp-tree">op-sparse-mla/
+├── SKILL.md
+├── <span class="g">contract.yaml</span>      <span class="d">← 契约</span>
+├── <span class="g">variants.yaml</span>      <span class="d">← 变体矩阵</span>
+├── candidates.yaml
+├── shapes/  bench/  tests/
+├── <span class="g">ledger.md</span>          <span class="d">← 台账</span>
+└── references/</div>
+      </div>
+    </div>
+    <table class="cmp-table reveal">
+      <thead><tr><th style="width:140px">维度</th><th>cannbot</th><th>dcu-toolkit ops</th></tr></thead>
+      <tbody>
+        <tr><td>核心动作</td><td class="cb"><b>生成</b>：tilelang → AscendC</td><td class="dk"><b>判定 + 沉淀</b></td></tr>
+        <tr><td>变体</td><td class="cb">同目录多文件</td><td class="dk">variants.yaml 结构化矩阵</td></tr>
+        <tr><td>正确性</td><td class="cb">模板 + 人工</td><td class="dk">tests + 四闸，机器可判</td></tr>
+        <tr><td>性能口径</td><td class="cb">未见统一口径</td><td class="dk">三问 + 六铁律 + MAD</td></tr>
+        <tr><td>沉淀</td><td class="cb">代码与 design 文档</td><td class="dk">五段台账 + 已证伪</td></tr>
+        <tr><td>构建</td><td class="cb">CMake + build.sh</td><td class="dk">不绑定构建系统</td></tr>
+        <tr><td>CI</td><td class="cb">未见算子级质量门</td><td class="dk">静态检查 + 单测，无需 DCU</td></tr>
+        <tr><td>最强</td><td class="cb">生成流水线、工程闭环</td><td class="dk">验收纪律、结论可复用</td></tr>
+      </tbody>
+    </table>
+    <div class="cmp-two reveal">
+      <div class="cmp-box purple"><div class="hh">ops 可借鉴</div><ul><li>补 design/：设计意图落纸</li><li>补 kernel/ 与构建脚本</li><li>构建配置本身就是变体的一部分</li></ul></div>
+      <div class="cmp-box green"><div class="hh">cannbot 可借鉴</div><ul><li>生成的 kernel 也需要 contract</li><li>性能需要统一口径</li><li>每次改动应留可复跑台账</li></ul></div>
+    </div>
+    <div class="answer reveal" style="margin-top:18px">
+      <div class="t">一句话</div>
+      <div class="big" style="font-size:16px">cannbot 回答 <span style="color:var(--purple)">「怎么生产」</span>，ops 回答 <span style="color:var(--green)">「能不能信」</span></div>
+      <div class="t">理想形态是生成流水线 + 验收契约</div>
+    </div>
+    <div class="reveal" style="margin-top:14px;font-size:11.5px;color:var(--dim)">※ 基于 cannbot 仓库可见目录结构（2026-10），未做全量代码审计。</div>
+  </section>
+
+  <footer>dcu-toolkit 1.6.0 · 算子卡域 ops · 设计演示<br><span style="color:var(--dim)">文字版见 docs/OPS-CARD-DESIGN.md</span></footer>
+</div>
+
+<script>
+(function(){
+  const els = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{threshold:.12});
+  els.forEach(el=>io.observe(el));
+})();
+
+(function(){
+  const rows = document.querySelectorAll('.file-row');
+  rows.forEach(row=>row.addEventListener('click',()=>{
+    const on = row.classList.contains('active');
+    rows.forEach(r=>r.classList.remove('active'));
+    if(!on) row.classList.add('active');
+  }));
+})();
+
+(function(){
+  const gates = Array.from(document.querySelectorAll('.gate'));
+  const box = document.getElementById('verdict');
+  const sel = document.getElementById('scenario');
+  const btn = document.getElementById('runGate');
+  let running=false;
+  const map={
+    allpass:{failAt:-1,verdict:'ACCEPTED',cls:'v-accepted',reason:'四道门全过，结论可进台账。'},
+    gate0:{failAt:0,verdict:'REJECTED',cls:'v-rejected',reason:'数字配不上代码——后面三关全白跑。'},
+    gate1:{failAt:1,verdict:'REJECTED',cls:'v-rejected',reason:'正确性不过。容差是契约钉死的。'},
+    gate2:{failAt:2,verdict:'REJECTED',cls:'v-rejected',reason:'参考过了也不行——不变量是独立的门。'},
+    gate3:{failAt:3,verdict:'INCONCLUSIVE',cls:'v-inconclusive',reason:'差值落在噪声内，不许写成收益。'},
+    diag:{failAt:-2,verdict:'DIAGNOSTIC-ONLY',cls:'v-diagnostic',reason:'只作诊断，不进台账。'}
+  };
+  function reset(){
+    gates.forEach(g=>g.classList.remove('active','failed','passed'));
+    box.className='verdict';
+    box.querySelector('.vt').textContent='运行中…';
+    box.querySelector('.vr').textContent='';
+  }
+  function finish(sc){
+    box.className='verdict '+sc.cls;
+    box.querySelector('.vt').textContent=sc.verdict;
+    box.querySelector('.vr').textContent=(sc.failAt>=0?'停在第 '+(sc.failAt+1)+' 道门 · ':'')+sc.reason;
+  }
+  btn.addEventListener('click',()=>{
+    if(running)return; running=true;
+    const sc=map[sel.value]; reset();
+    if(sc.failAt===-2){
+      gates.forEach(g=>{g.classList.add('active');setTimeout(()=>{g.classList.remove('active');g.classList.add('passed');},420);});
+      setTimeout(()=>{finish(sc);running=false;},1200); return;
+    }
+    let i=0;
+    const step=()=>{
+      if(i>=4){finish(sc);running=false;return;}
+      const g=gates[i]; g.classList.add('active');
+      setTimeout(()=>{
+        if(sc.failAt===i){g.classList.remove('active');g.classList.add('failed');finish(sc);running=false;}
+        else{g.classList.remove('active');g.classList.add('passed');i++;step();}
+      },620);
+    };
+    setTimeout(step,250);
+  });
+})();
+
+(function(){
+  const POS_MIN = 0.20, POS_MAX = 1.50;          // 光谱范围
+  const PARITY = (1 - POS_MIN) / (POS_MAX - POS_MIN) * 100;
+  document.querySelectorAll('.spec-row').forEach(function(row){
+    const v = parseFloat(row.dataset.v);
+    const pos = Math.max(0, Math.min(100, (v - POS_MIN) / (POS_MAX - POS_MIN) * 100));
+    const fill = row.querySelector('.spec-fill');
+    const dot  = row.querySelector('.spec-dot');
+    if(v < 1){
+      fill.className = 'spec-fill fast';
+      fill.style.left = '0'; fill.style.width = pos + '%';
+      dot.className = 'spec-dot fast';
+    } else {
+      fill.className = 'spec-fill slow';
+      fill.style.left = PARITY + '%'; fill.style.width = (pos - PARITY) + '%';
+      dot.className = 'spec-dot slow';
+    }
+    dot.style.left = pos + '%';
+  });
+})();
+
+(function(){
+  const OVER=1.8, UNDER=0.6;
+  document.querySelectorAll('.ft-bar').forEach(b=>{
+    const v=parseFloat(b.dataset.v); if(isNaN(v))return;
+    if(Math.abs(v-1)<0.005){b.style.left='50%';b.classList.add('parity');return;}
+    let w,left;
+    if(v>1){w=(v-1)/(OVER-1)*50;left=50;b.classList.add('fast');}
+    else{w=(1-v)/(1-UNDER)*50;left=50-w;b.classList.add('slow');}
+    b.style.left=left+'%'; b.style.width=Math.max(w,.4)+'%';
+  });
+})();
+</script>
+</body>
+</html>

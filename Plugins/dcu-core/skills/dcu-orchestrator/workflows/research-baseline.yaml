@@ -1,0 +1,28 @@
+# 工作流：research-baseline —— 外部调研 → DCU 复现 → 端到端基线
+# 来源：2026-10 三端会话实测三次走出「公众号/GitHub 项目调研 → 真机复现 → benchmark 基线」形态
+#（RoCE 调研、sglang 文章复现、新模型复现），彼时无内置 workflow 覆盖，故补为第 5 条（router §四 链⑦）。
+# 契约：name / max_parallel / nodes[]（id + task + depends_on + retries + proceed）
+# 链路：research-collect（probe，只读调研）→ env-reproduce（gate，占卡起服务需审批）→ baseline-run（normal，固定口径出数）
+# 脱敏要求：示例中设备号/模型名/镜像 tag 均为公开占位，无内部实测数据、无内网地址、无内部工单号。
+name: research-baseline
+
+max_parallel: 1
+
+nodes:
+  - id: research-collect
+    task: research-collect
+    depends_on: []
+    retries: 1
+    proceed: auto              # probe 只读调研，无需审批
+
+  - id: env-reproduce
+    task: env-reproduce
+    depends_on: [research-collect]
+    retries: 1
+    proceed: ask               # gate：占卡、起服务/改容器状态，须用户审批放行
+
+  - id: baseline-run
+    task: baseline-run
+    depends_on: [env-reproduce]
+    retries: 1
+    proceed: auto              # 基准测量为只读推理请求，低风险

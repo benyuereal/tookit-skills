@@ -1,0 +1,17 @@
+shard_id: hip-core
+version: 0.0.0-placeholder
+owner_skill: dcu-hip-reference
+source_type: official
+priority: 1.0
+domains:
+- hip-runtime
+- hip-api
+- hip-concept
+- hip-example
+embedding:
+  model: qwen2-embedding
+  dim: 1024
+stats:
+  chunk_count: 1
+  doc_count: 1
+notes: 占位 manifest。运行 scripts/build_shard.py --skill dcu-hip-reference 构建正式分片。

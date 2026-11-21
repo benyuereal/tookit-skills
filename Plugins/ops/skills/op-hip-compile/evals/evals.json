@@ -1,0 +1,32 @@
+{
+  "skill": "op-hip-compile",
+  "description": "路由评测：true=手写 HIP 的编译选项镜像（aicc vs hipcc、-mllvm、FAST_MATH 条件项）、从 .so 读 VGPR 算占用率、codegen 报错二分这类「编译期怎么定/怎么查」的问题应命中本 skill；false=计时与噪声判定、候选队列与续跑应由 op-bench / op-optimize 接手。",
+  "cases": [
+    {
+      "id": "op-hip-compile-t1",
+      "prompt": "手写 kernel 输出位级一致，但比同体 tilelang 慢 1.16×/CTA。aicc 这边的 -mllvm 集怎么定？直接抄一份静态 flag 列表行不行？",
+      "expect": "命中§二/§四/§五：必须镜像对标实现运行时拼出的集合，用 derive_flags.py --fast-math 或 --sniff（它 import tilelang.contrib.hcu.get_hcu_compile_flags 并显式传 pass_configs）；漏掉 FAST_MATH 条件项 -enable-hcu-approx-func-fp-math 就慢 1.16×/CTA，而输出位级一致，正确性测试永远抓不到；静态副本只用于对照，判据是那个函数的实际输出；退出码 3 拦「静默空集」。",
+      "forbid": ["抄一份静态 flag 列表就够了"]
+    },
+    {
+      "id": "op-hip-compile-t2",
+      "prompt": "怎么从 .so 里读 VGPR/SGPR 来判断是不是 1 CTA/CU？顺手加 __launch_bounds__(256,2) 能不能换到 2 CTA/CU？",
+      "expect": "命中§二/§四/§六：用 inspect_so.py；.so 里 host ELF 之后内嵌一份设备 ELF，.note 的 AMDGPU metadata 带 vgpr_count / sgpr_count / .group_segment_fixed_size；每 CU 驻留数 = min(64K/(vgpr×线程数), 64KB/LDS)。aicc 忽略 minBlocks 请求（VGPR 252 纹丝不动、性能 1.000×），占用率墙只能靠 kernel 重分片压 VGPR 来破，不能靠编译期声明。",
+      "forbid": ["加 __launch_bounds__ 就能提高 occupancy"]
+    },
+    {
+      "id": "op-hip-compile-t3",
+      "prompt": "这批 -mllvm 交给 hipcc 报 Unknown command line argument，是 flag 本身写错了吗？为什么必须换 aicc？",
+      "expect": "命中§三：这批 flag 是后端 LLVM 的指令调度/延迟建模/寄存器预算，aicc 接受（本机 tilelang JIT 就是调它），hipcc 的后端 dcc/lld 不接受；带 flag 与不带 flag 的输出位级一致，所以数值对不上不是 flag 的问题，别往这里查。",
+      "forbid": ["把 -mllvm 当成性能开关盲试"]
+    },
+    {
+      "id": "op-hip-compile-f1",
+      "prompt": "同一 kernel 改完连跑三次，中位数差 2%、MAD 是 3%，这算不算显著收益？"
+    },
+    {
+      "id": "op-hip-compile-f2",
+      "prompt": "candidates.yaml 里写候选时 direction 和 expect 怎么填？loop.py queue 拒跑一般是什么原因？"
+    }
+  ]
+}

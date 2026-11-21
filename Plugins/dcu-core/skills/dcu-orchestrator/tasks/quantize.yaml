@@ -1,0 +1,46 @@
+# 任务：quantize —— 量化/精度写回（gate，需审批）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: gate            # 改变状态/写回，高风险
+  goal: "在 baseline 达标的前提下，对模型做量化/重精度（如 W8A8/INT8/FP8），写回新权重/配置，并验证精度与性能收益。"
+
+  executor_skills:
+    - dcu-vllm-runtime-patch    # runtime patch / 量化层接入
+    - dcu-vllm-precision        # 精度定位
+    - dcu-vllm-custom-op        # 自定义算子/量化
+    - dcu-op-optimization       # 算子优化闭环
+    - dcu-llm-benchmark         # 优化后复测
+
+  approach:
+    - "确认 baseline 达标且有明确收益空间（agent 给出依据）。"
+    - "选择量化/精度方案（如 W8A8、INT8、FP8、runtime patch），明确不改源码位置。"
+    - "执行量化并写回新权重/配置，记录改动点（补丁/环境变量/形状表）。"
+    - "复测 ttft/tpot/throughput 与精度（与 baseline 同窗 A/B）。"
+    - "把结果与验收写入 runs/infer-optimize/quantize/result.json。"
+
+  evidence:
+    path: "runs/infer-optimize/quantize/result.json"
+    fingerprint:
+      device: "BW1000"
+      dtk: "26.04"
+      image: "vllm:0.18.1"
+      model: "qwen3-32b"
+      ttft: "ms"
+      tpot: "ms"
+      throughput: "tokens/s"
+
+  acceptance:
+    - "量化后精度未劣化（同窗 A/B 断言通过，或精度差异在可接受范围）。"
+    - "收益端到端可量化（ttft/tpot/throughput 对比 baseline 有正向提升或有明确说明）。"
+    - "改动点（补丁/环境变量/形状表）已记录，可回退。"
+    - "独立 verifier 复核通过，或用户已审批。"
+
+  out_of_scope:
+    - "不做源码级别破坏性改动（不 fork 不重编译全部源码，除非明确）。"
+    - "不绕过 license 引入第三方闭源组件。"
+    - "不允许无精度验证的盲目量化。"
+
+  proceed: ask           # 高风险，必须经用户审批
+  on_exhaust: rollback   # 失败则回退到 baseline

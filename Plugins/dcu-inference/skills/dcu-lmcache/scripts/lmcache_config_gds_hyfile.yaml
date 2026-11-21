@@ -1,0 +1,21 @@
+# LMCache GDS 后端（海光 hyfile / XDS）配置 — 已验证生效
+# 来源：内部文档《XDS × LMCache 技术文档》(file_id <internal-file-id>, 2026-08 实测)
+# 适配：SGLang 0.5.12 + LMCache（含 hyfile GDS 后端），DCU BW1100 / DTK2604
+# 注意：本配置依赖宿主机已装 DDS（hyfs.ko + /dev/hyfs）且容器透传 /dev/hyfs 与 /opt/hyhal
+chunk_size: 256
+local_cpu: false
+max_local_cpu_size: 128
+use_layerwise: true
+
+gds_path: "/data/gds-lmcache"
+gds_buffer_size: 16384        # 单位 MB —— 已注册 DCU DMA 缓冲池，不是磁盘缓存总容量
+gds_backend: "hyfile"
+use_gds: true
+
+save_decode_cache: true
+save_unfull_chunk: true
+
+extra_config:
+  use_direct_io: true         # 尽量绕过 page cache；buffer 地址/offset/length 需满足 DDS 对齐要求
+  disk_io_threads: 16
+  disable_gpu_interm_buffer: true   # 验证镜像无编译版 c_ops 时走 Python fallback transfer

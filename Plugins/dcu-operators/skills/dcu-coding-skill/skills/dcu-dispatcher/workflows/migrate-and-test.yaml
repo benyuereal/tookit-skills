@@ -1,0 +1,21 @@
+workflow_id: migrate-and-test
+description: "CUDA 代码迁移并自动生成 CI 测试用例"
+on_error: stop
+
+steps:
+  - id: step-migrate
+    skill: dcu-code-migrator
+    action: migrate_cuda_to_hip
+    inputs:
+      code: "{{ context.query }}"
+    outputs: [hip_code, report]
+
+  - id: step-test
+    skill: dcu-ci-testcase
+    action: create_testcase
+    needs: [step-migrate]
+    inputs:
+      code: "{{ steps.step-migrate.outputs.hip_code }}"
+      test_type: unit_test
+    outputs: [testcase]
+    on_error: continue

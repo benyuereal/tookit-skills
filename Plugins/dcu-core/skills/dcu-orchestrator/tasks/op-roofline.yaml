@@ -1,0 +1,50 @@
+# 任务：op-roofline —— 瓶颈判定与理论天花板（normal）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: normal
+  goal: "把 profile 证据转成可判定的瓶颈结论：算出理论天花板 ceiling_us 与地板达成率，按 cost_bound 与两级天花板给出 verdict，并明确「当前结构到顶」与「物理到顶」的区别。"
+
+  executor_skills:
+    - op-roofline               # derive.py 预测 / constants.yaml 硬件常数 / rules.md 判定规则
+    - op-profiling              # PMC 原值 + §四 三级证据纪律（分母不全时不得写「到顶」）
+
+  approach:
+    - "用 op-roofline/derive.py 从几何与参数推导预测耗时，并算出两个维护下界 mem_ceiling_us 与 compute_ceiling_us，取大者为 ceiling_us。"
+    - "算 floor_attainment = 实测中位数 / ceiling_us；对外只用这一口径，不用加速比冒充地板达成率。"
+    - "按 op-profiling/SKILL.md §四 的三级证据分级：四个分母（FLOPs / DRAM 字节 / 实测峰值 / CU）齐全且天花板口径锁定才可写「到顶」；描述类事实与比值类只作描述与跨变体区分，§六 参考实现只提供机械原值。"
+    - "两级天花板判定：一级=当前结构已无合法减量方案（候选队列为空）；二级=实测 ≤ ceiling_us 乘 1.5。两级同时满足才可 ceiling_bound=true。"
+    - "只满足一级时结论必须写成「当前结构到顶，不等于物理到顶」，并给出结构性重写方向，不得直接收工。"
+    - "把 ceiling_us / measured_us / floor_attainment / cost_bound / ceiling_bound 与理由写入 result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/op-optimize/roofline/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      op: "<op-name>"                        # 占位：被测算子
+      shapes: "<shape-id>"                   # 占位：被测形状
+      cost_bound: "<memory|compute>"         # 占位：roofline.cost_bound
+      ceiling_us: "<theoretical-floor-us>"   # 占位：roofline.ceiling_us
+      measured_us: "<measured-us>"           # 占位：实测中位数
+      floor_attainment: "<measured/ceiling>" # 占位：地板达成率
+      ceiling_bound: "<true|false>"          # 占位：两级天花板是否同时满足
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "ceiling_us / measured_us / floor_attainment 均为公式推导值或实测值，非占位符。"
+    - "峰值常数来源已注明（rocminfo / hy-smi / constants.yaml），并说明口径是标称还是实测、哪个频率档。"
+    - "ceiling_bound=true 必须同时满足两级天花板；否则为 false 且给出下一步方向。"
+    - "结论带前提（形状/并发/频率档），凡换口径会反转的地方显式标注。"
+
+  out_of_scope:
+    - "不写代码、不改 kernel。"
+    - "不宣布端到端收益（那是 op-validate 节点）。"
+    - "不用「当前结构到顶」冒充「物理到顶」。"
+
+  proceed: auto
+  on_exhaust: exit

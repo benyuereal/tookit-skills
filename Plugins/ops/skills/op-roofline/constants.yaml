@@ -1,0 +1,183 @@
+# 机器常数（gfx938 / Hygon DCU BW1100 / 69 CU）
+#
+# 纪律：
+#   - 每个常数带 source + verified_on + status。status ∈ measured / derived / unverified。
+#   - 两个来源冲突时并列记录，**不取平均、不挑好看的那个**，并在 conflicts 里写清影响。
+#   - 这里只放物理常数与可由常数推出的量；具体形状的绝对耗时进 kb/op-opt/。
+
+chip:
+  name: gfx938
+  product: Hygon DCU BW1100
+  verified_on: 2026-10-27
+
+compute:
+  cu_count:
+    value: 64
+    status: measured
+    verified_on: 2026-11-13
+    source: "torch.cuda.get_device_properties(0).multi_processor_count = 64；hbird-gemm README 亦写 64 CU；pmc 从 dmesg SE 位图数出 64。三方一致。
+    ⚠️ 2026-11-13 更正：原值 69 来源写作「rocminfo / hy-smi」，但本机 rocminfo 只枚举到 CPU agent、hy-smi 的逐卡读数 69/70/71 与三方不符 —— 该 69 使所有按 CU 归一的量（per-CU 摊销、rounds、MFMA/CU）偏 ~8%。
+    gfx938 实测；其他 gfx 的 CU 数不同，换设备必须重测。"
+  wave_size:
+    value: 64
+    status: measured
+    source: "AMD GCN 系谱，gfx938 一致"
+  vgpr_per_cu:
+    value: 65536
+    unit: "32-bit 寄存器"
+    status: measured
+    source: "64 KB VGPR 文件 / CU"
+  vgpr_per_thread_cap:
+    value: 256
+    unit: "32-bit 寄存器"
+    status: derived
+    source: "ISA 单线程上限"
+  sdpr_per_thread_cap: 102
+  lds_per_cu:
+    value: 64
+    unit: KB
+    status: measured
+  mma_bf16:
+    shape: [16, 16, 16]
+    flops: 8192
+    status: measured
+  mma_issue_peak:
+    value: 19.7
+    unit: "条 MFMA(16x16x16 bf16)/cycle（全 GPU）"
+    status: derived
+    source: "2048^3 bf16 matmul 实测 217 TF ≈ 88% 峰值反推，且反代回该 matmul 得 88%，自洽"
+    note: "用来判「谁被算力卡住」；单算子占用率 80%+ 才算。本项目稀疏 MLA 只有 18~38%。"
+  clock_ghz:
+    value: 1.15
+    unit: GHz
+    status: measured
+    source: "hy-smi 读生产卡 6-9 实际运行档位"
+    note: "卡 0-5 钉在 600 MHz。**跨卡比较只能用比值，不能用绝对 µs**。"
+    verified_on: 2026-10-27
+  fp8_gemm_peak_tf:
+    value: 540
+    unit: TFLOPS
+    status: measured
+    source: "本机 fp8 GEMM 实测 479 TF = 89% 达成，反推峰值 540 TF（kb: qwen38-prefill-floor）"
+    note: >
+      **fp8 与 bf16 的峰值不可混用**：bf16 反推峰值 ≈185 TF（19.7 MFMA/cyc @1.15GHz），
+      fp8 实测可达 540 TF ≈ 2.9×。用错分母会把「还有 4× 空间」判成「已经到顶」。
+      MMA 形状 16x16x16 的常数只对 bf16 成立，fp8 的发射率**尚未直接标定**，此处只用实测整体峰值。
+
+memory:
+  l2_size:
+    value: 8
+    unit: MB
+    status: measured
+  ddr_access_granule:
+    value: 128
+    unit: B
+    status: derived
+    source: "PMC 记账口径：DRAM 读字节 = (TCC_HIT + TCC_MISS 的 miss 项) × 128B"
+  stream_read_peak:
+    value: 1724
+    unit: GB/s
+    status: measured
+    source: "torch 大块流式只读 sum，卡 4（600 MHz 档）1712 / 卡 6（1150 MHz 档）1714，取 1724 为多次峰值"
+    verified_on: 2026-10-27
+    note: "**与 sclk 锁频无关**。这是本机可达带宽的唯一可信分母。"
+  stream_copy_peak:
+    value: 1350
+    unit: GB/s
+    status: measured
+    source: "copy(R+W)，卡 4 1338 / 卡 6 1350"
+  spec_bandwidth:
+    value: 1100
+    unit: GB/s
+    status: unverified
+    source: "产品型号 BW1100 标称值"
+    note: "**不要用它算达成率**。见 conflicts:peak-bw-definition。"
+
+conflicts:
+  - id: peak-bw-definition
+    severity: high
+    claim_a:
+      text: "本机峰值带宽 = 1100 GB/s（标称）"
+      used_by: ["op-sparse-mla/contract.yaml:floor.peak（2026-10-27 前）", "mqa 优化结论「分离平面 955 GB/s = 87% 峰值」"]
+    claim_b:
+      text: "本机流式只读实测 = 1724 GB/s"
+      used_by: ["op-sparse-mla/contract.yaml（2026-10-27 起）", "mem-only 变体达成率 94~97%"]
+    impact: >
+      同一份 955 GB/s 的实测数据：拿 1100 做分母是 87%（接近上限，别做了）；
+      拿 1724 做分母是 55%（还有 1.8×）。**分母换了，优化该不该继续的结论就反了。**
+    resolution: >
+      **一律用 1724（实测）做分母。** 标称值不是机器的能力，只是型号名。
+      凡是用 1100 算出来的达成率，都要按 1724 重算一遍再引用。
+    action:
+      - "✅ op-sparse-mla/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
+      - "✅ op-moe-w8a8/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
+      - "✅ op-gemm-fp8/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
+      - "✅ kb 里 mqa 的「87% 峰值」已按 1724 重述为 55%（sparse-mla-20261027.md §19.1）"
+
+  - id: random-gather-cap
+    severity: medium
+    claim_a:
+      text: "1152 B 随机行 gather 的 DRAM 效率上限 ≈345 GB/s（峰值 20%）"
+      source: "kb/op-opt/sparse-mla-20261027.md §9.5，依据 flash_mla 在 320k 池下 75.5 MB / 0.219 ms"
+    claim_b:
+      text: "同访问模式的 mem-only 变体可达 1621~1665 GB/s（峰值的 94~97%）"
+      source: "同文件 §2，S=128 / S=4096，ctx 320k，真随机池"
+    impact: >
+      若 claim_a 成立，「内存侧已封死」；若 claim_b 成立，内存侧还有巨大空间。
+      两条结论对「下一刀往哪切」的方向完全相反。
+    resolution: >
+      **claim_a 不成立，降级为「小工作量下的实测值」。** 75.5 MB 总量在 1.7 TB/s 下只需 44 µs，
+      实测 219 µs —— 说明限制来自占用率/平底，不是 DRAM 效率。
+      claim_b 才是该访问模式的效率证据（大工作量 + mem-only 隔离）。
+    action:
+      - "旧结论「345 GB/s 是物理上限」不得再引用（见 rules.md R5）"
+
+  - id: vgpr-reported-vs-declared
+    severity: medium
+    claim_a:
+      text: "bm32/thr256 的寄存器需求 ≈190 VGPR（按 buffer 形状 ÷ 线程数逐项相加）"
+    claim_b:
+      text: "生成代码声明段合计 120 VGPR，编译器报 vgpr_count=256 / spill=0"
+    impact: >
+      按形状除线程数算出来的「190」两头都不对：既不是声明量（120），也不是编译器实际（256）。
+      layout 有复制因子，算术除不干净。
+    resolution: >
+      寄存器**绝对量**只能从两处取：生成代码声明段（下界）或编译产物（真值）。
+      形状算术只能给**相对量**（「这个改动多 76 VGPR」）。
+    status: open
+    note: "复制因子的解析式尚未建模；`tools/hipbudget.py` 因此只输出「保证溢出 / 不保证」两档。"
+
+calibration_points:
+  - id: bm32-thr256
+    design: {block_m: 32, threads: 256, block_I: 32, d: 512}
+    declared_live_vgpr: 120
+    compiler: {vgpr: 256, spill: 0}
+    prediction: "未超限"
+    verdict: hit
+  - id: bm64-thr256
+    design: {block_m: 64, threads: 256, block_I: 32, d: 512}
+    declared_live_vgpr: 342
+    compiler: {vgpr: 256, spill_bytes: 141}
+    prediction: "保证溢出"
+    verdict: hit
+  - id: lds-bm32-bi32
+    design: {block_m: 32, block_I: 32, d: 512, threads: 256}
+    model_lds_bytes: 28672
+    actual_lds_bytes: 28672
+    basis: "生成 HIP 的 buf_dyn_shmem 偏移：3×KV_spilt@0/8192/16384 + S_shared@24576"
+    verdict: hit
+  - id: lds-bm64-bi32
+    design: {block_m: 64, block_I: 32, d: 512, threads: 256}
+    model_lds_bytes: 32768
+    actual_lds_bytes: 32768
+    verdict: hit
+  - id: bi64-blocks-halved
+    design: {block_m: 32, block_I: 64, d: 512, threads: 256}
+    prediction_without_R6: "-18.6%（块数减半 ⇒ 固定开销次数减半）"
+    actual: "+220%（慢 3.2×）"
+    verdict: miss
+    root_cause: >
+      模型缺 LDS 容量项：bi64 的 shared 需求 56 KB = 88% of 64 KB（R6 阈值 85%），
+      剩余空间不足，编译器把 buffer 挤进 VGPR/scratch，并发与向量化同时崩。
+      补上 R6 后模型对此设计**拒绝预测**，不再给出错误的「更快」。
+    lesson: "预测错了要回去补物理约束，不是换变体再试——这次补的是 R6。"

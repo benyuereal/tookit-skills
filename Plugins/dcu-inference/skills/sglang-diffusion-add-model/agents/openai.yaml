@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sglang Diffusion Add Model"
+  short_description: "Help with Sglang Diffusion Add Model tasks"
+  default_prompt: "Use $sglang-diffusion-add-model to handle this task with evidence-backed validation."

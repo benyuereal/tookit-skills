@@ -1,0 +1,29 @@
+{
+  "skill": "op-gate",
+  "description": "路由评测：true=判断改动能不能进生产、微基准快但端到端没收益怎么定性、为什么要跑不变量这类「怎么判」问题应命中本 skill；false=PMC 定位瓶颈、候选队列与续跑应由 op-profiling / op-optimize 接手。",
+  "cases": [
+    {
+      "id": "op-gate-t1",
+      "prompt": "改完一个 kernel，想知道这个改动能不能进生产，判定流程是什么？",
+      "expect": "命中§一：四道门顺序不可换——gate0 执行身份 → gate1 正确性（对 fp32 参考，分块算）→ gate2 不变量（bit-exact）→ gate3 端到端 A-B（同进程交替、≥3 轮、MAD 显著）；四档决策 ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY；用 scripts/opverify.py 输出 verdict。"
+    },
+    {
+      "id": "op-gate-t2",
+      "prompt": "opverify.py 的 gates 里 perf=pass（微基准快了 40%），但端到端 step 耗时没变，四档里该记哪种结论、为什么不能记 ACCEPTED？",
+      "expect": "命中§二：判 DIAGNOSTIC-ONLY，禁止宣称收益，只能作为诊断证据；必须补端到端口径（step 级 / 服务级）才能判 ACCEPTED；微基准收益常在大 shape 上被吃掉。"
+    },
+    {
+      "id": "op-gate-t3",
+      "prompt": "按四闸判：contract.yaml 里 vs_fp32_ref 的容差对比已经过了，invariants 那组还没跑，这次能不能直接记 correctness 闸 pass、判 ACCEPTED？",
+      "expect": "命中§一 gate2：gate1（对 fp32 参考容差）与 gate2（不变量）是两道独立闸，容差过不能替代不变量——不变量抓参考对比抓不到的结构 bug（determinism / batch_independence / padding_invariance / index_permutation_invariance / split_invariance），要求 bit-exact 而非容差内；闸的顺序不可换，gate2 没跑不许判 pass、不许跳过，另需前置输入隔离（每变体独立副本）与输出毒化（NaN 检测漏写）。"
+    },
+    {
+      "id": "op-gate-f1",
+      "prompt": "这个 kernel 到底是卡在 DRAM 带宽还是 MFMA 发射率，用 hipprof 的计数器怎么判断？"
+    },
+    {
+      "id": "op-gate-f2",
+      "prompt": "手上有一堆优化方向要排序，优化做到一半被中断了怎么接着干？"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mechanical Refactor Verify"
+  short_description: "Help with Mechanical Refactor Verify tasks"
+  default_prompt: "Use $mechanical-refactor-verify to handle this task with evidence-backed validation."

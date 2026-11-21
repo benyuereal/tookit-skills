@@ -1,0 +1,11 @@
+# 二进制文件：禁止 autocrlf 行尾转换（Windows checkout 会按文本转换 LF→CRLF 损坏二进制）
+*.sqlite binary
+*.gz binary
+*.pyc binary
+*.db binary
+*.whl binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.bin binary

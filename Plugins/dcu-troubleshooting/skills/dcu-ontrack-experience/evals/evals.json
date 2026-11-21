@@ -1,0 +1,29 @@
+{
+  "skill": "dcu-ontrack-experience",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对要点；false=形似但应路由他处（只给 id+prompt）。",
+  "cases": [
+    {
+      "id": "dcu-ontrack-experience-t1",
+      "prompt": "容器里 hy-smi 看不到卡，有类似的历史踩坑记录吗？先查什么？",
+      "expect": "命中本 skill 触发条件（A 容器/驱动/可见性）：按关键词反查经验条目，先核对 /opt/hyhal、驱动加载。"
+    },
+    {
+      "id": "dcu-ontrack-experience-t2",
+      "prompt": "dmesg 里出现 XID 190 错误码，什么意思、怎么处理？",
+      "expect": "命中本 skill：指向 references/xid_sxid_errors.md 正向错误码速查（错误码→含义/原因/处理）。"
+    },
+    {
+      "id": "dcu-ontrack-experience-t3",
+      "prompt": "推理服务启动报 libhipblasLt.so 找不到，有没有现成规避手段？",
+      "expect": "命中本 skill 触发条件（libxxx.so 缺失类）：关键词 grep 反查根因与规避（DTK 路径/激活），提醒核对版本。"
+    },
+    {
+      "id": "dcu-ontrack-experience-f1",
+      "prompt": "实测一下 BW1000 双卡 AllReduce 带宽是多少 GB/s，给我完整测试命令。"
+    },
+    {
+      "id": "dcu-ontrack-experience-f2",
+      "prompt": "这台机器 UE 报错疑似硬件损坏，帮我整理一份报修说明。"
+    }
+  ]
+}

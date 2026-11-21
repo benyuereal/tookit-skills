@@ -1,0 +1,51 @@
+# 任务：op-validate —— 端到端 A/B 判定（normal，opverify 三闸四档）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: normal
+  goal: "用 opverify.py 的三闸（正确性 / 不变量 / 性能）与四档结论（ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY），对 op-optimize 的改动做端到端 A/B 判定，产出可复算、可回溯的 verdict。"
+
+  executor_skills:
+    - op-gate                     # 三闸四档判定、回退与留痕（本节点判定口径以此为准）
+    - op-bench                    # 计时口径（median_ms + MAD、同窗 A/B），禁止单次/均值冒充
+    - op-profiling                # 不变量与 PMC 证据复核，确认热点归因未变
+
+  approach:
+    - "用 `python3 -I scripts/opverify.py --contract <op 卡>/contract.yaml --run <run-dir> --json` 出四档结论（ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY），verdict 只认脚本输出。"
+    - "只有 ACCEPTED 才允许下游 op-distill；INCONCLUSIVE 不得当通过（补采样或补重复次数后重判），DIAGNOSTIC-ONLY 只作诊断不进台账，REJECTED 按 op-gate 归因回退。"
+    - "计时口径走 op-bench（median_ms + mad_ms），端到端 A/B 用同一负载、同一时间窗对比 baseline_ms，禁止跨窗或跨卡拼接数字。"
+    - "精度复核与不变量分开报：逐项列出 determinism / padding_invariance / index_permutation_invariance / split_invariance 的结果，不许合并成一个「通过」。"
+    - "把 opverify 原始 JSON、A/B 计时双值、精度结论与地板达成率写入 runs/op-optimize/validate/result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/op-optimize/validate/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      measured_ms: "<median-ms>"              # 占位：优化后 median_ms（op-bench 口径）
+      baseline_ms: "<baseline-median-ms>"     # 占位：同负载同窗基线 median_ms
+      gain: "<gain-percent>"                  # 占位：相对收益百分比
+      floor_attainment: "<measured/ceiling>"  # 占位：地板达成率（实测 / 理论天花板）
+      verdict: "<ACCEPTED|REJECTED|INCONCLUSIVE|DIAGNOSTIC-ONLY>"  # 占位：opverify 四档结论
+      invariants: "<determinism/padding_invariance/index_permutation_invariance/split_invariance 逐项 pass|fail|n-a>"
+      accuracy: "<pass|fail>"                 # 占位：精度复核结论（与不变量分开报）
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "verdict 必须逐字取自 opverify 的 --json 输出（ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY），非手写、非人工改写。"
+    - "只有 ACCEPTED 才算通过；INCONCLUSIVE 与 DIAGNOSTIC-ONLY 均不得记为通过，REJECTED 必须给出回退或重判路径。"
+    - "measured_ms / baseline_ms / gain / floor_attainment 均为实测数值（op-bench 口径 median_ms + mad_ms），非占位符。"
+    - "不变量逐项给出结论（determinism / padding_invariance / index_permutation_invariance / split_invariance），且与精度复核分开陈述。"
+    - "负载参数与基线一致（并发 / 输入输出长度 / 迭代数 / 频率档），差异已说明。"
+
+  out_of_scope:
+    - "不做新的优化改动（负收益时回退决策属 op-optimize 的 rollback）。"
+    - "不手写或改写 verdict，不把 INCONCLUSIVE 当通过。"
+    - "不用中间诊断指标（单 kernel 加速比）替代端到端结论。"
+
+  proceed: auto
+  on_exhaust: exit

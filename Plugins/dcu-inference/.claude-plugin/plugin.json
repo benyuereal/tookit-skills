@@ -1,0 +1,27 @@
+{
+  "name": "dcu-inference",
+  "version": "1.4.0",
+  "description": "推理框架部署与适配 — vLLM 部署调优/精度/自定义算子/runtime patch/trace 分析、模型部署目录、LibTorch、MIGraphX、LMCache、CosyVoice",
+  "author": {
+    "name": "DCU Toolkit Contributors"
+  },
+  "homepage": "https://developer.sourcefind.cn/codes/jixx/dcu-toolkit-skills/-/tree/open-source/Plugins/dcu-inference",
+  "license": "MIT",
+  "keywords": [
+    "dcu",
+    "hygon",
+    "aarch64",
+    "skills",
+    "inference",
+    "vllm",
+    "migraphx",
+    "libtorch",
+    "lmcache",
+    "deploy",
+    "precision"
+  ],
+  "platforms": [
+    "claude",
+    "opencode"
+  ]
+}

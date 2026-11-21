@@ -1,0 +1,101 @@
+#!/bin/bash
+
+if [ -z "$ROCM_PATH" ]; then
+    echo "Cannot find \$ROCM_PATH, please check your environment."
+    exit 1
+fi
+if [ -z "$HYHAL_PATH" ]; then
+    HYHAL_PATH="/opt/hyhal"
+fi
+
+HIPGDB_FILE_PATH_HYHAL="$HYHAL_PATH/bin/hipgdb"
+DGBAPI_LIB_PATH_HYHAL="$HYHAL_PATH/lib"
+HIPGDB_FILE_PATH_15="$ROCM_PATH/bin/hipgdb-15/hipgdb"
+DGBAPI_LIB_PATH_15="$ROCM_PATH/lib/amd-dbgapi/0.77"
+HIPGDB_FILE_PATH_13="$ROCM_PATH/bin/hipgdb-13/hipgdb"
+DGBAPI_LIB_PATH_13="$ROCM_PATH/lib/amd-dbgapi/0.70"
+HIPGDB_FILE_PATH_11="$ROCM_PATH/bin/hipgdb-11/hipgdb"
+DGBAPI_LIB_PATH_11="$ROCM_PATH/lib/amd-dbgapi/0.56"
+
+if [ -f "/sys/module/hycu/version" ]; then
+    HIPGDB_DRIVER_VERSION_NEW="/sys/module/hycu/version"
+else
+    HIPGDB_DRIVER_VERSION_NEW="/sys/module/hydcu/version"
+fi
+
+HIPGDB_DRIVER_VERSION_OLD="/sys/module/amdgpu/version"
+
+
+run_hipgdb_with_library_path() {
+    local driver_version="$1"
+    local hipgdb_path="$2"
+    local dbgapi_lib_path="$3"
+    local args=("${@:4}")
+    HIPGDB_DRIVER_VERSION_CHECK=${HIPGDB_DRIVER_VERSION_CHECK:-0}
+    if [ "$HIPGDB_DRIVER_VERSION_CHECK" -eq 1 ]; then
+        echo "driver version:      $driver_version"
+        echo "hipgdb path:         $hipgdb_path"
+        echo "dbgapi library path: $dbgapi_lib_path"
+        echo "Arguments to pass:"
+        for i in "${!args[@]}"; do
+            echo "  [$i] = '${args[i]}'"
+        done
+        exit 0
+    else
+        LD_LIBRARY_PATH="$dbgapi_lib_path:$LD_LIBRARY_PATH" "$hipgdb_path" "${args[@]}"
+        exit $?
+    fi
+}
+
+# Check if version file exists
+if [ -f $HIPGDB_DRIVER_VERSION_NEW ]; then
+    HIPGDB_DRIVER_VERSION=$(cat $HIPGDB_DRIVER_VERSION_NEW)
+else
+    if [ -f $HIPGDB_DRIVER_VERSION_OLD ]; then
+        HIPGDB_DRIVER_VERSION=$(cat $HIPGDB_DRIVER_VERSION_OLD)
+    fi
+fi
+
+# Determine the gdb path based on the version
+if [ -z "$HIPGDB_DRIVER_VERSION" ]; then
+    DGBAPI_LIB_PATH=$DGBAPI_LIB_PATH_15
+    HIPGDB_FILE_PATH=$HIPGDB_FILE_PATH_15
+else
+    # Extract major and minor version numbers
+    DRIVER_MAJOR_VERSION=$(echo $HIPGDB_DRIVER_VERSION | awk -F. '{print $1}')
+    DRIVER_MINOR_VERSION=$(echo $HIPGDB_DRIVER_VERSION | awk -F. '{print $2}')
+    
+    # Check if version is at least 6.3 (for version 15)
+    if [ "$DRIVER_MAJOR_VERSION" -ge 6 ] && [ "$DRIVER_MINOR_VERSION" -ge 3 ]; then
+        DGBAPI_LIB_PATH=$DGBAPI_LIB_PATH_15
+        HIPGDB_FILE_PATH=$HIPGDB_FILE_PATH_15
+    # Check if version is between 5.7 and 6.2 (for version 13)
+    elif [ "$DRIVER_MAJOR_VERSION" -eq 5 ] && [ "$DRIVER_MINOR_VERSION" -ge 7 ] || 
+         [ "$DRIVER_MAJOR_VERSION" -eq 6 ] && [ "$DRIVER_MINOR_VERSION" -le 2 ]; then
+        DGBAPI_LIB_PATH=$DGBAPI_LIB_PATH_13
+        HIPGDB_FILE_PATH=$HIPGDB_FILE_PATH_13
+    # Otherwise use old version (11)
+    else
+        DGBAPI_LIB_PATH=$DGBAPI_LIB_PATH_11
+        HIPGDB_FILE_PATH=$HIPGDB_FILE_PATH_11
+    fi
+fi
+
+# If HIPGDB_FORCE_USE_VERSION is set to new or old, use the corresponding version of hipgdb
+HIPGDB_FORCE_USE_VERSION=${HIPGDB_FORCE_USE_VERSION:-0}
+if [ "$HIPGDB_FORCE_USE_VERSION" == "hyhal" ]; then 
+    run_hipgdb_with_library_path "$HIPGDB_DRIVER_VERSION" "$HIPGDB_FILE_PATH_HYHAL" "$DGBAPI_LIB_PATH_HYHAL" "$@"
+fi
+if [ "$HIPGDB_FORCE_USE_VERSION" == "15" ] || [ "$HIPGDB_FORCE_USE_VERSION" == "new" ]; then 
+    run_hipgdb_with_library_path "$HIPGDB_DRIVER_VERSION" "$HIPGDB_FILE_PATH_15" "$DGBAPI_LIB_PATH_15" "$@"
+fi
+if [ "$HIPGDB_FORCE_USE_VERSION" == "13" ]; then 
+    run_hipgdb_with_library_path "$HIPGDB_DRIVER_VERSION" "$HIPGDB_FILE_PATH_13" "$DGBAPI_LIB_PATH_13" "$@"
+fi
+if [ "$HIPGDB_FORCE_USE_VERSION" == "11" ] || [ "$HIPGDB_FORCE_USE_VERSION" == "old" ]; then 
+    run_hipgdb_with_library_path "$HIPGDB_DRIVER_VERSION" "$HIPGDB_FILE_PATH_11" "$DGBAPI_LIB_PATH_11" "$@"
+fi
+
+# Invoke gdb and pass all arguments provided to the script to gdb
+run_hipgdb_with_library_path "$HIPGDB_DRIVER_VERSION" "$HIPGDB_FILE_PATH" "$DGBAPI_LIB_PATH" "$@"
+

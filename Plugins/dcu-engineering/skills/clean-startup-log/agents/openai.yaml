@@ -1,0 +1,4 @@
+interface:
+  display_name: "Clean Startup Log"
+  short_description: "Help with Clean Startup Log tasks"
+  default_prompt: "Use $clean-startup-log to handle this task with evidence-backed validation."

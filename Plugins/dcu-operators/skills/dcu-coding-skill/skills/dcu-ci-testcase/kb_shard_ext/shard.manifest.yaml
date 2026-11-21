@@ -1,0 +1,15 @@
+shard_id: dcu-ci-testcase-shard
+owner_skill: dcu-ci-testcase
+source_type: official
+priority: 1.0
+domains:
+- testing-patterns
+- test-debug
+- ci-config
+embedding:
+  model: qwen2-embedding
+  dim: 1024
+stats:
+  chunk_count: 42
+  doc_count: 33
+source_layer: ext

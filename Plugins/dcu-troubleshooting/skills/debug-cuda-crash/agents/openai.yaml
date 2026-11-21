@@ -1,0 +1,4 @@
+interface:
+  display_name: "Debug Cuda Crash"
+  short_description: "Help with Debug Cuda Crash tasks"
+  default_prompt: "Use $debug-cuda-crash to handle this task with evidence-backed validation."

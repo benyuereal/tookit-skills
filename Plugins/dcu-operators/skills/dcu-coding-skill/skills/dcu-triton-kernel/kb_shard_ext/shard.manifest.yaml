@@ -1,0 +1,16 @@
+shard_id: dcu-triton-kernel-shard
+owner_skill: dcu-triton-kernel
+source_type: official
+priority: 1.0
+domains:
+- triton-knowledge
+- triton-perf
+- triton-debug
+- triton-template
+embedding:
+  model: qwen2-embedding
+  dim: 1024
+stats:
+  chunk_count: 16
+  doc_count: 12
+source_layer: ext

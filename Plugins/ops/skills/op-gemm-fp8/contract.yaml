@@ -1,0 +1,71 @@
+# op-gemm-fp8 契约（draft：门已定义，脚本待补）
+
+op: gemm-fp8
+version: 1
+math: "out[M,N] = A[M,K] @ B[K,N]；A/B 为 fp8(e4m3/fnuz)，acc=fp32，输出 bf16"
+
+shapes:
+  A: [M, K]
+  B: [K, N]
+  out: [M, N]
+
+dtypes:
+  A: float8_e4m3
+  B: float8_e4m3
+  acc: float32
+  out: bfloat16
+
+layout_constraints:
+  - "ROCm 上 fp8 是 fnuz 语义（gfx950 除外），量化代码不能照搬 NVIDIA e4m3"
+  - "裸 cvt_pk_fp8_f32 需要 fp8-insts 目标特性，gfx938 不提供；须用 cast_to_f8/cast_from_f8"
+  - "tilelang 必须显式 warp_size=64、target=hip；k_pack=2 为 CDNA 系取向"
+  - "M 决定瓶颈类型：M<=32 带宽型，M>=128 算力型；两者不可用同一地板判据"
+
+tolerance:
+  vs_fp32_ref:
+    max_abs: 5.0e-2
+    cosine: 0.9990
+    note: "相对容差更合适；绝对容差随 N 增长，正式值待实测后按相对误差改写"
+  variant_vs_variant:
+    mode: tolerance
+    note: "不同 tile/k_pack 改变累加顺序，不要求 bit-exact"
+
+invariants:
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+  - name: shape_tiling_invariance
+    mode: tolerance
+    note: "不同 block 尺寸配平结果应在容差内一致"
+  - name: batch_independence
+    mode: bit_exact
+    note: "batched/grouped 场景下，同一行输出不得依赖同 batch 的其他行"
+
+gates:
+  - name: correctness
+    template: correctness
+    required: false
+    skip_reason: "缺 adapter（卡内还没有 _common.py：build_inputs / reference / get_runner）；补上后改 required: true 即可跑 scripts/opcheck.py correctness"
+  - name: invariants
+    template: invariants
+    required: false
+    skip_reason: "缺 adapter，同上"
+  - name: layout_capability
+    template: padding
+    required: false
+    skip_reason: "缺 adapter，同上"
+  - name: perf
+    script: bench/bench.py
+    required: false
+    require: "median_ms <= baseline_ms * 1.02"
+    repeats: 3
+    skip_reason: "尚未落地"
+
+floor:
+  metric: hbm_bandwidth
+  peak: 1724
+  unit: GB/s
+  basis: "M<=32 时每步必读 B(K*N*1B)，地板=读权重字节/峰值带宽；M>=128 时改按算力地板（峰值 TFLOPS 需按 dtk/rocminfo 实测填）。峰值用本机流式只读实测（不是型号标称 1100）"
+  source: "本机流式只读实测 1712~1724 GB/s；见 op-roofline/constants.yaml:conflicts:peak-bw-definition"
+  status: measured
+  at_floor_threshold: 0.85

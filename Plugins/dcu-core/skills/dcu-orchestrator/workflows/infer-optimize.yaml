@@ -1,0 +1,31 @@
+# 工作流：infer-optimize —— 推理优化主线（脱敏命名）
+# 契约：name / max_parallel / nodes[]（id + task + depends_on + retries + proceed）
+# 链路：env-check（probe）→ baseline（normal）→ quantize（gate，ask）→ 探索阶段
+# 脱敏要求：设备号/模型/镜像均为公开占位，无内部实测数据、无内网地址、无工单号。
+name: infer-optimize
+
+# 同时最多执行的节点数（依赖链上每层可并行；本例为串行链路）
+max_parallel: 1
+
+nodes:
+  - id: env-check
+    task: env-check          # 对应 tasks/env-check.yaml
+    depends_on: []           # 无依赖，最先就绪
+    retries: 2
+    proceed: auto            # probe，只读，无需用户审批
+
+  - id: baseline
+    task: baseline           # 对应 tasks/baseline.yaml
+    depends_on: [env-check]  # 依赖环境指纹就绪
+    retries: 2
+    proceed: auto            # 基准测量只读，属低风险
+
+  - id: quantize
+    task: quantize           # 对应 tasks/quantize.yaml
+    depends_on: [baseline]   # 需基准达标后才量化
+    retries: 1
+    proceed: ask             # gate 高风险，覆盖为需用户审批
+
+# 扩展说明：量化通过后可继续追加探索类节点（算子优化接 op-optimize 工作流的
+# op-profile/op-optimize/op-validate 任务契约，或自定义 task 挂到 tasks/ 下），
+# 新节点 depends_on: [quantize] 即可接入本链路。

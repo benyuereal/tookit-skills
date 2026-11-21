@@ -1,0 +1,46 @@
+# 任务：fault-locate —— 根因定位（normal）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: normal
+  goal: "基于 fault-collect 的现场快照做根因定位：按故障类型路由到对应 skill 的排查路径，产出「根因结论 + 修复建议 + 置信度」。"
+
+  executor_skills:
+    - dcu-vmfault-coredump   # VMFault：faulting kernel + 越界值解码
+    - debug-cuda-crash       # crash 类：崩溃调试
+    - debug-distributed-hang # hang 类：卡死/超时诊断
+    - dcu-vllm-precision     # 精度类：逐层 cos 对比定位算子
+    - dcu-train-precision    # 训练精度类：loss/NaN 逐层定位
+    - dcu-rccl-test          # 通信类：多卡互联验证
+
+  approach:
+    - "按 fault_type 选择排查路径（VMFault→coredump 取证 / hang→栈与超时分析 / 精度→逐层对比 / 通信→rccl 通测）。"
+    - "先查高频已知根因（版本组合、已知坑），再走深度定位，避免从零排查。"
+    - "每个候选根因记录支持/反对证据，收敛到最可能的一项并给置信度。"
+    - "给出修复建议（含回退方案）与验证方式，写入结果文件。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/fault-triage/locate/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      fault_type: "<vmfault|hang|crash|precision|other>"
+      root_cause: "<conclusion>"          # 占位：根因结论
+      confidence: "<high|medium|low>"     # 占位：置信度
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "root_cause 有明确技术结论（不是「可能是」式的猜测罗列），并附支持证据。"
+    - "给出了可执行的修复建议与验证方式。"
+    - "confidence 已标注；low 时明确列出还需要采集的信息。"
+
+  out_of_scope:
+    - "不直接执行修复动作（那是 fault-fix 任务的 gate 范围）。"
+    - "不在定位阶段反复重启/复跑制造新现场，破坏原始故障证据。"
+
+  proceed: auto
+  on_exhaust: continue   # 定位未收敛时输出已知信息，转人工或补充采集

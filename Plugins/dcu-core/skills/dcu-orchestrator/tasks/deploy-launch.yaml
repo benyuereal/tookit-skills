@@ -1,0 +1,47 @@
+# 任务：deploy-launch —— 启动推理服务（gate，写状态需审批）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: gate            # 拉起服务改变设备/容器状态，走独立 verifier 或用户审批
+  goal: "按 deploy-catalog 配方在 DCU 上启动模型推理服务，确认服务健康（可推理、无启动报错），产出服务端点与启动参数指纹。"
+
+  executor_skills:
+    - dcu-vllm-deploy           # vLLM 部署参数/容器约束/已知坑
+    - dcu-docker                # 容器启动规范（挂载 hyhal 等）
+    - dcu-hy-smi                # 启动后卡占用与健康确认
+    - dcu-model-deploy-verify   # 部署一致性校验方法
+
+  approach:
+    - "向用户提交启动方案摘要：镜像、卡位、端口、关键启动参数，获批后执行。"
+    - "按配方启动服务容器（挂载权重与 hyhal，卡位来自 precheck）。"
+    - "等待服务就绪（health 接口 / 日志无报错），记录启动日志关键行。"
+    - "确认显存占用与预期一致（hy-smi），无 OOM / VMFault。"
+    - "把服务端点与启动参数写入 runs/model-deploy/launch/result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/model-deploy/launch/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      serve_endpoint: "<host:port>"        # 占位：服务端点
+      startup_args: "<key-startup-args>"   # 占位：关键启动参数摘要
+      mem_used_gb: "<mem-used-gb>"         # 占位：单卡显存占用
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "服务健康检查通过（health 接口 200 或等效探活），可完成一次最小推理请求。"
+    - "启动日志无 OOM / VMFault / import 类致命报错（或已定位并说明为可接受告警）。"
+    - "serve_endpoint / startup_args / mem_used_gb 已填写，非占位符。"
+    - "独立 verifier 复核通过，或用户已审批放行。"
+
+  out_of_scope:
+    - "不做精度对齐验证（那是 deploy-verify 任务）。"
+    - "不做性能压测与调参（属 infer-optimize 工作流）。"
+    - "不改模型权重与量化配置。"
+
+  proceed: ask           # 高风险（占卡、起服务），必须经用户审批
+  on_exhaust: rollback   # 启动失败则回退：停掉半启动容器并释放卡位

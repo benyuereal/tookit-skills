@@ -1,0 +1,24 @@
+{
+  "name": "ops",
+  "version": "1.6.0",
+  "description": "算子卡域 — 一算子一目录（op-*）：contract.yaml 机器可读契约 + variants.yaml 实现变体矩阵 + shapes 形状档位 + bench 微基准 + ledger.md 结论台账；配 op-contract / op-bench / op-gate 等方法论 skill",
+  "author": {
+    "name": "DCU Toolkit Contributors"
+  },
+  "homepage": "https://developer.sourcefind.cn/codes/jixx/dcu-toolkit-skills/-/tree/open-source/Plugins/ops",
+  "license": "MIT",
+  "keywords": [
+    "dcu",
+    "hygon",
+    "operator",
+    "kernel",
+    "contract",
+    "benchmark",
+    "gate",
+    "ledger"
+  ],
+  "platforms": [
+    "claude",
+    "opencode"
+  ]
+}

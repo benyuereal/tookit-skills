@@ -1,0 +1,47 @@
+# 任务：deploy-verify —— 部署一致性验证（normal）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: normal
+  goal: "对已启动的推理服务做部署验证：同一批测试输入下，服务输出与 HF/原始权重参照实现对齐，精度一致性达标后 deployment 才算交付可用。"
+
+  executor_skills:
+    - dcu-model-deploy-verify   # 部署前后一致性校验方法论
+    - dcu-vllm-precision        # 输出异常时定位到算子（逐层对比）
+    - dcu-llm-benchmark         # 小规模推理请求规范
+
+  approach:
+    - "准备固定测试输入集（覆盖典型与边界输入，固定随机种子）。"
+    - "对服务端点发推理请求，收集输出；用参照实现（HF 同权重）跑同批输入。"
+    - "逐条对比输出（token 级 / 数值容差），记录不一致样本。"
+    - "存在不一致时按 dcu-vllm-precision 收敛定位（逐层 cos 对比 → 层内钻取），把结论写入结果。"
+    - "把对比结论写入 runs/model-deploy/verify/result.json。"
+    - "沉淀：验证通过后，按 `data/product-matrix/README.md`（只读模板）把「模型×框架×卡型」方案卡片记入用户知识库 `~/.config/dcu-toolkit/kb/solution/`（遵循 `docs/STANDARDS.md` 脱敏红线，性能数据用相对倍数/百分比，不留内部实测绝对值）。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/model-deploy/verify/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      serve_endpoint: "<host:port>"
+      cases_total: "<n-cases>"             # 占位：测试用例数
+      mismatch_ratio: "<mismatch-ratio>"   # 占位：不一致样本占比
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "固定输入集下服务输出与参照实现对比结论明确（一致，或不一致样本占比在验收阈值内）。"
+    - "测试输入集、随机种子、对比方法已记录，第三方可复跑。"
+    - "如发生不一致，已给出定位结论（层/算子级）或明确标注「未定位，需专项排查」。"
+    - "cases_total / mismatch_ratio 已填写数值，非占位符。"
+
+  out_of_scope:
+    - "不做性能压测（吞吐/延迟口径属 infer-optimize 工作流）。"
+    - "不改服务启动参数与权重（如需变更，回 deploy-launch 重新过 gate）。"
+    - "不做量化改精度（那是 quantize 任务的范围）。"
+
+  proceed: auto
+  on_exhaust: exit

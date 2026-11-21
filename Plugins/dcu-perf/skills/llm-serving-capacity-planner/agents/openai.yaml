@@ -1,0 +1,4 @@
+interface:
+  display_name: "LLM Serving Capacity Planner"
+  short_description: "Help with LLM Serving Capacity Planner tasks"
+  default_prompt: "Use $llm-serving-capacity-planner to handle this task with evidence-backed validation."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "LLM Pipeline Analysis"
+  short_description: "Help with LLM Pipeline Analysis tasks"
+  default_prompt: "Use $llm-pipeline-analysis to handle this task with evidence-backed validation."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cookbook Review PR"
+  short_description: "Help with Cookbook Review PR tasks"
+  default_prompt: "Use $cookbook-review-pr to handle this task with evidence-backed validation."

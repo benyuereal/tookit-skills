@@ -1,0 +1,7 @@
+{
+  "embedding_enabled": false,
+  "embedding_api_url": "",
+  "embedding_api_key": "",
+  "embedding_model": "qwen3-embedding",
+  "_note": "To change embedding_model, run: python scripts/rebuild_embeddings.py --help"
+}

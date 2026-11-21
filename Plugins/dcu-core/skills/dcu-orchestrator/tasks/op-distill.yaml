@@ -1,0 +1,55 @@
+# 任务：op-distill —— 优化成果沉淀到用户知识库（gate，写持久知识需审批）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: gate            # 写持久知识（知识库/候选事实），需用户审批放行
+  goal: "把 op-validate 已通过的优化成果沉淀成可复用条目：数字与证据进用户知识库台账 ~/.config/dcu-toolkit/kb/op-opt/，跨项目可复用的事实写成候选条目并产出晋升提案；不改写厂商 skill 内容、不外发。"
+
+  executor_skills:
+    - op-gate                  # 以 ACCEPTED 与四档 verdict 作为沉淀前提（非 ACCEPTED 不进台账）
+    - dcu-op-optimization      # 5 步闭环 + 留痕模板（沉淀口径以此为准）
+    - dcu-kernelwiki           # 可复用事实的组织方式与 scope/source/verified_on 约定
+    - dcu-perf-cases           # 性能数据落点与「数字不入事实库」纪律
+
+  approach:
+    - "以 opverify 的 ACCEPTED 结论与四档 verdict 作为沉淀前提，非 ACCEPTED 不进台账。"
+    - "以 runs/op-optimize/validate/result.json 为唯一数字来源；任何写进台账的数字必须能回到该产物字段或命名的 profiling 证据。"
+    - "跑 Plugins/dcu-core/skills/dcu-orchestrator/scripts/dcu_distill.py --run runs/op-optimize/validate/result.json --kb ~/.config/dcu-toolkit/kb 生成台账条目骨架（含 source / verified_on / 环境指纹）。"
+    - "台账按五段骨架写：结论 / 前提 / 已证伪 / 复现命令 / 口径；生成方推不出的段留明确占位，不得编造。写完后跑 scripts/kbq.py index 自查，缺段必须在提交前补齐。"
+    - "从本次改动中挑出「跨项目可复用的事实」（手法 / 坑 / 架构约束），逐条标注 scope（gfx 号 / 卡型）与 status（verified | unverified）。"
+    - "生成晋升提案：写明拟并入的 skill 文件路径（如 dcu-kernelwiki/wiki/<topic>.md）与明确不并入项（环境专属、一次性参数、未验证结论）。"
+    - "按 docs/STANDARDS.md 脱敏红线自查：性能数字标 [历史数据，随硬件/DTK/版本变化]，优先相对倍数/百分比，无内网地址与凭证。"
+
+  # 产物契约：path + fingerprint[]
+  # 说明：.json 是机器可读证据（供 verify_evidence.py 校验），同名 .md 是人工可读台账
+  evidence:
+    path: "~/.config/dcu-toolkit/kb/op-opt/<op-name>-<yyyyMMdd>.json"
+    fingerprint:
+      device: "<device-model>"          # 占位：设备型号
+      dtk: "<dtk-version>"              # 占位：DTK 版本
+      gfx: "<gfx-code>"                 # 占位：gfx 号（物理机 rocminfo 查得）
+      framework: "<framework+version>"  # 占位：框架与版本（vLLM / SGLang / 自研）
+      op: "<op-name>"                   # 占位：算子名
+      gain: "<gain-percent>"            # 占位：相对收益百分比
+      source_run: "runs/op-optimize/validate/result.json"
+      status: "<verified|unverified>"   # 占位：本次事实的验证状态
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "台账条目已写入 ~/.config/dcu-toolkit/kb/op-opt/，且 source / verified_on / gfx / DTK / 框架 字段均非占位符。"
+    - "台账五段齐全（结论 / 前提 / 已证伪 / 复现命令 / 口径），scripts/kbq.py index 对该条目不报缺段。"
+    - "verify_evidence.py 按本任务契约校验同名 .json 证据通过（fingerprint 无缺失、非占位符）。"
+    - "条目内每个数字都能回溯到 result.json 字段或命名的证据文件。"
+    - "候选事实逐条带 scope 与 status；未验证的一律标 unverified，不得写成结论腔。"
+    - "晋升提案已生成（含拟并入的 skill 文件路径与不并入项清单），且未直接改写厂商 skill 内容。"
+    - "用户已审批放行（gate）。"
+
+  out_of_scope:
+    - "不写 <skills根>/ 与 <skills根>/_dcu-toolkit-shared/（厂商内容，重装以包内版本为准）。"
+    - "不自动上传或外发任何记录。"
+    - "不把单次实测数字当可复用基线（数字标 [历史数据]）。"
+    - "不做新的优化改动（负收益回退属 op-optimize 的 rollback）。"
+
+  proceed: ask          # 写持久知识，需用户审批
+  on_exhaust: continue  # 记账失败不回退已完成的优化；continue 并留下缺口记录

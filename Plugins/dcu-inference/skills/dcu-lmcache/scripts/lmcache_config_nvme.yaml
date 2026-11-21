@@ -1,0 +1,8 @@
+# LMCache NVMe offload 配置（CPU + NVMe SSD 两级卸载）
+# 千亿大参数量模型优先 NVMe offload（约为 CPU offload 性能的 85-90%）
+chunk_size: 256
+local_cpu: true
+max_local_cpu_size: 20          # CPU 缓存层（建议 MemAvailable 的 10-20%）
+local_disk: "file:///public/lmcache"   # NVMe SSD 路径
+max_local_disk_size: 160        # SSD 缓存层（按实验对比设 160GB）
+extra_config: {'use_odirect': True}

@@ -1,0 +1,16 @@
+shard_id: dcu-hip-reference-shard
+owner_skill: dcu-hip-reference
+source_type: official
+priority: 1.0
+domains:
+- hip-runtime
+- hip-api
+- hip-concept
+- hip-example
+embedding:
+  model: qwen2-embedding
+  dim: 1024
+stats:
+  chunk_count: 177
+  doc_count: 122
+source_layer: ext

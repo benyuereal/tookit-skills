@@ -1,0 +1,17 @@
+{
+    "generated_at":  "2026-04-22T08:04:08+00:00",
+    "db_path":  "kb_shard/shard.sqlite",
+    "embedding_enabled":  false,
+    "embedding_api_url":  "",
+    "embedding_api_key":  "",
+    "embedding_model":  "text-embedding-3-small",
+    "document_count":  71,
+    "chunk_count":  118,
+    "source_stats":  [
+                         {
+                             "source_type":  "gitlab",
+                             "documents":  71,
+                             "chunks":  118
+                         }
+                     ]
+}

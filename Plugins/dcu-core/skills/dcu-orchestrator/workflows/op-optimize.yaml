@@ -1,0 +1,57 @@
+# 工作流：op-optimize —— 算子优化主线（脱敏命名）
+# 契约：name / max_parallel / nodes[]（id + task + depends_on + retries + proceed）
+# 链路：op-profile（probe，auto，retries 2）
+#   → op-roofline（normal，auto，retries 1）
+#   → op-constrain（normal，auto，retries 1）
+#   → op-optimize（gate，ask，retries 1）
+#   → op-validate（normal，auto，retries 1）
+#   → op-distill（gate，ask，retries 1）
+# 每节点职责：
+#   op-profile    只读采集，op-bench 口径计时 + PMC CSV，产出热点与原始证据
+#   op-roofline   由 profile 推理论天花板与地板达成率，判定 cost_bound 与两级天花板
+#   op-constrain  把 verdict 硬映射成允许动作集合，核对 VGPR/LDS/频率档，出可否证候选清单
+#   op-optimize   在允许集合内实施单点改动，跑 opverify 自检，改动可回退（gate）
+#   op-validate   用 opverify 三闸四档做端到端 A/B 判定，产出 verdict（normal 只读复测）
+#   op-distill    只沉淀 ACCEPTED 结论到用户知识库，出候选事实与晋升提案（gate）
+# 脱敏要求：设备号/模型/镜像均为公开占位，无内部实测数据、无内网地址、无工单号。
+name: op-optimize
+
+# 同时最多执行的节点数（本工作流为串行链路：采集 → 判定 → 约束 → 改动 → 验证 → 沉淀）
+max_parallel: 1
+
+nodes:
+  - id: op-profile
+    task: op-profile          # 对应 tasks/op-profile.yaml
+    depends_on: []            # 无依赖，最先就绪
+    retries: 2
+    proceed: auto             # probe，只读，无需用户审批
+
+  - id: op-roofline
+    task: op-roofline         # 对应 tasks/op-roofline.yaml
+    depends_on: [op-profile]  # 有热点与电路证据才推天花板
+    retries: 1
+    proceed: auto             # normal，只读推算，低风险
+
+  - id: op-constrain
+    task: op-constrain        # 对应 tasks/op-constrain.yaml
+    depends_on: [op-roofline] # 有 verdict 才能映射允许动作集合
+    retries: 1
+    proceed: auto             # normal，只读核对约束，低风险
+
+  - id: op-optimize
+    task: op-optimize         # 对应 tasks/op-optimize.yaml
+    depends_on: [op-constrain] # 有可否证候选清单才动代码
+    retries: 1
+    proceed: ask              # gate 高风险（改代码/编译/注入），需用户审批
+
+  - id: op-validate
+    task: op-validate         # 对应 tasks/op-validate.yaml
+    depends_on: [op-optimize] # 改动就绪后做 opverify 三闸四档判定
+    retries: 1
+    proceed: auto             # normal，只读复测，低风险
+
+  - id: op-distill
+    task: op-distill          # 对应 tasks/op-distill.yaml
+    depends_on: [op-validate] # 只有 ACCEPTED 才沉淀（非 ACCEPTED 不进台账）
+    retries: 1
+    proceed: ask              # gate：写持久知识（知识库/候选事实），需用户审批

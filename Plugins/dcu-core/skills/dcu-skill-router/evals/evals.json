@@ -1,0 +1,75 @@
+{
+  "skill": "dcu-skill-router",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对要点；false=形似但应路由他处（只给 id+prompt）。t4-t8 验证 §四 任务链路与 §五 alias（2026-10 会话审计归纳）。",
+  "cases": [
+    {
+      "id": "dcu-skill-router-t1",
+      "prompt": "手上有一堆 DCU 相关任务，先帮我看看这类问题技能库里都有哪些 skill、该用哪个。",
+      "expect": "命中本 skill 总入口定位：按部署/推理/算子开发/性能调优/环境/训练/工程发布七域分组路由表查 name+定位+触发场景，再进具体 skill 读方法；本 skill 不含方法本身。"
+    },
+    {
+      "id": "dcu-skill-router-t2",
+      "prompt": "要给两台 DCU 机器配 RoCEv2 无损网络跑多机 RCCL，网络层怎么配？",
+      "expect": "命中 §4 性能调优域路由表：env/dcu-roce-network（IP/MTU 规划、静态 ARP 全量注入、QoS/PFC/ECN、RDMA 连通性验证）——RCCL 多机测试的物理网络前置层。"
+    },
+    {
+      "id": "dcu-skill-router-t3",
+      "prompt": "HYGON-AI 上游仓库最近有没有发新版？咱们记录的版本锚点还准不准？",
+      "expect": "命中 §三 使用须知：上游 35 仓库索引/版本锚点在 references/hygon-upstream/repos-index.md，先跑 python3 scripts/hygon-upstream-sync.py --check 确认版本没变（--full 刷新矩阵）。"
+    },
+    {
+      "id": "dcu-skill-router-t4",
+      "prompt": "新到一台 BW1000 节点，要把 Qwen3-32B 用 vLLM 跑起来并确认输出正常，从头该按什么顺序用哪些 skill？",
+      "expect": "命中 §四 链路① 部署验证：dcu-ssh → env/dcu-docker（挂 hyhal）→ inference/dcu-model-deploy-catalog 查现成配方（镜像 tag/框架版本/启动命令）→ inference/dcu-vllm-deploy 起服务 → inference/dcu-model-deploy-verify 真机一致性验证；只要跑通到 verify 即退出，不进 benchmark。"
+    },
+    {
+      "id": "dcu-skill-router-t5",
+      "prompt": "vLLM 服务吞吐比上周基线掉了三成，帮我从性能剖析定位到 kernel 优化改一圈。",
+      "expect": "命中 §四 链路② 性能优化闭环：先 perf/dcu-llm-benchmark 定基线口径 → perf/dcu-perf-profiling 采 profile 判瓶颈 → perf/dcu-kernel-layer-microbench kernel 级细定位 → perf/dcu-op-optimization 优化闭环（找现成优化用 dcu-external-opt-scout / operators/dcu-triton-kernels / dcu-kernelwiki）；无 baseline 不动手，收益不过噪声门禁回滚。"
+    },
+    {
+      "id": "dcu-skill-router-t6",
+      "prompt": "SGLang 多卡推理跑一半进程崩了，日志里 HSA_STATUS_ERROR_EXCEPTION 0x1016，怎么定位是哪个 kernel 写越界？",
+      "expect": "命中 §四 链路③ 崩溃/故障定位：dcu-crash-log-triage 先取证 → troubleshooting/dcu-vmfault-coredump 从 crash log 的 HSA QUEUE ANALYSIS 解 faulting kernel 与越界值（coredump 缺失先 HSA_ENABLE_COREDUMP=1 复现）→ dcu-ontrack-experience 按报错关键词反查规避。"
+    },
+    {
+      "id": "dcu-skill-router-t7",
+      "prompt": "新节点装完驱动和 DTK 了，要验证多卡 RCCL allreduce 带宽达不达标，按什么顺序检查？",
+      "expect": "命中 §四 链路④ 环境搭建：dcu-ssh → env/dcu-docker → env/dcu-env → env/dcu-env-packages → env/dcu-driver → env/dcu-dtk → env/dcu-dtk-layout → env/dcu-hy-smi → env/dcu-topology → env/dcu-cpu-affinity → env/dcu-rccl-test；带宽不达标加 env/dcu-roce-network 查物理网络层。"
+    },
+    {
+      "id": "dcu-skill-router-t8",
+      "prompt": "按 dcu-runtime-patch 的方法给 vLLM 注入自定义 kernel，这个 skill 在哪？",
+      "expect": "命中 §五 alias 对照表：dcu-runtime-patch 是旧名已不存在，现名 inference/dcu-vllm-runtime-patch（2026-08-07 v2.23.0 定名，vLLM 运行时 monkey-patch 注入专用），按新名加载。"
+    },
+    {
+      "id": "dcu-skill-router-f1",
+      "prompt": "vLLM 推理 infra 的子 skill 这么多，帮我按场景细分分发到具体子域。"
+    },
+    {
+      "id": "dcu-skill-router-f2",
+      "prompt": "DCU 上 vLLM 开 MTP 后 tool call 参数 JSON 结尾畸形，具体怎么修？"
+    },
+    {
+      "id": "dcu-skill-router-f3",
+      "prompt": "帮我写一个 Triton matmul kernel 并在 DCU 上做性能调优。"
+    },
+    {
+      "id": "dcu-skill-router-f4",
+      "prompt": "vLLM 0.23 的 paged attention 源码在哪个文件？"
+    },
+    {
+      "id": "dcu-skill-router-f5",
+      "prompt": "把这段 CUDA 代码迁移到 HIP，迁完自动生成单元测试验证。"
+    },
+    {
+      "id": "dcu-skill-router-t9",
+      "prompt": "我在公众号看到一个新的推理优化项目，想在咱们 DCU 上复现一下，先拿到一份可信的基线数字，之后可能再调优。",
+      "expect": "命中 §四 链⑦ 调研→复现→基线（或直接进 dcu-orchestrator 的 research-baseline 工作流）：web-tools-guide/anysearch/github-repo-deep-dive 调研要点 → dcu-modelzoo/dcu-image-hub 查适配与镜像 → dcu-model-deploy-catalog 查现成配方 → dcu-vllm-deploy 复现起服务 → dcu-llm-benchmark 定基线口径；复现占卡起服务属 gate 需审批。"
+    },
+    {
+      "id": "dcu-skill-router-f6",
+      "prompt": "帮我查一下 DCU 镜像仓库里 vllm 有哪些 tag。"
+    }
+  ]
+}

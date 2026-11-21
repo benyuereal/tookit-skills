@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cookbook Migrate Model"
+  short_description: "Help with Cookbook Migrate Model tasks"
+  default_prompt: "Use $cookbook-migrate-model to handle this task with evidence-backed validation."

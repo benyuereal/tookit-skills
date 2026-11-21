@@ -1,0 +1,27 @@
+# 工作流：fault-triage —— 故障排查主线（脱敏命名）
+# 契约：name / max_parallel / nodes[]（id + task + depends_on + retries + proceed）
+# 链路：fault-collect（probe）→ fault-locate（normal）→ fault-fix（gate，ask）
+# 脱敏要求：设备号/模型/镜像均为公开占位，无内部实测数据、无内网地址、无工单号。
+name: fault-triage
+
+# 同时最多执行的节点数（本工作流为串行链路：采集 → 定位 → 修复）
+max_parallel: 1
+
+nodes:
+  - id: fault-collect
+    task: fault-collect        # 对应 tasks/fault-collect.yaml
+    depends_on: []             # 无依赖，最先就绪
+    retries: 2
+    proceed: auto              # probe，只读，无需用户审批
+
+  - id: fault-locate
+    task: fault-locate         # 对应 tasks/fault-locate.yaml
+    depends_on: [fault-collect]    # 基于现场快照定位
+    retries: 1
+    proceed: auto              # 定位只读（分析/采集），低风险
+
+  - id: fault-fix
+    task: fault-fix            # 对应 tasks/fault-fix.yaml
+    depends_on: [fault-locate]   # 有根因结论才执行修复
+    retries: 1
+    proceed: ask               # gate 高风险（改配置/重启服务），需用户审批

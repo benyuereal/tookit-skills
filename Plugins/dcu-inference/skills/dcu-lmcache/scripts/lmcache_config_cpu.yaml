@@ -1,0 +1,7 @@
+# LMCache CPU offload 配置
+# 小参数量模型首选 CPU offload（实测吞吐/TTFT 最优）
+# max_local_cpu_size 按 MemAvailable 的 70-80% 设置
+chunk_size: 256
+local_cpu: true
+max_local_cpu_size: 160   # 单位 GB，按内存调整（建议 MemAvailable 的 70-80%）
+# cache_policy 默认 LRU，可省略

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Model PR History Knowledge"
+  short_description: "Help with Model PR History Knowledge tasks"
+  default_prompt: "Use $model-pr-history-knowledge to handle this task with evidence-backed validation."

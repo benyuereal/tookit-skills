@@ -1,0 +1,84 @@
+# op-sparse-mla 契约（机器可读，opverify.py 只认这份文件）
+# 写法规范见 Plugins/ops/skills/op-contract/SKILL.md
+# 注意：本文件刻意使用 YAML 的安全子集（无 inline map / 无 block scalar / 无锚点），
+#       以便纯标准库解析器读取。
+
+op: sparse-mla
+version: 1
+capability_baseline: flash_mla
+math: "out[i,h,:] = softmax_j(q[i,h,:] dot kv[indices[i,j],:] * sm_scale) dot kv[indices[i,j],:512]；indices 的 -1 表示无效槽位，softmax 前必须掩成 -inf"
+
+shapes:
+  q: [S, H, 576]
+  kv: [SKV, kv_group, 576]
+  indices: [S, kv_group, topk]
+  out: [S, H, 512]
+  lse: [S, H]
+
+dtypes:
+  q: bfloat16
+  kv: bfloat16
+  indices: int32
+  acc: float32
+  out: bfloat16
+
+layout_constraints:
+  - "-1 是无效哨兵，不是索引 0；短上下文时 padding 比例高，effective_topk 远小于名义 topk"
+  - "kv 同一张量兼作 K 与 V（MLA）：前 512 维只用于输出，后 64 维 tail 只参与打分"
+  - "kv 若为 packed [slots,132] 布局，向量化被限制在 <=4B，带宽约为分离平面的一半；两种布局的性能不可跨布局比较"
+  - "sm_scale 取 1/sqrt(576+64)=0.03952847075210474，不是 1/sqrt(576)；两实现比较时必须传同一值"
+  - "tilelang 版要求 topk 是 block_I（默认 32）的整数倍，且 is_causal 只支持 True"
+  - "tilelang 版的 -1 必须是后缀（有效索引在前）：kernel 按「块首≥0」计数截断循环；前置 -1 会静默算错，全前置输出恒为 0。flash_mla 无此限制。能力见 variants.yaml:padding_support，校验见 `opcheck.py padding`（gate `layout_capability`）"
+
+tolerance:
+  vs_fp32_ref:
+    max_abs: 2.0e-3
+    cosine: 0.9999
+    note: "bf16 输入 + fp16 combine；当前两个实现在该容差下实测均在 1.1e-3 以内"
+  variant_vs_variant:
+    mode: tolerance
+    max_abs: 3.0e-3
+    note: "2026-10-27 实测：同实现的 num_split 1→2 差 max_abs=1.95e-3（fp16 glse 与 output_partial 分离归约）；tilelang vs flash_mla 在队尾填充下差 1.95e-3 —— 两个独立 bf16 实现各自离 fp32 参考约 1e-3，互相差到 2e-3 是正常叠加，故上限定 3e-3。不要求逐位一致"
+
+invariants:
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+    note: "同输入重复 5 次输出逐位一致"
+  - name: index_permutation_invariance
+    mode: tolerance
+    note: "乱序有效索引改变累加顺序，不要求逐位一致，按 vs_fp32_ref 容差判定"
+  - name: split_invariance
+    mode: tolerance
+    note: "不同 num_split 改变 partial 的合并顺序；各 split 写不相交输出列只保证「不互相踩」，不保证逐位一致。实测 num_split 1 vs 2：max_abs=1.95e-3 / cos=0.9999977，在容差内"
+
+gates:
+  - name: correctness
+    template: correctness
+    required: true
+  - name: invariants
+    template: invariants
+    required: true
+  - name: layout_capability
+    template: padding
+    required: true
+  - name: perf
+    script: bench/bench.py
+    required: true
+    require: "median_ms <= baseline_ms * 1.02"
+    repeats: 3
+
+floor:
+  metric: hbm_bandwidth
+  peak: 1724
+  unit: GB/s
+  basis: "每 query-head 需从 DRAM 取 topk 个 token 的 576*2B（无跨 head 复用）；实际读取字节/峰值带宽=理论下限。峰值取**本机流式只读实测值** 1724 GB/s（卡 4 1712 / 卡 6 1714，与 sclk 锁频无关）"
+  source: "torch 大块流式只读实测（kb/op-opt/sparse-mla-20261027.md §9.1）；型号标称 1100 GB/s 不作为分母，见 op-roofline/constants.yaml:conflicts:peak-bw-definition"
+  status: measured
+  verified_on: 2026-10-27
+  at_floor_threshold: 0.85
+
+manifest:
+  required_roles: [source, loaded]
+  env_keys: [gfx, dtk, torch, python, sclk_mhz, device]
+  note: "env_keys 用的是 bench 真产出的键名（bench/_common.py:env_fingerprint + _probe_clock），不另造 clock_ghz —— 同一个事实只留一个权威点。执行身份冻结（T10/P0-1）。source=算子源码，loaded=进程实际加载的产物，两者 sha256 必须与 run 目录下 manifest.json 一致。**这里不要求 build**：tilelang 直接编成 executable.so 再加载，build 与 loaded 是同一个文件（2026-10-28 实测）；只有「编译产物 ≠ 加载产物」的算子（如 lightop 的 .co 编译后拷进安装树）才在各自契约里加 build，用 mtime 链查「编完没拷」。缺任一 role、或 env 键为空/unknown/unavailable(<...>) 一律 REJECTED。路径不进契约：由 opmanifest.py record --artifact role=path 显式给（tilelang 缓存下有 1700+ 个 executable.so，猜必错）"

@@ -1,0 +1,30 @@
+{
+  "skill": "op-profiling",
+  "description": "路由评测：true=拿到 PMC CSV 怎么解析/怎么判、口径陷阱（TA_* 跨 SE、首次 launch 虚高）、能否宣布到顶这类「硬件证据怎么读」问题应命中本 skill；false=bench 报告字段、契约容差应由 op-bench / op-contract 接手。",
+  "cases": [
+    {
+      "id": "op-profiling-t1",
+      "prompt": "拿到一份 hipprof --pmc 的 CSV，同一个 kernel 出现多行，稳态行该怎么选？直接把第一次 launch 的数拿来用行不行？",
+      "expect": "命中§五陷阱 1：取单次 launch 中 GRBM 最小的行做稳态；PMC 下首次 launch 的 GRBM 虚高约 40%，取首行或求和都不是真耗时；只有查长尾才取最慢行。§六 参考实现会打印选中的 kernel、数据行索引、launch 次数与墙钟。"
+    },
+    {
+      "id": "op-profiling-t2",
+      "prompt": "PMC CSV 里 TA_TA_BUSY 有 16 个实例列，汇总时求和、取 max 还是平均？CU 数又是从哪来的？",
+      "expect": "命中§五陷阱 4/5：TA_* 的 [n] 是按 CU 编号跨 SE 分开的实例，只能跨实例求和（Σ TA_TA_BUSY[n] / (CU×GRBM)）；取 max 会得到 >100% 的荒谬值，取平均/逐编号比大小无意义。CU 数当场探测（dmesg SE 位图）或显式传入，探测不到写 unknown，代码里绝不写死兜底常数。",
+      "forbid": ["re:TA_\\*[^。；\\n]{0,8}取平均", "re:首次 launch[^。；\\n]{0,10}(?:可以|直接)用"]
+    },
+    {
+      "id": "op-profiling-t3",
+      "prompt": "我手上只有一份 PMC CSV 的原始计数器（SQ_INSTS_VALU 标注含 MFMA），要判断 kernel 是不是发射受限、能不能写「到顶」，按什么纪律？还缺什么？",
+      "expect": "命中§四：解析只输出原值、不下结论。读数分三级——贴顶类只有在四个分母（FLOPs / DRAM 字节 / 同 SoC 实测峰值 / CU）齐全且天花板取自 op-roofline/derive.py 时才能当结论；比值类（非MFMA VALU/MFMA、LDS/MFMA）只能区分变体；描述类（CTA/CU、issue_util、L2 驻留）是描述性事实，多个 kernel 会同时命中（flash_mla 与 bm32 都是 CTA/CU=1、issue_util 都低，却差 2.18×）。口径不全时不得写「到顶/物理上限/没有空间」，只允许补证据；分母必须和数字写在同一行。"
+    },
+    {
+      "id": "op-profiling-f1",
+      "prompt": "算子卡的 bench 报告里必须带哪些字段，人读和机读怎么一起输出？"
+    },
+    {
+      "id": "op-profiling-f2",
+      "prompt": "契约里两个实现之间的 tolerance 到底写 bit_exact 还是给个具体容差？"
+    }
+  ]
+}

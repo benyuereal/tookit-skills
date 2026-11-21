@@ -1,0 +1,738 @@
+{
+  "generated_at": "2026-04-23T03:10:54+00:00",
+  "document_count": 71,
+  "role_counts": {
+    "guide": 22,
+    "authoritative": 12,
+    "playbook": 37
+  },
+  "domain_counts": {
+    "migration": 23,
+    "algorithm": 2,
+    "blas": 5,
+    "runtime": 25,
+    "collective": 1,
+    "fft": 1,
+    "ai": 1,
+    "random": 1,
+    "environment": 9,
+    "solver": 1,
+    "sparse": 1,
+    "therock": 1
+  },
+  "source_type_counts": {
+    "gitlab": 71
+  },
+  "documents": [
+    {
+      "doc_id": "readme_md_f8c89de9",
+      "title": "适用范围",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/README.md",
+      "role": "guide",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "ab1aea53bdab1b7d"
+    },
+    {
+      "doc_id": "hip_performance_optimization_md_dddc2074",
+      "title": "HIP Performance Optimization",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/algorithms/hip-performance-optimization.md",
+      "role": "authoritative",
+      "domain": "algorithm",
+      "version": "7.0+",
+      "content_hash": "ac2dab95afd6f9d2"
+    },
+    {
+      "doc_id": "rocthrust_usage_md_4f9a01b8",
+      "title": "rocThrust Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/algorithms/rocthrust-usage.md",
+      "role": "guide",
+      "domain": "algorithm",
+      "version": "main",
+      "content_hash": "fa8935c229e1b09e"
+    },
+    {
+      "doc_id": "hipblas_usage_md_ba53fcd1",
+      "title": "hipBLAS Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/blas/hipblas-usage.md",
+      "role": "authoritative",
+      "domain": "blas",
+      "version": "7.0+",
+      "content_hash": "bbe8ee62d8936a1d"
+    },
+    {
+      "doc_id": "rocblas_usage_md_627052b9",
+      "title": "rocBLAS Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/blas/rocblas-usage.md",
+      "role": "authoritative",
+      "domain": "runtime",
+      "version": "7.0+",
+      "content_hash": "3a9d4cf04c3cb0fe"
+    },
+    {
+      "doc_id": "rccl_usage_md_586d2597",
+      "title": "RCCL Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/communications/rccl-usage.md",
+      "role": "authoritative",
+      "domain": "collective",
+      "version": "7.0+",
+      "content_hash": "516ae516c7f67b1c"
+    },
+    {
+      "doc_id": "rocfft_usage_md_722ea9ea",
+      "title": "rocFFT Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/fft/rocfft-usage.md",
+      "role": "authoritative",
+      "domain": "fft",
+      "version": "7.0+",
+      "content_hash": "4b2d3735f91e8f05"
+    },
+    {
+      "doc_id": "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+      "title": "DTK_HIP_CPP_Programming_Guide_Gemini3_0",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/DTK_HIP_CPP_Programming_Guide_Gemini3_0.md",
+      "role": "guide",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "4dc651dfe300f37e"
+    },
+    {
+      "doc_id": "dtk_md_71e1e878",
+      "title": "DTK 应用适配前置评估框架",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/DTK适配评估框架.md",
+      "role": "guide",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "e98956c13b68487f"
+    },
+    {
+      "doc_id": "cuda_to_hip_porting_md_b8ba120d",
+      "title": "cuda-to-hip-porting",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/cuda-to-hip-porting.md",
+      "role": "guide",
+      "domain": "migration",
+      "version": "7.0+",
+      "content_hash": "2716af3fd078fbd5"
+    },
+    {
+      "doc_id": "dcu_cuda_to_hip_porting_md_a9a98d76",
+      "title": "DCU CUDA To HIP Porting",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/dcu-cuda-to-hip-porting.md",
+      "role": "guide",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "e0f6dabe0f63fcee"
+    },
+    {
+      "doc_id": "readme_md_2989aba6",
+      "title": "CUDA To HIP Porting Examples",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/README.md",
+      "role": "authoritative",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "5bb5d21f9624bd9f"
+    },
+    {
+      "doc_id": "cooperative_groups_tile_md_ae3ac611",
+      "title": "Cooperative Groups Tile Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/cooperative-groups-tile.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "2d6718972390d18c"
+    },
+    {
+      "doc_id": "cuda_to_hip_vector_add_md_d7a495c4",
+      "title": "CUDA To HIP Vector Add Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/cuda-to-hip-vector-add.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "08e779e5fbf7e604"
+    },
+    {
+      "doc_id": "driver_runtime_stream_mixed_md_add900a9",
+      "title": "Driver Runtime Stream Mixed Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/driver-runtime-stream-mixed.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "aa8330d3c7d1db9c"
+    },
+    {
+      "doc_id": "hipgraph_capture_launch_md_e04443b9",
+      "title": "HIP Graph Capture Launch Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/hipgraph-capture-launch.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "de0e9d0ea06c8fd3"
+    },
+    {
+      "doc_id": "layered_texture_normalized_md_e8d2c4cf",
+      "title": "Layered Texture Normalized Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/layered-texture-normalized.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "de463c51bb6a53ae"
+    },
+    {
+      "doc_id": "module_api_vector_add_md_1c3ec898",
+      "title": "Module API Vector Add Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/module-api-vector-add.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "519e0b4a36639645"
+    },
+    {
+      "doc_id": "peer2peer_minimal_md_311f6acc",
+      "title": "Peer2Peer Minimal Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/peer2peer-minimal.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "8e8d5ef102c78f19"
+    },
+    {
+      "doc_id": "pitch_layout_correctness_md_5bb1e50c",
+      "title": "Pitch Layout Correctness Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/pitch-layout-correctness.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "b4c51616716a3215"
+    },
+    {
+      "doc_id": "separate_compilation_device_library_md_265f46ab",
+      "title": "Separate Compilation Device Library Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/separate-compilation-device-library.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "5ba2a8762d56d7cb"
+    },
+    {
+      "doc_id": "stream_and_events_md_66e6663f",
+      "title": "Stream And Events Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/stream-and-events.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "467e69e8f44cb8eb"
+    },
+    {
+      "doc_id": "stream_priority_overlap_compare_md_d6e69db7",
+      "title": "Stream Priority Overlap Compare",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/stream-priority-overlap-compare.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "ebbb32776262da3c"
+    },
+    {
+      "doc_id": "symbol_copy_md_6c7327ea",
+      "title": "Symbol Copy Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/symbol-copy.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "39e41e0835743ce0"
+    },
+    {
+      "doc_id": "texture_object_array_normalized_md_0d9cf3a5",
+      "title": "Texture Object Array Normalized Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/texture-object-array-normalized.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "1d7d408cadf7cb26"
+    },
+    {
+      "doc_id": "vector_add_md_91be52db",
+      "title": "Vector Add Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/examples/vector-add.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "1e06ae9ba908950d"
+    },
+    {
+      "doc_id": "hip_advanced_optimization_md_b07c2635",
+      "title": "Native HIP/ROCm Programming Guide: Advanced GPU Optimization Techniques",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/hip-advanced-optimization.md",
+      "role": "authoritative",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "78ba6d3fef869e41"
+    },
+    {
+      "doc_id": "hip_debugging_md_c585a552",
+      "title": "HIP Debugging Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/hip-debugging.md",
+      "role": "guide",
+      "domain": "runtime",
+      "version": "7.0+",
+      "content_hash": "fad9ff07cc7aba53"
+    },
+    {
+      "doc_id": "hip_gpu_programming_fundamentals_md_ad0c4088",
+      "title": "HIP GPU Programming Fundamentals",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/hip-gpu-programming-fundamentals.md",
+      "role": "guide",
+      "domain": "runtime",
+      "version": "7.0+",
+      "content_hash": "ff89997274787a86"
+    },
+    {
+      "doc_id": "hip_memory_management_md_de0d2134",
+      "title": "HIP Memory Management",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/hip-memory-management.md",
+      "role": "guide",
+      "domain": "runtime",
+      "version": "7.0+",
+      "content_hash": "cfd1c52aca08a4f1"
+    },
+    {
+      "doc_id": "hip_native_examples_guide_md_bc10895f",
+      "title": "AMD HIP Native Optimization Examples",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/hip-native-examples-guide.md",
+      "role": "guide",
+      "domain": "blas",
+      "version": "main",
+      "content_hash": "dddf1c6ebe0fc987"
+    },
+    {
+      "doc_id": "hip_thread_synchronization_md_045cfaa5",
+      "title": "HIP Thread Synchronization",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/hip-thread-synchronization.md",
+      "role": "guide",
+      "domain": "runtime",
+      "version": "7.0+",
+      "content_hash": "7638c712117376cb"
+    },
+    {
+      "doc_id": "md_90d007e3",
+      "title": "DTK 适配经验总结",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/hip/适配经验.md",
+      "role": "authoritative",
+      "domain": "blas",
+      "version": "main",
+      "content_hash": "a2eddc84a93a86f9"
+    },
+    {
+      "doc_id": "miopen_usage_md_3932581a",
+      "title": "MIOpen Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/ml-primitives/miopen-usage.md",
+      "role": "authoritative",
+      "domain": "ai",
+      "version": "7.0+",
+      "content_hash": "24f7c61440ad23a7"
+    },
+    {
+      "doc_id": "rocrand_usage_md_4ed980e7",
+      "title": "rocRAND Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/random/rocrand-usage.md",
+      "role": "guide",
+      "domain": "random",
+      "version": "main",
+      "content_hash": "ef5ffebd8b7a80af"
+    },
+    {
+      "doc_id": "dcu_library_mapping_md_31834cb4",
+      "title": "DCU Library Mapping",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/dcu-library-mapping.md",
+      "role": "guide",
+      "domain": "blas",
+      "version": "main",
+      "content_hash": "3eeb0e5cc53437c8"
+    },
+    {
+      "doc_id": "readme_md_b4b85ea6",
+      "title": "ROCm Library Mapping Examples",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/README.md",
+      "role": "playbook",
+      "domain": "blas",
+      "version": "main",
+      "content_hash": "3481affa974ef8af"
+    },
+    {
+      "doc_id": "hipfft_roundtrip_md_2ae5be1c",
+      "title": "hipFFT Round-Trip Oracle",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/hipfft-roundtrip.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "a01fcf152471e49d"
+    },
+    {
+      "doc_id": "miopen_convolution_md_8f767a41",
+      "title": "MIOpen Convolution Skeleton",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/miopen-convolution.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "a21c05f5eb938d43"
+    },
+    {
+      "doc_id": "rccl_allreduce_mpi_md_389bad8c",
+      "title": "Rccl Allreduce Mpi",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rccl-allreduce-mpi.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "422f0691185a090d"
+    },
+    {
+      "doc_id": "rccl_allreduce_md_bde34827",
+      "title": "RCCL AllReduce Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rccl-allreduce.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "6ba40c26af0b1fd8"
+    },
+    {
+      "doc_id": "rocblas_gemm_bf16_f32_pointer_batched_md_bbfe49ff",
+      "title": "rocBLAS BF16 Pointer-Batched GEMM Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-gemm-bf16-f32-pointer-batched.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "57276b23fd3300e3"
+    },
+    {
+      "doc_id": "rocblas_gemm_bf16_f32_strided_batched_md_5efecfbc",
+      "title": "rocBLAS BF16 Strided-Batched GEMM Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-gemm-bf16-f32-strided-batched.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "8a0d75960c446458"
+    },
+    {
+      "doc_id": "rocblas_gemm_bf16_f32_md_340b6e4e",
+      "title": "rocBLAS BF16 To F32 GEMM Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-gemm-bf16-f32.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "c85687259cdaacf8"
+    },
+    {
+      "doc_id": "rocblas_gemm_bf16_md_122a91a3",
+      "title": "rocBLAS BF16 GEMM Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-gemm-bf16.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "3d7f30dc09fad9b8"
+    },
+    {
+      "doc_id": "rocblas_gemm_fp16_md_7176a711",
+      "title": "rocBLAS FP16 GEMM Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-gemm-fp16.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "237889f1701c387e"
+    },
+    {
+      "doc_id": "rocblas_gemm_md_c5b1709d",
+      "title": "rocBLAS GEMM Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-gemm.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "e5a5fd1e8ba1fa8c"
+    },
+    {
+      "doc_id": "rocblas_tf32_probe_md_d9a53cae",
+      "title": "rocBLAS TF32 Probe",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-tf32-probe.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "fb0410a51efd772f"
+    },
+    {
+      "doc_id": "rocblas_xf32_math_mode_md_c456ed88",
+      "title": "rocBLAS XF32 Math-Mode Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocblas-xf32-math-mode.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "ab125dcd3de4e445"
+    },
+    {
+      "doc_id": "rocfft_1d_md_5080a6fb",
+      "title": "rocFFT 1D Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocfft-1d.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "cc4206e05ec7c01a"
+    },
+    {
+      "doc_id": "rocfft_load_callback_md_71677418",
+      "title": "rocFFT Load Callback Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocfft-load-callback.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "42e7b8fc10b391dc"
+    },
+    {
+      "doc_id": "rocfft_store_callback_md_d0a66793",
+      "title": "rocFFT Store Callback Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocfft-store-callback.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "7f62d340012baf82"
+    },
+    {
+      "doc_id": "rocsolver_lu_solve_batched_pivot_md_3500a79c",
+      "title": "rocSOLVER Batched LU Solve With Pivot Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocsolver-lu-solve-batched-pivot.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "61a63031db6b795a"
+    },
+    {
+      "doc_id": "rocsolver_lu_solve_pivot_md_9ec87c29",
+      "title": "rocSOLVER LU Solve With Pivot Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocsolver-lu-solve-pivot.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "d3b4d1579eda4bbf"
+    },
+    {
+      "doc_id": "rocsolver_qr_md_d5b39a76",
+      "title": "rocSOLVER QR Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocsolver-qr.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "c410f4906c68eea8"
+    },
+    {
+      "doc_id": "rocsparse_spmv_md_81e3d72f",
+      "title": "rocSPARSE SpMV Example",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/examples/rocsparse-spmv.md",
+      "role": "playbook",
+      "domain": "runtime",
+      "version": "main",
+      "content_hash": "b9ea763d0389eef2"
+    },
+    {
+      "doc_id": "rocm_libraries_usage_md_d2acd0a4",
+      "title": "ROCm Libraries Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-libraries/rocm-libraries-usage.md",
+      "role": "authoritative",
+      "domain": "runtime",
+      "version": "7.1+",
+      "content_hash": "1b7dbb1927c4651d"
+    },
+    {
+      "doc_id": "amd_smi_usage_md_ea61995c",
+      "title": "AMD System Management Interface (AMD SMI)",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-systems/amd-smi-usage.md",
+      "role": "guide",
+      "domain": "environment",
+      "version": "7.0+",
+      "content_hash": "246b4c7fc2f4ac08"
+    },
+    {
+      "doc_id": "rocm_systems_usage_md_b098f7f4",
+      "title": "ROCm Systems Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm-systems/rocm-systems-usage.md",
+      "role": "guide",
+      "domain": "environment",
+      "version": "7.0+",
+      "content_hash": "e9bb7576f0f317f3"
+    },
+    {
+      "doc_id": "dcu_env_build_md_319f787c",
+      "title": "DCU Env Build",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/dcu-env-build.md",
+      "role": "guide",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "379153121ef5ba30"
+    },
+    {
+      "doc_id": "readme_md_fa8c4e78",
+      "title": "ROCm Environment And Build Examples",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/examples/README.md",
+      "role": "playbook",
+      "domain": "migration",
+      "version": "main",
+      "content_hash": "beac1b9d75e08460"
+    },
+    {
+      "doc_id": "driver_device_query_baseline_md_a42c15f4",
+      "title": "Driver Device Query Baseline",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/examples/driver-device-query-baseline.md",
+      "role": "playbook",
+      "domain": "environment",
+      "version": "main",
+      "content_hash": "66c2fbd2e9bb81c1"
+    },
+    {
+      "doc_id": "p2p_bandwidth_latency_matrix_compare_md_a21d780e",
+      "title": "P2P Bandwidth Latency Matrix Compare",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/examples/p2p-bandwidth-latency-matrix-compare.md",
+      "role": "playbook",
+      "domain": "environment",
+      "version": "main",
+      "content_hash": "52e817a1e0052959"
+    },
+    {
+      "doc_id": "rocm_docker_images_md_4ae9bfb3",
+      "title": "ROCm Docker Images - Complete Reference (ROCm 7.x)",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/rocm-docker-images.md",
+      "role": "guide",
+      "domain": "environment",
+      "version": "7.0+",
+      "content_hash": "dd3ba678c29e02d6"
+    },
+    {
+      "doc_id": "rocm_installation_md_317fe1af",
+      "title": "ROCm Installation Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/rocm-installation.md",
+      "role": "guide",
+      "domain": "environment",
+      "version": "7.0+",
+      "content_hash": "e604f6bc4ad27d6c"
+    },
+    {
+      "doc_id": "rocm_profiling_md_77939b57",
+      "title": "ROCm Profiling and Performance Analysis",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/rocm-profiling.md",
+      "role": "guide",
+      "domain": "environment",
+      "version": "7.0+",
+      "content_hash": "c8e7109951807921"
+    },
+    {
+      "doc_id": "rocm_repositories_md_caea7bf7",
+      "title": "ROCm GitHub Repositories - Complete Reference",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/rocm-repositories.md",
+      "role": "guide",
+      "domain": "environment",
+      "version": "7.0+",
+      "content_hash": "bee364a6e8c81fbf"
+    },
+    {
+      "doc_id": "rocm_stack_overview_md_270046a9",
+      "title": "ROCm Compute Stack Overview",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/rocm/rocm-stack-overview.md",
+      "role": "guide",
+      "domain": "environment",
+      "version": "7.0+",
+      "content_hash": "3d876ace57f2a7c1"
+    },
+    {
+      "doc_id": "rocsolver_usage_md_f9315676",
+      "title": "rocSOLVER Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/solver/rocsolver-usage.md",
+      "role": "authoritative",
+      "domain": "solver",
+      "version": "7.0+",
+      "content_hash": "5a354fb4802be90d"
+    },
+    {
+      "doc_id": "rocsparse_usage_md_9c948c69",
+      "title": "rocSPARSE Usage Guide",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/sparse/rocsparse-usage.md",
+      "role": "authoritative",
+      "domain": "sparse",
+      "version": "7.0+",
+      "content_hash": "7cb9bc326038e75c"
+    },
+    {
+      "doc_id": "therock_overview_md_fef8291f",
+      "title": "TheRock: The HIP Environment and ROCm Kit",
+      "source_type": "gitlab",
+      "source_uri": "http://<internal-gitlab>/dcu-knowledge/cudaTranscoding/therock/therock-overview.md",
+      "role": "guide",
+      "domain": "therock",
+      "version": "7.0+",
+      "content_hash": "3c67682950dcc1ae"
+    }
+  ]
+}

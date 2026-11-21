@@ -1,0 +1,29 @@
+{
+  "skill": "dcu-image-hub",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对要点；false=形似但应路由他处（只给 id+prompt）。",
+  "cases": [
+    {
+      "id": "dcu-image-hub-t1",
+      "prompt": "光合社区 DCU 镜像仓库里 vllm 相关的镜像有哪些 tag？哪个是最近推送的？",
+      "expect": "命中本 skill：用 Web API 或 data/sourcefind_dcu_images.json 快照列 tag，按 push_time 降序给最新。"
+    },
+    {
+      "id": "dcu-image-hub-t2",
+      "prompt": "把 sourcefind 上全部 DCU 镜像的全量快照刷成最新的。",
+      "expect": "命中本 skill：跑 scripts/fetch_sourcefind_images.py 重新落盘快照，并触发 schema 自校验。"
+    },
+    {
+      "id": "dcu-image-hub-t3",
+      "prompt": "不登录 Harbor，直接查某个 DCU 镜像仓库的 tag 列表并给出 docker pull 命令。",
+      "expect": "命中本 skill：Harbor 匿名 token 直查 /v2 API，pull_url 直接给出。"
+    },
+    {
+      "id": "dcu-image-hub-f1",
+      "prompt": "帮我 docker build 一个装了 vLLM 的镜像并推到私有 registry。"
+    },
+    {
+      "id": "dcu-image-hub-f2",
+      "prompt": "查一下 pypi.sourcefind.cn 上 vllm 的 das 版 wheel 都有哪些版本。"
+    }
+  ]
+}

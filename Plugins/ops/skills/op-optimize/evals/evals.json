@@ -1,0 +1,29 @@
+{
+  "skill": "op-optimize",
+  "description": "路由评测：true=开始一轮算子优化、候选排序、中断后续跑这类「怎么持续推进」问题应命中本 skill；false=单次量法、四闸判定应由 op-bench / op-gate 接手。",
+  "cases": [
+    {
+      "id": "op-optimize-t1",
+      "prompt": "算子卡的 runs/loop/ 还是空的，要开第一轮优化：先做什么后做什么？",
+      "expect": "命中§三六步循环：①定口径 → ②复现基线（现测，不引用历史；与历史差 >5% 先查环境）→ ③定位瓶颈（一句话「卡在 X，证据是 Y」，证据要有区分性）→ ④列候选（candidates.yaml 带 direction + priority）→ ⑤单实验（一次一个假设，判定由 loop.py 算）→ ⑥记账（ledger 一行 + 候选状态）。"
+    },
+    {
+      "id": "op-optimize-t2",
+      "prompt": "runs/loop/<日期>.jsonl 和 candidates.yaml 记着上一轮试过什么；现在 loop.py status 显示某个候选已证伪，它还能重跑吗？从哪接着干？",
+      "expect": "命中§四单模型纪律：状态外置落盘——runs/loop/<日期>.jsonl 每次实验一条、candidates.yaml 记候选状态；用 loop.py status/queue 看现状；已证伪项不重跑（loop.py 拒绝），判定由脚本算不由模型说。"
+    },
+    {
+      "id": "op-optimize-t3",
+      "prompt": "candidates.yaml 里的候选条目怎么写，才不会被 loop.py 的 queue 拒跑、也不会白跑？",
+      "expect": "命中§三/§五：每个候选必须写 direction（挂到哪条攻击面）与 expect（预期幅度），缺 direction 脚本直接拒跑（方向预算）；按可信度排序；一次只跑一个假设，变体不直接改生产文件；证伪要写机制，不写「试过，慢」。"
+    },
+    {
+      "id": "op-optimize-f1",
+      "prompt": "两个实现谁更快，跑多少次、怎么取数才不会被频率漂移骗？"
+    },
+    {
+      "id": "op-optimize-f2",
+      "prompt": "四档决策里 ACCEPTED 和 INCONCLUSIVE 的边界怎么判，噪声内应该怎么处理？"
+    }
+  ]
+}

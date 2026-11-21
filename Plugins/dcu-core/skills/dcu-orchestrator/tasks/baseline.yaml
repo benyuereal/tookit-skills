@@ -1,0 +1,43 @@
+# 任务：baseline —— 基准测量（normal）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: normal
+  goal: "在 env-check 确认的环境上跑一次端到端基准，记录 serving 指纹（ttft/tpot/throughput）作为优化前的基线。"
+
+  executor_skills:
+    - dcu-llm-benchmark          # LLM 端到端基准
+    - dcu-inference-optimization # 推理优化方法论（用于理解基线口径）
+    - dcu-perf-profiling         # 若需细化 profile
+
+  approach:
+    - "确认环境指纹与 env-check 一致（device/dtk/image/model）。"
+    - "按统一负载（并发、输入/输出长度、batch）跑 baseline 基准，记录 ttft/tpot/throughput。"
+    - "把结果写入 runs/infer-optimize/baseline/result.json，附 fingerprint。"
+    - "标注是否达到预期基线（若不达标单独说明）。"
+
+  evidence:
+    path: "runs/infer-optimize/baseline/result.json"
+    fingerprint:
+      device: "BW1000"
+      dtk: "26.04"
+      image: "vllm:0.18.1"
+      model: "qwen3-32b"
+      # serving 专属指纹字段
+      ttft: "ms"              # 首 token 延迟
+      tpot: "ms"              # 每 token 延迟
+      throughput: "tokens/s"  # 端到端吞吐
+
+  acceptance:
+    - "ttft / tpot / throughput 三个字段均已量化填写（数值 + 单位）。"
+    - "run 参数（并发、输入/输出长度）已记录，可复现。"
+    - "环境指纹与 env-check 一致，或差异已说明。"
+
+  out_of_scope:
+    - "不做优化改动（那是 quantize / 探索阶段）。"
+    - "不做 kernel 级微基准（如需走 kernel 类任务）。"
+    - "不改设备/镜像/模型权重。"
+
+  proceed: auto
+  on_exhaust: exit

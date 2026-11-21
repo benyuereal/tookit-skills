@@ -1,0 +1,32 @@
+{
+  "skill": "op-sparse-mla",
+  "description": "路由评测：true=稀疏 MLA 的 -1 哨兵布局、sm_scale 形状口径（576 vs 512）、跨实现站位的池子陷阱这类「这个稀疏算子怎么算对/怎么比」的问题应命中本 skill；false=A/B 噪声与统计口径、手写 HIP 的编译 flag 镜像应由 op-bench / op-hip-compile 接手。",
+  "cases": [
+    {
+      "id": "op-sparse-mla-t1",
+      "prompt": "自己拼 indices 时把 -1 垫在最前面（队首）行不行？tilelang 变体会怎么表现？",
+      "expect": "命中§一/§五：不行。tilelang 用 valid_NI 数「块首 ≥ 0 的块数」再截断循环，等价要求 -1 是后缀；前置 -1 时垫 1 个 cos=0.9997、垫 31/64 个 cos≈0.99、全前置输出恒为 0；flash_mla 两种布局都正确；自己拼 indices 不要产生前导 -1，声明与实测的一致性用 opcheck.py padding 校验。",
+      "forbid": ["前导 -1 和队尾 -1 结果一样"]
+    },
+    {
+      "id": "op-sparse-mla-t2",
+      "prompt": "576 宽度和 512 宽度两种形状，sm_scale 各该传多少？直接抄参考实现的默认值行不行？",
+      "expect": "命中§一：576 宽度（tail_dim=64）用 1/sqrt(576+64)=0.03952847075210474；512 宽度（GLM5.3 吸收式 MLA，tail_dim=0）用 1/sqrt(512)=0.044194…，两者不是同一个值。厂商 fp32 reference 默认 dim_q**-0.5=1/√576，与 kernel 默认的 1/√640 不等价，必须显式传同一个值。",
+      "forbid": ["两种形状都用 1/sqrt(576)"]
+    },
+    {
+      "id": "op-sparse-mla-t3",
+      "prompt": "跨实现比站位（比如 S=128 我们这个实现 vs flash_mla），怎么保证不被索引池大小和布局骗？",
+      "expect": "命中§五：用 bench/bench_long.py（写死 pool=full，不提供开关）；q_start=4096 这类池只有 4.6 MB 全在 L2，flash_mla 免付内存费，曾把「落后」测成「领先」（缩池 377MB→2.4MB 时 fm 快 1.83×、tl 只快 1.03×）；判据是池大小不是参数名——pool_extent/pool_mb < 64 MB 要打 warning；跨实现一律 pool=full 或 q_start_s_index >= SKV；带宽按 effective_topk 折算，不用 topk 名义值。",
+      "forbid": ["按 topk 名义值算带宽就行"]
+    },
+    {
+      "id": "op-sparse-mla-f1",
+      "prompt": "A/B 判定里 |Δ| > 3×MAD 这条怎么用？跑几次、怎么取数才不会被噪声骗？"
+    },
+    {
+      "id": "op-sparse-mla-f2",
+      "prompt": "手写 HIP 与 tilelang 同体却慢 13%，derive_flags.py 和 aicc 那边的 -mllvm 镜像怎么弄？"
+    }
+  ]
+}

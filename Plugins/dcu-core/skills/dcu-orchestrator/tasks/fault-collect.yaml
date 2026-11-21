@@ -1,0 +1,45 @@
+# 任务：fault-collect —— 故障信息采集（probe 只读）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: probe            # 只读采集，不改状态
+  goal: "故障发生后第一时间采集现场：错误现象、日志关键行、hy-smi 状态、近期变更，产出结构化故障现场快照。"
+
+  executor_skills:
+    - dcu-hy-smi             # 卡状态/温度/显存/进程
+    - dcu-env                # 环境/DTK 版本指纹
+    - dcu-vmfault-coredump   # VMFault 崩溃取证（faulting kernel + gpucore）
+    - debug-cuda-crash       # CUDA/HIP crash 调试方法
+    - debug-distributed-hang # 分布式 hang 的栈采集方法
+
+  approach:
+    - "记录故障现象：报错原文、发生阶段（启动/推理/通信）、可复现步骤。"
+    - "用 hy-smi 采集卡状态（显存/温度/利用率/进程），记录异常卡位。"
+    - "按故障类型采集：VMFault 取 gpucore 快照定位 faulting kernel；hang 采进程栈/NCCL 调试日志。"
+    - "采集环境指纹（device/dtk/image/model），记录与上次正常运行的差异（变更点）。"
+    - "把现场快照写入 runs/fault-triage/collect/result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/fault-triage/collect/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      fault_type: "<vmfault|hang|crash|precision|other>"  # 占位：故障类型
+      key_error: "<first-error-line>"                     # 占位：首报错关键行
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "公共四类指纹 + fault_type + key_error 已填写，非空且非占位符。"
+    - "现场采集完整：报错原文、卡状态、日志关键行至少齐备两类。"
+    - "result.json 可被 JSON 解析。"
+
+  out_of_scope:
+    - "不做任何修复动作（定位与修复属后续任务）。"
+    - "不重启服务、不杀进程、不改配置。"
+
+  proceed: auto
+  on_exhaust: continue   # probe 失败不阻塞后续（可带残缺现场继续定位）

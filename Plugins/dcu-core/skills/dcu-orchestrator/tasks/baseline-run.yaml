@@ -1,0 +1,43 @@
+# 任务契约：baseline-run —— 固定口径端到端基线（normal，只读测量）
+# 契约字段说明见 tasks/research-collect.yaml 头部注释。
+task:
+  type: normal
+  goal: "对已复现的服务跑固定口径端到端基准（吞吐/TTFT/TPOT），产出可复跑、可对比的基线数字，作为后续优化的对照锚点。"
+
+  executor_skills:
+    - dcu-llm-benchmark        # 端到端基准方法论（口径/长度曲线/JIT 归因）
+    - dcu-model-deploy-verify  # 先确认服务输出正确再测性能
+    - dcu-hy-smi               # 测量期间设备状态记录
+
+  approach:
+    - "先做输出正确性冒烟（对齐参照实现/来源声称数字量级），输出错误不进基准。"
+    - "按 dcu-llm-benchmark 口径设计测试：每档长度独立探针、warmup 与稳态分测分报、固定随机种子。"
+    - "记录并发/输入输出长度/请求数与测量期间设备占用快照（hy-smi）。"
+    - "产出吞吐/TTFT/TPOT 基线数字写入 result.json；与调研来源声称的数字对比并注明口径差异。"
+
+  evidence:
+    path: "runs/research-baseline/baseline/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      serve_endpoint: "<host:port>"
+      concurrency: "<concurrencies>"
+      input_len: "<input-lengths>"
+      output_len: "<output-lengths>"
+      ttft: "<ttft-ms>"
+      tpot: "<tpot-ms>"
+      throughput: "<tokens/s>"
+
+  acceptance:
+    - "吞吐/TTFT/TPOT 数值齐全且非占位符；测量口径（并发/长度/请求数/warmup）已记录，第三方可复跑。"
+    - "正确性冒烟通过，或有明确不一致结论（转 dcu-vllm-precision 定位，本工作流不深入）。"
+    - "与来源声称数字的对比已注明口径差异，不硬凑一致。"
+
+  out_of_scope:
+    - "不做优化改动与量化（转 infer-optimize / op-optimize 工作流）。"
+    - "不改服务启动参数（需要时回 env-reproduce 重新过 gate）。"
+
+  proceed: auto
+  on_exhaust: exit

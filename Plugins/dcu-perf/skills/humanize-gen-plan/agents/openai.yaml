@@ -1,0 +1,4 @@
+interface:
+  display_name: "Humanize Gen Plan"
+  short_description: "Help with Humanize Gen Plan tasks"
+  default_prompt: "Use $humanize-gen-plan to handle this task with evidence-backed validation."

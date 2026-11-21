@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dcu Vllm Wiki"
+  short_description: "Help with Dcu Vllm Wiki tasks"
+  default_prompt: "Use $dcu-vllm-wiki to handle this task with evidence-backed validation."

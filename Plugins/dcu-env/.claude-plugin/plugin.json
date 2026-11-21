@@ -1,0 +1,28 @@
+{
+  "name": "dcu-env",
+  "version": "1.4.0",
+  "description": "基础环境与连接 — SSH 远程、环境检测、DTK 安装激活、驱动、容器、hy-smi 监控、NUMA 亲和、RCCL 通测、RoCEv2 网络、镜像反推重建",
+  "author": {
+    "name": "DCU Toolkit Contributors"
+  },
+  "homepage": "https://developer.sourcefind.cn/codes/jixx/dcu-toolkit-skills/-/tree/open-source/Plugins/dcu-env",
+  "license": "MIT",
+  "keywords": [
+    "dcu",
+    "hygon",
+    "aarch64",
+    "skills",
+    "dtk",
+    "driver",
+    "docker",
+    "numa",
+    "rccl",
+    "roce",
+    "hy-smi",
+    "env"
+  ],
+  "platforms": [
+    "claude",
+    "opencode"
+  ]
+}

@@ -1,0 +1,6 @@
+DSpark (Confidence-Driven Speculative Decoding) — upstream source snapshot
+================================================================================
+Source:  sgl-project/sglang (main branch, post PR #30261, integrated 2026-07-06)
+Captured: 2026-08-06 (layout mirrors sglang package, see README.txt)
+License: Apache License 2.0 (see LICENSE in this directory)
+Files under sglang/ are (c) the SGLang authors and contributors.

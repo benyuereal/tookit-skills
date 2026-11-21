@@ -1,0 +1,29 @@
+{
+  "skill": "dcu-docker",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对要点；false=形似但应路由他处（只给 id+prompt）。",
+  "cases": [
+    {
+      "id": "dcu-docker-t1",
+      "prompt": "在 DCU 物理机上起一个 vLLM 容器，docker run 需要带哪些参数卡才可见？",
+      "expect": "命中启动模板：必需 --device=/dev/kfd、/dev/mkfd、/dev/dri 透传 + -v /opt/hyhal:/opt/hyhal:ro 驱动挂载 + --group-add video；推荐 --shm-size=16G（默认 64M 不够）、--network=host、--ipc=host、--privileged、seccomp=unconfined；起完 hy-smi 验证。"
+    },
+    {
+      "id": "dcu-docker-t2",
+      "prompt": "docker exec -d bash -c 'bash bench.sh' 跑推理测评，吞吐比同事手动进容器跑低 15-20%，为什么？",
+      "expect": "命中测评执行方式坑：方式1 非交互非登录 shell 不读 .bashrc → rocblas/hipblaslt 加速库没加载；强制规范用 docker exec -d bash -ilc（-i -l 强制交互+登录加载 .bashrc/.profile），所有性能相关命令都走 -ilc。"
+    },
+    {
+      "id": "dcu-docker-t3",
+      "prompt": "两台机器的 DCU 容器之间要配 SSH 免密跑多机测试，容器里 sshd 怎么配？",
+      "expect": "命中 Standard Procedure：容器内 root 装 openssh → sshd 端口改 2233（避开宿主机 22）→ 切回业务用户 ssh-keygen → 双方公钥汇进同一份 authorized_keys（chmod 700/600）→ 可选 ssh config 别名；仅跨节点互联场景才配，单机多卡用 docker exec 即可。"
+    },
+    {
+      "id": "dcu-docker-f1",
+      "prompt": "宿主机直接 SSH 到 DCU 服务器，密码认证和凭证管理怎么做？"
+    },
+    {
+      "id": "dcu-docker-f2",
+      "prompt": "容器里缺 libxxx.so 报错，这种具体报错的排障经验去哪查？"
+    }
+  ]
+}

@@ -1,0 +1,725 @@
+{
+    "generated_at":  "2026-04-22T08:04:08+00:00",
+    "document_count":  71,
+    "role_counts":  {
+                        "guide":  71
+                    },
+    "domain_counts":  {
+                          "general":  71
+                      },
+    "source_type_counts":  {
+                               "gitlab":  71
+                           },
+    "documents":  [
+                      {
+                          "doc_id":  "readme_md_f8c89de9",
+                          "title":  "閫傜敤鑼冨洿",
+                          "source_type":  "gitlab",
+                          "source_uri":  "README.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ab1aea53bdab1b7d"
+                      },
+                      {
+                          "doc_id":  "hip_performance_optimization_md_dddc2074",
+                          "title":  "HIP Performance Optimization",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hip-performance-optimization.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "18affd845a9f4927"
+                      },
+                      {
+                          "doc_id":  "rocthrust_usage_md_4f9a01b8",
+                          "title":  "rocThrust Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocthrust-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "fa8935c229e1b09e"
+                      },
+                      {
+                          "doc_id":  "hipblas_usage_md_ba53fcd1",
+                          "title":  "hipBLAS Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hipblas-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "b12891b24bc370db"
+                      },
+                      {
+                          "doc_id":  "rocblas_usage_md_627052b9",
+                          "title":  "rocBLAS Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "93061ca9bf011d77"
+                      },
+                      {
+                          "doc_id":  "rccl_usage_md_586d2597",
+                          "title":  "RCCL Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rccl-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "23fe0235a4721867"
+                      },
+                      {
+                          "doc_id":  "rocfft_usage_md_722ea9ea",
+                          "title":  "rocFFT Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocfft-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "28544ee77daf1d3c"
+                      },
+                      {
+                          "doc_id":  "dtk_hip_cpp_programming_guide_gemini3_0_7e7a851e",
+                          "title":  "DTK_HIP_CPP_Programming_Guide_Gemini3_0",
+                          "source_type":  "gitlab",
+                          "source_uri":  "DTK_HIP_CPP_Programming_Guide_Gemini3_0.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "4dc651dfe300f37e"
+                      },
+                      {
+                          "doc_id":  "dtk_md_71e1e878",
+                          "title":  "DTK 应用适配前置评估框架",
+                          "source_type":  "gitlab",
+                          "source_uri":  "DTK适配评估框架.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "e98956c13b68487f"
+                      },
+                      {
+                          "doc_id":  "cuda_to_hip_porting_md_b8ba120d",
+                          "title":  "layer: \"2\"",
+                          "source_type":  "gitlab",
+                          "source_uri":  "cuda-to-hip-porting.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "b89d3c0e0a4325cc"
+                      },
+                      {
+                          "doc_id":  "dcu_cuda_to_hip_porting_md_a9a98d76",
+                          "title":  "DCU CUDA To HIP Porting",
+                          "source_type":  "gitlab",
+                          "source_uri":  "dcu-cuda-to-hip-porting.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "e0f6dabe0f63fcee"
+                      },
+                      {
+                          "doc_id":  "readme_md_2989aba6",
+                          "title":  "CUDA To HIP Porting Examples",
+                          "source_type":  "gitlab",
+                          "source_uri":  "README.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "5bb5d21f9624bd9f"
+                      },
+                      {
+                          "doc_id":  "cooperative_groups_tile_md_ae3ac611",
+                          "title":  "Cooperative Groups Tile Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "cooperative-groups-tile.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "e6186d221d65c935"
+                      },
+                      {
+                          "doc_id":  "cuda_to_hip_vector_add_md_d7a495c4",
+                          "title":  "CUDA To HIP Vector Add Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "cuda-to-hip-vector-add.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "f4653ae738ea3264"
+                      },
+                      {
+                          "doc_id":  "driver_runtime_stream_mixed_md_add900a9",
+                          "title":  "Driver Runtime Stream Mixed Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "driver-runtime-stream-mixed.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "005a67c012ca6b1f"
+                      },
+                      {
+                          "doc_id":  "hipgraph_capture_launch_md_e04443b9",
+                          "title":  "HIP Graph Capture Launch Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hipgraph-capture-launch.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "d3ab38cac7d7fae1"
+                      },
+                      {
+                          "doc_id":  "layered_texture_normalized_md_e8d2c4cf",
+                          "title":  "Layered Texture Normalized Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "layered-texture-normalized.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ce1b80012f92c0ff"
+                      },
+                      {
+                          "doc_id":  "module_api_vector_add_md_1c3ec898",
+                          "title":  "Module API Vector Add Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "module-api-vector-add.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "5d9e580d91df3059"
+                      },
+                      {
+                          "doc_id":  "peer2peer_minimal_md_311f6acc",
+                          "title":  "Peer2Peer Minimal Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "peer2peer-minimal.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "639d042f13e29f54"
+                      },
+                      {
+                          "doc_id":  "pitch_layout_correctness_md_5bb1e50c",
+                          "title":  "Pitch Layout Correctness Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "pitch-layout-correctness.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "657b9d1e645a44c5"
+                      },
+                      {
+                          "doc_id":  "separate_compilation_device_library_md_265f46ab",
+                          "title":  "Separate Compilation Device Library Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "separate-compilation-device-library.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "8b1831986999bc2d"
+                      },
+                      {
+                          "doc_id":  "stream_and_events_md_66e6663f",
+                          "title":  "Stream And Events Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "stream-and-events.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "3f33fe1eba8f0a7a"
+                      },
+                      {
+                          "doc_id":  "stream_priority_overlap_compare_md_d6e69db7",
+                          "title":  "Stream Priority Overlap Compare",
+                          "source_type":  "gitlab",
+                          "source_uri":  "stream-priority-overlap-compare.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "e4219ae6a54d9351"
+                      },
+                      {
+                          "doc_id":  "symbol_copy_md_6c7327ea",
+                          "title":  "Symbol Copy Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "symbol-copy.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "7e6f7e9876de8426"
+                      },
+                      {
+                          "doc_id":  "texture_object_array_normalized_md_0d9cf3a5",
+                          "title":  "Texture Object Array Normalized Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "texture-object-array-normalized.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "e3c83d19983ccb37"
+                      },
+                      {
+                          "doc_id":  "vector_add_md_91be52db",
+                          "title":  "Vector Add Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "vector-add.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "729b50f03fc547ac"
+                      },
+                      {
+                          "doc_id":  "hip_advanced_optimization_md_b07c2635",
+                          "title":  "Native HIP/ROCm Programming Guide: Advanced GPU Optimization Techniques",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hip-advanced-optimization.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "78ba6d3fef869e41"
+                      },
+                      {
+                          "doc_id":  "hip_debugging_md_c585a552",
+                          "title":  "HIP Debugging Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hip-debugging.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "890f434eebaef796"
+                      },
+                      {
+                          "doc_id":  "hip_gpu_programming_fundamentals_md_ad0c4088",
+                          "title":  "HIP GPU Programming Fundamentals",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hip-gpu-programming-fundamentals.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "75d2a8db7ff17516"
+                      },
+                      {
+                          "doc_id":  "hip_memory_management_md_de0d2134",
+                          "title":  "HIP Memory Management",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hip-memory-management.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "add132da051a88a7"
+                      },
+                      {
+                          "doc_id":  "hip_native_examples_guide_md_bc10895f",
+                          "title":  "AMD HIP Native Optimization Examples",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hip-native-examples-guide.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "dddf1c6ebe0fc987"
+                      },
+                      {
+                          "doc_id":  "hip_thread_synchronization_md_045cfaa5",
+                          "title":  "HIP Thread Synchronization",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hip-thread-synchronization.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "881a9e1a01ca6e4d"
+                      },
+                      {
+                          "doc_id":  "md_90d007e3",
+                          "title":  "DTK 适配经验总结",
+                          "source_type":  "gitlab",
+                          "source_uri":  "适配经验.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "a2eddc84a93a86f9"
+                      },
+                      {
+                          "doc_id":  "miopen_usage_md_3932581a",
+                          "title":  "MIOpen Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "miopen-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "a21aa44184fa7d51"
+                      },
+                      {
+                          "doc_id":  "rocrand_usage_md_4ed980e7",
+                          "title":  "rocRAND Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocrand-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ef5ffebd8b7a80af"
+                      },
+                      {
+                          "doc_id":  "dcu_library_mapping_md_31834cb4",
+                          "title":  "DCU Library Mapping",
+                          "source_type":  "gitlab",
+                          "source_uri":  "dcu-library-mapping.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "3eeb0e5cc53437c8"
+                      },
+                      {
+                          "doc_id":  "readme_md_b4b85ea6",
+                          "title":  "ROCm Library Mapping Examples",
+                          "source_type":  "gitlab",
+                          "source_uri":  "README.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "3481affa974ef8af"
+                      },
+                      {
+                          "doc_id":  "hipfft_roundtrip_md_2ae5be1c",
+                          "title":  "hipFFT Round-Trip Oracle",
+                          "source_type":  "gitlab",
+                          "source_uri":  "hipfft-roundtrip.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "5a7227cbbeb7e73e"
+                      },
+                      {
+                          "doc_id":  "miopen_convolution_md_8f767a41",
+                          "title":  "MIOpen Convolution Skeleton",
+                          "source_type":  "gitlab",
+                          "source_uri":  "miopen-convolution.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "24a1ca081dec43f7"
+                      },
+                      {
+                          "doc_id":  "rccl_allreduce_mpi_md_389bad8c",
+                          "title":  "Rccl Allreduce Mpi",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rccl-allreduce-mpi.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ad378395feef3608"
+                      },
+                      {
+                          "doc_id":  "rccl_allreduce_md_bde34827",
+                          "title":  "RCCL AllReduce Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rccl-allreduce.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "021b93e8903e1e00"
+                      },
+                      {
+                          "doc_id":  "rocblas_gemm_bf16_f32_pointer_batched_md_bbfe49ff",
+                          "title":  "rocBLAS BF16 Pointer-Batched GEMM Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-gemm-bf16-f32-pointer-batched.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "a8604a3d6f7cdc5d"
+                      },
+                      {
+                          "doc_id":  "rocblas_gemm_bf16_f32_strided_batched_md_5efecfbc",
+                          "title":  "rocBLAS BF16 Strided-Batched GEMM Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-gemm-bf16-f32-strided-batched.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "87efcc539af41847"
+                      },
+                      {
+                          "doc_id":  "rocblas_gemm_bf16_f32_md_340b6e4e",
+                          "title":  "rocBLAS BF16 To F32 GEMM Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-gemm-bf16-f32.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "cd54f140b0acfe46"
+                      },
+                      {
+                          "doc_id":  "rocblas_gemm_bf16_md_122a91a3",
+                          "title":  "rocBLAS BF16 GEMM Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-gemm-bf16.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "6674fdf5b1080e27"
+                      },
+                      {
+                          "doc_id":  "rocblas_gemm_fp16_md_7176a711",
+                          "title":  "rocBLAS FP16 GEMM Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-gemm-fp16.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ca46714c3de4c456"
+                      },
+                      {
+                          "doc_id":  "rocblas_gemm_md_c5b1709d",
+                          "title":  "rocBLAS GEMM Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-gemm.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "a2ff940a2663bf95"
+                      },
+                      {
+                          "doc_id":  "rocblas_tf32_probe_md_d9a53cae",
+                          "title":  "rocBLAS TF32 Probe",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-tf32-probe.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "20ed9e0d72c66546"
+                      },
+                      {
+                          "doc_id":  "rocblas_xf32_math_mode_md_c456ed88",
+                          "title":  "rocBLAS XF32 Math-Mode Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocblas-xf32-math-mode.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "79e4e0c38a7fde26"
+                      },
+                      {
+                          "doc_id":  "rocfft_1d_md_5080a6fb",
+                          "title":  "rocFFT 1D Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocfft-1d.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "56a7c3873f7f5915"
+                      },
+                      {
+                          "doc_id":  "rocfft_load_callback_md_71677418",
+                          "title":  "rocFFT Load Callback Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocfft-load-callback.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "9b9d9b75ae2f142c"
+                      },
+                      {
+                          "doc_id":  "rocfft_store_callback_md_d0a66793",
+                          "title":  "rocFFT Store Callback Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocfft-store-callback.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "729b8132b5e68b73"
+                      },
+                      {
+                          "doc_id":  "rocsolver_lu_solve_batched_pivot_md_3500a79c",
+                          "title":  "rocSOLVER Batched LU Solve With Pivot Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocsolver-lu-solve-batched-pivot.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "52b90d0039f3c7af"
+                      },
+                      {
+                          "doc_id":  "rocsolver_lu_solve_pivot_md_9ec87c29",
+                          "title":  "rocSOLVER LU Solve With Pivot Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocsolver-lu-solve-pivot.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ef75e75f3d66640b"
+                      },
+                      {
+                          "doc_id":  "rocsolver_qr_md_d5b39a76",
+                          "title":  "rocSOLVER QR Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocsolver-qr.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "cf323aae4b3c6f70"
+                      },
+                      {
+                          "doc_id":  "rocsparse_spmv_md_81e3d72f",
+                          "title":  "rocSPARSE SpMV Example",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocsparse-spmv.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "1d8774b3e7019d7d"
+                      },
+                      {
+                          "doc_id":  "rocm_libraries_usage_md_d2acd0a4",
+                          "title":  "ROCm Libraries Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocm-libraries-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "41f6c5c7dc78c052"
+                      },
+                      {
+                          "doc_id":  "amd_smi_usage_md_ea61995c",
+                          "title":  "AMD System Management Interface (AMD SMI)",
+                          "source_type":  "gitlab",
+                          "source_uri":  "amd-smi-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "a2d59f95670d67fb"
+                      },
+                      {
+                          "doc_id":  "rocm_systems_usage_md_b098f7f4",
+                          "title":  "ROCm Systems Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocm-systems-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "e300b8943e40a3cf"
+                      },
+                      {
+                          "doc_id":  "dcu_env_build_md_319f787c",
+                          "title":  "DCU Env Build",
+                          "source_type":  "gitlab",
+                          "source_uri":  "dcu-env-build.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "379153121ef5ba30"
+                      },
+                      {
+                          "doc_id":  "readme_md_fa8c4e78",
+                          "title":  "ROCm Environment And Build Examples",
+                          "source_type":  "gitlab",
+                          "source_uri":  "README.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "beac1b9d75e08460"
+                      },
+                      {
+                          "doc_id":  "driver_device_query_baseline_md_a42c15f4",
+                          "title":  "Driver Device Query Baseline",
+                          "source_type":  "gitlab",
+                          "source_uri":  "driver-device-query-baseline.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "7b7125103d0125c5"
+                      },
+                      {
+                          "doc_id":  "p2p_bandwidth_latency_matrix_compare_md_a21d780e",
+                          "title":  "P2P Bandwidth Latency Matrix Compare",
+                          "source_type":  "gitlab",
+                          "source_uri":  "p2p-bandwidth-latency-matrix-compare.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "b51362d799aaf3c9"
+                      },
+                      {
+                          "doc_id":  "rocm_docker_images_md_4ae9bfb3",
+                          "title":  "ROCm Docker Images - Complete Reference (ROCm 7.x)",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocm-docker-images.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "fb32439841dac0ab"
+                      },
+                      {
+                          "doc_id":  "rocm_installation_md_317fe1af",
+                          "title":  "ROCm Installation Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocm-installation.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "8f29b17730ccf0d0"
+                      },
+                      {
+                          "doc_id":  "rocm_profiling_md_77939b57",
+                          "title":  "ROCm Profiling and Performance Analysis",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocm-profiling.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "6ef00f7e3609d487"
+                      },
+                      {
+                          "doc_id":  "rocm_repositories_md_caea7bf7",
+                          "title":  "ROCm GitHub Repositories - Complete Reference",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocm-repositories.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ddda6a668d889115"
+                      },
+                      {
+                          "doc_id":  "rocm_stack_overview_md_270046a9",
+                          "title":  "ROCm Compute Stack Overview",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocm-stack-overview.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "9b534826a5d1a235"
+                      },
+                      {
+                          "doc_id":  "rocsolver_usage_md_f9315676",
+                          "title":  "rocSOLVER Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocsolver-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "d766e2785869ed1f"
+                      },
+                      {
+                          "doc_id":  "rocsparse_usage_md_9c948c69",
+                          "title":  "rocSPARSE Usage Guide",
+                          "source_type":  "gitlab",
+                          "source_uri":  "rocsparse-usage.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "099f95aab06d4c12"
+                      },
+                      {
+                          "doc_id":  "therock_overview_md_fef8291f",
+                          "title":  "TheRock: The HIP Environment and ROCm Kit",
+                          "source_type":  "gitlab",
+                          "source_uri":  "therock-overview.md",
+                          "role":  "guide",
+                          "domain":  "general",
+                          "version":  "main",
+                          "content_hash":  "ed2038ad504910a3"
+                      }
+                  ]
+}

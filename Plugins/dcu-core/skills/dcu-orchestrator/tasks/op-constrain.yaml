@@ -1,0 +1,49 @@
+# 任务：op-constrain —— 合法改动集合与硬件约束（normal）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: normal
+  goal: "把 roofline verdict 硬映射成允许的优化动作集合，并核对硬件/编译约束（VGPR、LDS、wave size、CU 数、频率档），产出可被否证的候选方向清单，防止越界改法。"
+
+  executor_skills:
+    - op-contract               # 不变量与容差（候选必须能被同一契约判据否证）
+    - op-roofline               # hipbudget.py 预算 / constants.yaml 常数 / rules.md 映射规则
+
+  approach:
+    - "按 verdict 硬映射允许动作：memory 天花板→只准减字节（不许再调 tile）；compute 天花板→只准减 FLOP；两者都贴→只准结构性重写。"
+    - "用 hipbudget.py 做 VGPR/LDS 预算核对，但只采信相对比较（A 设计 vs B 设计）；绝对数值判定须先与编译产物实测对齐，未对齐时不得据此否决方案。"
+    - "从 constants.yaml 取硬件常数，逐项注明来源与口径（标称/实测/频率档），不手抄裸数。"
+    - "生成候选方向清单，每条含预期收益、验证口径、回退方式，写入 result.json。"
+    - "清单每条都必须能被 op-validate 的判据否证；无法否证的条目不得进入候选。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/op-optimize/constrain/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      op: "<op-name>"                   # 占位：被测算子
+      shapes: "<shape-id>"              # 占位：被测形状
+      verdict: "<memory|compute|structural>"             # 占位：输入 verdict
+      allowed_actions: "<reduce_bytes|reduce_flops|restructure>"  # 占位：允许动作集合
+      candidates: "<count>"             # 占位：候选条数
+      vgpr_limit: "<num>"               # 占位：每线程 VGPR 上限
+      lds_limit_kb: "<num>"             # 占位：每 CU LDS 上限
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "allowed_actions 与 roofline verdict 严格一致，不是自由发挥。"
+    - "每条候选带预期收益 + 验证口径 + 回退方式，且可被否证。"
+    - "硬件约束数值注明来源与频率档口径。"
+    - "hipbudget 的绝对数值结论已标明是否与编译产物对齐；未对齐时只作为相对比较使用。"
+
+  out_of_scope:
+    - "不实施改动（那是 op-optimize 节点）。"
+    - "不引入允许动作集合之外的优化方向。"
+    - "不用手抄常数下结论而不标注来源。"
+
+  proceed: auto
+  on_exhaust: continue

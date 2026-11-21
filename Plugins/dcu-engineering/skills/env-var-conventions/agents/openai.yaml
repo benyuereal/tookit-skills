@@ -1,0 +1,4 @@
+interface:
+  display_name: "Env Var Conventions"
+  short_description: "Help with Env Var Conventions tasks"
+  default_prompt: "Use $env-var-conventions to handle this task with evidence-backed validation."

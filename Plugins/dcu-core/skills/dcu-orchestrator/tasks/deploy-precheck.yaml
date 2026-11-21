@@ -1,0 +1,50 @@
+# 任务：deploy-precheck —— 部署前置检查（probe 只读）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: probe            # 只读、不改状态
+  goal: "确认目标模型在 DCU 上的部署可行性前置条件：镜像/框架版本基线、卡位与显存占用、权重文件齐备，产出部署指纹。"
+
+  # 执行用到的 skill（装配知识包时读取其 SKILL.md/references）
+  executor_skills:
+    - dcu-env                   # 环境检测
+    - dcu-docker                # 容器/镜像操作规范
+    - dcu-hy-smi                # 卡位/显存占用检查
+    - dcu-model-deploy-catalog  # 查已验证模型配方（镜像/框架/启动命令/坑）
+    - dcu-dtk                   # DTK 版本核对
+
+  approach:
+    - "用 hy-smi 确认目标卡空闲（显存/进程占用），被占则先协调换卡，不停他人服务。"
+    - "按 dcu-model-deploy-catalog 查该模型的已验证配方：镜像 tag、框架版本、启动命令。"
+    - "核对镜像本地是否存在，缺失则记录需拉取的镜像与来源。"
+    - "核对模型权重路径、文件齐备（config / 分片 / tokenizer），记录占用磁盘量。"
+    - "把部署前置指纹写入 runs/model-deploy/precheck/result.json。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/model-deploy/precheck/result.json"
+    fingerprint:
+      device: "<device-model>"       # 占位：设备型号
+      dtk: "<dtk-version>"           # 占位：DTK 版本
+      image: "<image-tag>"           # 占位：镜像 tag
+      model: "<model-name>"          # 占位：模型名/规格
+      weights_path: "<weights-path>" # 占位：权重路径
+      cards_free: "<free-cards>"     # 占位：空闲卡位
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "device / dtk / image / model 四类公共指纹已填写，非空且非占位符 <...>。"
+    - "目标卡位空闲（或已明确换卡结论），权重文件齐备且路径有效。"
+    - "该模型在 deploy-catalog 有配方或已注明「无现成配方，走 portability 评估」。"
+
+  # 明确不做的事（防越界）
+  out_of_scope:
+    - "不实际启动服务（那是 deploy-launch 任务）。"
+    - "不拉取镜像、不下载权重（只核对与记录）。"
+    - "不停他人占卡的服务。"
+
+  # 是否需用户审批放行
+  proceed: auto
+  # 重试耗尽后的处理（probe 失败可 continue）
+  on_exhaust: continue

@@ -1,0 +1,29 @@
+{
+  "skill": "dcu-model-deploy-catalog",
+  "description": "最小触发/行为评测：true=应加载本 skill 且能答对要点；false=形似但应路由他处（只给 id+prompt）。",
+  "cases": [
+    {
+      "id": "dcu-model-deploy-catalog-t1",
+      "prompt": "Qwen3-32B 在 BW1100 上怎么部署？用哪个镜像、什么框架、启动命令是什么？",
+      "expect": "命中本 skill：先查 references/index.md 机器可读总索引（模型→镜像 tag→框架→原文链接），再进 references/llm.md 看完整配方；命令摘自《海光DCU模型部署手册》原文，路径/卡号按实际调整。"
+    },
+    {
+      "id": "dcu-model-deploy-catalog-t2",
+      "prompt": "DCU 容器里跑模型 hy-smi 能看到卡但程序报 DEVCOUNT=0 看不到设备，怎么回事？",
+      "expect": "命中 §三 共性坑表：docker run 漏挂 -v /opt/hyhal:/opt/hyhal:ro（99/100 篇手册必挂），补挂后重启容器；同时确认 --device=/dev/kfd、/dev/dri 都在。"
+    },
+    {
+      "id": "dcu-model-deploy-catalog-t3",
+      "prompt": "DCU 容器里 pip install transformers 之后报 Failed to initialize NumPy: _ARRAY_API not found。",
+      "expect": "命中 §三 排障表：残留 CUDA 版 cupy-cuda12x 与 numpy 2.x 冲突 → pip uninstall -y cupy-cuda12x（必要时 cupy），numpy 锁 <2；另注意镜像预装 DCU 版 torch 时勿 pip install torch 覆盖。"
+    },
+    {
+      "id": "dcu-model-deploy-catalog-f1",
+      "prompt": "评估一个全新 PyTorch 模型能不能即插即用部署到 DCU，从零产出部署手册。"
+    },
+    {
+      "id": "dcu-model-deploy-catalog-f2",
+      "prompt": "vLLM 服务在 DCU 上吞吐上不去，TP 拆分和投机解码参数怎么调优？"
+    }
+  ]
+}

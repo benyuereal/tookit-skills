@@ -1,0 +1,45 @@
+# 任务契约：research-collect —— 外部资料调研与复现要点沉淀（probe 只读）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: probe
+  goal: "收集外部项目/文章/论文的方案要点，并核对 DCU 侧适配现状（有无现成镜像/配方/源码适配），沉淀成可执行的复现要点清单；结尾按沉淀审批块约定把调研要点呈现到会话，由人工决定是否合入调研知识/方案库。"
+
+  executor_skills:
+    - web-tools-guide          # 网页抓取/搜索入口（含失败回退链）
+    - anysearch                # 聚合搜索
+    - github-repo-deep-dive    # GitHub 仓库结构与关键提交
+    - dcu-modelzoo             # 查官方 DCU 适配仓库与基线（DTK/框架/卡型）
+    - dcu-das-hub-api          # 查 DCU 源包版本与 wheel
+    - dcu-image-hub            # 查现成镜像与 tag
+
+  approach:
+    - "读原文/仓库，提炼：模型与规模、推理引擎与版本、关键配置（并行/量化/attention backend）、官方声称的性能数字与测法。"
+    - "查 DCU 侧现状三查：modelzoo 有无适配仓库、das-hub 有无对应 wheel、image-hub 有无现成镜像，记录版本锚点。"
+    - "把「可直接复现的启动命令/镜像 tag/环境变量」与「需要适配的缺口」分开列，每条关键结论带来源链接。"
+    - "写入 runs/research-baseline/research-collect/notes.md，并生成 result.json 摘要。"
+    - "沉淀：按 dcu-orchestrator/references/promotion-review-convention.md 生成「沉淀审批块」呈现在会话（用 dcu-orchestrator/scripts/extract_candidate_facts.py --run runs/research-baseline/research-collect/result.json --domain research --notes runs/research-baseline/research-collect/notes.md 预填候选事实），人工选 ①合入 / ②只留台账 / ③修改后合入 / ④放弃；选①/③且已脱敏（无裸设备号/IP/用户名/内网仓库/工单号，外部来源保留可引用的公开链接）才合入调研知识/方案库。"
+
+  evidence:
+    path: "runs/research-baseline/research-collect/result.json"
+    fingerprint:
+      source_url: "<原文或仓库链接>"
+      source_version: "<commit/release/tag>"
+      target_model: "<model-name>"
+      dtk: "<dtk-version>"
+      image: "<image-tag 或 none>"
+
+  acceptance:
+    - "notes.md 含启动命令/配置要点，且每条关键结论带来源链接。"
+    - "DCU 适配三查（modelzoo/das-hub/image-hub）各有明确结论：有现成 / 需适配 / 无适配。"
+    - "result.json 可被 JSON 解析，fingerprint 非占位符。"
+    - "「沉淀审批块」已呈现到会话，且用户已对本次调研要点给出显式选择（①/②/③/④）。"
+    - "选①/③（合入）时：拟合入的调研要点/方案已过脱敏闸（无裸设备号/IP/用户名/内网仓库/工单号）；选②/④ 时未改写任何 skill（probe 只读，合入仅发生在用户批准后）。"
+
+  out_of_scope:
+    - "不上机操作：不拉镜像、不起服务、不改任何环境配置（那是 env-reproduce）。"
+    - "不跑性能数字（那是 baseline-run）。"
+
+  proceed: auto
+  on_exhaust: continue

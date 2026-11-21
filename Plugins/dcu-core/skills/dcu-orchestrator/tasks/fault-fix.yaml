@@ -1,0 +1,47 @@
+# 任务：fault-fix —— 修复动作执行（gate，写状态需审批）
+# 契约字段（全部位于 task 键下）：task/type, task/goal, task/executor_skills[],
+#   task/approach[], task/evidence(path+fingerprint[]), task/acceptance[],
+#   task/out_of_scope[], task/proceed, task/on_exhaust
+task:
+  type: gate            # 修复动作改设备/服务状态，高风险
+  goal: "按 fault-locate 的根因结论执行修复（换版本/改配置/打补丁/重启服务），并复测确认故障消除且功能恢复正常。"
+
+  executor_skills:
+    - dcu-docker             # 容器级修复（重启/换镜像）
+    - dcu-dtk                # DTK 版本变更
+    - dcu-driver             # 驱动层修复
+    - dcu-vllm-runtime-patch # 运行时补丁注入（不改源码）
+    - dcu-vllm-deploy        # 服务重启与参数调整
+
+  approach:
+    - "向用户提交修复方案摘要（动作、影响面、回退方式），获批后执行。"
+    - "执行修复动作，记录每一步改动（命令/配置 diff/补丁内容）。"
+    - "按原故障现场复测：原报错不再出现，最小功能请求通过。"
+    - "确认无次生问题（新报错/性能回退/相邻卡异常），写入结果。"
+    - "沉淀：修复通过后，按 `data/issue-kb/README.md`（只读模板）把本次故障记入用户知识库 `~/.config/dcu-toolkit/kb/issue/`（遵循 `docs/STANDARDS.md` 脱敏红线）。"
+
+  # 产物契约：path + fingerprint[]
+  evidence:
+    path: "runs/fault-triage/fix/result.json"
+    fingerprint:
+      device: "<device-model>"
+      dtk: "<dtk-version>"
+      image: "<image-tag>"
+      model: "<model-name>"
+      fix_action: "<action-summary>"      # 占位：修复动作摘要
+      retest: "<pass|fail>"               # 占位：复测结论
+
+  # 通过判据（全部满足才 pass）
+  acceptance:
+    - "原故障现象复测消除（原报错关键行不再出现）。"
+    - "复测通过一次最小功能验证（推理请求/通信测试/训练 step 视故障类型）。"
+    - "fix_action 与全部改动已记录，回退方式明确。"
+    - "独立 verifier 复核通过，或用户已审批放行。"
+
+  out_of_scope:
+    - "不做与根因无关的顺手优化（改动面最小化，一次只修一个问题）。"
+    - "不停他人服务、不改他人占用的卡位。"
+    - "复测仍失败时不反复盲试（超过 retries 走 on_exhaust，转人工）。"
+
+  proceed: ask           # 高风险，必须经用户审批
+  on_exhaust: rollback   # 修复失败则回退本次改动，恢复故障前状态

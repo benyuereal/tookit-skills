@@ -1,0 +1,7 @@
+#!/bin/bash
+echo "gfx000"
+echo "gfx906"
+echo "gfx926"
+echo "gfx928"
+echo "gfx936"
+echo "gfx938"

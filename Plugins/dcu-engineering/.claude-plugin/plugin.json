@@ -1,0 +1,24 @@
+{
+  "name": "dcu-engineering",
+  "version": "1.4.0",
+  "description": "工程与发布实践 — CI 回归 bisect、sglang cherry-pick、模型 PR 历史知识、代码规范",
+  "author": {
+    "name": "DCU Toolkit Contributors"
+  },
+  "homepage": "https://developer.sourcefind.cn/codes/jixx/dcu-toolkit-skills/-/tree/open-source/Plugins/dcu-engineering",
+  "license": "MIT",
+  "keywords": [
+    "dcu",
+    "hygon",
+    "aarch64",
+    "skills",
+    "ci",
+    "cherry-pick",
+    "code-review",
+    "conventions"
+  ],
+  "platforms": [
+    "claude",
+    "opencode"
+  ]
+}

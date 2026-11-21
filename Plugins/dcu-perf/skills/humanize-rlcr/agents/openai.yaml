@@ -1,0 +1,4 @@
+interface:
+  display_name: "Humanize Rlcr"
+  short_description: "Help with Humanize Rlcr tasks"
+  default_prompt: "Use $humanize-rlcr to handle this task with evidence-backed validation."
