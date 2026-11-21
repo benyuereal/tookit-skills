@@ -4,10 +4,6 @@ description: "无外网DCU容器缺少量纯Python包时用：探测、wheel传�
 version: 1.0.0
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, offline, airgap, pip, wheel, docker, deps]
-    related_skills: [dcu-docker, dcu-env-packages, dcu-model-portability]
 ---
 
 # 无外网 DCU 容器离线装纯 Python 依赖

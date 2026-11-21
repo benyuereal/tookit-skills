@@ -4,10 +4,6 @@ description: DCU 系列 skills 路由与链路手册：按部署/推理/算子�
 version: 2.2.2
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, hygon, router, entry, index, deploy, inference, operator, performance, environment, orchestration, workflow, alias]
-    related_skills: [dcu-inference-infra, dcu-vllm-deploy, dcu-perf-analysis, dcu-op-optimization, dcu-kernel-dev, dcu-env, dcu-orchestrator]
 ---
 
 # DCU 系列 skills 统一入口路由（dcu-skill-router）

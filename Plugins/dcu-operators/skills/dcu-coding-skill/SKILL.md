@@ -2,8 +2,6 @@
 name: dcu-coding-skill
 version: 1.2.3
 description: DCU Coding Skill 整包统一入口：dcu-dispatcher 意图分发 + 五个子 skill（dcu-hip-reference HIP API 查询、dcu-code-migrator CUDA→HIP 迁移知识分片、dcu-ci-testcase 测试用例、dcu-triton-kernel kernel 开发，skills/ 下平铺），common/ 提供 KB 分片检索与 SPI 路由基础设施。
-category: entry
-standalone: true
 author: DCU Team
 license: MIT
 ---

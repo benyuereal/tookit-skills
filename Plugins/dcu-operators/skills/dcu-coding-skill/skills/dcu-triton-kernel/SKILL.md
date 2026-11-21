@@ -3,11 +3,8 @@ name: dcu-triton-kernel
 version: 1.0.1
 license: MIT
 description: Triton kernel 开发助手，支持 CUDA/Triton 到 DCU HIP/TileLang 的 kernel 迁移与开发
-category: core
-standalone: true
 author: DCU Team
 
-keywords:
 
 - migrate
 - migration
@@ -22,46 +19,12 @@ keywords:
 - 移植
 - api-mapping
 
-intents:
-  - type: code-migrate
-    description: 把 CUDA 代码迁移到 HIP / DTK / DCU
-    examples:
-      - "把这段 CUDA 代码迁移到 HIP"
-      - "cublasSgemm 在 DTK 下等价写法"
-      - "cudaMemcpy 迁移后要注意什么"
-      - "帮我把 cuFFT 换成 hipFFT"
-      - "检查这份代码里还有没有 CUDA 符号"
 
-shard:
-  shard_id: dcu-code-migrator-native
-  domains:
-    - hip-runtime
-    - hip-api
-    - cuda-hip-mapping
-    - migration
-    - rocm-library
 
-recommended_companions:
 
 - dcu-hip-reference
 - dcu-ci-testcase
 
-capabilities:
-  - action: migrate_cuda_to_hip
-    cost: medium
-    description: 基于知识分片生成 CUDA→HIP 迁移代码
-  - action: get_migration_report
-    cost: medium
-    description: 汇总迁移覆盖度、已处理/未处理 API 与风险点
-  - action: check_remaining_cuda
-    cost: cheap
-    description: 扫描残留的 CUDA 符号 / 头文件 / API
-  - action: lookup_api
-    cost: cheap
-    description: 直接查 HIP/DTK API 签名与使用说明
-  - action: search_docs
-    cost: medium
-    description: 在 HIP/DTK 知识分片中做关键词/语义检索
 ---
 
 # DCU 代码迁移助手

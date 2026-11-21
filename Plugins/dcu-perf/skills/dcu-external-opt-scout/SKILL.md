@@ -4,10 +4,6 @@ description: "Vet GitHub GPU/DCU optimization projects for DCU testing."
 version: 1.0.0
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, github, optimization, kernel, triage, research]
-    related_skills: [dcu-ssh, dcu-hy-smi, dcu-op-optimization, dcu-kernel-dev, dcu-inference-optimization]
 ---
 
 # DCU 外部优化项目侦察与筛选

@@ -4,10 +4,6 @@ description: "Vet external GPU kernel optimizations end-to-end on DCU."
 version: 1.0.0
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, kernel, optimization, validation, methodology, attention, triton, e2e]
-    related_skills: [dcu-external-opt-scout, dcu-op-optimization, dcu-kernel-dev, dcu-vllm-source, dcu-flashattn-source, dcu-ssh, dcu-hy-smi]
 ---
 
 # DCU 外部内核优化全链路验证方法论

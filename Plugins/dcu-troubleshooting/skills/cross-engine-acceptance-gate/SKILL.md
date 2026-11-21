@@ -4,10 +4,6 @@ description: 移植/换引擎后的精度验收门禁。bf16 跨引擎逐 bit �
 version: 1.0.0
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, vllm, precision, acceptance, bf16, gate, hybrid]
-    related_skills: [dcu-vllm-precision, dcu-vllm-deploy, dcu-engine-precision-localization]
 ---
 
 # cross-engine-acceptance-gate — 移植精度验收门禁（bf16 分级判据）

@@ -4,10 +4,6 @@ description: "Use when an offline DCU container lacks a Python package."
 version: 1.0.0
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, offline, docker, pip, wheel, dependencies, container]
-    related_skills: [dcu-docker, dcu-env-packages, china-network-model-download]
 ---
 
 # Offline DCU Container: Installing Missing Python Deps

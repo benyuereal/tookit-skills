@@ -3,46 +3,12 @@ name: dcu-ci-testcase
 version: 1.0.1
 license: MIT
 description: CI 测试用例管理，支持测试用例创建、验证和组织，覆盖 unit/integration 场景
-category: core
-standalone: true
 author: DCU Team
 
-keywords:
-  - test
-  - ci
-  - unit-test
-  - integration-test
-  - test-case
-  - pytest
-  - gtest
-  - testing
-  - 测试
-  - 用例
 
-intents:
-  - type: ci-test
-    description: 生成或管理 CI 测试用例
-    examples:
-      - "给这段 HIP 代码生成 pytest 单元测试"
-      - "创建集成测试套件"
-      - "帮我写 gtest 测试用例"
 
-shard:
-  shard_id: testing-patterns
-  domains: [testing-patterns, test-debug, ci-config]
 
-recommended_companions:
-  - dcu-hip-reference
 
-capabilities:
-  - action: create_testcase
-    cost: medium
-  - action: create_suite
-    cost: medium
-  - action: validate_testcase
-    cost: cheap
-  - action: run_testcase
-    cost: cheap
 ---
 
 # DCU CI 测试用例技能

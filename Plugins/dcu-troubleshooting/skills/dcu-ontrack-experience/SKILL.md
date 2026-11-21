@@ -4,12 +4,6 @@ description: DCU 故障排查速查：按报错关键词反查根因与规避手
 version: 1.2.3
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, hygon, troubleshooting, ontrack, fault, driver, vllm, rccl, compile]
-    related_skills: [dcu-driver, dcu-docker, dcu-vllm-deploy, dcu-rccl-test, dcu-env, dcu-perf-profiling]
-  source:
-    provenance: "海光 DCU 故障排查经验速查（按报错关键词反查）"
 ---
 
 # DCU 故障排查经验速查（dcu-ontrack-experience）

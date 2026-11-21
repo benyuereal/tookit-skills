@@ -2,10 +2,7 @@
 name: dcu-code-migrator
 version: 1.0.1
 description: CUDA 到 HIP/DTK 的代码迁移助手，基于内置 HIP 知识分片做 API 映射、迁移报告生成与残留 CUDA 符号检测
-category: core
-standalone: true
 author: DCU Team
-keywords:
 - migrate
 - migration
 - cuda
@@ -18,7 +15,6 @@ keywords:
 - 适配
 - 移植
 - api-mapping
-intents:
 - type: code-migrate
   description: 把 CUDA 代码迁移到 HIP / DTK / DCU
   examples:
@@ -27,18 +23,8 @@ intents:
   - "cudaMemcpy 迁移后要注意什么"
   - "帮我把 cuFFT 换成 hipFFT"
   - "检查这份代码里还有没有 CUDA 符号"
-shard:
-  shard_id: dcu-code-migrator-native
-  domains:
-  - hip-runtime
-  - hip-api
-  - cuda-hip-mapping
-  - migration
-  - rocm-library
-recommended_companions:
 - dcu-hip-reference
 - dcu-ci-testcase
-capabilities:
 - action: migrate_cuda_to_hip
   cost: medium
   description: 基于知识分片生成 CUDA→HIP 迁移代码
@@ -54,6 +40,7 @@ capabilities:
 - action: search_docs
   cost: medium
   description: 在 HIP/DTK 知识分片中做关键词/语义检索
+license: MIT
 ---
 ---
 

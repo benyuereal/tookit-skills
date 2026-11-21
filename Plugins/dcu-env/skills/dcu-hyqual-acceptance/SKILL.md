@@ -4,13 +4,6 @@ description: 海光DCU HyQual 官方压力验收工具：5 卡型镜像版本矩
 version: 1.0.0
 author: DCU Engineer
 license: MIT
-metadata:
-  toolkit:
-    tags: [dcu, hygon, hyqual, acceptance, stress-test, du-bootstrap, dudiag, oob, 验收]
-    related_skills: [dcu-env, dcu-rccl-test, dcu-ontrack-experience, dcu-driver, dcu-hy-smi]
-  source:
-    provenance: "sourcefind 下载站 Cat5/13 + 文档中心 hyqual 树 2026-10-14 匿名实测（未真机复测）"
-    reference: "z-file CategoryID=5 基础压力工具/环境部署检测工具, CategoryID=13 带外管理, 文档中心树 5ce53abd"
 ---
 
 # DCU HyQual 官方压力验收与环境自检
