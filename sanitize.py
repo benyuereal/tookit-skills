@@ -63,6 +63,8 @@ _GITLAB_IP = _b64("MTEyLjExLjExOS45OQ==")                                       
 _INTERNAL_GROUP = _b64("ZGFzYXBw")                                            # 内部组名
 _INTERNAL_GIT_PATH = _b64("ZGN1dG9vbGtpdC9kZWVwbGVhcmluZw==")            # 内部 git 仓库路径
 _SUGON_DOMAIN = _b64("c3Vnb24uY29t")                                          # 内部邮箱域
+_HYGON_DOMAIN = _b64("aHlnb24uY24=")                                          # 内部邮箱/主机域（v5 新增：此前漏检，sanitize 假绿）
+_HYGON_PERSON = _b64("57qq56yR5pet")                                          # 内部 MAINTAINER 署名（v5 新增）
 _HERMES_DIR = _b64("Lmhlcm1lcw==")                                           # 内部 agent 运行时目录名
 _SSH_ALIAS = _b64("ZGN1ODk=")                                                 # 内部 ssh config 主机别名
 _ALIASES = [_b64(x) for x in ("eXVlYmlu","bGl1eHU=","d2FuZ21pbjY=","d3VqbDU=","eWFuZ3Fs","bGFpYmFv","emh1d2Vud2Vu","aGllY29f","ZmFud2g=","c3Vuemhx")]  # 内网用户名拼音别名
@@ -111,6 +113,12 @@ RULES.append((re.compile(r"\b" + re.escape(_GITLAB_IP) + r"(?::\d+)?"), "<intern
 RULES.append((re.compile(re.escape(_INTERNAL_GROUP) + r"/"), "<internal-group>/", "内部组路径"))
 RULES.append((re.compile(re.escape(_INTERNAL_GIT_PATH)), "<internal-group>", "内部git路径"))
 RULES.append((re.compile(r"[A-Za-z0-9._%+-]+@" + re.escape(_SUGON_DOMAIN)), "<internal-email>", "内部邮箱"))
+# v5：该内部域此前完全漏检，导致 `sanitize.py .` 假绿（exit 0 但仓库里有 21 处残留）
+RULES.append((re.compile(r"[A-Za-z0-9._%+-]+@" + re.escape(_HYGON_DOMAIN)), "<internal-email>", "内部邮箱"))
+RULES.append((re.compile(r"https?://(?:[\w-]+\.)*" + re.escape(_HYGON_DOMAIN)),
+              "<internal-gitlab>", "内部GitLab主机"))
+RULES.append((re.compile(r"(?<![@\w.])" + re.escape(_HYGON_DOMAIN)), "<internal-domain>", "内部域"))
+RULES.append((re.compile(re.escape(_HYGON_PERSON)), "<internal-user>", "内部作者署名"))
 RULES.append((re.compile(r"(?:~/|\^/|/root/|\$HOME/|(?<![\w./-]))" + re.escape(_HERMES_DIR) + r"(?![\w-])"), "<agent-home>", "内部agent路径"))
 RULES.append((re.compile(r"^\s{2}hermes:\s*$"), "  toolkit:", "frontmatter内部键"))
 BDF_DOMAIN = re.compile(r"\b[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]\b")
@@ -131,7 +139,11 @@ LOOPBACK = {"0.0.0.0", "127.0.0.1", "127.0.1.1", "255.255.255.255"}
 VERSION_LIKE = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
 PRIVATE_IP = re.compile(r"\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2[0-9]|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b")
 ALLOWED_IP = ("10.244.", "10.96.", "192.168.122.")
-EXTS = {".md", ".sh", ".py", ".json", ".yaml", ".yml", ".sql", ".txt", ".rst", ".toml", ".cpp", ".hpp", ".cc", ".h", ".c", ".mk", ".cmake", ".cfg", ".ini", ".conf", ".dockerfile", ".gz", ".sqlite", ".db"}
+EXTS = {".md", ".sh", ".py", ".json", ".yaml", ".yml", ".sql", ".txt", ".rst", ".toml", ".cpp", ".hpp", ".cc", ".h", ".c", ".mk", ".cmake", ".cfg", ".ini", ".conf", ".dockerfile", ".gz", ".sqlite", ".db",
+        # v5：此前漏扫——package.env 的 MAINTAINER/HOMEPAGE 在这里
+        ".env"}
+# 无后缀（dotfile）也要扫的文件名：.gitmodules 的 url 曾漏检
+EXTRA_NAMES = {".gitmodules", ".gitconfig"}
 SKIP_FILES = {"sanitize.py"}
 SKIP_DIRS = {".git"}
 
@@ -145,7 +157,8 @@ def _is_public_repo_url(line):
 
 def iter_files():
     for f in ROOT.rglob("*"):
-        if f.is_file() and f.suffix.lower() in EXTS and not (set(f.parts) & SKIP_DIRS):
+        if f.is_file() and (f.suffix.lower() in EXTS or f.name in EXTRA_NAMES) \
+                and not (set(f.parts) & SKIP_DIRS):
             if f.name in SKIP_FILES:
                 continue
             yield f
@@ -366,6 +379,10 @@ def selftest():
         ("git clone http://" + _GITLAB_IP + ":10068/" + _INTERNAL_GROUP + "/x.git", "内部GitLab主机"),
         ("repo " + _INTERNAL_GIT_PATH + "/dev.git", "内部git路径"),
         ("mail me at dev@" + _SUGON_DOMAIN + " please", "内部邮箱"),
+        ("mail me at dev@" + _HYGON_DOMAIN + " please", "内部邮箱"),  # v5 新增：此前假绿
+        ("HOMEPAGE=\"https://gitlab." + _HYGON_DOMAIN + "/group/repo\"", "内部GitLab主机"),
+        ("MAINTAINER=\"" + _HYGON_PERSON + " <x@y>\"", "内部作者署名"),
+        ("plain domain " + _HYGON_DOMAIN + " appears", "内部域"),
         ("cd ~/x then " + _HERMES_DIR + "/state.db", "内部agent路径"),
         ("lspci output 0000:03:00.0 ok", "裸BDF"),
         ("lspci 03:00.0 and 03:00.1 listed", "裸BDF短形"),

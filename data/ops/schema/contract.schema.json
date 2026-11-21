@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://gitlab.hygon.cn/tsoc/kits-platform/dcu-toolkit-skills/data/ops/schema/contract.schema.json",
+  "$id": "<internal-gitlab>",
   "title": "DCU 算子契约（contract.yaml）",
   "description": "算子卡的机器可读契约。算子卡内 contract.yaml 的结构约束；scripts/opverify.py 按此判定一次 run 是否通过。写法说明见 Plugins/ops/skills/op-contract/SKILL.md。",
   "type": "object",

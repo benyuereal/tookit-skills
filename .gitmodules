@@ -1,3 +1,3 @@
 [submodule "kits-common"]
     path = .kits-common
-    url = https://gitlab.hygon.cn/tsoc/kits-platform/kits-common.git
+    url = <internal-gitlab>/tsoc/kits-platform/kits-common.git

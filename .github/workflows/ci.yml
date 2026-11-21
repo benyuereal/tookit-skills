@@ -1,0 +1,53 @@
+name: ci
+
+# 存在理由：仓库原有的 .gitlab-ci.yml 是内网 Kits Platform 父/子流水线
+# （include tsoc/kits-platform/kits-common），且 sanitize-gate 只在 open-source
+# 分支跑 —— 在 GitHub 上等于零检查。本文件提供与内网无关的最小可用门禁。
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: sanitize + evals + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 1. 脱敏规则自测：规则表本身坏了必须立刻发现，否则 gate 是假绿
+      - name: sanitize selftest
+        run: python3 sanitize.py --selftest
+
+      # 2. 全仓脱敏扫描：exit 非 0 表示有内部残留（文档/邮箱/内网地址/设备号）
+      - name: sanitize scan
+        run: python3 sanitize.py .
+
+      # 3. 静态 evals：skill 描述与 evals 契约
+      - name: static evals
+        run: python3 scripts/run_evals.py --root .
+
+      # 4. ops 域单测（含 engine 的显著性、三道门、loop 状态机）
+      - name: ops tests
+        working-directory: Plugins/ops/tests
+        run: python3 -m unittest discover -s . -p "test_*.py" -v
+
+      # 5. 结构 lint：只拦新增违规（基线入库后）
+      #    基线未入库时跳过，避免一开始就红；入库后自动生效
+      - name: structure lint (新增违规为 0)
+        run: |
+          if [ -f lint-baseline.json ]; then
+            python3 skill_lint.py --root . --baseline lint-baseline.json --out /tmp/lint-now.json
+          else
+            echo "::notice::lint-baseline.json 未入库，跳过新增违规检查"
+          fi
