@@ -5,6 +5,7 @@
 
 - **工具介绍 + 路由表 + 安装与使用**：[SKILL.md](./SKILL.md)（包级总入口，唯一用户文档）
 - **跨 Agent 入口**：[AGENTS.md](./AGENTS.md)
+- **算子优化引擎（分层与决策路径）**：[docs/ENGINE.md](./docs/ENGINE.md) ← 想优化算子从这读
 - **贡献与命名规范**：[docs/STANDARDS.md](./docs/STANDARDS.md)
 - **评测（静态门 + 动态路由评测）**：[docs/EVALS.md](./docs/EVALS.md)
 - **发版检查清单（上机验证/留痕/版本）**：[docs/RELEASE-CHECKLIST.md](./docs/RELEASE-CHECKLIST.md)
