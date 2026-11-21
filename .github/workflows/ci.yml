@@ -37,6 +37,10 @@ jobs:
       - name: static evals
         run: python3 scripts/run_evals.py --root .
 
+      # 3b. 算子图谱防漂移（索引与 cards 双向一致、§/L 号可解析、字段白名单）
+      - name: op-atlas validate
+        run: python3 -I Plugins/ops/op-atlas/validate.py --atlas Plugins/ops/op-atlas
+
       # 4. ops 域单测（含 engine 的显著性、三道门、loop 状态机）
       - name: ops tests
         working-directory: Plugins/ops/tests

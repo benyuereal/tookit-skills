@@ -1,0 +1,49 @@
+id: moe-grouped-gemm
+title: MoE grouped GEMM（routed experts）
+family: moe
+math: "y = concat_e ( x_e @ W_e ), e ∈ topk(token)；x_e 为按专家重排后的 token 块"
+status: draft
+op_card: null
+
+impls:
+  - repo: deepgemm-das
+    library_profile_ref: "libraries.md §6"
+    file_hint: "m_grouped_*_gemm_nt_masked / _contiguous / _ll"
+    tier: primary
+    law_ref: null
+  - repo: aiter-das
+    library_profile_ref: "libraries.md §4"
+    file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
+    tier: structural
+    law_ref: null
+  - repo: moe_c
+    library_profile_ref: "libraries.md §5"
+    file_hint: "moe_c_configs/"
+    tier: fallback
+    law_ref: null
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "稠密 GEMM 循环调 per-expert"
+    tier: avoid
+    law_ref: "L1"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: mixed
+  note: "无 models/ 模型，待补 moe_grouped_gemm.py；当前只给不等式，不算达成率"
+
+shapes: [decode-m1, decode-m64, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无本算子独立实测；grouped 比稠密循环快一条来自 libraries.md，非本卡结论"
+  verified_on: null
+
+surfaces:
+  - table-miss
+  - layout-pack
+
+updated: "2026-11-22"

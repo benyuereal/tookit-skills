@@ -1,0 +1,48 @@
+id: mqa-logits
+title: MQA logits（DSA indexer 打分）
+family: attention
+math: "logits[i,j] = Σ_h max(0, Q[i,h,:]·K[j,:]) · W[i,h]；H=32, D=128"
+status: measured
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "csrc/mqa_logits/paged/paged_mqa_logits_grouped.cu"
+    tier: primary
+    law_ref: "L1"
+  - repo: hbird-gemm
+    library_profile_ref: "libraries.md §1"
+    file_hint: "grouped G=3 + ds_bpermute epilogue（0.691 ms @192x32K）"
+    tier: structural
+    law_ref: "L1"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "shipped ungrouped（ee7b710，1.385 ms）"
+    tier: fallback
+    law_ref: "L9"
+
+ceiling:
+  kind: roofline_model
+  ref: "Plugins/ops/skills/op-roofline/models/mqa_logits.py"
+  model_name: mqa_logits
+  bound: bandwidth
+  note: "decode 档 q_per_ktile=1 ⇒ AI=64 FLOP/B < 平衡点 313"
+
+shapes: [decode-m1, decode-nextn, prefill-8k]
+
+last_verdict:
+  status: measured
+  kb_path: "/workspace/op_engine_design/MQA.md"
+  ratio:
+    value: 1.29
+    vs: "grouped G=3 (0.887 ms)"
+  conclusion: "epilogue 跨 lane 归约换 ds_bpermute，逐位一致；LDS 冲突非杠杆"
+  verified_on: "2026-11-22"
+
+surfaces:
+  - epilogue-fold
+  - cross-row-kv-reuse
+  - fold-nextn
+
+updated: "2026-11-22"

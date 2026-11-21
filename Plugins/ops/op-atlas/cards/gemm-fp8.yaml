@@ -1,0 +1,50 @@
+id: gemm-fp8
+title: FP8 GEMM（含 batched / grouped）
+family: gemm
+math: "out[M,N] = A[M,K] @ B[K,N]；A/B fp8-e4m3, acc=fp32, out=bf16"
+status: draft
+op_card: Plugins/ops/skills/op-gemm-fp8
+
+impls:
+  - repo: tilelang-hygon
+    library_profile_ref: "libraries.md §8"
+    file_hint: "examples/gemm_fp8"
+    tier: primary
+    law_ref: null
+  - repo: hipBLASLt
+    library_profile_ref: "libraries.md §6"
+    file_hint: "torch._scaled_mm"
+    tier: fallback
+    law_ref: null
+  - repo: aiter-das
+    library_profile_ref: "libraries.md §4"
+    file_hint: "aiter GEMM 入口"
+    tier: fallback
+    law_ref: null
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写 HIP + MFMA intrinsic"
+    tier: structural
+    law_ref: "L1"
+
+ceiling:
+  kind: constants
+  ref: "Plugins/ops/skills/op-roofline/constants.yaml"
+  bound: compute
+  note: "540 TF 是 fp8 分母；bf16 用 185 TF。混用会把'还有 4x'判成'到顶'"
+
+shapes: [decode-m1, decode-m32, prefill-8k, batched, grouped]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "draft：选型与坑已整理，bench 与 adapter 未落地，无实测结论"
+  verified_on: null
+
+surfaces:
+  - occupancy
+  - split-k
+  - table-miss
+
+updated: "2026-11-22"

@@ -1,0 +1,296 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""op-atlas 防漂移校验。退出码非 0 = CI 失败。
+
+用法:
+    python3 -I validate.py --atlas Plugins/ops/op-atlas
+    python3 -I validate.py --atlas Plugins/ops/op-atlas --json
+
+设计前提：**图谱是索引层**。所以校验的重点不是「卡片写得对不对」，
+而是「索引与真相源是否还一致」——卡片最容易的腐化方式是悄悄变成副本，
+或指向一个已经不存在的 §号 / L 号。
+
+八类检查（E1~E8）：
+  E1  cards ↔ INDEX 双向一致（每张卡在 INDEX 出现；INDEX 每个链接真实存在）
+  E2  impls.library_profile_ref 的 §号在 libraries.md 里真实存在
+  E3  impls.law_ref 的 L 号在 pipeline-laws.md 里真实存在
+  E4  status 与 data/ops/registry.json 对齐（registry 无此算子时 op_card 必须为 null）
+  E5  ceiling.ref 可解析（文件存在 / constants 键存在 / missing 时 ref 为 null）
+  E6  字段白名单 —— 卡片结构上**没有字段**可以承载技术描述
+  E7  结论红线 —— last_verdict 不许写裸绝对耗时、不许无分母百分比
+  E8  家族文件齐备（每个 family 都有 families/<family>.md）
+"""
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+FAMILIES = {"gemm", "attention", "moe", "elementwise", "comm", "sampling"}
+STATUSES = {"draft", "measured", "tuned", "at_floor", "deprecated"}
+TIERS = {"primary", "structural", "reference", "fallback", "avoid", "unavailable"}
+CEIL_KINDS = {"roofline_model", "constants", "measured", "analytic", "missing"}
+VERDICT_STATUSES = {"none", "predicted", "measured", "refuted", "at_floor"}
+
+# E6：顶层字段白名单。只有这些，多的一个字也进不来。
+ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
+               "ceiling", "shapes", "last_verdict", "surfaces", "updated"}
+REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
+                "ceiling", "last_verdict", "updated"}
+ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref"}
+REQUIRED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier"}
+ALLOWED_CEIL = {"kind", "ref", "bound", "model_name", "note"}
+REQUIRED_CEIL = {"kind", "ref"}
+ALLOWED_VERDICT = {"status", "kb_path", "ratio", "conclusion", "verified_on"}
+REQUIRED_VERDICT = {"status", "kb_path", "conclusion", "verified_on"}
+
+# E7：裸绝对耗时（0.887 ms / 1.29s / 83 us）——必须带分母或干脆不写
+BARE_TIME = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*(?:ms|µs|us|ns)\b", re.I)
+# E7：无分母百分比（97% / 87 %）——必须写清"相对谁"
+BARE_PCT = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*%")
+
+errors, warns = [], []
+
+
+def err(code, where, msg):
+    errors.append("[%s] %s: %s" % (code, where, msg))
+
+
+def warn(code, where, msg):
+    warns.append("[%s] %s: %s" % (code, where, msg))
+
+
+def _load_yaml(path):
+    try:
+        import yaml
+    except ImportError:
+        return None, "PyYAML 未安装，无法解析 %s（本校验器需要它；CI 已装）" % path
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")), None
+    except Exception as e:                                    # noqa: BLE001
+        return None, "%s 解析失败: %s" % (path, e)
+
+
+def _truth_sources(repo):
+    lib_p = repo / "Plugins/ops/skills/op-stack-design/references/libraries.md"
+    laws_p = repo / "Plugins/ops/skills/op-stack-design/references/pipeline-laws.md"
+    lib = lib_p.read_text(encoding="utf-8") if lib_p.is_file() else ""
+    laws = laws_p.read_text(encoding="utf-8") if laws_p.is_file() else ""
+    lib_sections = {int(m) for m in re.findall(r"(?m)^###\s+(\d+)\.\s", lib)}
+    law_ids = {m for m in re.findall(r"(?m)^##\s+L(10|[0-9])\b", laws)}
+    return lib_sections, law_ids
+
+
+def _registry(repo):
+    p = repo / "data/ops/registry.json"
+    if not p.is_file():
+        return {}, {}
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        return {}, {}
+    return ({o.get("name"): o.get("status") for o in d.get("ops", [])},
+            {o.get("name"): o.get("path") for o in d.get("ops", [])})
+
+
+def validate(atlas, repo):
+    cards_dir = atlas / "cards"
+    cards = sorted(cards_dir.glob("*.yaml"))
+    if not cards:
+        err("E1", str(atlas), "cards/ 下没有卡片")
+        return
+
+    lib_sections, law_ids = _truth_sources(repo)
+    reg_status, reg_path = _registry(repo)
+
+    index_p = atlas / "INDEX.md"
+    index_txt = index_p.read_text(encoding="utf-8") if index_p.is_file() else ""
+    if not index_txt:
+        err("E1", str(index_p), "INDEX.md 不存在或为空")
+
+    seen_ids = set()
+    for card_path in cards:
+        c, problem = _load_yaml(card_path)
+        where = card_path.name
+        if problem:
+            err("E0", where, problem)
+            continue
+        if not isinstance(c, dict):
+            err("E0", where, "顶层不是 mapping")
+            continue
+
+        cid = c.get("id")
+        if cid != card_path.stem:
+            err("E0", where, "id=%r 与文件名 %r 不符" % (cid, card_path.stem))
+        if cid in seen_ids:
+            err("E1", where, "id %r 重复" % cid)
+        seen_ids.add(cid)
+
+        # ---- E6 字段白名单（事前防副本，最重要的一条）
+        extra = set(c) - ALLOWED_TOP
+        if extra:
+            err("E6", where, "未知顶层字段 %s；卡片不接受自由文本" % sorted(extra))
+        missing = REQUIRED_TOP - set(c)
+        if missing:
+            err("E6", where, "缺必填字段 %s" % sorted(missing))
+
+        if c.get("family") not in FAMILIES:
+            err("E8", where, "family=%r 不在 %s" % (c.get("family"), sorted(FAMILIES)))
+        if c.get("status") not in STATUSES:
+            err("E6", where, "status=%r 非法" % c.get("status"))
+
+        # ---- E1 cards ↔ INDEX 双向
+        if index_txt and ("cards/%s.yaml" % card_path.stem) not in index_txt:
+            err("E1", where, "%s 未在 INDEX.md 登记" % cid)
+
+        # ---- E2 / E3 指针可解析
+        impls = c.get("impls") or []
+        if not isinstance(impls, list) or not impls:
+            err("E6", where, "impls 必须是非空数组")
+            impls = []
+        for i, impl in enumerate(impls):
+            if not isinstance(impl, dict):
+                err("E6", where, "impls[%d] 不是 mapping" % i)
+                continue
+            iextra = set(impl) - ALLOWED_IMPL
+            if iextra:
+                err("E6", where, "impls[%d] 未知字段 %s" % (i, sorted(iextra)))
+            imiss = REQUIRED_IMPL - set(impl)
+            if imiss:
+                err("E6", where, "impls[%d] 缺必填 %s" % (i, sorted(imiss)))
+            if impl.get("tier") not in TIERS:
+                err("E6", where, "impls[%d].tier=%r 非法" % (i, impl.get("tier")))
+
+            ref = impl.get("library_profile_ref")
+            if ref is None:
+                if impl.get("repo") not in ("in-house", None):
+                    err("E2", where, "impls[%d] 非 in-house 缺 library_profile_ref" % i)
+            else:
+                m = re.fullmatch(r"libraries\.md §(\d{1,2})", str(ref))
+                if not m:
+                    err("E2", where, "impls[%d] ref 格式非法 %r" % (i, ref))
+                elif int(m.group(1)) not in lib_sections:
+                    err("E2", where, "impls[%d] %s 在 libraries.md 不存在（现有 §%s）"
+                        % (i, ref, sorted(lib_sections)))
+
+            law = impl.get("law_ref")
+            if law is not None:
+                if not re.fullmatch(r"L(10|[0-9])", str(law)):
+                    err("E3", where, "impls[%d] law_ref 格式非法 %r" % (i, law))
+                elif str(law)[1:] not in law_ids:
+                    err("E3", where, "impls[%d] %s 不是 pipeline-laws.md 的定律（现有 L%s）"
+                        % (i, law, sorted(law_ids, key=int)))
+            if impl.get("tier") == "avoid" and not law:
+                warn("W1", where, "impls[%d] avoid 条目无 law_ref，机制会丢失" % i)
+
+        # ---- E4 status 与 registry 对齐
+        reg = reg_status.get(cid)
+        if reg is None:
+            if c.get("op_card") is not None:
+                err("E4", where, "registry 无此算子，但 op_card=%r 非空" % c.get("op_card"))
+        elif reg != c.get("status"):
+            err("E4", where, "status=%r != registry %r" % (c.get("status"), reg))
+        oc = c.get("op_card")
+        if oc and not (repo / oc).is_dir():
+            err("E4", where, "op_card=%r 指向的目录不存在" % oc)
+
+        # ---- E5 ceiling 可解析
+        ce = c.get("ceiling") or {}
+        if not isinstance(ce, dict):
+            err("E6", where, "ceiling 必须是 mapping")
+            ce = {}
+        cextra = set(ce) - ALLOWED_CEIL
+        if cextra:
+            err("E6", where, "ceiling 未知字段 %s" % sorted(cextra))
+        if CEIL_KINDS - {ce.get("kind")} and ce.get("kind") not in CEIL_KINDS:
+            err("E6", where, "ceiling.kind=%r 非法" % ce.get("kind"))
+        if ce.get("kind") == "missing":
+            if ce.get("ref") is not None:
+                err("E5", where, "ceiling.kind=missing 时 ref 必须为 null")
+        elif ce.get("ref"):
+            ref = str(ce["ref"])
+            if "#" in ref:
+                f, _, key = ref.partition("#")
+                if not (repo / f).is_file():
+                    err("E5", where, "ceiling.ref 文件不存在: %s" % f)
+                elif key and (repo / f).is_file():
+                    body = (repo / f).read_text(encoding="utf-8", errors="ignore")
+                    if key.split(".")[-1] not in body:
+                        err("E5", where, "ceiling.ref 键 %r 在 %s 中找不到" % (key, f))
+            elif not (repo / ref).exists():
+                err("E5", where, "ceiling.ref 路径不存在: %s" % ref)
+
+        # ---- E7 结论红线
+        lv = c.get("last_verdict") or {}
+        if not isinstance(lv, dict):
+            err("E6", where, "last_verdict 必须是 mapping")
+            lv = {}
+        lextra = set(lv) - ALLOWED_VERDICT
+        if lextra:
+            err("E6", where, "last_verdict 未知字段 %s" % sorted(lextra))
+        lmiss = REQUIRED_VERDICT - set(lv)
+        if lmiss:
+            err("E6", where, "last_verdict 缺必填 %s" % sorted(lmiss))
+        if lv.get("status") not in VERDICT_STATUSES:
+            err("E6", where, "last_verdict.status=%r 非法" % lv.get("status"))
+
+        conc = str(lv.get("conclusion") or "")
+        if BARE_TIME.search(conc):
+            err("E7", where, "结论含裸绝对耗时 %r —— 绝对数字进 kb，卡里只留相对倍数"
+                % BARE_TIME.search(conc).group(0))
+        if BARE_PCT.search(conc):
+            err("E7", where, "结论含无分母百分比 %r —— 百分比必须写明相对谁"
+                % BARE_PCT.search(conc).group(0))
+        if len(conc) > 60:
+            err("E7", where, "结论 %d 字，超过 60 字上限（会变成技术描述）" % len(conc))
+
+        ratio = lv.get("ratio")
+        if ratio is not None:
+            if not isinstance(ratio, dict):
+                err("E6", where, "last_verdict.ratio 必须是 mapping 或 null")
+            else:
+                rextra = set(ratio) - {"value", "vs"}
+                if rextra:
+                    err("E6", where, "ratio 未知字段 %s" % sorted(rextra))
+                if "value" not in ratio or "vs" not in ratio:
+                    err("E6", where, "ratio 必须带 value 与 vs（分母不许省略）")
+
+    # ---- E1b INDEX 指向的卡必须存在
+    for m in re.findall(r"cards/([a-z0-9-]+)\.yaml", index_txt):
+        if not (cards_dir / ("%s.yaml" % m)).is_file():
+            err("E1", "INDEX.md", "指向不存在的卡 %s" % m)
+
+    # ---- E8 家族文件齐备
+    for c in cards:
+        data, problem = _load_yaml(c)
+        if problem or not isinstance(data, dict):
+            continue
+        fam = data.get("family")
+        if fam in FAMILIES and not (atlas / "families" / ("%s.md" % fam)).is_file():
+            err("E8", c.name, "缺家族文件 families/%s.md" % fam)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="op-atlas 防漂移校验")
+    ap.add_argument("--atlas", default="Plugins/ops/op-atlas")
+    ap.add_argument("--repo", default=None, help="仓库根（默认从 atlas 路径推）")
+    ap.add_argument("--json", action="store_true")
+    a = ap.parse_args()
+
+    atlas = Path(a.atlas).resolve()
+    repo = Path(a.repo).resolve() if a.repo else atlas.parents[2]
+    validate(atlas, repo)
+
+    if a.json:
+        print(json.dumps({"errors": errors, "warns": warns}, ensure_ascii=False, indent=2))
+    else:
+        for e in errors:
+            print(e)
+        for w in warns:
+            print(w)
+        print("\n结果：%d 错误 / %d 警告" % (len(errors), len(warns)))
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
