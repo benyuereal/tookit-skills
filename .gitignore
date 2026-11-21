@@ -11,6 +11,9 @@ data/devices.json
 # Python 缓存
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .DS_Store
 *.swp
 # 手写 HIP kernel 编译产物（.so/.o/备份，运行时本地生成，不入库；源 .hip 入库）

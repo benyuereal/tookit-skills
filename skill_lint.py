@@ -252,7 +252,9 @@ def lint(root):
 
     # ---------- 文件命名 SK003 ----------
     for dirpath, dirnames, filenames in os.walk(os.path.join(root, 'Plugins')):
-        dirnames[:] = [x for x in dirnames if x != '__pycache__']
+        # 构建产物目录不参与命名检查：它们由 .gitignore 排除，不是本仓文件。
+        dirnames[:] = [x for x in dirnames if x not in (
+            '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.git')]
         if 'kb_shard' in dirpath:
             continue
         for fn in filenames:
