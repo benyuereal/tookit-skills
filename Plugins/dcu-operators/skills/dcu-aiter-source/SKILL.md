@@ -120,6 +120,16 @@ aiter-0.1.3-das184.dtk2604/
 4. **验证闭环**：`dcu-op-optimization`（profile→定位→改→验证）+ `dcu-perf-profiling`（rocprof/rocTracer）。
 5. **构建前置**：海光 DTK 见 `dcu-dtk`；容器内必挂 `-v /opt/hyhal:/opt/hyhal:ro`，否则 DCU 不可见。
 
+## 何时选它 / 何时别选
+
+- **选它**：标准 MoE / Norm / Activation / Quant / Attention 接入，要一层统一 Python API，还要按 gfx 自动挑后端；已在 vLLM/SGLang 的 ROCm-HCU 路径上，改的是「被框架调到的那条实现」。
+- **选它**：`get_aiter_moe_config` 返回的 `solution_type` 是 `ASM` / `CK` / `TRITON` 之一，问题确实落在该后端 kernel 里。
+- **选它**：需要四后端回退——某量化档在 asm 上没解但 triton 有，交给调度器比自己做分支便宜。
+- **别选**：MoE 慢但 `solution_type` 是 `MOE_C`——那是独立仓库 `Moe` 的实现（见 `dcu-aiter-moe`），改 AITER 的 Python 层调不到它；先确认后端再动手。
+- **别选**：需要 GEMM 的 layout 级控制（masked/contiguous/low-latency、HIPC/W6 权重布局）——走 `dcu-deepgemm-source`，AITER 的 GEMM 是 MoE 流程的一部分。
+- **别选**：memory-bound 的融合链（norm+rope、激活+量化）——LightOp 的融合 kernel 才是为这条链设计的。
+- **结构性吃亏**：查表不是自动调优。同一 shape 换一档量化可能整体降级到更慢的后端而**无告警**（`status=False` 才报），性能回归的根因常在表项缺失而不是 kernel 退化——这种情况继续调 kernel 是白花时间。
+
 ## 使用须知
 > **别混淆**：z-file Cat4 DAS 目录里的 `aitemplate`（DAS1.8.3/1.8.4 新增独立包）是 Meta AITemplate 框架线，**不是**本 skill 的 AITER 算子库（aiter）——找 aiter 的包/源码时别错拿 aitemplate（2026-10-14 下载站实测备注）。
 

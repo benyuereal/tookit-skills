@@ -10,7 +10,7 @@ license: MIT
 
 ## 工具介绍
 
-海光 DCU 算子开发技能集：CUDA→HIP 移植、HIP/Triton 算子开发、kernel 优化知识库与 MoE 融合算子。本目录为 Kits Platform Skill Tool `dcu-operators` 的发布单元，包含 19 个子 skill：
+海光 DCU 算子开发技能集：CUDA→HIP 移植、HIP/Triton 算子开发、kernel 优化知识库与 MoE 融合算子。本目录为 Kits Platform Skill Tool `dcu-operators` 的发布单元，包含 20 个子 skill：
 
 | skill | 说明 |
 |---|---|
@@ -22,6 +22,7 @@ license: MIT
 | dcu-deepep-source | DeepEP DCU 适配源码结构——MoE 专家并行 dispatch/combine（Buffer + low_latency 路由策略… |
 | dcu-deepgemm-arch | DeepGEMM三路径架构与MODE调优机制：masked/contiguous/ll选型与layout陷阱 |
 | dcu-deepgemm-source | DeepGEMM通用GEMM库DCU源码结构与适配 |
+| dcu-hytlass-source | hytlass（CUTLASS 3.5.0 的 HCU 移植）源码与用法索引：两套编程模型 + 示例清单 + 何时用它搭自己的 GEMM |
 | dcu-flashattn-source | flash-attn 海光 DCU 适配源码索引：三层适配结构 + FA3 不可移植结论 + 版本谱系 |
 | dcu-hipdsa-source | hip-dsa / hip-dsa-kernels / hipdnn DCU 适配——cudnn.DSA（DeepSeek 稀疏注意力）HI… |
 | dcu-kernel-dev | DCU算子开发规范：HIP kernel开发与TileLang DSL写算子两路径 |

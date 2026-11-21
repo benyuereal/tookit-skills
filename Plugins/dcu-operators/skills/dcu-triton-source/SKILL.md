@@ -124,7 +124,16 @@ ls ~/.triton/cache/failed_kernels/   # 有失败 kernel 时这里有 context.txt
 python -m triton.tools.opt_config_cli show --all
 ```
 
-## 使用须知
+## 何时选它 / 何时别选
+
+- **选它**：算子的形状随数据变化（topk、ragged、gather 类），写不出固定的 tile 切分，需要 DSL 的表达力换正确性。
+- **选它**：要快速得到一版可用的正确实现做对照（写 Triton 的周期通常短于写 HIP 同等功能）。
+- **选它**：问题出在编译器层——`AI LLVM (aillvm) not found`、kernel 编译失败要归档、要找最优 config（`opt_config_cli`）。
+- **别选（结构性吃亏）**：GEMM 主体。`tl.dot` 在 DCU 上 M=64–256 只有参考实现的 0.29–0.41×，且这是 lowering 路径的结构位置，调 BLOCK/num_warps 救不回来。
+- **别选**：需要直接控制寄存器/LDS 或手排 barrier 的 kernel——hcu backend 暴露不到那一层，硬需求走手写 HIP。
+- **别选**：M=1 的极瘦 GEMV——非 dot 的 broadcast 写法能打满流式峰值，但这种形状手写 ladder 更省编译与缓存的不确定性。
+- **反例（易混）**：编译问题先看 `~/.triton/cache/failed_kernels/` 的归档；工具链缺失报的是安装不完整，不是本 skill 能修的代码问题。
+
 - **DCC 编译器官方文档索引**（8 章 56 叶：编译选项/-mllvm/GCVM/Triton 接入/LingShu 后端/dcc-autotune/dccprof）：见 `references/dcc-compiler-docs.md`（2026-10-14 从文档中心实测建档）。
 
 - DCU 设备**走 hcu backend**（gfx926/928/936/938/92a/946 命中），不是 amd backend。排查 Triton 编译问题先看 hcu backend 代码。

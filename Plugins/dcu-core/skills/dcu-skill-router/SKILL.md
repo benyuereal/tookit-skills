@@ -90,6 +90,7 @@ metadata:
 | `operators/dcu-aiter-source` | AITER 算子库源码索引 | AITER 算子取/改 |
 | `operators/dcu-aiter-moe` | AITER MoE 融合算子四后端 | MoE 算子深度专题 |
 | `operators/dcu-deepgemm-source` | DeepGEMM 通用 GEMM 源码索引 | DeepGEMM 取/改 |
+| `operators/dcu-hytlass-source` | hytlass（CUTLASS 3.5.0 的 HCU 移植）源码与用法：C++ 模板搭 GEMM、两套编程模型（2.x mmac / 3.x HuTe）、11 个示例、与手写 HIP 的分界 | 想自己搭 GEMM / 非标准 layout / 融合 epilogue / 移植 CUTLASS 风格 kernel |
 | `operators/dcu-deepgemm-arch` | DeepGEMM 三路径架构与 MODE 调优机制 | 选 GEMM 路径 / layout 陷阱 / 加调优表 |
 | `operators/dcu-flashattn-source` | flash-attn 海光 DCU 适配源码索引（三层适配结构 + FA3 不可移植结论 + 版本谱系） | flash-attn 怎么适配 / 开源最新版能否适配 / 能否提速 |
 | `operators/dcu-lightop-source` | LightOp 海光融合算子库源码 | LightOp 取/改 |
@@ -209,9 +210,13 @@ metadata:
 | `op-contract` | 契约怎么写：字段规范、容差分级、不变量清单、性能地板依据 | 新建/补齐算子卡 |
 | `op-bench` | 怎么量：口径三问、六条铁律、MAD 显著性、跨卡 ratio | 微基准口径设计 |
 | `op-profiling` | 实测卡在哪：PMC 计数器→`bound`/`facts`/`ratios` 三级证据；TA_* 跨 SE 求和、L1 无命中率等口径陷阱 | 「卡在算力还是内存」「能不能写『到顶』」「跨变体找区分项」 |
-| `op-gate` | 怎么判：三闸四档（ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY）、回退留痕 | 判断改动能否进生产 |
+| `op-gate` | 怎么判：四闸四档（ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY）、回退留痕 | 判断改动能否进生产 |
 | `op-optimize` | 怎么持续推进：候选队列→单实验→机器判定→落盘记账，拒绝重跑已证伪项 | 优化做了一半要接着干 / 单模型跑完一轮 |
+| `op-stack-design` | 先选型再排流水线：十一库画像 + 十条流水线定律，编译前否掉结构性不可行的设计 | 不知道用哪个库 / 单算子突破换成整库选型 |
 | `op-roofline` | 先算再写：物理常数→推导规则→算子模型，输出**绑定约束**与地板；写不出预测不许写代码 | 「下一个改动往哪切」「这个设计会不会溢出/超 LDS」「为什么实测和预期差很远」 |
+| `op-hip-compile` | 手写 HIP 编译调优：用 aicc 而非 hipcc、镜像 tilelang 的 `-mllvm` 集、从 .so 读 VGPR 算占用率 | 手写 HIP 慢但数值对 / 编译参数怎么对齐 |
+
+> 各 skill 的分工边界以 `Plugins/ops/SKILL.md` §5.1「唯一权威表」为准，本表只作索引。
 
 ## 二、dcu-coding-skill 分类路由（面向代码检索/迁移/CI）
 

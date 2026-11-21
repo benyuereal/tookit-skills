@@ -60,6 +60,8 @@ deepgemm-main/
 
 ## §3 海光适配要点（有上游，但文件级差异小）
 
+> **开源锚点**：官方开源版 **`deepgemm-das`**（`github.com/HYGON-AI/deepgemm-das`，`main` 分支）上游基线 `deepseek-ai/DeepGEMM` commit **`559d79fb`**，MIT。开源版把 csrc 按架构分了目录：`csrc/arch/gfx92a`、`csrc/arch/gfx936`、`csrc/arch/gfx938`、`csrc/arch/gfx936_gfx938_shared`——**找某个 gfx 专属实现（HIPC、W6、shuffle-unique）先进对应 arch 目录**，不是在全库搜同名文件。下面的本地实测以发布包为基准，两边的接口名一致、目录布局以开源版为准。
+
 > **方法论**：DeepGEMM **有公开上游**（DeepSeek `deepseek-ai/DeepGEMM`，CUDA 原版）。实测 `diff -rq 上游 海光版` **仅 3 个顶层文件不同**（`.gitignore` / `README.md` / `setup.py`）——因为海光把上游 CUDA（.cu + JIT）**同名移植为 HIP（.cpp + py_itfs_cu/）**，保持文件名结构，故文件级看不到"新增文件"，差异在**内容级**。这与 AITER（csrc 大面积改同名文件）同属"内容级改造"类，但 DeepGEMM 上游本就小、且 README 已详尽列出差异，故适配点以 README 5 点 + DTK/gfx 矩阵为准，不必纠缠 diff 行数。
 
 **README 明示的 5 点海光改造**（相对官方 DeepGemm）：
@@ -79,10 +81,15 @@ deepgemm-main/
 | 普通 FP8 GEMM | `deepgemm/gemm.py:fp8_gemm_nt` | `csrc/py_itfs_cu/`（fp8 gemm 实现） | `op_test/test_fp8_gemm.py` | FP8 nt 布局 |
 | 分组 masked W8A8 | `deepgemm/m_group_gemm_nt_masked.py:m_grouped_w8a8_gemm_nt_masked` | `csrc/py_itfs_cu/` | `op_test/test_deepgemm_masked_w8a8_fp8.py` / `_w8a8_int8.py` / `_w8a8_int8_gfx936.py` / `_w8a8_fp8_tensor_wise.py` | marlin/marlin2 layout |
 | 分组 masked W4A8 | `m_grouped_w4a8_gemm_nt_masked` | 同上 | `op_test/test_deepgemm_masked_w4a8.py` | |
+| **分组 masked W4A8 · HIPC** | `m_grouped_w4a8_gemm_nt_masked_hipc` | `csrc/arch/gfx936`、`gfx938`（开源版仓） | 对应 `_hipc` 测试 | **权重须先经 `pack_w4a8_moe_hipc_weight` 转 HIPC 专用 layout**；与 marlin 版是两条入口，布局不可互换 |
+| **分组 masked W8A8 · gfx936 专用** | `m_grouped_w8a8_gemm_nt_masked_gfx936` | `csrc/arch/gfx936` | `op_test/test_deepgemm_masked_w8a8_int8_gfx936.py` | 权重用 **W6 packed**，由 `pack_w8a8_gfx936_weight_to_w6` 生成；gfx936 上走它而不是通用入口 |
 | 分组 masked BF16 | `m_grouped_bf16_gemm_nt_masked` | 同上 | `op_test/test_deepgemm_masked_w16a16_bf16.py` | 不涉及量化重排 |
 | 分组 masked FP8 | `m_grouped_fp8_gemm_nt_masked` | 同上 | `op_test/test_deepgemm_masked_w8a8_fp8.py` | 仅 ARCH>=GFX938 |
 | 分组 contiguous W8A8/INT8/FP8/BF16 | `m_group_gemm_nt_contiguous.py:*` | 同上 | `op_test/test_deepgemm_contiguous_w8a8_fp8*.py` / `test_deepgemm_contiguous_w8a8_int8*.py` / `test_deepgemm_contiguous_w8a8_int8_gfx936.py` | 推荐 W6 packed；input 256 对齐 |
-| 分组 low-latency W8A8/FP8 | `m_grouped_*_gemm_nt_masked_ll*` | 同上 | 对应 `_ll` 测试（见 op_test/ 命名规律） | W6 packed；仅覆盖 N/K shape |
+| 分组 low-latency W8A8/FP8 | `m_grouped_fp8_gemm_nt_masked_ll`（及 `_ll_tensor_wise` 变体） | 同上 | 对应 `_ll` 测试（见 op_test/ 命名规律） | W6 packed；仅覆盖 N/K shape；`_ll_tensor_wise` 是 scale 粒度不同的另一入口 |
+| **分组 contiguous INT8（shuffle 开关）** | `m_grouped_i8_gemm_nt_contiguous` | `csrc/arch/gfx936` / `gfx92a` / `gfx938` | 对应 `_i8_contiguous` 测试 | `shuffle_unique=1`（默认）走 shuffle-unique/HIPC；`0` 在 gfx936/gfx92a 走 ASM；**gfx938 不区分**（两值同一实现） |
+| **普通 FP8 GEMM（hipBLASLt 后端）** | `deepgemm/gemm.py:fp8_gemm` | 转调 hipBLASLt | `op_test/test_fp8_gemm.py` | 不吃 DeepGEMM 的 layout 约束，但也不吃它的调优表 |
+| **einsum / bmm** | `einsum` / `fp8_einsum` | 同上 | — | **BF16 的 einsum/bmm 走 hipBLASLt；FP8 落到 `fp8_gemm`** ——两条路的后端不同，性能不可直接对比 |
 | W8A16 线性 | `deepgemm/w8a16_linear.py` | 同上 | `op_test/test_w8a16_linear.py` / `test_w4a16_gw32_masked.py` | |
 | MQA logits | `deepgemm/mqa_logits.py:mqa_logits` / `paged_mqa_logits` / `get_paged_mqa_logits_metadata` | `csrc/py_itfs_cu/`（mqa 实现） | `op_test/test_mqa_logits.py` / `test_paged_mqa_logits.py` | 与 AITER `mqa_logits_kernels.cu` 同类 |
 | MoE Marlin prefill | `deepgemm/moe_marlin_prefill.py` | 同上 | — | MoE Marlin 预填充 |
@@ -110,6 +117,17 @@ python3 test_deepgemm_masked_w8a8_int8_gfx936.py    # gfx936 专用
 # 调试 size 打印
 DEEPGEMM_PRINT_OP_SIZE=1 DEEPGEMM_PRINT_OP_SIZE_FILTER=w8a8 python3 op_test/test_deepgemm_contiguous_w8a8_fp8.py
 ```
+
+## §7 何时选它 / 何时别选
+
+- **选它**：**grouped GEMM**（MoE 每专家 M 很小、专家数多）——它是为「token 按专家分组」这个形状设计的，三条路径覆盖 token 的三种组织方式。
+- **选它**：需要按布局/架构精细选入口——W4A8 要 HIPC、gfx936 要 W6、decode 要 low-latency；这些入口别处没有。
+- **选它**：要把调优沉淀成表——masked 的 MODE 表与 contiguous 的 size-aware 阈值都是加表项，不用改代码。
+- **选它**：普通 fp8/einsum 想直接借 hipBLASLt（`fp8_gemm` / `einsum`）——但要记得这条路径不吃 DeepGEMM 的调优表。
+- **别选（结构性吃亏）**：稠密大 GEMM。它的专精是分组与量化布局；单个 (M,N,K) 大矩阵走 hipBLASLt 或 hytlass 的深流水线更合适，用 DeepGEMM 只是多一层 wrapper。
+- **别选**：attention / 融合链 / 逐元素——不覆盖；也不要以它为起点改出 attention（KV gather 的瓶颈不在 GEMM）。
+- **别选**：要求一套入口跨 gfx936/938 不分叉。`gfx936` 专属 W6 入口与通用入口是两条线，强行统一就是 layout 混用（静默错，不是报错）。
+- **结构性吃亏的一点**：fp8 masked 仅在 gfx938 及以后，gfx936 上走 fp8 masked 是「能跑但不是这条路」；且 contiguous 的 k_group kernel 不支持——这两处是已知缺口，不是调参空间。
 
 ## 使用须知
 - 经验仅供参考，不保证修复。**先核对**：gfx 型号（fp8 需 gfx938）、DTK 版本（24.04/25.04/26.04）、pytorch 版本、报错原文。DeepGEMM 有上游（DeepSeek DeepGEMM），但海光为同名 Hip 移植，文件级差异小——以 README 5 点差异 + DTK 矩阵 + 实际编译为准。

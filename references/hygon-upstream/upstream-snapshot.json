@@ -1,53 +1,117 @@
 {
- "fetched_at": "2026-10-19",
+ "fetched_at": "2026-11-21",
  "org": "HYGON-AI",
  "repos": [
   {
-   "name": "torchvision-das",
-   "desc": "本仓库基于上游 torchvision 开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、测试以及相关文档维护。本仓库用于公开源码协作、问题跟踪和版本发布。",
-   "lang": "Python",
-   "stars": 1,
-   "pushed_at": "2026-10-19",
-   "archived": false
-  },
-  {
-   "name": "inference-cookbook-das",
-   "desc": "本仓库整理了在 HCU 硬件上部署、调优和运行 AI 模型的经验与最佳实践",
-   "lang": "Python",
-   "stars": 74,
-   "pushed_at": "2026-10-16",
-   "archived": false
-  },
-  {
-   "name": "triton-das",
-   "desc": "基于 triton-lang/triton 上游社区建设的 HCU 平台下游适配仓库，面向 HYGON HCU 平台进行编译后端、算子 lowering、运行时及工程能力适配，并结合 HCU 硬件特性进行功能扩展与性能优化。",
-   "lang": "MLIR",
-   "stars": 1,
-   "pushed_at": "2026-10-17",
+   "name": "train-cookbook-das",
+   "desc": "本仓库整理了在 HCU 硬件上 训练/微调 AI 模型的经验与最佳实践",
+   "lang": null,
+   "stars": 7,
+   "pushed_at": "2026-11-18",
    "archived": false
   },
   {
    "name": "Megatron-LM-das",
    "desc": "基于Megatron-LM上游社区版本建设的das插件仓库，为HCU平台提供功能适配、兼容支持与性能优化。",
    "lang": "Python",
-   "stars": 7,
-   "pushed_at": "2026-10-16",
+   "stars": 9,
+   "pushed_at": "2026-11-20",
+   "archived": false
+  },
+  {
+   "name": "inference-cookbook-das",
+   "desc": "本仓库整理了在 HCU 硬件上部署、调优和运行 AI 模型的经验与最佳实践",
+   "lang": "Python",
+   "stars": 112,
+   "pushed_at": "2026-11-20",
    "archived": false
   },
   {
    "name": "one-click-quant",
    "desc": "one‑click‑quant 是海光 AI 开源的大模型一键量化压缩工具，可简化大模型量化流程，降低模型显存占用，便于大模型的高效推理部署。",
    "lang": "Python",
-   "stars": 4,
-   "pushed_at": "2026-10-16",
+   "stars": 9,
+   "pushed_at": "2026-11-17",
    "archived": false
   },
   {
-   "name": "k8s-hcu-device-plugin",
-   "desc": "The HCU Device Plugin is a Kubernetes device plugin deployed as a DaemonSet on every HCU node. It implements the Kuberne",
-   "lang": "Go",
+   "name": "flash-attention-das",
+   "desc": "基于开源仓库 flash-attention，增加hcu适配，以及增加部分变体attenion，比如qsa,dsa等。",
+   "lang": "C++",
    "stars": 2,
-   "pushed_at": "2026-10-16",
+   "pushed_at": "2026-11-06",
+   "archived": false
+  },
+  {
+   "name": "Megatron-bridge-das",
+   "desc": "基于Megatron-bridge上游社区版本建设的das插件仓库，为HCU平台提供功能适配、兼容支持与性能优化。",
+   "lang": "Python",
+   "stars": 3,
+   "pushed_at": "2026-11-20",
+   "archived": false
+  },
+  {
+   "name": "vllm-plugin-das",
+   "desc": "基于 vLLM 上游社区版本建设的 das 插件仓库，为 hcu 平台提供功能适配、兼容支持与性能优化。",
+   "lang": "Python",
+   "stars": 36,
+   "pushed_at": "2026-11-21",
+   "archived": false
+  },
+  {
+   "name": "hcu_probe-das",
+   "desc": "hcu_probe-das是HCU 平台的训练精度调试 Python whl 包,给在 HCU 上训练的团队提供一套「采集 → 比对 → 定界」的精度工具:训练时逐层 dump 张量统计量、监测梯度 / 优化器 / 参数,训练后离线做两端精",
+   "lang": "Python",
+   "stars": 3,
+   "pushed_at": "2026-11-03",
+   "archived": false
+  },
+  {
+   "name": "pytorch-das",
+   "desc": "本仓库基于上游 PyTorch 开展二次开发，用于适配和维护 PyTorch 在 HCU 环境下的编译、测试及 CI 流程，涵盖源码构建、依赖配置和全量单测等内容。仓库主要用于保障 PyTorch 在平台上的稳定集成与交付，并持续处理版本兼",
+   "lang": "Python",
+   "stars": 3,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "tilelang-das",
+   "desc": "基于TileKernels上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
+   "lang": "C++",
+   "stars": 0,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "BoltOPs",
+   "desc": "面向海光 HCU 的高性能算子库，以 Triton、TileLang 等 DSL 实现低时延融合算子，覆盖 MoE、GEMM 与量化、Attention、MLA、稀疏注意力及 FLA；提供 Python API、调优配置、自动调参、正确性与",
+   "lang": "Python",
+   "stars": 3,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "adapter-das",
+   "desc": "让宿主框架（sglang / vLLM）官方代码的 python 部分零修改、直接跑在 海光 HCU（HCU/DTK，HIP 路径）上的适配层（adapter）",
+   "lang": "Python",
+   "stars": 1,
+   "pushed_at": "2026-11-21",
+   "archived": false
+  },
+  {
+   "name": "lightop",
+   "desc": "Lightop是一个自研的融合算子库，提供了大量的自研算子，用来加速模型的推理和训练。",
+   "lang": "Python",
+   "stars": 10,
+   "pushed_at": "2026-11-20",
+   "archived": false
+  },
+  {
+   "name": "sglang-plugin-das",
+   "desc": "基于 SGLang 上游社区版本的官方插件机制建设的 das 插件仓库，为 hcu 平台提供优化适配能力——量化方案、注意力后端、前缀缓存等运行时扩展与性能优化；与 adapter-das 适配底座组合部署。",
+   "lang": "HTML",
+   "stars": 3,
+   "pushed_at": "2026-11-20",
    "archived": false
   },
   {
@@ -55,111 +119,63 @@
    "desc": "基于deepspeed上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
    "lang": "Python",
    "stars": 0,
-   "pushed_at": "2026-10-16",
+   "pushed_at": "2026-11-19",
    "archived": false
   },
   {
-   "name": "sglang-das",
-   "desc": "基于 sgl-project/sglang 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
-   "lang": "Python",
-   "stars": 46,
-   "pushed_at": "2026-10-16",
-   "archived": false
-  },
-  {
-   "name": "xla-das",
-   "desc": "本仓库基于上游XLA开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、算子及内核适配、性能优化、测试以及相关文档维护。本仓库用于公开源码协作、问题跟踪和版本发布。",
+   "name": "rccl-dtk",
+   "desc": "基于rccl上游社区版本建设的 dtk 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
    "lang": "C++",
-   "stars": 0,
-   "pushed_at": "2026-10-16",
-   "archived": false
-  },
-  {
-   "name": "spconv-das",
-   "desc": "本仓库基于上游 spconv_rocm 社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
-   "lang": "Python",
-   "stars": 1,
-   "pushed_at": "2026-10-16",
-   "archived": false
-  },
-  {
-   "name": "hcu-exporter",
-   "desc": "HCU-Exporter提供 HCU/vHCU 设备的监控指标，支持 Prometheus 集成。通过 HCU-Exporter，用户可以实时监控 HCU/vHCU 的温度、功耗、显存使用率等关键指标，确保设备的健康运行。",
-   "lang": "Go",
-   "stars": 5,
-   "pushed_at": "2026-10-16",
-   "archived": false
-  },
-  {
-   "name": "k8s-hcu-label-node",
-   "desc": "HCU Label Node is a Kubernetes DaemonSet component. Once deployed to the nodes of a cluster it automatically detects HCU",
-   "lang": "Go",
-   "stars": 1,
-   "pushed_at": "2026-10-16",
-   "archived": false
-  },
-  {
-   "name": "k8s-hcu-dra-driver",
-   "desc": "HCU DRA Driver 是一个 Kubernetes Dynamic Resource Allocation (DRA) Kubelet 插件，以 DaemonSet 方式部署到 HCU 节点，将物理 HCU 注册为 Resource",
-   "lang": "Go",
    "stars": 2,
-   "pushed_at": "2026-10-16",
+   "pushed_at": "2026-11-18",
    "archived": false
   },
   {
-   "name": "hcu-container-toolkit",
-   "desc": "HCU Container Toolkit 是一个容器扩展工具套件，可以简化用户在容器中使用 HCU 设备的操作。",
-   "lang": "Go",
-   "stars": 1,
-   "pushed_at": "2026-10-15",
-   "archived": false
-  },
-  {
-   "name": "hcu_probe-das",
-   "desc": "hcu_probe-das是HCU 平台的训练精度调试 Python whl 包,给在 HCU 上训练的团队提供一套「采集 → 比对 → 定界」的精度工具:训练时逐层 dump 张量统计量、监测梯度 / 优化器 / 参数,训练后离线做两端精",
-   "lang": "Python",
-   "stars": 1,
-   "pushed_at": "2026-10-15",
+   "name": "FlashMLA-das",
+   "desc": "基于 DeepSeek FlashMLA，面向海光 HCU 平台适配与优化的高效多头潜在注意力算子库，支持 BF16/FP8 及稀疏 MLA prefill/decode。",
+   "lang": "C++",
+   "stars": 2,
+   "pushed_at": "2026-10-22",
    "archived": false
   },
   {
    "name": "TurboPhysAI",
    "desc": "TurboPhysAI 是面向 Physical AI 模型的训练性能优化组件，主要围绕 PyTorch 模型训练栈，覆盖自动驾驶、具身智能、世界模型 等典型模型架构与应用方向。无需修改模型源码，即可通过算子优化、计算图优化、数据链路优化和",
    "lang": "Python",
-   "stars": 4,
-   "pushed_at": "2026-10-15",
-   "archived": false
-  },
-  {
-   "name": "vllm-plugin-das",
-   "desc": "基于 vLLM 上游社区版本建设的 das 插件仓库，为 hcu 平台提供功能适配、兼容支持与性能优化。",
-   "lang": "Python",
-   "stars": 23,
-   "pushed_at": "2026-10-18",
-   "archived": false
-  },
-  {
-   "name": "hcu-dcgm",
-   "desc": "面向HCU卡的Go语言管理与监控工具，提供设备发现、健康诊断、遥测数据采集、进程监控和性能压力测试能力，并支持CLI与REST API调用。",
-   "lang": "Go",
-   "stars": 4,
-   "pushed_at": "2026-10-15",
-   "archived": false
-  },
-  {
-   "name": "tensorflow-das",
-   "desc": "本仓库基于上游TensorFlow开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、算子及内核适配、性能优化、测试以及相关文档维护。本仓库用于公开源码协作、问题跟踪和版本发布。",
-   "lang": "C++",
-   "stars": 0,
-   "pushed_at": "2026-10-14",
+   "stars": 7,
+   "pushed_at": "2026-11-12",
    "archived": false
   },
   {
    "name": "mooncake-das",
    "desc": "Mooncake 在 Hygon HCU 平台上的适配仓库",
    "lang": "C++",
-   "stars": 6,
-   "pushed_at": "2026-10-14",
+   "stars": 8,
+   "pushed_at": "2026-11-20",
+   "archived": false
+  },
+  {
+   "name": "fastsafetensors-das",
+   "desc": "模型加载性能优化，基于 fastsafetensors 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
+   "lang": "Python",
+   "stars": 0,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "triton-das",
+   "desc": "基于 triton-lang/triton 上游社区建设的 HCU 平台下游适配仓库，面向 HYGON HCU 平台进行编译后端、算子 lowering、运行时及工程能力适配，并结合 HCU 硬件特性进行功能扩展与性能优化。",
+   "lang": "MLIR",
+   "stars": 1,
+   "pushed_at": "2026-11-21",
+   "archived": false
+  },
+  {
+   "name": "composable_kernel-das",
+   "desc": "基于 ROCm/composable_kernel 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台开展 GPU 算子适配、功能扩展与性能优化，为 AI 训练与推理提供高性能、可组合的算子实现。",
+   "lang": "C++",
+   "stars": 3,
+   "pushed_at": "2026-11-12",
    "archived": false
   },
   {
@@ -167,47 +183,103 @@
    "desc": "本仓库基于上游JAX开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、算子及内核适配、性能优化、测试以及相关文档维护。本仓库用于公开源码协作、问题跟踪和版本发布。",
    "lang": "Python",
    "stars": 0,
-   "pushed_at": "2026-10-14",
-   "archived": false
-  },
-  {
-   "name": "pytorch-das",
-   "desc": "本仓库基于上游 PyTorch 开展二次开发，用于适配和维护 PyTorch 在 HCU 环境下的编译、测试及 CI 流程，涵盖源码构建、依赖配置和全量单测等内容。仓库主要用于保障 PyTorch 在平台上的稳定集成与交付，并持续处理版本兼",
-   "lang": "Python",
-   "stars": 0,
-   "pushed_at": "2026-10-14",
-   "archived": false
-  },
-  {
-   "name": "flash-train",
-   "desc": "Flash-Train is designed for the training of large-scale and general-purpose models, providing unified, on-demand support",
-   "lang": "C++",
-   "stars": 6,
-   "pushed_at": "2026-10-12",
+   "pushed_at": "2026-11-19",
    "archived": false
   },
   {
    "name": "rocSHMEM-das",
    "desc": "基于 rocSHMEM 上游社区版本建设的 das 下游适配仓库，面向 HCU 平台进行功能适配与优化。",
    "lang": "C++",
-   "stars": 1,
-   "pushed_at": "2026-10-14",
+   "stars": 2,
+   "pushed_at": "2026-11-20",
    "archived": false
   },
   {
-   "name": "TileKernels-das",
-   "desc": "基于 DeepSeek-AI/TileKernels 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行算子适配与优化。",
+   "name": "spconv-das",
+   "desc": "本仓库基于上游 spconv_rocm 社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
    "lang": "Python",
-   "stars": 0,
-   "pushed_at": "2026-10-13",
+   "stars": 1,
+   "pushed_at": "2026-11-19",
    "archived": false
   },
   {
-   "name": "FastPT",
-   "desc": "FastPT用于基于pytorch的应用组件适配，为CUDA代码在HCU平台上移植适配提供支持。本仓库用于公开源码协作、问题跟踪和版本发布。",
+   "name": "xla-das",
+   "desc": "本仓库基于上游XLA开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、算子及内核适配、性能优化、测试以及相关文档维护。本仓库用于公开源码协作、问题跟踪和版本发布。",
    "lang": "C++",
    "stars": 0,
-   "pushed_at": "2026-10-10",
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "hcu-train-simulator",
+   "desc": "面向HCU大模型训练的性能建模与估算工具，支持显存、计算、通信和训练吞吐分析。",
+   "lang": "Python",
+   "stars": 3,
+   "pushed_at": "2026-11-17",
+   "archived": false
+  },
+  {
+   "name": "quality-gate",
+   "desc": "HYGON-AI 仓库统一 PR 质量、安全与开源合规门禁。",
+   "lang": "Python",
+   "stars": 4,
+   "pushed_at": "2026-11-17",
+   "archived": false
+  },
+  {
+   "name": "sglang-das",
+   "desc": "基于 sgl-project/sglang 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
+   "lang": "Python",
+   "stars": 49,
+   "pushed_at": "2026-11-20",
+   "archived": false
+  },
+  {
+   "name": "k8s-hcu-device-plugin",
+   "desc": "The HCU Device Plugin is a Kubernetes device plugin deployed as a DaemonSet on every HCU node. It implements the Kuberne",
+   "lang": "Go",
+   "stars": 4,
+   "pushed_at": "2026-11-17",
+   "archived": false
+  },
+  {
+   "name": "hcu-dcgm",
+   "desc": "面向HCU卡的Go语言管理与监控工具，提供设备发现、健康诊断、遥测数据采集、进程监控和性能压力测试能力，并支持CLI与REST API调用。",
+   "lang": "Go",
+   "stars": 4,
+   "pushed_at": "2026-11-16",
+   "archived": false
+  },
+  {
+   "name": "ao-das",
+   "desc": "基于 torchao 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
+   "lang": "Python",
+   "stars": 0,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "hcu-exporter",
+   "desc": "HCU-Exporter提供 HCU/vHCU 设备的监控指标，支持 Prometheus 集成。通过 HCU-Exporter，用户可以实时监控 HCU/vHCU 的温度、功耗、显存使用率等关键指标，确保设备的健康运行。",
+   "lang": "Go",
+   "stars": 5,
+   "pushed_at": "2026-11-17",
+   "archived": false
+  },
+  {
+   "name": "DiffSynth-Studio-das",
+   "desc": "基于 DiffSynth-Studio 的 HCU 适配版本，提供 MiniMax-H3 多卡训练适配、算子与通信优化及训练示例。",
+   "lang": "Python",
+   "stars": 1,
+   "pushed_at": "2026-11-09",
+   "archived": false
+  },
+  {
+   "name": "PhysX-das",
+   "desc": "基于 NVIDIA PhysX 上游社区版本构建的 Hygon（海光）下游适配仓库，面向 HCU/HIP 平台完成 PhysX CPU/GPU 组件的功能适配、构建集成、正确性与性能优化，并提供 HCU 示例和验证脚本。",
+   "lang": "C++",
+   "stars": 0,
+   "pushed_at": "2026-11-18",
    "archived": false
   },
   {
@@ -215,39 +287,71 @@
    "desc": "本仓库基于上游 faiss 开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、GPU 算子性能优化、测试用例修复、文档更新以及合规性整改。本仓库用于公开源码协作、问题跟踪和版本发布。",
    "lang": "C++",
    "stars": 0,
-   "pushed_at": "2026-10-10",
+   "pushed_at": "2026-11-19",
    "archived": false
   },
   {
-   "name": "opencv-das",
-   "desc": "本仓库为基于上游 opencv 社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
+   "name": "flash-train",
+   "desc": "Flash-Train is designed for the training of large-scale and general-purpose models, providing unified, on-demand support",
+   "lang": "C++",
+   "stars": 7,
+   "pushed_at": "2026-11-20",
+   "archived": false
+  },
+  {
+   "name": "k8s-hcu-label-node",
+   "desc": "HCU Label Node is a Kubernetes DaemonSet component. Once deployed to the nodes of a cluster it automatically detects HCU",
+   "lang": "Go",
+   "stars": 1,
+   "pushed_at": "2026-11-16",
+   "archived": false
+  },
+  {
+   "name": "FastPT",
+   "desc": "FastPT用于基于pytorch的应用组件适配，为CUDA代码在HCU平台上移植适配提供支持。本仓库用于公开源码协作、问题跟踪和版本发布。",
    "lang": "C++",
    "stars": 0,
-   "pushed_at": "2026-10-10",
+   "pushed_at": "2026-11-19",
    "archived": false
   },
   {
-   "name": "opencv_contrib-das",
-   "desc": "本仓库为基于上游 opencv_contrib社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化，启用了多个opencv扩展模块。",
+   "name": "DeepEP-das",
+   "desc": "基于 DeepEP 上游社区版本建设的 das 下游适配仓库，面向 HCU 平台进行功能适配与优化。",
+   "lang": "Cuda",
+   "stars": 4,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "Moe",
+   "desc": "Hygon Aiter 所依赖第三方库之一，提供多种精度类型的hipc Moe算子以及部分通用算子",
    "lang": "C++",
-   "stars": 0,
-   "pushed_at": "2026-10-10",
+   "stars": 2,
+   "pushed_at": "2026-11-19",
    "archived": false
   },
   {
-   "name": "opencv-python-das",
-   "desc": "本仓库为基于上游 opencv-python 社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化，启用了opencv扩展模块的源码编译绑定，能对外提供opencv的Python层接口。 ",
-   "lang": "Shell",
-   "stars": 0,
-   "pushed_at": "2026-10-10",
-   "archived": false
-  },
-  {
-   "name": "cluster-manager-das",
-   "desc": "面向 HCU 分布式训练集群的管理与故障诊断工具，提供环境检查、任务监控、故障分析与容错恢复，支持 Kubernetes、Slurm 和裸机场景。",
-   "lang": "Python",
+   "name": "k8s-hcu-dra-driver",
+   "desc": "HCU DRA Driver 是一个 Kubernetes Dynamic Resource Allocation (DRA) Kubelet 插件，以 DaemonSet 方式部署到 HCU 节点，将物理 HCU 注册为 Resource",
+   "lang": "Go",
    "stars": 3,
-   "pushed_at": "2026-10-13",
+   "pushed_at": "2026-10-16",
+   "archived": false
+  },
+  {
+   "name": "causal-conv1d-das",
+   "desc": "基于causal-conv1d上游社区版本建设的das下游适配仓库，面向hcu平台进行功能适配与优化。",
+   "lang": "Python",
+   "stars": 0,
+   "pushed_at": "2026-10-29",
+   "archived": false
+  },
+  {
+   "name": "verl-das",
+   "desc": "基于verl上游社区版本建设的das插件仓库，为HCU平台提供功能适配、兼容支持与性能优化。",
+   "lang": "Python",
+   "stars": 5,
+   "pushed_at": "2026-10-29",
    "archived": false
   },
   {
@@ -255,15 +359,95 @@
    "desc": "基于 LMCache/LMCache 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
    "lang": "Python",
    "stars": 1,
-   "pushed_at": "2026-10-10",
+   "pushed_at": "2026-11-18",
    "archived": false
   },
   {
-   "name": "TransformerEngine-das",
-   "desc": "基于TransformerEngine上游社区版本建设的das下游适配仓库，面向HCU平台进行功能适配与优化。",
-   "lang": null,
+   "name": "SkillHub",
+   "desc": "优秀的skills仓库",
+   "lang": "Python",
+   "stars": 3,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "aiter-das",
+   "desc": "基于 ROCm/aiter 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台开展 AI 算子适配、功能扩展与性能优化，为大模型训练推理提供高性能算子支持。",
+   "lang": "Python",
+   "stars": 2,
+   "pushed_at": "2026-11-21",
+   "archived": false
+  },
+  {
+   "name": "deepgemm-das",
+   "desc": "实现高性能量化通用矩阵乘与 MoE 分组矩阵计算内核，面向海光 HCU 硬件，为大模型训练与推理场景提供算子算力加速。",
+   "lang": "C++",
    "stars": 0,
-   "pushed_at": "2026-10-09",
+   "pushed_at": "2026-10-26",
+   "archived": false
+  },
+  {
+   "name": "TileKernels-das",
+   "desc": "基于 DeepSeek-AI/TileKernels 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台进行算子适配与优化。",
+   "lang": "Python",
+   "stars": 0,
+   "pushed_at": "2026-11-16",
+   "archived": false
+  },
+  {
+   "name": "opencv-python-das",
+   "desc": "本仓库为基于上游 opencv-python 社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化，启用了opencv扩展模块的源码编译绑定，能对外提供opencv的Python层接口。 ",
+   "lang": "Shell",
+   "stars": 0,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "hytlass",
+   "desc": "HYTLASS(HYGON HCU Templates for Linear Algebra Subroutines)是一个用于在海光HCU架构下实现高性能矩阵乘法(GEMM)及其衍生计算的C++模板库，其设计思路来源于CUTLASS，将数",
+   "lang": "C++",
+   "stars": 0,
+   "pushed_at": "2026-10-22",
+   "archived": false
+  },
+  {
+   "name": "tensorflow-das",
+   "desc": "本仓库基于上游TensorFlow开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、算子及内核适配、性能优化、测试以及相关文档维护。本仓库用于公开源码协作、问题跟踪和版本发布。",
+   "lang": "C++",
+   "stars": 0,
+   "pushed_at": "2026-11-18",
+   "archived": false
+  },
+  {
+   "name": "torchvision-das",
+   "desc": "本仓库基于上游 torchvision 开展二次开发，用于提供对 Hygon HCU 软件及硬件环境的适配，包括后端集成、构建与打包适配、测试以及相关文档维护。本仓库用于公开源码协作、问题跟踪和版本发布。",
+   "lang": "Python",
+   "stars": 1,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "hcu-container-toolkit",
+   "desc": "HCU Container Toolkit 是一个容器扩展工具套件，可以简化用户在容器中使用 HCU 设备的操作。",
+   "lang": "Go",
+   "stars": 1,
+   "pushed_at": "2026-11-20",
+   "archived": false
+  },
+  {
+   "name": "opencv-das",
+   "desc": "本仓库为基于上游 opencv 社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化。",
+   "lang": "C++",
+   "stars": 0,
+   "pushed_at": "2026-11-19",
+   "archived": false
+  },
+  {
+   "name": "opencv_contrib-das",
+   "desc": "本仓库为基于上游 opencv_contrib社区版本建设的 das 下游适配仓库，面向 hcu 平台进行功能适配与优化，启用了多个opencv扩展模块。",
+   "lang": "C++",
+   "stars": 0,
+   "pushed_at": "2026-11-19",
    "archived": false
   },
   {
@@ -275,83 +459,11 @@
    "archived": false
   },
   {
-   "name": "train-cookbook-das",
-   "desc": "本仓库整理了在 HCU 硬件上 训练/微调 AI 模型的经验与最佳实践",
-   "lang": null,
-   "stars": 4,
-   "pushed_at": "2026-10-08",
-   "archived": false
-  },
-  {
    "name": "apex-das",
    "desc": "面向 DAS/HCU 的 PyTorch Apex 扩展库，提供混合精度、分布式训练和 HCU/HIP Kernel 融合优化。",
    "lang": "Python",
    "stars": 2,
-   "pushed_at": "2026-10-08",
-   "archived": false
-  },
-  {
-   "name": "DiffSynth-Studio-das",
-   "desc": "基于 DiffSynth-Studio 的 HCU 适配版本，提供 MiniMax-H3 多卡训练适配、算子与通信优化及训练示例。",
-   "lang": "Python",
-   "stars": 1,
-   "pushed_at": "2026-09-29",
-   "archived": false
-  },
-  {
-   "name": "aiter-das",
-   "desc": "基于 ROCm/aiter 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台开展 AI 算子适配、功能扩展与性能优化，为大模型训练推理提供高性能算子支持。",
-   "lang": "Python",
-   "stars": 0,
-   "pushed_at": "2026-10-13",
-   "archived": false
-  },
-  {
-   "name": "composable_kernel-das",
-   "desc": "基于 ROCm/composable_kernel 上游社区版本建设的 das 下游适配仓库，面向 hcu 平台开展 GPU 算子适配、功能扩展与性能优化，为 AI 训练与推理提供高性能、可组合的算子实现。",
-   "lang": "C++",
-   "stars": 0,
-   "pushed_at": "2026-09-29",
-   "archived": false
-  },
-  {
-   "name": "Moe",
-   "desc": "Hygon Aiter 所依赖第三方库之一，提供多种精度类型的hipc Moe算子以及部分通用算子",
-   "lang": "C++",
-   "stars": 0,
-   "pushed_at": "2026-09-29",
-   "archived": false
-  },
-  {
-   "name": "SkillHub",
-   "desc": "优秀的skills仓库",
-   "lang": "Python",
-   "stars": 0,
-   "pushed_at": "2026-09-28",
-   "archived": false
-  },
-  {
-   "name": "DeepEP-das",
-   "desc": "基于 DeepEP 上游社区版本建设的 das 下游适配仓库，面向 HCU 平台进行功能适配与优化。",
-   "lang": "Cuda",
-   "stars": 2,
-   "pushed_at": "2026-09-22",
-   "archived": false
-  },
-  {
-   "name": "quality-gate",
-   "desc": "HYGON-AI 仓库统一 PR 质量、安全与开源合规门禁。",
-   "lang": "Python",
-   "stars": 4,
-   "pushed_at": "2026-10-16",
-   "archived": false
-  },
-  {
-   "name": "verl-das",
-   "desc": "基于verl上游社区版本建设的das插件仓库，为HCU平台提供功能适配、兼容支持与性能优化。",
-   "lang": "Python",
-   "stars": 4,
-   "pushed_at": "2026-09-21",
+   "pushed_at": "2026-11-17",
    "archived": false
   },
   {
@@ -359,7 +471,7 @@
    "desc": "基于slime上游社区版本建设的das插件仓库，为HCU平台提供功能适配、兼容支持与性能优化。",
    "lang": "Python",
    "stars": 0,
-   "pushed_at": "2026-10-16",
+   "pushed_at": "2026-10-22",
    "archived": false
   },
   {
@@ -367,7 +479,7 @@
    "desc": "基于 volcano-sh/volcano 上游社区版本建设的 DAS 下游适配仓库，面向 HCU 平台进行功能适配与优化。",
    "lang": "Go",
    "stars": 1,
-   "pushed_at": "2026-10-10",
+   "pushed_at": "2026-11-16",
    "archived": false
   },
   {
@@ -375,29 +487,19 @@
    "desc": "基于AReal上游社区版本建设的das插件仓库，为HCU平台提供功能适配、兼容支持与性能优化。",
    "lang": "Python",
    "stars": 1,
-   "pushed_at": "2026-09-21",
-   "archived": false
-  },
-  {
-   "name": "hcu-train-simulator",
-   "desc": "面向HCU大模型训练的性能建模与估算工具，支持显存、计算、通信和训练吞吐分析。",
-   "lang": "Python",
-   "stars": 1,
-   "pushed_at": "2026-09-21",
+   "pushed_at": "2026-11-19",
    "archived": false
   }
  ],
  "anchors": {
   "vllm-plugin-das": {
-   "tags": [],
-   "anchor": "releases/v0.25.1 / v0.25.1"
+   "tags": []
   },
   "sglang-das": {
    "tags": []
   },
   "Megatron-LM-das": {
-   "tags": [],
-   "anchor": "core_v0.18.2"
+   "tags": []
   },
   "aiter-das": {
    "tags": []
@@ -409,43 +511,34 @@
    "tags": []
   },
   "LMCache-das": {
-   "tags": [],
-   "anchor": "0.4.2"
+   "tags": []
   },
   "DeepEP-das": {
-   "tags": [],
-   "anchor": "da6ca24ef7c2594e058def142adfb8f2e31a7f85"
+   "tags": []
   },
   "slime-das": {
-   "tags": [],
-   "anchor": "v0.3.0"
+   "tags": []
   },
   "AReal-das": {
-   "tags": [],
-   "anchor": "v1.0.4"
+   "tags": []
   },
   "verl-das": {
    "tags": []
   },
   "one-click-quant": {
-   "tags": [],
-   "anchor": "0.19.0"
+   "tags": []
   },
   "k8s-hcu-device-plugin": {
-   "tags": [],
-   "anchor": "v3.0.0"
+   "tags": []
   },
   "k8s-hcu-dra-driver": {
-   "tags": [],
-   "anchor": "v1.0.0"
+   "tags": []
   },
   "k8s-hcu-label-node": {
-   "tags": [],
-   "anchor": "v3.0.0"
+   "tags": []
   },
   "hcu-dcgm": {
-   "tags": [],
-   "anchor": "2.0.0"
+   "tags": []
   },
   "hcu-exporter": {
    "tags": []
@@ -457,325 +550,5 @@
    "tags": []
   }
  },
- "cookbook_matrix": {
-  "Qwen3.8|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3.8|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3-ASR|vLLM": {
-   "BW1100": "ok"
-  },
-  "Qwen3-ForcedAligner|vLLM": {
-   "BW1100": "wip"
-  },
-  "Qwen3.6|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3.6|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3.5|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3.5|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3-TTS|vLLM-Omni": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3-TTS|SGLang-Omni": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "Qwen3-VL|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "ok"
-  },
-  "Qwen3-VL|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3-Coder|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "ok"
-  },
-  "Qwen3-Coder|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen3|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen2.5-VL|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Qwen2.5-VL|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "QwQ|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "QwQ|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "Qwen2-VL|vLLM": {
-   "BW1000": "ok"
-  },
-  "Qwen2-VL|SGLang": {},
-  "Qwen2-72B|vLLM": {
-   "BW1000": "ok"
-  },
-  "Qwen2-72B|SGLang": {},
-  "Ling-1T|vLLM": {},
-  "Ling-1T|SGLang": {
-   "BW1100": "ok"
-  },
-  "DeepSeek-V4|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "DeepSeek-V4|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "DeepSeek-V3.2|vLLM": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "DeepSeek-V3.2|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "DeepSeek-V3.1|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "DeepSeek-V3.1|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "DeepSeek-V3|vLLM": {
-   "BW1100": "ok"
-  },
-  "DeepSeek-V3|SGLang": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "DeepSeek-R1|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "DeepSeek-R1|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-5.2|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-5.2|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-5.1|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-5.1|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-5|vLLM": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-5|SGLang": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-4.7|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "GLM-4.7|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "GLM-5.3|vLLM": {},
-  "GLM-5.3|SGLang": {},
-  "Hy4|vLLM": {
-   "BW1100": "ok"
-  },
-  "Hy4|SGLang": {},
-  "Hy3|vLLM": {
-   "BW1000": "ok"
-  },
-  "Hy3|SGLang": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Kimi-K3|vLLM": {},
-  "Kimi-K3|SGLang": {
-   "BW1100": "ok"
-  },
-  "Kimi-K2.6|vLLM": {},
-  "Kimi-K2.6|SGLang": {
-   "BW1100": "ok"
-  },
-  "Kimi-K2.5|vLLM": {
-   "BW1000": "ok"
-  },
-  "Kimi-K2.5|SGLang": {
-   "BW1100": "ok"
-  },
-  "Kimi-K2|vLLM": {
-   "BW1100": "ok"
-  },
-  "Kimi-K2|SGLang": {
-   "BW1100": "ok"
-  },
-  "MiniMax-M3|vLLM": {},
-  "MiniMax-M3|SGLang": {
-   "BW1100": "ok"
-  },
-  "MiniMax-M2.7|vLLM": {},
-  "MiniMax-M2.7|SGLang": {
-   "BW1100": "ok"
-  },
-  "MiniMax-M2.5|vLLM": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "MiniMax-M2.5|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "MiniMax-M2|vLLM": {},
-  "MiniMax-M2|SGLang": {},
-  "MiniMax-H3|vLLM-Omni": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "MiniMax-H3|SGLang Diffusion": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Step-3.5|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "Step-3.5|SGLang": {
-   "K100_AI": "wip",
-   "BW1000": "wip",
-   "BW1100": "wip"
-  },
-  "Step-3.7-Flash|vLLM": {},
-  "Step-3.7-Flash|SGLang": {},
-  "MiMo-V2.5-Pro|vLLM": {},
-  "MiMo-V2.5-Pro|SGLang": {
-   "BW1100": "ok"
-  },
-  "MiMo-V2-Flash|vLLM": {},
-  "MiMo-V2-Flash|SGLang": {
-   "K100_AI": "ok",
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Wan2.1-I2V|vLLM-Omni": {},
-  "Wan2.1-I2V|SGLang": {},
-  "Wan2.1-I2V|Wan-DAS": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Wan2.2-I2V|vLLM-Omni": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Wan2.2-I2V|SGLang": {},
-  "Wan2.2-I2V|Wan-DAS": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Wan2.2-T2V|vLLM-Omni": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Wan2.2-T2V|SGLang Diffusion": {
-   "BW1100": "ok"
-  },
-  "Wan2.2-T2V|Wan-DAS": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "Wan2.2-TI2V|vLLM-Omni": {},
-  "Wan2.2-TI2V|SGLang Diffusion": {},
-  "Wan2.2-TI2V|Wan-DAS": {
-   "BW1000": "ok",
-   "BW1100": "ok"
-  },
-  "BGE|Infinity": {
-   "BW1000": "ok"
-  },
-  "BGE|vLLM": {
-   "BW1000": "ok"
-  },
-  "MAGI-2-preview|vLLM": {
-   "K100_AI": "wip",
-   "BW1000": "ok",
-   "BW1100": "wip"
-  }
- }
+ "cookbook_matrix": {}
 }

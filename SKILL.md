@@ -1,6 +1,6 @@
 ---
 name: dcu-toolkit-open
-description: "海光 DCU 测试调优技能集（开源版）总入口。覆盖基础环境、性能剖析、推理框架部署适配、算子开发、故障排查、工程实践，按 8 个插件组织，共 144 个 skill（139 顶层 + 5 嵌套子 skill，含薄编排层 dcu-orchestrator）。本文件是包级入口：路由表 + 安装说明。Claude Code / OpenCode 插件包结构（Plugins/<domain>/skills/）。"
+description: "海光 DCU 测试调优技能集（开源版）总入口。覆盖基础环境、性能剖析、推理框架部署适配、算子开发、故障排查、工程实践，按 8 个插件组织，共 146 个 skill（141 顶层 + 5 嵌套子 skill，含薄编排层 dcu-orchestrator）。本文件是包级入口：路由表 + 安装说明。Claude Code / OpenCode 插件包结构（Plugins/<domain>/skills/）。"
 version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
@@ -33,7 +33,7 @@ data/ references/ scripts/ docs/   共享数据层（跨 skill 引用）
 海光 DCU（Hygon DCU）测试调优技能集，按 Claude Code / OpenCode 插件包结构组织，覆盖 DCU 全生命周期：
 基础环境与连接、性能剖析与调优、推理框架部署与适配、算子开发、故障排查、训练与工程实践。
 
-- **规模**：144 个 skill（139 顶层 + 5 嵌套子 skill），8 个插件域（dcu-core / dcu-env / dcu-perf / dcu-inference / dcu-operators / dcu-troubleshooting / dcu-engineering / ops）
+- **规模**：146 个 skill（141 顶层 + 5 嵌套子 skill），8 个插件域（dcu-core / dcu-env / dcu-perf / dcu-inference / dcu-operators / dcu-troubleshooting / dcu-engineering / ops）
 - **组织**：每个 skill = `SKILL.md`（方法论与流程）+ `scripts/`（可执行工具）+ `references/`（领域知识），自包含、按需加载
 - **路由**：包级路由表（下节）→ `dcu-skill-router` 全量索引 → 具体 skill；多步任务走 `dcu-orchestrator` 内置工作流
 - **共享层**：`data/ references/ scripts/ docs/` 为跨 skill 复用的领域数据与工具（见上文说明）
@@ -72,7 +72,7 @@ data/ references/ scripts/ docs/   共享数据层（跨 skill 引用）
 | XID/SXID 错误码 / VM fault coredump 取证 | dcu-vmfault-coredump | dcu-troubleshooting |
 | CUDA crash / 分布式 hang / 训练精度 NaN / vLLM 精度 | debug-cuda-crash、debug-distributed-hang、dcu-train-precision、dcu-vllm-precision、dcu-engine-precision-localization | dcu-troubleshooting |
 | CI 工作流 / 环境变量规范 / 代码风格 / 模型接入 cookbook | ci-workflow-guide、env-var-conventions、cookbook-* 等 | dcu-engineering |
-| 点名某个算子 / 建算子卡 / 查某算子历史结论 / 判断 kernel 改动是否算通过 / 推进一轮优化 / **先算出预测再写代码** / 手写 HIP 慢但数值对 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8；方法见 op-contract、op-bench、op-profiling、op-gate、op-optimize、op-roofline、op-hip-compile | ops |
+| 点名某个算子 / 建算子卡 / 查某算子历史结论 / 判断 kernel 改动是否算通过 / 推进一轮优化 / **先算出预测再写代码** / 选哪个算子库、流水线怎么排 / 手写 HIP 慢但数值对 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8；方法见 op-contract、op-bench、op-profiling、op-gate、op-optimize、op-stack-design、op-roofline、op-hip-compile；**同一问题只信一处，见 `Plugins/ops/SKILL.md` §5.1 唯一权威表** | ops |
 
 ## 安装与使用
 

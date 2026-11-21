@@ -37,17 +37,17 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python
 
 解析**没有现成可执行文件**（刻意的：长期维护一个 CSV 解析器不划算）。复制 §六 的参考实现到临时脚本，改几行 `COUNTERS` 即可；多项目共用同一套规则，别另起一套。
 
-## 四、输出怎么读（判据，必须由人执行）
+## 四、输出怎么读（判据，由人执行）
 
 机械输出只给数字。把它读成证据时，**三类证据地位不同，不能混用**：
 
 | 类别 | 含义 | 能不能当结论 |
 |---|---|---|
-| 贴顶类（`bound` 语义） | `NEAR-BANDWIDTH-CEILING` / `NEAR-COMPUTE-CEILING` / `MMA-ISSUE-SATURATED` | **能**，但仅当**口径齐全且分母可信**：四个输入（FLOPs、DRAM 字节、实测峰值、CU 数）一个不缺、峰值按同 SoC 实测并带来源与日期、天花板取自 `op-roofline/derive.py`。缺一项或分母未锁 ⇒ 结论**扣下**（`withheld_bound` 语义），不许写 |
-| 比值类（`ratios` 语义） | `NONMFMA-VALU/MFMA`、`LDS/MFMA` | **能区分变体**，不能说明绝对上限；必须同 FLOPs / 每个 MMA 的 FLOPs / CU 口径 |
+| 贴顶类（`bound` 语义） | `NEAR-BANDWIDTH-CEILING` / `NEAR-COMPUTE-CEILING` / `MMA-ISSUE-SATURATED` | **能**，但仅当**口径齐全且分母可信**：四个输入（FLOPs、DRAM 字节、实测峰值、CU 数）一个不缺、峰值按同 SoC 实测并带来源与日期、天花板取自 `op-roofline/derive.py`。缺一项或分母未锁 ⇒ 结论**扣下**（`withheld_bound` 语义） |
+| 比值类（`ratios` 语义） | `NONMFMA-VALU/MFMA`、`LDS/MFMA` | **能区分变体**，不能说明绝对上限；要求同 FLOPs / 每个 MMA 的 FLOPs / CU 口径 |
 | 描述类（`facts` 语义） | `CTA/CU=1`、`issue_util<25%`、`L2 命中率≥80%`、`VALU/LDS 开销重` | **不能**，描述性事实，多个内核会同时命中 |
 
-**为什么必须分三级**：实测 `flash_mla` 与 tilelang `bm32` **驻留 CTA 数相同（都是 2，2026-11-13 用 LDS 探针复核）、`issue_util` 都低于 10%**，两者却差 **2.18×**；把 `CTA/CU` 这类描述写成「占用率受限 ⇒ 有优化空间」，会得出「快 2.18× 的那个也有问题」的荒谬结论。真正的区分项是 `非MFMA VALU/MFMA`（0.73 vs **3.11**）与 `LDS/MFMA`（0.53 vs **1.67**）。
+**为什么分三级**：实测 `flash_mla` 与 tilelang `bm32` **驻留 CTA 数相同（都是 2，2026-11-13 用 LDS 探针复核）、`issue_util` 都低于 10%**，两者却差 **2.18×**；把 `CTA/CU` 这类描述写成「占用率受限 ⇒ 有优化空间」，会得出「快 2.18× 的那个也有问题」的荒谬结论。真正的区分项是 `非MFMA VALU/MFMA`（0.73 vs **3.11**）与 `LDS/MFMA`（0.53 vs **1.67**）。
 
 判读顺序（ledger §二 24 / KB §11.5）：
 
@@ -102,18 +102,18 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python
 ### 纪律
 
 - **只输出原值，不下结论**：MBU/MFU、`非MFMA VALU/MFMA` 要不要算、拿什么当分母，由写报告的人自己定；**分母必须和数字写在同一行**。
-- **硬件常数一律当场探测或显式传入**：CU 数、寄存器预算、LDS 容量、每 MMA 的 FLOPs、MMA 宽度、MFMA 发射率、L2 miss 搬运字节，都不许写死默认值（gfx938 实测：768-VGPR 预算 `196608`、LDS 64 KB/CU、bf16 MMA `16×16×16` / fp8 `16×16×32`；其他 gfx 未验证）；探测不到写 `unknown(<原因>)`。反例：`VF_LIMIT=65536` 是「非 768-VGPR 模式」的预算，本项目 kernel 全部走 768-VGPR，它把 `CTA/CU` 从 2 算成 1，进而得出一条 verified 的错误结论。反验：hbird-gemm「172 VGPR × 512 线程实测 2 CTA/CU」——65536 会得 **0 个 CTA**。**任何常数推出物理不可能的结果（0 个 CTA、>100% 占用率）时，先判常数错，不判数据错。**
+- **硬件常数一律当场探测或显式传入**：CU 数、寄存器预算、LDS 容量、每 MMA 的 FLOPs、MMA 宽度、MFMA 发射率、L2 miss 搬运字节，都按当场探测或显式传入给值（gfx938 实测：768-VGPR 预算 `196608`、LDS 64 KB/CU、bf16 MMA `16×16×16` / fp8 `16×16×32`；其他 gfx 未验证）；探测不到写 `unknown(<原因>)`。反例：`VF_LIMIT=65536` 是「非 768-VGPR 模式」的预算，本项目 kernel 全部走 768-VGPR，它把 `CTA/CU` 从 2 算成 1，进而得出一条 verified 的错误结论。反验：hbird-gemm「172 VGPR × 512 线程实测 2 CTA/CU」——65536 会得 **0 个 CTA**。**任何常数推出物理不可能的结果（0 个 CTA、>100% 占用率）时，先判常数错，不判数据错。**
 
 ## 七、与其它 skill 的关系
 
 计时口径的唯一来源是 `op-bench`（PMC 墙钟 ≠ bench 耗时）；`op-roofline` 负责「应该多快 + 绑定约束 + 唯一权威天花板 `derive.py`」，本 skill 负责「实际采到了什么」，对不上就是模型错；人算出的贴顶证据喂给 `op-gate` 的两级天花板门禁，比值作为 `op-optimize` 候选的 `expect`。本 skill 不提供可执行解析器，**同一套规则只有 §六 一份**。
 
-## 八、红线
+## 八、落点
 
 - 绝对 µs/ms/GB/s 只进 `~/.config/dcu-toolkit/kb/op-opt/`；本 skill 只放**相对比值**与**口径**。
-- 峰值带宽必须按 SoC 显式给定（本机实测 1724 GB/s，不是型号标称 1100 —— 换分母能把「到顶了」变成「还有 1.8×」）；缺峰值时 MBU 不成立，不许拿标称值凑。
-- 口径不全（缺 FLOPs / DRAM 字节 / 实测峰值 / CU）或分母不可信时，报告里**不得**出现「到顶」「物理上限」「没有空间」；此时只允许补证据。
-- **天花板只有一个权威点：`op-roofline/derive.py`**。§六 的参考实现不自算 `ceiling_us`，也不接受「临时给个字节数估算」——这正是 D1（同一份数据 38.9µs vs 77.9µs 两个天花板并存）的成因；**一个数只能有一个分母、分母与数字写在同一行**，引用达成率必须同时写明分母来源与测量日期。同一个数两处算必然漂，87%/55%（标称 vs 实测峰值）也是这么来的。
+- 峰值带宽按 SoC 显式给定（本机实测 1724 GB/s，不是型号标称 1100 —— 换分母能把「到顶了」变成「还有 1.8×」）；缺峰值时 MBU 不成立，标称值不能替代实测。
+- 口径不全（缺 FLOPs / DRAM 字节 / 实测峰值 / CU）或分母不可信时，报告里不写「到顶」「物理上限」「没有空间」；此时只补证据。
+- **天花板只有一个权威点：`op-roofline/derive.py`**。§六 的参考实现不自算 `ceiling_us`，也不接受「临时给个字节数估算」——这正是 D1（同一份数据 38.9µs vs 77.9µs 两个天花板并存）的成因；**一个数只能有一个分母、分母与数字写在同一行**，引用达成率要同时写明分母来源与测量日期。同一个数两处算必然漂，87%/55%（标称 vs 实测峰值）也是这么来的。
 
 ## 知识卡索引
 
@@ -122,5 +122,5 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python
 | id | 一句话结论 | 卡片 |
 |---|---|---|
 | `OP-PROFILING-001` | 描述性事实不能当结论：多个 kernel 共享同一几何会同时命中 | [OP-PROFILING-001](references/cards.md#OP-PROFILING-001) |
-| `OP-PROFILING-002` | 口径不全（缺分母/证据）时禁止写「到顶」 | [OP-PROFILING-002](references/cards.md#OP-PROFILING-002) |
-| `OP-PROFILING-003` | 计时口径：median + MAD，单次/均值不得当结论，frame 计时会虚高 | [OP-PROFILING-003](references/cards.md#OP-PROFILING-003) |
+| `OP-PROFILING-002` | 口径不全（缺分母/证据）时不写「到顶」 | [OP-PROFILING-002](references/cards.md#OP-PROFILING-002) |
+| `OP-PROFILING-003` | 计时口径：median + MAD，单次/均值不作结论，frame 计时会虚高 | [OP-PROFILING-003](references/cards.md#OP-PROFILING-003) |

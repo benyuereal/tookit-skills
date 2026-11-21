@@ -44,7 +44,7 @@
 | CUDA→HIP 移植 / kernel 开发 / Triton | dcu-cuda-hip-port、dcu-kernel-dev、dcu-triton-kernels、dcu-kernelwiki | operators |
 | 故障排查 / 精度 / crash / hang | dcu-vmfault-coredump、debug-cuda-crash、debug-distributed-hang、dcu-vllm-precision、dcu-train-precision | troubleshooting |
 | 工程实践 / CI / 代码规范 / cookbook | ci-workflow-guide、env-var-conventions、cookbook-*、model-pr-* | engineering |
-| 算子卡 / 某算子有哪几种实现 / 哪个档位用哪个 / kernel 改动算不算通过 / 怎么持续推进一轮优化 / **先算出预测再写代码** / 手写 HIP 慢但数值对 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8、op-contract、op-bench、op-profiling、op-gate、op-optimize、op-roofline、op-hip-compile | ops |
+| 算子卡 / 某算子有哪几种实现 / 哪个档位用哪个 / kernel 改动算不算通过 / 怎么持续推进一轮优化 / **先算出预测再写代码** / 选哪个算子库、流水线怎么排 / 手写 HIP 慢但数值对 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8、op-contract、op-bench、op-profiling、op-gate、op-optimize、op-stack-design、op-roofline、op-hip-compile | ops |
 | 全量路由索引 | dcu-skill-router（dcu-core） | core |
 
 > 完整路由表见仓库根 `SKILL.md`（包级总入口）与 `dcu-skill-router`。

@@ -131,7 +131,7 @@ python3 scripts/skill_eval.py --domain ops --dry-run
 - 动态门**不进 CI**：成本高、需要登录态、结果有随机性。发版前对「改动过的 skill」跑一遍，
   把通过率写进 `CHANGELOG.md` 或 PR 描述。
 - `forbid` 零额外成本，跟着动态门一起跑，不需要单独的开关。
-- `--strict-description` 是收敛工具：等 144 个 skill 的描述都补齐后，把它打开并写进 CI，
+- `--strict-description` 是收敛工具：等 146 个 skill 的描述都补齐后，把它打开并写进 CI，
   那时「描述不合规」才从报告项变成硬门。
 
 ## 六点五、能力评测的四级阶梯，以及为什么只做到 L1
@@ -155,7 +155,7 @@ python3 scripts/skill_eval.py --domain ops --dry-run
 
 ## 七、覆盖面与扩面顺序
 
-现状：144 个 skill 中 19 个带 evals（dcu-core 2、dcu-env 4、dcu-inference 2、
+现状：146 个 skill 中 19 个带 evals（dcu-core 2、dcu-env 4、dcu-inference 2、
 dcu-troubleshooting 1、ops 10）。ops 的 5 张算子卡（op-gemm-fp8 / op-hip-compile /
 op-moe-w8a8 / op-roofline / op-sparse-mla）于 2026-11-13 补齐 3+2 例。最近一次整批
 （2026-10-30，`--jobs 5`）：`dcu-ssh` 5/5、ops 21/25。

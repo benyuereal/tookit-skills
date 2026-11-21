@@ -40,16 +40,16 @@ x[B, H] --gate/up GEMM--> [B, 2*I] --silu(gate)*up--> [B, I] --fp8 quant-->
 
 > 生产有**两条** MoE 路径：routed 走 lightop，shared 走 triton+Cijk。分析时不要漏掉 shared 路径的耗时。
 
-## 三、正确性红线：ASM mode ≥ 1000
+## 三、正确性判据：ASM mode ≥ 1000
 
 **已知 bug**：`lightop` 的 MoE Marlin ASM kernel（`mode >= 1000`，预编译 `.co` 无源码）在**混合专家 batch** 下会串读其他 token / 专家的数据。
 
-- 判据不是「对比 torch 参考」，而是**自洽性**：同一个 token 在 batch 里的输出，不得依赖它的 batch 同伴。
+- 判据不是「对比 torch 参考」，而是**自洽性**：同一个 token 在 batch 里的输出不依赖它的 batch 同伴。
 - 实测：`(16, 0)` 配置 bit-exact 自洽；`(32, 1000)` 不自洽（max_diff 量级 1e5）。
 - 源码注释里「(32,1000) verified lossless 1.6e-8」**不可信**。
 - 安全区：`mode 500–525`（非 ASM 4-stage 家族）。
 
-推论：**MoE 的无损性判定必须用自洽性测试**（batch 独立性），不要依赖自己写的 torch 参考——参考写错会同时放过 bug。
+推论：**MoE 的无损性判定用自洽性测试**（batch 独立性），不要依赖自己写的 torch 参考——参考写错会同时放过 bug。
 
 ## 四、融合判据（已证伪，别再重开）
 

@@ -50,21 +50,21 @@ floor:                           # 性能地板：什么时候可以宣布「别
   at_floor_threshold: 0.85       # 达成率 ≥ 85% 判 at_floor
 ```
 
-## 三、字段硬规则
+## 三、字段判据
 
-| 字段 | 硬规则 |
+| 字段 | 判据 |
 |---|---|
-| `math` | 必须写出哨兵值语义（`-1` 无效索引、`-inf` 死区、`0` 填充）。这些是正确性 bug 的高发区 |
+| `math` | 写明哨兵值语义（`-1` 无效索引、`-inf` 死区、`0` 填充）。这些是正确性 bug 的高发区 |
 | `shapes` | 用**符号**，不放具体数值；具体数值进算子卡的 `shapes.yaml`，一档一个顶层键 |
-| `dtypes` | `acc` 必须显式写。fp16/bf16 累加与 fp32 累加结论会相反 |
+| `dtypes` | `acc` 显式写。fp16/bf16 累加与 fp32 累加结论会相反 |
 | `layout_constraints` | 只写**会导致结论反转**的布局事实。例：「kv 在 packed `[slots,132]` 下向量化被限制在 ≤4B，与分离平面的带宽差 2×，两者性能**不可跨布局比较**」 |
 | `tolerance` | 分两级：`vs_fp32_ref`（宽松，检数值正确）+ `variant_vs_variant`（严格，检实现等价）。**默认 `bit_exact`**，不 bit-exact 必须写明理由与容差 |
 | `invariants` | 见 §四。至少 `determinism`。**注意**：如果哨兵位置的支持度因变体而异（有的实现只支持后缀填充），那它就不是「每次 run 都要判」的不变量，而是**变体能力**——写进 `variants.yaml` 并单独出一个检查脚本 |
-| `gates` | 每条必须能**真的被执行**：优先写 `template:`（共享实现 `scripts/opcheck.py` 的子命令，见 §八），只在流程确实算子特有（如手写 `.so` 的构建核验）时才写 `script:` 指向卡内路径。跑不了的写 `required: false` 并注明 `skip_reason` |
+| `gates` | 每条要能**真的被执行**：优先写 `template:`（共享实现 `scripts/opcheck.py` 的子命令，见 §八），只在流程确实算子特有（如手写 `.so` 的构建核验）时才写 `script:` 指向卡内路径。跑不了的写 `required: false` 并注明 `skip_reason` |
 | `floor` | `peak` 必须是**物理常数**（rocminfo/规格书的峰值带宽、峰值算力），不是实测值。`basis` 必须能复算出「这个算子至少要多快」 |
 | `manifest` | 声明**要冻结哪些执行身份**（见 §六）。只写 role 与 env 键名，**不写路径**——路径由采集时命令行显式给 |
 
-> 缺项不许默认通过。`opverify.py` 对任何 `required: true` 但缺数据/缺脚本的条目一律判 FAIL——宁可拦下，不许糊过去。
+ > 缺项按失败处理。`opverify.py` 对任何 `required: true` 但缺数据/缺脚本的条目一律判 FAIL——宁可拦下，不糊过去。
 
 ## 四、不变量清单（通用 + 算子特定）
 
@@ -135,7 +135,7 @@ manifest:
 | `loaded` | 进程**实际加载**的那个产物 | 运行时从 kernel 的 `adapter.libpath` / `module.__file__` 抓 | 必填 |
 | `build` | 编译产物 | 缓存里的 `executable.so` / 编译出的 `.co` | **仅当产物 ≠ 加载产物时**（如 `.co` 编译后拷进安装树），用 mtime 链查「编完没拷」 |
 
-三条硬规则：
+三条判据：
 
 1. **`build` 与 `loaded` 至少要有一个**，且 `source` 必须在。只钉源码等于没钉产物（源码没变、产物被覆盖照样测错）；只钉产物则不知道是哪份源码编的。
 2. **`loaded` 必须在运行时抓**，不能事后猜。事后按名字 grep 缓存目录抓不到（生成的代码里没有算子名）——这条我们实测过（2026-10-28：`~/.tilelang/cache` 下 1700+ 个 `executable.so`，生成代码里无算子名）。
@@ -164,7 +164,7 @@ python3 scripts/opmanifest.py validate --manifest <run>/manifest.json --contract
 |---|---|---|
 | 契约里写具体 shape | 换档位就失效 | 符号维度 + `shapes.yaml` 分档 |
 | gate 脚本路径不存在 | 门永远「无法执行」→ 被跳过 | 要么写脚本，要么 `required: false` + `skip_reason` |
-| 契约与 SKILL.md 各说一套 | 模型按文档、脚本按契约，冲突 | 改一处必须改另一处 |
+| 契约与 SKILL.md 各说一套 | 模型按文档、脚本按契约，冲突 | 改一处要改另一处 |
 
 ## 八、与工具的关系
 

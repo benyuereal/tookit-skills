@@ -5,6 +5,32 @@
 ## [Unreleased]
 
 ### Added
+- **`dcu-hytlass-source`（operators 域，第 20 个子 skill）**：hytlass 是 CUTLASS 3.5.0（commit `7d49e6c7`）的
+  HCU 移植，C++ 模板库，BSD-3-Clause。覆盖两套编程模型（2.x threadblock/warp + mmac/`ds_read_matrix`；3.x CuTe，
+  仓内称 HuTe）、11 个代表性示例的选型、构建门槛（DTK 25.10+/CMake 3.19+/C++17）、与手写 HIP 的分界（示例是
+  best practice 不保证最优）、已知边界（上游固定 commit、无 autotune/plan 层）。
+- **`op-stack-design/references/libraries.md` 扩到十一库**：新增 hytlass / `Moe`(moe_c) / `BoltOPs` / `TileKernels`
+  四个画像；每个库由三行改为五行（加「何时选它 / 何时别选」）。AITER 画像补「moe_c 是独立仓库，MoE 慢先查
+  `moe_c_configs/`」；DeepGEMM 画像补 HIPC（`m_..._hipc` + `pack_w4a8_moe_hipc_weight`）与 gfx936 专用 W6
+  （`m_..._gfx936` + `pack_w8a8_gfx936_weight_to_w6`）、`shuffle_unique`、`fp8_gemm`/`einsum` 走 hipBLASLt；
+  LightOp 画像补「仓内置 `.agents/skills/`，带宽测量用它的脚本不要另写探针」。跨库共同税由三条扩到四条
+  （新增「融合的依赖链」：融合未必更快，mHC 的 `pre_big_fuse` 实测慢 1.7×）。
+- **五个 `dcu-*-source` 补「何时选它 / 何时别选」小节**：`dcu-aiter-source`、`dcu-triton-source`、`dcu-kernelwiki`、
+  `dcu-lightop-fusion`、`dcu-deepgemm-source`（后者同时更新 §3 的 `deepgemm-das` 开源锚点与 `csrc/arch/*` 目录
+  布局、§4 路径表补 HIPC / gfx936-W6 / `shuffle_unique` / hipBLASLt 入口）。
+- **`op-stack-design`（ops 域选型层 skill）接入路由并登记**：库画像（结构定律 / 可调面 / 已知遗留税 /
+  何时选它）+ 十条流水线定律，用于「写代码前排掉结构性不可行的设计」。包根 `SKILL.md` 路由表补入该
+  skill 并指向唯一权威表；`dcu-skill-router` §8 算子卡域索引同步补齐（连同此前漏登记的
+  `op-hip-compile`），并把过时的「三闸四档」更正为 `op-gate` 的「四闸四档」。
+- **`Plugins/ops/SKILL.md` §5.1「唯一权威表」**：同一件事在四个 skill（`op-gate` / `op-optimize` /
+  `dcu-op-optimization` / `humanize-rlcr`）里各讲一遍，agent 进来不知道信哪份。新增一张表逐项写明
+  「问题 → 唯一权威 → 其他位置的定位」：判定→`op-gate`、量法→`op-bench`、天花板→`op-roofline`、
+  算子身份→卡片+registry、候选队列→`op-optimize/loop.py`、PMC→`op-profiling`、选型→`op-stack-design`、
+  多轮编排→`dcu-orchestrator`。原索引顺延为 §5.2。
+- **`dcu-op-optimization` 顶部加「定位声明」**：明确它是方法学导读、不定义判定标准；判定/口径/天花板
+  分别归 `op-gate` / `op-bench` / `op-roofline`；文末 `candidates.jsonl` 标为历史遗留，现行格式是
+  `op-optimize` 的 `candidates.yaml`。原有内容（微基准 roofline 五步、踩坑、配方）保留不动。
+- 规模数字更正：`SKILL.md`、`README.md`、`docs/EVALS.md`、`HANDOFF.md` 的 144 → **146**（141 顶层 + 5 嵌套）。
 - **`scripts/skill_eval.py`（evals 动态执行器）+ `docs/EVALS.md`**：把 `evals/evals.json` 真的跑起来——
   每条用例在独立临时 cwd 起 `claude -p`，**挂仓内全部插件**（路由本来就发生在全库之间），并隔离
   `CLAUDE_CONFIG_DIR` 让 `~/.claude/skills` 里的已安装旧副本不参与竞争（不隔离时测的是上次 install 的描述，

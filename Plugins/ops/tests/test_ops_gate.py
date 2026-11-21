@@ -111,7 +111,9 @@ def record_manifest(src, loaded, out, op="demo", shape="s", src_older=60.0):
         "schema": "opmanifest/v1",
         "op": op,
         "shape": shape,
-        "recorded_at": "2026-10-28T00:00:00+0800",
+        # 相对时间：这份 manifest 是「刚 record 的」，不是历史记录。
+        # 写成固定日期会让 `STALE_DAYS` 的陈旧豁免意外生效，测不到本来要测的拦截。
+        "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(now)),
         "artifacts": [
             {"role": "source", "path": str(src), "sha256": _sha(src),
              "bytes": Path(src).stat().st_size, "mtime": Path(src).stat().st_mtime},
@@ -130,7 +132,7 @@ class Fixture:
     def __init__(self, root):
         self.root = Path(root)
         (self.root / "scripts").mkdir(exist_ok=True)
-        for n in ("opverify.py", "opmanifest.py"):
+        for n in ("opverify.py", "opmanifest.py", "opgate_checks.py"):
             shutil.copy(REPO / "scripts" / n, self.root / "scripts" / n)
         hookdir = self.root / "Plugins" / "ops" / "hooks"
         hookdir.mkdir(parents=True)
@@ -224,6 +226,27 @@ class TestTriggers(Base):
         perf.parent.mkdir(parents=True)
         perf.write_text("x = 1\n")
         self.assertEqual(g.classify(self.f.write_payload(perf))[0], "write_source")
+
+    def test_fast_path_skips_ordinary_actions(self):
+        """`_worth_checking` 是便宜的预筛：普通 Bash / 普通写文件根本不进判定。"""
+        self.assertFalse(ops_gate._worth_checking(self.f.bash_payload("ls -l")))
+        self.assertFalse(ops_gate._worth_checking(self.f.bash_payload("git status")))
+        self.assertFalse(ops_gate._worth_checking(
+            self.f.write_payload(self.td + "/notes.txt", "Write")))
+        self.assertFalse(ops_gate._worth_checking(
+            {"tool_name": "Read", "tool_input": {"file_path": str(self.f.src)}}))
+        # 值得查的四类仍进判定
+        self.assertTrue(ops_gate._worth_checking(self.f.write_payload(self.f.src)))
+        self.assertTrue(ops_gate._worth_checking(self.f.bash_payload("git commit -m x")))
+        self.assertTrue(ops_gate._worth_checking(self.f.bash_payload(
+            "%s %s" % (sys.executable, self.f.card / "bench" / "ab.py"))))
+
+    def test_settings_matcher_is_narrow(self):
+        cfg = json.loads((REPO / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        matcher = cfg["hooks"]["PreToolUse"][0]["matcher"]
+        self.assertEqual(matcher, "Bash|Write|Edit")
+        self.assertNotIn("MultiEdit", matcher)
+        self.assertNotIn("NotebookEdit", matcher)
 
     def test_bench_and_commit_are_gated(self):
         g = self.f.gate()
@@ -359,6 +382,35 @@ class TestWriteAction(Base):
         rc, out = self.f.hook_rc(self.f.write_payload(self.f.loaded))
         self.assertEqual(rc, 2, out)
         self.assertIn("role=build/loaded", out)
+
+    def test_stale_manifest_warns_instead_of_blocking_the_whole_repo(self):
+        """陈旧 manifest 只提示、不拦。
+
+        为什么：manifest 记的是某次 run 的产物指纹，换机器/清缓存必然失效。
+        让它永久挡住所有 `git commit`，身份闸就成了仓库锁 —— 那是重约束，
+        而且它挡的动作与那条过期结论无关。`OPS_GATE_STRICT=1` 才恢复全量拦截。
+        """
+        man_path = self.f.root / "runs" / "op-optimize" / "2026-10-28-demo" / "profile" / "manifest.json"
+        man = json.loads(man_path.read_text())
+        man["recorded_at"] = "2020-01-01T00:00:00"
+        man_path.write_text(json.dumps(man))
+        self.f.src.write_text("// drifted after the record\n")   # 制造 sha 漂移
+
+        rc, out = self.f.hook_rc(self.f.write_payload(self.f.other_src))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("陈旧 manifest", out)
+
+        # strict 模式恢复拦截：要全量核验时仍然拦得住
+        old = os.environ.get("OPS_GATE_STRICT")
+        os.environ["OPS_GATE_STRICT"] = "1"
+        try:
+            rc, out = self.f.hook_rc(self.f.write_payload(self.f.other_src))
+        finally:
+            if old is None:
+                os.environ.pop("OPS_GATE_STRICT", None)
+            else:
+                os.environ["OPS_GATE_STRICT"] = old
+        self.assertEqual(rc, 2, out)
 
 
 # --------------------------------------------------- verified 提案门（F）

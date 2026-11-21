@@ -28,7 +28,7 @@ license: MIT
 | `aiter` | aiter GEMM 库 | 生产 | 待评 |
 | `hand-hip` | 手写 HIP + MFMA intrinsic | 特殊形状 | 兜底 |
 
-## 三、gfx938 的 FP8 事实（写代码前必须知道）
+## 三、gfx938 的 FP8 事实（写代码前需要知道）
 
 - gfx938 **有** FP8/BF8 MFMA intrinsic：`__builtin_amdgcn_mfma_f32_32x32x16_fp8_fp8`、`_16x16x32_bf8_bf8`、`smfmac_f32_16x16x64_*`。
 - 裸 `cvt_pk_fp8_f32` 需要 `fp8-insts` 目标特性——**gfx938 不提供**，必须改用 HIP 的 `cast_to_f8` / `cast_from_f8`。

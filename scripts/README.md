@@ -10,6 +10,7 @@
 | `skill_eval.py` | evals 动态执行器：每条用例起一次 `claude -p --plugin-dir <插件>` 独立会话，判「该不该拉起这个 skill」（true=第一个 Skill 调用是它；false=全程不得出现），`--judge` 再判回答要点。烧 token，不进 CI。用法见 `python3 scripts/skill_eval.py --list` / `--skill <name>` / `--domain <plugin>`，完整流程见 [`docs/EVALS.md`](../docs/EVALS.md) |
 | `json_schema_mini.py` | 零依赖 JSON Schema 子集校验器（type/required/properties/items/enum/const/minItems/pattern/minLength/minimum/maximum/additionalProperties）。用法 `python scripts/json_schema_mini.py <schema.json> <data.json>`；现被 dcu-image-hub / dcu-modelzoo 的 fetch 脚本在快照落盘后自动调用，schema 文件放各 skill `data/*.schema.json` |
 | `hygon-upstream-sync.py` | HYGON-AI 上游仓库周更同步（35 仓库索引/版本锚点见包根 `references/hygon-upstream/repos-index.md`；配套的内部 skill `dcu-upstream-integration` 未随本包分发） |
+| `opgate_checks.py` | ops 门禁（`Plugins/ops/hooks/ops_gate.py`）的检查函数：A 契约 / B 执行身份 / C 方向预算 / D 交付件 / E 编译产物 / F verified 提案。hook 只做动作识别与判定编排，判定本身仍调用 `opverify` / `opmanifest` / `loop.py` |
 | `install_sync_selftest.sh` | install.sh 清单式增量同步语义自测（7 用例：尾斜杠/用户新增/上游移除/本地改动备份/幂等等），发布前可跑 |
 
 **可执行的 `.sh` 脚本全部在各子 skill 自己的 `scripts/` 目录下**，例如：

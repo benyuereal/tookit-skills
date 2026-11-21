@@ -1,6 +1,6 @@
 ---
 name: op-hip-compile
-description: "手写 HIP kernel 的编译调优：为什么必须用 aicc 而不是 hipcc、怎样从对标实现（tilelang JIT）逐字镜像 -mllvm 集合（而不是抄静态列表）、FAST_MATH/WDRA 条件项、从 .so 里读 VGPR/SGPR 算占用率、codegen 报错（PrintVecElemLoad Check failed）怎么二分到具体构造。触发场景：手写 HIP 正确但比同体 tilelang 慢 10%+、同体不同速、aicc/hipcc 报 Unknown command line argument、要判断 occupancy 是不是 1 CTA/CU、要给新 kernel 定编译参数、codegen 在 Check failed 处 abort 而大 kernel 里定位不到源头。不适用：换算法/调参/候选队列与续跑走 op-optimize；计时口径与噪声判定走 op-bench；fp8 dtype 与 tilelang 写法走 op-gemm-fp8。"
+description: "手写 HIP kernel 的编译调优：为什么用 aicc 而不是 hipcc、怎样从对标实现（tilelang JIT）逐字镜像 -mllvm 集合（而不是抄静态列表）、FAST_MATH/WDRA 条件项、从 .so 里读 VGPR/SGPR 算占用率、codegen 报错（PrintVecElemLoad Check failed）怎么二分到具体构造。触发场景：手写 HIP 正确但比同体 tilelang 慢 10%+、同体不同速、aicc/hipcc 报 Unknown command line argument、要判断 occupancy 是不是 1 CTA/CU、要给新 kernel 定编译参数、codegen 在 Check failed 处 abort 而大 kernel 里定位不到源头。不适用：换算法/调参/候选队列与续跑走 op-optimize；计时口径与噪声判定走 op-bench；fp8 dtype 与 tilelang 写法走 op-gemm-fp8。"
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
@@ -128,7 +128,7 @@ tilelang.contrib.hcu.get_hcu_compile_flags` 并显式传 `pass_configs`。若 ai
 | `op-optimize` | 「所有调参都撞墙」时，先按 §二 排除 codegen，再判「需重写 kernel」 |
 | `op-sparse-mla` | 本模块的来源案例：`../op-sparse-mla/dev/sparse_mla_hip_glm.hip` 的 11-flag 构建与 1.16×/CTA 代价 |
 
-## 九、红线
+## 九、落点
 
 - 绝对 ms / 体积字节只进 `~/.config/dcu-toolkit/kb/op-opt/`；本 skill 只放相对倍数与口径。
 - 「镜像」的判据是**跑 `derive_flags.py`**，不是这份文档里的表——表会漂，函数不会。

@@ -1,6 +1,6 @@
 ---
 name: op-stack-design
-description: "算子优化的选型层：先认库、再排流水线、最后才动 kernel。按「M 档 × 复用结构」把工作负载匹配到七个算子库（hbird 手写形态 / LightOp / AITER / DeepGEMM / flash-attn·FlashMLA / TileLang / Triton），每个库给结构定律、可调面、已知还留在地上的税；再用十条流水线定律（驻留优先于 tile、barrier 宽度、预取深度不是延迟杠杆、寄存器是生命周期等）在写代码前排掉结构性不可行的设计。触发场景：拿到一个算子不知道用哪个库、要不要手写、某个库在这台机器上到底强在哪、想把单算子突破换成整库选型 + 流水线设计、接手一个手写 kernel 库要判断还有没有空间。不适用：已经定了算子要单个调优走 op-optimize（本 skill 只到「选谁 + 怎么排」）；预测与地板算式走 op-roofline；量法与判定走 op-bench / op-gate。"
+description: "算子优化的选型层：先认库、再排流水线、最后才动 kernel。按「M 档 × 复用结构」把工作负载匹配到十一类算子库（hbird 手写形态 / hytlass / LightOp / AITER / Moe(moe_c) / DeepGEMM / flash-attn·FlashMLA / TileLang / Triton / BoltOPs / TileKernels），每个库给结构定律、可调面、已知还留在地上的税；再用十条流水线定律（驻留优先于 tile、barrier 宽度、预取深度不是延迟杠杆、寄存器是生命周期等）在写代码前排掉结构性不可行的设计。触发场景：拿到一个算子不知道用哪个库、要不要手写、某个库在这台机器上到底强在哪、想把单算子突破换成整库选型 + 流水线设计、接手一个手写 kernel 库要判断还有没有空间。不适用：已经定了算子要单个调优走 op-optimize（本 skill 只到「选谁 + 怎么排」）；预测与地板算式走 op-roofline；量法与判定走 op-bench / op-gate。"
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
@@ -67,7 +67,7 @@ license: MIT
 
 ## 四、深引用
 
-- 七个库的画像与匹配表 → [`references/libraries.md`](references/libraries.md)
+- 十一个库的画像与匹配表 → [`references/libraries.md`](references/libraries.md)
 - 十条流水线定律（每条带反例）→ [`references/pipeline-laws.md`](references/pipeline-laws.md)
 - 源码地图 / 构建 / 适配点 → `dcu-operators/dcu-{lightop,aiter,deepgemm,flashattn,tilelang,triton}-source`、`dcu-lightop-fusion`、`dcu-lightop-moe`、`dcu-deepgemm-arch`
 - 算子级四问演算 → `op-roofline/references/pipeline.md`

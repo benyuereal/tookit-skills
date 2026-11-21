@@ -74,6 +74,16 @@ LightOp 的融合**只打 memory-bound 的算子链**（norm / elementwise / 激
 - 源码地图 / 构建 / DTK 矩阵：见 `dcu-lightop-source`
 - MoE 多量化路径：见 `dcu-lightop-moe`
 
+## §6 何时选它 / 何时别选
+
+- **选它**：目标算子链是 memory-bound（norm / 激活 / 量化 / rope / 采样 / 视觉预处理 / loss），且中间态当前要落 HBM 多次——融合的收益只有「省往返」这一项，能省才做。
+- **选它**：融合后 kernel **个数减少而并行度不变**（各段独立、可 block-specialized grid 合成一次 launch，如 Q/KV 异构工作）。
+- **选它**：要写训练向算子（residual+norm+dropout 带 backward），库里已有 autograd.Function 的成套样板。
+- **别选（结构性吃亏）**：主体是 compute-bound 的 GEMM / attention matmul——融合不省时间还多占 smem 与寄存器，净负。
+- **别选（结构性吃亏）**：把**独立、可并行**的 kernel 串成一条依赖链的「大融合」。链条变长后延迟由最长段决定、smem 峰值累加——本项目实测一例这种融合比非融合组合慢 1.7×（同形态实现在 `TileKernels-das` 的 mHC 族 `pre_big_fuse`，见 `op-stack-design` 的库画像）。
+- **别选**：只想拿单个算子的现成实现、没有可融的邻居——没有往返可省，融合纯增复杂度。
+- **先量的东西**：融合前后的 HBM 字节数（读+写）与 launch 次数。两者都没降就不是融合问题，回去查是不是 memory-bound。
+
 ## 使用须知
 - 本 skill 是方法论索引，具体 kernel 实现细节以源码为准。**先核对**：gfx 型号、DTK 版本、pytorch 版本。
 - 改 kernel 后必须重编（`setup.py install`）；`PYTORCH_ROCM_ARCH` 与 gfx 强相关，**换 gfx 必须重编**。
