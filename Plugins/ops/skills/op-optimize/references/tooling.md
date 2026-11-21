@@ -7,8 +7,8 @@
 | 这个改动快了多少 | `scripts/opbench.py`（HIP event，中位数 + MAD，`\|Δ\| > 3×MAD`） |
 | 我们和 flash_mla 谁快、交叉点在哪 | `op-sparse-mla/bench/bench_long.py`（`pool=full`，比值走 `significant()`） |
 | 这个档位的索引池够不够大 | `op-sparse-mla/_common.build_inputs`（看 `pool_extent`/`pool_mb`，池 <64MB 告警） |
-| 卡在算力、内存还是指令发射 | 照 `op-profiling/SKILL.md §六` 的参考实现自己解析 PMC CSV（只出机械原值；三级证据按 §四 由人判） |
-| 多个变体并排比 | 用 §六 同一份参考实现、同一口径各算一遍再并排（**不要为它再维护一个解析器**） |
+| 卡在算力、内存还是指令发射 | 跑 `scripts/pmc.py` 解析 PMC CSV（只出机械原值；三级证据按 `op-profiling/SKILL.md §四` 由人判） |
+| 多个变体并排比 | 用 `scripts/pmc.py` 同一口径各算一遍再并排（**不要为它再维护一个解析器**） |
 | 这个算子该往哪优化 | `op-roofline/derive.py`（shape + 设计 → 预测耗时 + 绑定约束；唯一天花板权威） |
 | 这个设计会不会寄存器溢出 | `op-roofline/tools/hipbudget.py`（活集合 vs 每线程 256）。**只作相对比较**：绝对 VGPR 判定实测不准（算 283 / 实际 256），不要拿它一票否决设计 |
 | 只想隔离一个变量（occupancy / launch 配置 / 分配） | 改一个**不改变语义**的量做探针：动态 LDS 申请量（kernel 仍只读前 N 字节，输出必须 bit-identical）、launch 配置、分配策略；先证 bit-identical 再比耗时 |

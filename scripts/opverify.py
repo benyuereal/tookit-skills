@@ -458,7 +458,8 @@ def _selftest():
     assert c["shapes"]["q"] == ["S", "H", 576], c["shapes"]["q"]
     assert abs(c["tolerance"]["vs_fp32_ref"]["max_abs"] - 2.0e-3) < 1e-12
     assert c["invariants"][0]["name"] == "determinism"
-    assert c["gates"][2]["name"] == "perf"
+    # 按名字找，不按位置：卡片的门数会随卡变化（这张卡是 4 道门，perf 在第 4 位）。
+    assert "perf" in [g["name"] for g in c["gates"]], c["gates"]
     print("[ok] 契约解析与校验通过（%d 项不变量 / %d 道门）" % (len(c["invariants"]), len(c["gates"])))
 
     run = {"op": "sparse-mla", "shape": "decode-s128", "variant": "tilelang",

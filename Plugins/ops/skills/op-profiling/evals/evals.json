@@ -5,7 +5,7 @@
     {
       "id": "op-profiling-t1",
       "prompt": "拿到一份 hipprof --pmc 的 CSV，同一个 kernel 出现多行，稳态行该怎么选？直接把第一次 launch 的数拿来用行不行？",
-      "expect": "命中§五陷阱 1：取单次 launch 中 GRBM 最小的行做稳态；PMC 下首次 launch 的 GRBM 虚高约 40%，取首行或求和都不是真耗时；只有查长尾才取最慢行。§六 参考实现会打印选中的 kernel、数据行索引、launch 次数与墙钟。"
+      "expect": "命中§五陷阱 1：取单次 launch 中 GRBM 最小的行做稳态；PMC 下首次 launch 的 GRBM 虚高约 40%，取首行或求和都不是真耗时；只有查长尾才取最慢行。`scripts/pmc.py`（§六 唯一实现）会打印选中的 kernel、数据行索引、launch 次数与墙钟。"
     },
     {
       "id": "op-profiling-t2",

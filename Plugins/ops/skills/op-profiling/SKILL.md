@@ -1,7 +1,7 @@
 ---
 name: op-profiling
-description: "算子性能剖析：PMC 计数器采回来以后怎么读、怎么判瓶颈——本 skill 不提供解析脚本，只给一份可直接照抄的参考实现与判据：稳态行怎么选、噪声 kernel 怎么排、TA_* 怎么跨 SE 求和、哪些计数器不存在，以及三级证据纪律（贴顶类可当结论 / 比值只用于区分变体 / 描述性事实不能当结论）。触发场景：拿 PMC 读数判断「卡在算力还是内存还是指令发射」、外包或自己写一个 PMC CSV 解析、决定哪几组计数器能拼成一条证据、跨变体找区分项。不适用：PMC/trace 怎么采、hipprof 工具本身怎么跑走 dcu-hipprof；先算上界/地板（不测、按机器模型推导）、能不能宣布到顶走 op-roofline；bench 报告口径与统计走 op-bench；契约容差与 floor 写法走 op-contract。"
-version: 3.0.0
+description: "算子性能剖析：PMC 计数器采回来以后怎么读、怎么判瓶颈——判据（稳态行怎么选、噪声 kernel 怎么排、TA_* 怎么跨 SE 求和、哪些计数器不存在、三级证据纪律）在本文，可执行解析器是 scripts/pmc.py（唯一权威实现，只打印原值、不下结论）。触发场景：拿 PMC 读数判断「卡在算力还是内存还是指令发射」、外包或自己写一个 PMC CSV 解析、决定哪几组计数器能拼成一条证据、跨变体找区分项。不适用：PMC/trace 怎么采、hipprof 工具本身怎么跑走 dcu-hipprof；先算上界/地板（不测、按机器模型推导）、能不能宣布到顶走 op-roofline；bench 报告口径与统计走 op-bench；契约容差与 floor 写法走 op-contract。"
+version: 3.1.0
 author: DCU Toolkit Contributors
 license: MIT
 ---
@@ -12,10 +12,10 @@ license: MIT
 
 | 做 | 不做 |
 |---|---|
-| 给出「怎么读 PMC CSV」的**参考实现 + 判据**（§四 三级证据、§五 口径陷阱、§六 可直接照抄的代码） | 不维护解析脚本：解析代码由 agent/人按 §六 现写，40~60 行标准库即可 |
+| 给出「怎么读 PMC CSV」的**判据**（§四 三级证据、§五 口径陷阱、§六 权威实现） | 不维护第二套解析：唯一可执行实现是 `scripts/pmc.py`，不另起一份 |
 | 说明每一行数字的口径与来源，缺的写 `unknown(<原因>)` | 不内置任何硬件常数；不在代码里下结论（没有 `bound`/`facts`/`ratios` 判定字段） |
 
-**唯一产出**：一份「采集 → 解析 → 判读」的方法与可复制代码。数字只出原值，结论由写报告的人按 §四 得出。
+**唯一产出**：一份「采集 → 解析 → 判读」的方法 + 一个只吐原值的解析器。数字只出原值，结论由写报告的人按 §四 得出。
 
 ## 二、什么时候用
 
@@ -24,9 +24,9 @@ license: MIT
 | 想问 | 用什么 | 为什么不是 PMC |
 |---|---|---|
 | 这个改动快了多少 | `op-bench`（`scripts/opbench.py`） | PMC 墙钟只到 ±1%，且有 launch 虚高 |
-| 卡在算力还是内存 | **本 skill**：先按 §六 拿原值，再按 §四 自行算 MBU/MFU | 计时测不出「上限在哪」 |
+| 卡在算力还是内存 | **本 skill**：先跑 `scripts/pmc.py` 拿原值，再按 §四 自行算 MBU/MFU | 计时测不出「上限在哪」 |
 | 片上开销在哪 | **本 skill**：原值里取 VALU/LDS，自行算 `非MFMA VALU/MFMA`、`LDS/MFMA` | 比值比绝对条数稳，能跨形状比 |
-| 多个变体并排比 | 用 §六 同一份参考实现、同一口径各算一遍再并排 | 口径不同就没有可比性 |
+| 多个变体并排比 | 用 `scripts/pmc.py` 同一口径各算一遍再并排 | 口径不同就没有可比性 |
 | 某段指令占多少 ⇒ 删掉省多少 | **都不该这么问** | 见 §五 陷阱 6 |
 
 ## 三、采集与解析
@@ -35,7 +35,14 @@ license: MIT
 HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python3 bench.py
 ```
 
-解析**没有现成可执行文件**（刻意的：长期维护一个 CSV 解析器不划算）。复制 §六 的参考实现到临时脚本，改几行 `COUNTERS` 即可；多项目共用同一套规则，别另起一套。
+解析用**唯一可执行实现** `scripts/pmc.py`（标准库；选行/排噪声/跨实例求和/常数不写死四条硬规则已内置）：
+
+```bash
+python3 -I scripts/pmc.py /tmp/pmcout/x.csv                    # 自动排噪声、按单次 GRBM 选主 kernel
+python3 -I scripts/pmc.py /tmp/pmcout/x.csv --kernel main --cu 64 --json
+```
+
+它**只打印原值**，不下结论；要加减计数器用 `--counter KEY`。多项目共用同一套规则，别另起一套。
 
 ## 四、输出怎么读（判据，由人执行）
 
@@ -74,7 +81,7 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python
 
 ## 五、口径陷阱（全部实测坐实）
 
-每条都曾真实读错一次；§六 的参考实现把选行/排除噪声/跨 SE 求和写进了代码，但引用数字时你仍要知道口径。
+每条都曾真实读错一次；`scripts/pmc.py` 把选行/排除噪声/跨 SE 求和写进了代码，但引用数字时你仍要知道口径。
 
 | # | 陷阱 | 错误做法的结果 | 正确口径 |
 |---|---|---|---|
@@ -91,9 +98,9 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python
 - **L1 不存在命中率计数器**：只有 `TA_TA_BUSY`（忙）和 `TCP_TCP_TA_DATA_STALL_CYCLES`（数据缺失停顿）的周期占比；报告里的「L1 命中率 x%」都是编的。
 - **`TA_FLAT_READ_WAVEFRONTS` 只统计 flat（通用寻址）访问**：常规 global load 走 buffer 不计数（GEMM 核实测 61 次 launch 合计仅 4096）；量访存 volume 用 `SQ_INSTS_VMEM_RD/WR`。
 
-## 六、参考实现：怎么读一份 PMC CSV
+## 六、权威实现：怎么读一份 PMC CSV
 
-完整参考实现见 **[`references/pmc_reference.py.md`](references/pmc_reference.py.md)**（标准库 ~60 行，可直接复制到临时脚本）。它只负责**选对行、排掉噪声、按实例求和、打印原值**，不解释、不判定；按本次要看的计数器改 `COUNTERS` 即可。**为什么必须这么做**（每条对应一次真实读错，数字见 §五）：
+唯一可执行实现是 **`scripts/pmc.py`**（包根共享脚本；`references/pmc_reference.py.md` 只是它的说明页，不另存一份代码）。它只负责**选对行、排掉噪声、按实例求和、打印原值**，不解释、不判定；要加减计数器用 `--counter`。**为什么必须这么做**（每条对应一次真实读错，数字见 §五）：
 
 - **选行与噪声**：稳态取单次 launch 中 GRBM 最小的行（首行虚高 ~40%）；自动选主 kernel 先排 `_ZN2at`/`_ZN7rocprim` 前缀，否则 `randperm` 内部 kernel 会夺冠（单次 GRBM 比主 kernel 还大）。
 - **跨实例求和**：`TA_*` 的 `[n]` 是按 CU 编号跨 8 个 SE 分开的实例，只能求和；`max(TA_TA_BUSY)/GRBM` 会得 352% 的荒谬值，均值/逐编号比大小也无意义。L1 没有命中率计数器，只有 busy/data-stall 的周期占比。
@@ -106,14 +113,14 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python
 
 ## 七、与其它 skill 的关系
 
-计时口径的唯一来源是 `op-bench`（PMC 墙钟 ≠ bench 耗时）；`op-roofline` 负责「应该多快 + 绑定约束 + 唯一权威天花板 `derive.py`」，本 skill 负责「实际采到了什么」，对不上就是模型错；人算出的贴顶证据喂给 `op-gate` 的两级天花板门禁，比值作为 `op-optimize` 候选的 `expect`。本 skill 不提供可执行解析器，**同一套规则只有 §六 一份**。
+计时口径的唯一来源是 `op-bench`（PMC 墙钟 ≠ bench 耗时）；`op-roofline` 负责「应该多快 + 绑定约束 + 唯一权威天花板 `derive.py`」，本 skill 负责「实际采到了什么」，对不上就是模型错；人算出的贴顶证据喂给 `op-gate` 的两级天花板门禁，比值作为 `op-optimize` 候选的 `expect`。本 skill 的可执行解析器只有 `scripts/pmc.py` 一个，**同一套规则只有一份**。
 
 ## 八、落点
 
 - 绝对 µs/ms/GB/s 只进 `~/.config/dcu-toolkit/kb/op-opt/`；本 skill 只放**相对比值**与**口径**。
 - 峰值带宽按 SoC 显式给定（本机实测 1724 GB/s，不是型号标称 1100 —— 换分母能把「到顶了」变成「还有 1.8×」）；缺峰值时 MBU 不成立，标称值不能替代实测。
 - 口径不全（缺 FLOPs / DRAM 字节 / 实测峰值 / CU）或分母不可信时，报告里不写「到顶」「物理上限」「没有空间」；此时只补证据。
-- **天花板只有一个权威点：`op-roofline/derive.py`**。§六 的参考实现不自算 `ceiling_us`，也不接受「临时给个字节数估算」——这正是 D1（同一份数据 38.9µs vs 77.9µs 两个天花板并存）的成因；**一个数只能有一个分母、分母与数字写在同一行**，引用达成率要同时写明分母来源与测量日期。同一个数两处算必然漂，87%/55%（标称 vs 实测峰值）也是这么来的。
+- **天花板只有一个权威点：`op-roofline/derive.py`**。`scripts/pmc.py` 不自算 `ceiling_us`，也不接受「临时给个字节数估算」——这正是 D1（同一份数据 38.9µs vs 77.9µs 两个天花板并存）的成因；**一个数只能有一个分母、分母与数字写在同一行**，引用达成率要同时写明分母来源与测量日期。同一个数两处算必然漂，87%/55%（标称 vs 实测峰值）也是这么来的。
 
 ## 知识卡索引
 

@@ -12,7 +12,7 @@ applies_to: gfx938
 status: verified
 ```
 ### 知识点
-PMC 读数分三级，**证据地位不同**：贴顶类（MBU/MFU 贴天花板、MFMA 发射饱和）可当结论，前提见 `OP-PROFILING-002`；比值类（`非MFMA VALU/MFMA`、`LDS/MFMA`）只能区分变体；描述类（`CTA/CU`、`issue_util`、`L2 命中率`、`VALU/LDS 开销重`）**只是描述**。`SKILL.md §六` 的参考实现只吐机械原值，三级划分与判读由人按 §四 执行。**为什么不能混用**：同一几何的 kernel 会同时命中同一批描述性事实。本项目 `flash_mla` 与 tilelang `bm32` **驻留 CTA 数相同（都是 2；2026-11-13 用动态 LDS 探针复核，旧的「=1」是常数错）、`issue_util` 都低于 10%**，两者却差 **2.18×**；把这类描述写成「占用率受限 ⇒ 有优化空间」，会得出「快 2.18× 的那个也有问题」的荒谬结论。真正能区分的是比值：`非MFMA VALU/MFMA`（约 0.73 vs 约 3.11）与 `LDS/MFMA`（约 0.53 vs 约 1.67）。
+PMC 读数分三级，**证据地位不同**：贴顶类（MBU/MFU 贴天花板、MFMA 发射饱和）可当结论，前提见 `OP-PROFILING-002`；比值类（`非MFMA VALU/MFMA`、`LDS/MFMA`）只能区分变体；描述类（`CTA/CU`、`issue_util`、`L2 命中率`、`VALU/LDS 开销重`）**只是描述**。`scripts/pmc.py`（§六 唯一实现）只吐机械原值，三级划分与判读由人按 §四 执行。**为什么不能混用**：同一几何的 kernel 会同时命中同一批描述性事实。本项目 `flash_mla` 与 tilelang `bm32` **驻留 CTA 数相同（都是 2；2026-11-13 用动态 LDS 探针复核，旧的「=1」是常数错）、`issue_util` 都低于 10%**，两者却差 **2.18×**；把这类描述写成「占用率受限 ⇒ 有优化空间」，会得出「快 2.18× 的那个也有问题」的荒谬结论。真正能区分的是比值：`非MFMA VALU/MFMA`（约 0.73 vs 约 3.11）与 `LDS/MFMA`（约 0.53 vs 约 1.67）。
 **已证伪（不要重开）**：「`CTA/CU=1` ⇒ 占用率受限 ⇒ 有优化空间」；「bank 冲突是优化目标」——厂商调优 matmul 自己有约 13% 的冲突占用率照样跑到实测峰值的近九成，我们的实现还更低。
 **反转条件**：描述类事实只在**同一实现内部纵向对比**（改版前后）时有指示意义；跨实现比较必须换比值类证据，并固定同一 FLOPs / MFMA 口径 / CU 口径。
 ### 错误写法
@@ -27,7 +27,7 @@ PMC 读数分三级，**证据地位不同**：贴顶类（MBU/MFU 贴天花板�
 - 同一形状的三方对照表（本实现 / 对手实现 / 一个已知高效的 matmul）；两个比值的具体数值与口径（FLOPs、每个 MMA 的 FLOPs 数、CU 取值）。
 - 描述类事实只作线索列出，并说明为什么它不能区分（列出同样命中的对照 kernel）；若声称「卡在算力/内存」，给出 MBU/MFU 的完整分母（DRAM 字节 / 实测峰值 / FLOPs / CU）、来源与日期。
 ### 参考
-- Plugins/ops/skills/op-profiling/SKILL.md（§四 三级证据由人执行、§六 参考实现只产原值）；Plugins/ops/skills/op-sparse-mla/ledger.md（§二 24：比值区分变体的实测记录）
+- Plugins/ops/skills/op-profiling/SKILL.md（§四 三级证据由人执行、§六 权威实现只产原值）与 scripts/pmc.py；Plugins/ops/skills/op-sparse-mla/ledger.md（§二 24：比值区分变体的实测记录）
 - Plugins/ops/skills/op-roofline/SKILL.md（预测侧与实测侧对账的分工）
 
 ## OP-PROFILING-002 · 口径不全（缺分母/证据）时禁止写「到顶」
@@ -40,7 +40,7 @@ applies_to: gfx938
 status: verified
 ```
 ### 知识点
-「到顶」需要四个外部口径齐全：FLOPs（反算 MFMA 条数）、DRAM 字节（MBU 分子）、同 SoC 实测峰值（MBU 分母）、CU 数（归一化分母），再加上 `op-roofline/derive.py` 给出的唯一权威天花板。缺任何一个，对应的 MBU/MFU 就不成立、写进「缺什么」清单；此时**没有证据**说明是否到顶，任何「到顶」「物理上限」「没有空间」的结论都被禁止。**为什么**：「算不出贴顶」≠「没有到达上限」，也≠「已经到达上限」——它只是**不知道**；把 `unknown` 当 0、或用一个没锁定的分母把 `unknown` 凑成百分比，是最常见的错法。§六 参考实现故意不内置这些常数、也不吐 MBU/MFU，就是为了让缺口显式暴露。
+「到顶」需要四个外部口径齐全：FLOPs（反算 MFMA 条数）、DRAM 字节（MBU 分子）、同 SoC 实测峰值（MBU 分母）、CU 数（归一化分母），再加上 `op-roofline/derive.py` 给出的唯一权威天花板。缺任何一个，对应的 MBU/MFU 就不成立、写进「缺什么」清单；此时**没有证据**说明是否到顶，任何「到顶」「物理上限」「没有空间」的结论都被禁止。**为什么**：「算不出贴顶」≠「没有到达上限」，也≠「已经到达上限」——它只是**不知道**；把 `unknown` 当 0、或用一个没锁定的分母把 `unknown` 凑成百分比，是最常见的错法。`scripts/pmc.py` 故意不内置这些常数、也不吐 MBU/MFU，就是为了让缺口显式暴露。
 **已证伪（不要重开）**：「没算出贴顶 ⇒ 说明还有空间」；「缺实测峰值就按型号标称值填」——本机流式只读实测峰值比型号标称高约 1.5 倍，拿标称当分母会把「到顶」翻成「还有约 1.8 倍」。
 **反转条件**：补齐四个口径并锁定天花板后贴顶判断才有意义；峰值必须按 SoC 显式传入并记录来源与日期。换卡、换访问模式（只读/只写/读写混合）、换 dtype 都要重新锁分母。
 ### 错误写法
@@ -55,7 +55,7 @@ status: verified
 - 缺什么：哪一项、为什么缺（原文）；补齐后的重算命令与四个口径取值（FLOPs / DRAM 字节 / 实测峰值 / CU）。
 - 贴顶判定的完整推导链（从四个输入到结论式子的每一步）；分母来源条目（`constants.yaml` 路径）、测量日期、访问模式与 dtype。
 ### 参考
-- Plugins/ops/skills/op-profiling/SKILL.md（§四 三级证据、§六 参考实现不内置常数、§七 红线）；Plugins/ops/skills/op-gate/SKILL.md（两级天花板门禁消费人算出的贴顶证据）
+- Plugins/ops/skills/op-profiling/SKILL.md（§四 三级证据、§六 权威实现不内置常数、§七 红线）；Plugins/ops/skills/op-gate/SKILL.md（两级天花板门禁消费人算出的贴顶证据）
 - Plugins/ops/skills/op-roofline/constants.yaml（峰值常数的 `source / verified_on / status`）；Plugins/ops/skills/op-gate/references/cards.md#OP-GATE-001（两级天花板）
 
 ## OP-PROFILING-003 · 计时口径：必须 median + MAD；单次/均值不得当结论；流式 frame 计时会系统性虚高
@@ -68,7 +68,7 @@ applies_to: gfx938
 status: verified
 ```
 ### 知识点
-三条互不回退的口径事实：**① 单次/均值不能当结论**——DCU 上同一 kernel 抖动可达 5%，必须多轮取**中位数**，用 `|Δ| > k × MAD`（k 默认 3）判显著；过不了门是 `INCONCLUSIVE`（「在噪声内」），不许写成「快了 x%」。**② 流式 frame 计时会系统性虚高**——按 SSE frame 间隔折算 per-token 会把服务端 flush/批量行为算进单 token，本项目实测虚高约 **2.15×**；真实 per-token 必须用 `usage.completion_tokens` 折算。**③ PMC 墙钟 ≠ bench 耗时**——PMC 有采集开销且首次 launch 数据不可用；计时精度与显著性门在 `op-bench`，PMC 只给结构性证据。§六 参考实现输出的 `EndNs-BeginNs` 只是采集时的墙钟，不要拿它当 bench 值，也不要反向去改 PMC 口径。
+三条互不回退的口径事实：**① 单次/均值不能当结论**——DCU 上同一 kernel 抖动可达 5%，必须多轮取**中位数**，用 `|Δ| > k × MAD`（k 默认 3）判显著；过不了门是 `INCONCLUSIVE`（「在噪声内」），不许写成「快了 x%」。**② 流式 frame 计时会系统性虚高**——按 SSE frame 间隔折算 per-token 会把服务端 flush/批量行为算进单 token，本项目实测虚高约 **2.15×**；真实 per-token 必须用 `usage.completion_tokens` 折算。**③ PMC 墙钟 ≠ bench 耗时**——PMC 有采集开销且首次 launch 数据不可用；计时精度与显著性门在 `op-bench`，PMC 只给结构性证据。`scripts/pmc.py` 输出的 `EndNs-BeginNs` 只是采集时的墙钟，不要拿它当 bench 值，也不要反向去改 PMC 口径。
 **已证伪（不要重开）**：「跑两次看着差不多就写收益」；「SSE frame 的间隔就是 ITL」；「PMC 墙钟能替代 bench」。
 **反转条件**：只有两轮口径完全一致（同样的 token 计数来源、计时方式、冷/热状态）时才能相比；换成 usage token 后必须重算，不能复用旧的 frame 数字。
 ### 错误写法

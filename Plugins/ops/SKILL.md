@@ -118,7 +118,8 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | 天花板是多少 | `ops/op-roofline` 的 `derive.py` | 任何别处写的达成率都必须引用它 |
 | 这个算子是什么 / 上次结论 | `ops/op-<算子>` 卡 + `data/ops/registry.json` | — |
 | 候选队列 / 中断续跑 | `ops/op-optimize` 的 `loop.py` | `dcu-op-optimization` 的 `candidates.jsonl` 是历史格式，**已被 `loop.py` 取代** |
-| PMC 怎么读 | `ops/op-profiling` | — |
+| PMC 怎么读 | `ops/op-profiling` + `scripts/pmc.py` | — |
+| 实测流式带宽 / 访问模式上限 | `scripts/probe_stream.py` / `scripts/probe_pattern.py` | 达成率分母的唯一来源：前者给 read/copy/write 流式峰值，后者给「行内连续 X 字节」的 pattern ceiling |
 | 选哪个库 / 流水线怎么排 | `ops/op-stack-design` | `dcu-operators/*` 只讲源码地图 |
 | 多轮可恢复的编排 | `dcu-core/dcu-orchestrator` | `humanize-rlcr` 是其中一种 harness 实现 |
 
@@ -133,7 +134,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 |---|---|---|
 | `op-contract` | — | 契约怎么写：字段规范、容差分级、不变量清单、地板依据 |
 | `op-bench` | — | 怎么量：口径三问、六条铁律、MAD 显著性、地板判定、跨卡 ratio |
-| `op-profiling` | — | 实测卡在哪：PMC 硬件计数器怎么读→三级证据 + 口径陷阱表 + 可照抄的 CSV 参考实现（§六，不维护解析脚本）；**和 op-bench 是两套口径，别混** |
+| `op-profiling` | — | 实测卡在哪：PMC 硬件计数器怎么读→三级证据 + 口径陷阱表 + 可执行解析器 `scripts/pmc.py`（唯一权威实现）；**和 op-bench 是两套口径，别混** |
 | `op-gate` | — | 怎么判：四道门（执行身份→正确性→不变量→A-B）、四档决策、回退与留痕 |
 | `op-optimize` | — | 怎么找下一个改动：候选队列→单实验→机器判定→落盘记账；**单模型、可中断、不重复劳动**（配 `loop.py`） |
 | `op-stack-design` | — | 选哪个库、流水线怎么排：十一库画像（结构定律/可调面/已知遗留税/何时选它）+ 十条流水线定律，**写代码前排掉结构性不可行的设计**；单算子突破换成整库选型 |

@@ -87,6 +87,10 @@ python3 -I scripts/probe_stream.py --sizes 1024 --check   # 与 op-roofline/cons
 三种口径不可混用：`copy` 的字节按 R+W 计，只算单边会比实际高 2 倍。**小 buffer 不能当峰值**——
 实测同一台机器 128 MiB 只有 1124 GB/s、1 GiB 才 1761，差 57%，因为前者跑进了固定开销主导区。
 
+**行内连续 X 字节的访问模式（strided gather / 列读 / 转置读）另有自己的 ceiling**：
+先跑 `python3 -I scripts/probe_pattern.py --runs 128 256 512 linear`，用它给的 `pattern ceiling`
+当分母；拿流式峰值算这类 kernel 的达成率，会凭空多出几十个百分点的「优化空间」。
+
 写报告时把「分母来自哪个探针、什么 buffer 尺寸」和百分比写在同一行。
 
 ## 五、边界：什么时候**不要**测 / 找谁

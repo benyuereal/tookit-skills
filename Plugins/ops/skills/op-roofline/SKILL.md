@@ -1,7 +1,7 @@
 ---
 name: op-roofline
 description: "算子优化的机器模型：把「试一个改动、量一次」换成「算出来再写代码」。三层——物理常数（实测标定）/推导规则（可计算、带反例）/算子模型（shape→设计→预测耗时+绑定约束）。判据：先有预测再写代码；测量只用来给模型打分，不用来找答案。触发场景：要给某算子定优化方向、判断某个设计「编译前就该否掉」、估算可达上界、解释一次实测为什么和预期差很远、某条更快的数据通路被告知用不了（先查编译期前置条件）。不适用：读 PMC 实测计数器做瓶颈归因走 op-profiling；改动能不能合入的判定走 op-gate；bench 口径与统计走 op-bench。"
-version: 1.0.1
+version: 1.1.0
 author: DCU Toolkit Contributors
 license: MIT
 ---
@@ -50,7 +50,13 @@ python3 derive.py sparse-mla --s 128 --h 64 --topk 2048 --nvalid 2000 --bm 32 --
 python3 derive.py sparse-mla ... --measured-ms 0.7799                                         # ② 有实测后对账：残差 > 30% 回去修模型
 python3 tools/hipbudget.py path/to/generated.hip --live acc_o,Q_spilt,KV_spilt --threads 256   # ③ R1：会不会溢出
 python3 tools/probe_peak.py --check                                                           # ④ 常数是否漂了
+python3 scripts/probe_stream.py --check                                                       # ⑤ 流式峰值实测（read/copy/write 三口径）
+python3 scripts/probe_pattern.py --runs 128 256 512 linear                                    # ⑥ 访问模式自己的 ceiling
 ```
+
+④ 校验的是**手抄常数**；⑤ 是**当场实测**的流式峰值（`constants.yaml` 的 `stream_*_peak` 分母就是它），
+两者对不上时以实测为准并改 constants。⑥ 给的是「行内连续 X 字节」这类 kernel 的物理上限：
+**用线性峰值给它算达成率，分母就错了**（R4 的可执行版）。
 
 `derive.py` 的输出有且只有一个目的：**指出绑定约束**——下面同时给出三件事：当前分子多少、可达上界多少、下一刀该切哪。
 
