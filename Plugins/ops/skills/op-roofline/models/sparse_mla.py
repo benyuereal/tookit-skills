@@ -14,8 +14,33 @@
   并发上限 = 每 CU 驻留 CTA 数 × CU 数 × 每 CTA 的 wave 数（决定能有多少个独立依赖链同时在飞）
 """
 
-CU = 69
+CU_FALLBACK = 64            # constants.yaml:compute.cu_count（gfx938 实测，2026-11-13 由 69 更正为 64）
+CU_FALLBACK_SOURCE = "constants.yaml:compute.cu_count"
+
+
+def _cu_count(device=None):
+    """从设备查询 CU 数；读不到时退回 constants.yaml 的实测值并打印来源。
+
+    为什么不再写死 69：原值 69 来自 hy-smi 的逐卡读数（69/70/71），与
+    torch / hbird-gemm README / dmesg SE 位图三方给出的 64 不符，会让所有
+    按 CU 归一的量（per-CU 摊销、rounds、waves_per_cu、MFMA/CU）偏 ~8%。
+    详见 constants.yaml:compute.cu_count 的更正记录。
+    """
+    try:
+        import torch
+        n = torch.cuda.get_device_properties(device).multi_processor_count
+        if n:
+            return int(n)
+    except Exception:
+        pass
+    import sys
+    print("⚠ CU 数无法从设备读取，退回 %s = %d" % (CU_FALLBACK_SOURCE, CU_FALLBACK),
+          file=sys.stderr)
+    return CU_FALLBACK
+
+
 MMA_PEAK_PER_CYCLE = 19.7
+CU = _cu_count()
 # 每 CU 的 VGPR 文件（32-bit 寄存器数）。本项目所有 kernel 都用
 # `-mllvm=-support-768-vgprs=true` 编译，故为 768 模式 = 4 SIMD × 64 lane × 768 = 196608；
 # 未开该 flag 时才是 4 × 64 × 256 = 65536。

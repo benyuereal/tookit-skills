@@ -32,7 +32,30 @@
 该形状的实际峰值**未标定**。达成率的分子可信、分母不可信，引用时必须带这句。
 """
 
-CU = 69
+CU_FALLBACK = 64            # constants.yaml:compute.cu_count（gfx938 实测，2026-11-13 由 69 更正为 64）
+CU_FALLBACK_SOURCE = "constants.yaml:compute.cu_count"
+
+
+def _cu_count(device=None):
+    """从设备查询 CU 数；读不到时退回 constants.yaml 的实测值并打印来源。
+
+    为什么不再写死 69：原值来自 hy-smi 逐卡读数（69/70/71），与 torch /
+    hbird-gemm README / dmesg SE 位图的 64 不符，会让按 CU 归一的量偏 ~8%。
+    """
+    try:
+        import torch
+        n = torch.cuda.get_device_properties(device).multi_processor_count
+        if n:
+            return int(n)
+    except Exception:
+        pass
+    import sys
+    print("⚠ CU 数无法从设备读取，退回 %s = %d" % (CU_FALLBACK_SOURCE, CU_FALLBACK),
+          file=sys.stderr)
+    return CU_FALLBACK
+
+
+CU = _cu_count()
 
 
 def analyze(S, H, SKV, D, BM=128, BN=128, kv_bytes=2, q_bytes=2,
