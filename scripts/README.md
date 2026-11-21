@@ -11,6 +11,7 @@
 | `json_schema_mini.py` | 零依赖 JSON Schema 子集校验器（type/required/properties/items/enum/const/minItems/pattern/minLength/minimum/maximum/additionalProperties）。用法 `python scripts/json_schema_mini.py <schema.json> <data.json>`；现被 dcu-image-hub / dcu-modelzoo 的 fetch 脚本在快照落盘后自动调用，schema 文件放各 skill `data/*.schema.json` |
 | `hygon-upstream-sync.py` | HYGON-AI 上游仓库周更同步（35 仓库索引/版本锚点见包根 `references/hygon-upstream/repos-index.md`；配套的内部 skill `dcu-upstream-integration` 未随本包分发） |
 | `opgate_checks.py` | ops 门禁（`Plugins/ops/hooks/ops_gate.py`）的检查函数：A 契约 / B 执行身份 / C 方向预算 / D 交付件 / E 编译产物 / F verified 提案。hook 只做动作识别与判定编排，判定本身仍调用 `opverify` / `opmanifest` / `loop.py` |
+| `probe_stream.py` | **流式带宽探针**：分 read / copy / write 三种口径测实测峰值，按 buffer 尺寸分别报（小尺寸落 L2，不能当 HBM 峰值），`--check` 与 `op-roofline/constants.yaml` 对账。**任何达成率的百分比都必须用它给出的分母，不能用型号标称值**。先用 `bash -c` 之外的方式确认机器空闲 |
 | `install_sync_selftest.sh` | install.sh 清单式增量同步语义自测（7 用例：尾斜杠/用户新增/上游移除/本地改动备份/幂等等），发布前可跑 |
 
 **可执行的 `.sh` 脚本全部在各子 skill 自己的 `scripts/` 目录下**，例如：

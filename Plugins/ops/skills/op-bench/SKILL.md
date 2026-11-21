@@ -77,6 +77,18 @@ print(floor_status(achieved_gbs=1020, peak_gbs=1200))               # -> ('at_fl
 
 只用标准库 + 可选 torch（未装 torch 时 `bench_fn` 退化为 CPU 侧 wall clock 并明确告警），可 `python3 -I scripts/opbench.py --selftest` 自检。
 
+### 算「达成率」之前先取分母
+
+```bash
+python3 -I scripts/probe_stream.py --sizes 16 256 1024    # read/copy/write 三种口径分别报
+python3 -I scripts/probe_stream.py --sizes 1024 --check   # 与 op-roofline/constants.yaml 对账
+```
+
+三种口径不可混用：`copy` 的字节按 R+W 计，只算单边会比实际高 2 倍。**小 buffer 不能当峰值**——
+实测同一台机器 128 MiB 只有 1124 GB/s、1 GiB 才 1761，差 57%，因为前者跑进了固定开销主导区。
+
+写报告时把「分母来自哪个探针、什么 buffer 尺寸」和百分比写在同一行。
+
 ## 五、边界：什么时候**不要**测 / 找谁
 
 - 契约还没写：先写契约（`op-contract`），否则测出来的数没有归属；没有生产布局的真实张量且算子对布局敏感：先解决入参，再测。
