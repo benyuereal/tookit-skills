@@ -18,8 +18,10 @@
 
 | 算子 | 家族 | 状态 | 首选实现 | 上限 | 上次结论 |
 |---|---|---|---|---|---|
+| [`sparse-mla`](cards/sparse-mla.yaml) | attention | tuned | tilelang-hygon / flash-mla | mixed | 指令数地板，非带宽地板 |
 | [`mqa-logits`](cards/mqa-logits.yaml) | attention | measured | lightop grouped | bandwidth | 1.29x vs G=3（epilogue bpermute） |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | draft | tilelang-hygon | compute | 无实测 |
+| [`moe-w8a8`](cards/moe-w8a8.yaml) | moe | draft | lightop-4stage | mixed | 分量 88.8% 峰值，整体未判 |
 | [`moe-grouped-gemm`](cards/moe-grouped-gemm.yaml) | moe | draft | deepgemm-das | mixed | 无实测 |
 
 ## 家族
