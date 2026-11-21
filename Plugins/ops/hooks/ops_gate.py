@@ -48,8 +48,7 @@ HELP = {
 
 def _worth_checking(payload):
     """快速路径：这次动作值不值得进判定。只做字符串/后缀判断，毫秒级。"""
-    tool = payload.get("tool_name") or ""
-    ti = payload.get("tool_input") or {}
+    tool, ti = payload.get("tool_name") or "", payload.get("tool_input") or {}
     if tool == "Bash":
         cmd = ti.get("command") or ""
         return "commit" in cmd or ".py" in cmd      # 其余 Bash 永远不查
@@ -83,8 +82,7 @@ class Gate:
 
     def classify(self, payload):
         """返回 (动作名, 目标卡列表, 说明)。动作名 None = 不管。"""
-        tool = payload.get("tool_name") or ""
-        ti = payload.get("tool_input") or {}
+        tool, ti = payload.get("tool_name") or "", payload.get("tool_input") or {}
         cwd = payload.get("cwd") or str(self.root)
 
         if tool in WRITE_TOOLS:
