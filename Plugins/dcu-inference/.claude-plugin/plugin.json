@@ -1,6 +1,6 @@
 {
   "name": "dcu-inference",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "推理框架部署与适配 — vLLM 部署调优/精度/自定义算子/runtime patch/trace 分析、模型部署目录、LibTorch、MIGraphX、LMCache、CosyVoice",
   "author": {
     "name": "DCU Toolkit Contributors"

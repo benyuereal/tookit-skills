@@ -1,7 +1,7 @@
 ---
 name: dcu-perf
 description: "DCU 性能剖析与调优技能集。覆盖海光 DCU 性能剖析与优化技能集：profiling 方法论、算子优化闭环、推理优化、压测与真实案例库。"
-version: 1.5.1
+version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
 ---

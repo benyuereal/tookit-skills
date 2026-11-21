@@ -1,6 +1,6 @@
 {
   "name": "dcu-engineering",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "工程与发布实践 — CI 回归 bisect、sglang cherry-pick、模型 PR 历史知识、代码规范",
   "author": {
     "name": "DCU Toolkit Contributors"

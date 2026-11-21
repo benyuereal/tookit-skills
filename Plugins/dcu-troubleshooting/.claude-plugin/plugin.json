@@ -1,6 +1,6 @@
 {
   "name": "dcu-troubleshooting",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "故障排查 — XID/SXID 错误码、VM fault coredump、CUDA crash、分布式 hang、训练精度、vLLM 精度定位",
   "author": {
     "name": "DCU Toolkit Contributors"

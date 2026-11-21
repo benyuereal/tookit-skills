@@ -1,7 +1,7 @@
 ---
 name: dcu-inference
 description: "DCU 推理框架适配技能集。覆盖海光 DCU 推理框架技能集：vLLM/SGLang 部署与调优、精度定位、自定义算子、MIGraphX 与模型部署目录。"
-version: 1.5.1
+version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
 ---

@@ -1,6 +1,6 @@
 {
   "name": "dcu-operators",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "算子开发 — CUDA-to-HIP 移植、Triton kernels、kernel 开发规范与 wiki、MoE 融合算子",
   "author": {
     "name": "DCU Toolkit Contributors"

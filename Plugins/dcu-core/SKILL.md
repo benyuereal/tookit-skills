@@ -1,7 +1,7 @@
 ---
 name: dcu-core
 description: "DCU 核心路由与编排技能集。覆盖海光 DCU 核心技能集：skill 统一路由、多任务工作流编排、KV Cache 卸载、融合 kernel 与训练手册。"
-version: 1.5.1
+version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
 ---

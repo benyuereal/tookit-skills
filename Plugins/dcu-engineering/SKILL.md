@@ -1,7 +1,7 @@
 ---
 name: dcu-engineering
 description: "DCU 工程实践技能集。覆盖海光 DCU 工程实践技能集：CI bisect、cherry-pick、代码规范、模型接入 cookbook 与 PR 优化史。"
-version: 1.5.1
+version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
 ---

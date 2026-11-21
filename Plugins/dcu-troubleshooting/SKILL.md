@@ -1,7 +1,7 @@
 ---
 name: dcu-troubleshooting
 description: "DCU 故障排查技能集。覆盖海光 DCU 故障排查技能集：XID/SXID 错误码、VM fault coredump、CUDA crash、分布式 hang 与训练精度。"
-version: 1.5.1
+version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
 ---

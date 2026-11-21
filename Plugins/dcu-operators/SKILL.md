@@ -1,7 +1,7 @@
 ---
 name: dcu-operators
 description: "DCU 算子开发技能集。覆盖海光 DCU 算子开发技能集：CUDA→HIP 移植、HIP/Triton 算子开发、kernel 优化知识库与 MoE 融合算子。"
-version: 1.5.1
+version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
 ---

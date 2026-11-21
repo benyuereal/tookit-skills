@@ -1,6 +1,6 @@
 {
   "name": "dcu-perf",
-  "version": "1.4.0",
+  "version": "1.6.0",
   "description": "性能剖析与优化 — hipprof/rocprof 方法论、算子优化闭环、推理优化、LLM benchmark、torch profiler 分析、模型 PR 优化史",
   "author": {
     "name": "DCU Toolkit Contributors"

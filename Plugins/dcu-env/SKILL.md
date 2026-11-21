@@ -1,7 +1,7 @@
 ---
 name: dcu-env
 description: "DCU 基础环境技能集。覆盖海光 DCU 基础环境技能集：SSH、环境检测、DTK/驱动、容器、hy-smi、NUMA、RCCL、RoCE 与 K8s 部署。"
-version: 1.5.1
+version: 1.6.0
 author: DCU Toolkit Contributors
 license: MIT
 ---
