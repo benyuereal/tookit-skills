@@ -280,6 +280,76 @@ def _significant(base, cand, k=3.0):
 
 # ---------------------------------------------------------------- 子命令
 
+SURFACES_PATH = Path(__file__).resolve().parent / "references" / "surfaces.yaml"
+
+
+def load_surfaces():
+    """读攻击面表。缺文件返回空表（不报错——老卡片环境可能没有）。"""
+    if not SURFACES_PATH.exists():
+        return []
+    import yaml
+    d = yaml.safe_load(SURFACES_PATH.read_text(encoding="utf-8")) or []
+    return [s for s in d if isinstance(s, dict) and s.get("id")]
+
+
+def cmd_enumerate(a):
+    """列出可用攻击面，并标出「已被方向预算封掉」的那些。
+
+    这是给人和 agent 看的候选菜单：direction 只能从这张表里挑，
+    不再允许凭空发明。已封的方向直接标出来，避免白跑。
+
+    --new 只打印可以填进 candidates.yaml 的 YAML 片段。
+    """
+    surfaces = load_surfaces()
+    if not surfaces:
+        print(_c("找不到 %s" % SURFACES_PATH, WARN), file=sys.stderr)
+        return 2
+
+    cands = load_candidates(a.card)
+    table = direction_table(cands)
+    pending_dirs = {str(c.get("direction")) for c in (cands.get("candidates") or [])
+                    if isinstance(c, dict) and str(c.get("status") or "pending") == "pending"}
+
+    rows = []
+    for s in surfaces:
+        sid = str(s["id"])
+        info = table.get(sid)
+        if info and info["exhausted"]:
+            state, note = "SEALED", "已证伪 %d 次，回 L1 重定约束" % info["refutes"]
+        elif sid in pending_dirs:
+            state, note = "QUEUED", "已有 pending 候选挂在这个方向"
+        elif info and info["refutes"]:
+            state, note = "OPEN*", "已证伪 %d 次（再 1 次封方向）" % info["refutes"]
+        else:
+            state, note = "OPEN", ""
+        rows.append((state, sid, s.get("class", ""), s.get("cost", ""),
+                     s.get("law", ""), s.get("statement", ""), note))
+
+    if a.new:
+        for state, sid, cls, cost, law, stmt, _ in rows:
+            if state.startswith("OPEN"):
+                print("- id: %s" % sid)
+                print("  direction: %s" % sid)
+                print("  status: pending")
+                print("  # %s（%s/%s  %s）" % (stmt, cls, cost, law))
+        return 0
+
+    print("%-7s %-18s %-12s %-4s %-4s %s" %
+          ("状态", "surface", "class", "cost", "law", "说明"))
+    for state, sid, cls, cost, law, stmt, note in rows:
+        color = {"OPEN": "", "OPEN*": WARN, "QUEUED": "", "SEALED": WARN}.get(state, "")
+        line = "%-7s %-18s %-12s %-4s %-4s %s" % (state, sid, cls, cost, law, stmt)
+        if note:
+            line += "  ← " + note
+        print(_c(line, color) if color else line)
+
+    open_n = sum(1 for r in rows if r[0].startswith("OPEN"))
+    print("\n可挑 %d 条 / 共 %d 条；已封 %d 条。"
+          % (open_n, len(rows), sum(1 for r in rows if r[0] == "SEALED")))
+    print("下一步：把选中的 id 填进 candidates.yaml 的 direction（可加 --new 直接出片段）")
+    return 0
+
+
 def cmd_status(a):
     card, cands, recs = a.card, load_candidates(a.card), read_records(a.card)
     pend = [c for c in cands["candidates"]
@@ -841,6 +911,9 @@ def main():
     sub.add_parser("queue", help="打印候选队列与已证伪清单")
     sub.add_parser("report", help="从记录渲染交付表")
 
+    e = sub.add_parser("enumerate", help="列出攻击面（direction 只能从这挑），标出已封的")
+    e.add_argument("--new", action="store_true", help="只打印可用的 candidates.yaml 片段")
+
     r = sub.add_parser("run", help="跑一个实验并判定")
     r.add_argument("tags", nargs="+")
     r.add_argument("--skv", type=int, nargs="+")
@@ -878,7 +951,8 @@ def main():
     a = ap.parse_args()
     a.card = Path(a.card).resolve()
     return {"status": cmd_status, "queue": cmd_queue, "run": cmd_run,
-            "report": cmd_report, "impl-broken": cmd_impl_broken,
+            "report": cmd_report, "enumerate": cmd_enumerate,
+            "impl-broken": cmd_impl_broken,
             "direction-refuted": cmd_direction_refuted,
             "refute": cmd_refute, "verify": cmd_verify,
             "adopt": cmd_adopt}[a.cmd](a) or 0
