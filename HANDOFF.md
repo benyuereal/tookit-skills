@@ -119,3 +119,34 @@ python3 scripts/skill_eval.py --skill op-gemm-fp8 --repeat 3 --jobs 3    # 3/3 �
 - 包内零密码、零密钥、零内网地址；发版前 `python3 sanitize.py .` 必须 0 命中。
 - 用户态知识库 `~/.config/dcu-toolkit/kb/`（`op-opt/` 台账、`issue/` 故障、`solution/` 方案）；
   重装不会删用户新增文件，但**别把沉淀写进 skill 树**。
+
+---
+
+## 推送纪律（2026-11-22 新增，来自一次实际事故）
+
+**D 项（结构 lint）不过，不许推送。**
+
+事故经过：有一轮在 `lint --baseline` 报 FAIL（SK003 +1）的状态下，连续推了 38 个
+commit。这违反了「D 项失败本该阻断推送」的约定。
+
+为什么这条重要：`lint --baseline` 的设计意图是「只拦新增」，它一旦红，
+说明新代码引入了结构退化。若此时推送，退化就进了主干，后面所有人都要在
+一个已经变脏的基线上工作。
+
+**执行方式**（每次推送前跑一遍，任何一项非 0 就不推）：
+
+```bash
+python3 -m pytest -q                                              # 测试全绿
+python3 skill_lint.py --root . --baseline lint-baseline.json --out /tmp/l.json
+python3 sanitize.py --selftest && python3 sanitize.py .           # 脱敏
+python3 -I Plugins/ops/op-atlas/validate.py --atlas Plugins/ops/op-atlas
+python3 scripts/run_evals.py --root .
+```
+
+这五条就是 `.github/workflows/ci.yml` 里跑的那五条——本地先跑一遍，
+把红色的部分留在本地，不要把排查成本转嫁给 CI 和后续接手的人。
+
+> 另一个相关教训：CI 的测试步骤曾经是 **空跑**（`unittest discover` 在非包目录
+> 返回 0 个用例却 exit 0），所以「CI 绿」本身不能作为绿灯的依据。
+> 现在已改为 `pytest`（`pytest.ini` 固定 `--import-mode=importlib`），
+> 实测收集数从 0 变成 350+。**看到 CI 绿之前先确认它真的跑了用例。**
