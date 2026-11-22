@@ -1,0 +1,75 @@
+{
+  "case": "003-rope-bandwidth",
+  "scenario": "bandwidth-bound",
+  "library": {
+    "canonical_id": "aiter",
+    "version": "0.1.6+dtk2604.torch2110",
+    "import_path": "aiter.ops.rope.rope_fwd"
+  },
+  "caliber": {
+    "what": "single kernel call",
+    "alloc": false,
+    "state": "hot",
+    "timer": "cuda_event",
+    "rounds": 9
+  },
+  "probes": [
+    {
+      "probe": "scale",
+      "S": 512,
+      "median_ms": 0.2303999960422516,
+      "gbs": 291
+    },
+    {
+      "probe": "scale",
+      "S": 2048,
+      "median_ms": 0.772799015045166,
+      "gbs": 347
+    },
+    {
+      "probe": "scale",
+      "S": 8192,
+      "median_ms": 3.048798084259033,
+      "gbs": 352
+    },
+    {
+      "probe": "copy_ref",
+      "median_ms": 0.8444790244102478,
+      "gbs": 1271
+    },
+    {
+      "probe": "dims",
+      "D": 128,
+      "median_ms": 3.1051180362701416,
+      "gbs": 346
+    },
+    {
+      "probe": "dims",
+      "D": 64,
+      "median_ms": 2.834238052368164,
+      "gbs": 189
+    },
+    {
+      "probe": "dims",
+      "D": 256,
+      "median_ms": 3.831355094909668,
+      "gbs": 561
+    }
+  ],
+  "findings": [
+    "规模放大到 S=8192 带宽仍只 352 GB/s ⇒ **不是固定开销主导**",
+    "同字节纯 copy 达 1226 GB/s ⇒ rope 只有它的 0.29",
+    "带宽随 D 单调上升：D=64→186、D=128→351、D=256→561 GB/s",
+    "⇒ 瓶颈是**每线程连续处理字节太少**，不是合并访问问题"
+  ],
+  "verdict": {
+    "root_cause": "向量宽度不足（layout-pack 类）",
+    "evidence": "带宽与 D 近似线性，且都远低于同字节 copy",
+    "not_this": "不是固定开销（S 放大不改善）、不是 freqs 开销（占 0.8%）"
+  },
+  "next": "要突破需改 kernel 让每个线程处理更多连续字节（如把相邻 head 合并成一次向量读）；不改 kernel 的前提下，rope 的带宽上限就是这个量级",
+  "not_measured": [
+    "改 kernel 后能到多少（需 hand-write 或改 aiter 源码，本 case 未做）",
+    "gather-path 方向（freqs 的访问模式）未单独测"
+  ]
+}
