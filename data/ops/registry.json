@@ -157,7 +157,7 @@
     {
       "name": "rmsnorm-fused",
       "path": "Plugins/ops/skills/op-rmsnorm-fused",
-      "status": "draft",
+      "status": "measured",
       "shapes": [
         "decode-m1",
         "decode-m32",
@@ -170,8 +170,8 @@
         "torch-native"
       ],
       "best_variant": null,
-      "floor_status": "bandwidth_bound（未实测）",
-      "last_verified": null,
+      "floor_status": "bandwidth_bound（M=8192 时 887 GB/s，达峰值 0.51）",
+      "last_verified": "2026-11-23",
       "evidence": "SKILL.md 判据 + _common.py 参考实现；ref-heavy 已过 correctness 门",
       "open_questions": [
         "lightop-fused 的残差融合版实际达成率",

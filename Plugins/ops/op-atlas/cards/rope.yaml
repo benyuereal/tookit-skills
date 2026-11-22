@@ -2,7 +2,7 @@ id: rope
 title: RoPE 旋转位置编码
 family: rope
 math: x_rot = x*cos(theta) + rotate_half(x)*sin(theta)
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -51,16 +51,33 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 0.973
+    vs: rotate_style=1 相对 style=0 的耗时比（0.7251/0.7451）
+    scope:
+      cards: 1
+      in_len: B=8 S=2048
+      out_len: H=32 D=128
+      warmup: hot
+      note: bf16；两种 style 差 0.02ms，接近 3×MAD=0.006 的边界
+  conclusion: 两种 rotate_style 耗时比为 0.973（差异接近噪声边界）；带宽仅达峰值的 0.21
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 选对 rotate_style 并合入 norm
   how: aiter.RoPE.forward(x, freqs, rotate_style=0/1, ...)；若有前置 norm 用 fused_qk_rmsnorm_rope
   requires: freqs 形状 [B,S,1,D/2]（实测：写成 [B,S,D/2] 会报维度错）
+hard_preconditions:
+- statement: aiter.rope_fwd 的 freqs 必须是 [B,S,1,D/2]，写成 [B,S,D/2] 会报维度错
+  check: 'python3 -I -c "from aiter.ops.rope import rope_fwd; import torch; x=torch.randn(2,8,4,64,dtype=torch.bfloat16,device=''cuda''); f=torch.rand(2,8,32,dtype=torch.float32,device=''cuda''); rope_fwd(x,f,0,False,False)"
+    → RuntimeError: Dimension out of range'
+- statement: aiter.RoPE 是 autograd Function 类，不能直接实例化调用
+  check: 用 aiter.ops.rope.rope_fwd 而非 aiter.RoPE(...)
+soft_preconditions:
+- 建议 hot 态且 ≥9 轮
+- bandwidth 分母按读 x + 写 y = 2*B*S*H*D*2B
 surfaces:
 - layout-pack
 - fusion-boundary
