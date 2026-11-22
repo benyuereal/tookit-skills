@@ -1,0 +1,57 @@
+id: qk-norm
+title: "QK per-head 归一化"
+family: norm
+math: "q = rmsnorm(q,-1)*w_q；k = rmsnorm(k,-1)*w_k"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "qk-norm 融合"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "Qwen3 系模型"
+      - "需要与 rope 融合"
+    not_for:
+      - "hidden 维归一（那是另一个算子）"
+    pros:
+      - "融合省往返"
+    cons:
+      - "head_dim 契约需核对"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写 per-head norm"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "head_dim 非标准"
+    not_for:
+      - "常规形状"
+    pros:
+      - "可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "每头在 head_dim 上归一，与 hidden 维归一是两个算子"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [fusion-boundary]
+
+updated: "2026-11-22"

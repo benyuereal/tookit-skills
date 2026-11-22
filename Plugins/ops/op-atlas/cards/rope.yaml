@@ -1,0 +1,57 @@
+id: rope
+title: "RoPE 旋转位置编码"
+family: rope
+math: "x_rot = x*cos(theta) + rotate_half(x)*sin(theta)"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "rope 融合族"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要与 QK-norm 融合"
+      - "decode 档"
+    not_for:
+      - "需要非标准缩放变体时先核实支持面"
+    pros:
+      - "融合省一次往返"
+    cons:
+      - "缩放变体支持面需核对"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写 HIP rope"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非标准 rot_dim 组合"
+    not_for:
+      - "常规形状"
+    pros:
+      - "完全可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "逐元素，字节数确定；half vs interleaved 弄反不报错只偏"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [layout-pack, fusion-boundary]
+
+updated: "2026-11-22"

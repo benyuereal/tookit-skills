@@ -1,0 +1,57 @@
+id: fused-add-rmsnorm
+title: "残差 + RMSNorm 融合"
+family: norm
+math: "y = w*((x+r)/sqrt(mean((x+r)^2)+eps))"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "融合 norm 族"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要融合残差"
+      - "绝大多数 decoder"
+    not_for:
+      - "单条无链算子（融合无可省的往返）"
+    pros:
+      - "省一次 HBM 往返"
+    cons:
+      - "原地写残差的变体会污染多变体对比"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "torch 两步：add 后 norm"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "基线对照"
+    not_for:
+      - "追求极限"
+    pros:
+      - "无依赖"
+    cons:
+      - "多一次往返"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "字节数完全确定（3*M*H*2B），是校准带宽判据的最佳载体"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [fusion-boundary, layout-pack]
+
+updated: "2026-11-22"

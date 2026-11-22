@@ -26,7 +26,8 @@ import re
 import sys
 from pathlib import Path
 
-FAMILIES = {"gemm", "attention", "moe", "elementwise", "comm", "sampling"}
+FAMILIES = {"gemm", "attention", "moe", "elementwise", "comm", "sampling",
+            "norm", "rope", "activation", "quant", "kv", "linear-attn", "memory"}
 STATUSES = {"draft", "measured", "tuned", "at_floor", "deprecated"}
 TIERS = {"primary", "structural", "reference", "fallback", "avoid", "unavailable"}
 CEIL_KINDS = {"roofline_model", "constants", "measured", "analytic", "missing"}

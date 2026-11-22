@@ -1,0 +1,42 @@
+id: logits-softmax-ce
+title: "Softmax + 交叉熵（训练侧）"
+family: activation
+math: "loss = -sum(y*log_softmax(logits))"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "torch 原生"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "训练侧对照"
+    not_for:
+      - "推理优化（不适用）"
+    pros:
+      - "无依赖"
+    cons:
+      - "无推理场景"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: compute
+  note: "训练侧算子；本仓定位是推理优化，无对应 profile 场景"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: []
+
+updated: "2026-11-22"

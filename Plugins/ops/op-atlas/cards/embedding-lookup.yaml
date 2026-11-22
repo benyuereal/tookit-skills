@@ -1,0 +1,57 @@
+id: embedding-lookup
+title: "Embedding 查表"
+family: memory
+math: "y = weight[token_ids]；gather 型"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "torch.index_select"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "常规词表"
+    not_for:
+      - "需要与后续 norm 融合时"
+    pros:
+      - "无依赖"
+      - "够用"
+    cons:
+      - "无融合，另起一趟"
+    source: "references/libraries.md"
+  - repo: BoltOPs
+    library_profile_ref: "libraries.md §10"
+    file_hint: "gather 类成品"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要低时延"
+    not_for:
+      - "大词表且要求极限"
+    pros:
+      - "自带调优"
+    cons:
+      - "版本较新"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "随机 gather，DRAM 行激活效率决定实际上限（不是流式峰值）"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [gather-path]
+
+updated: "2026-11-22"

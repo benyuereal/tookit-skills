@@ -1,0 +1,56 @@
+id: layernorm
+title: "LayerNorm"
+family: norm
+math: "y = w*(x-mean(x))/sqrt(var(x)+eps) + b"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "layernorm 融合"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "老模型 / 多模态"
+    not_for:
+      - "只需 RMSNorm 时（多算一次均值）"
+    pros:
+      - "融合族成熟"
+    cons:
+      - "比 rmsnorm 多一次遍历"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "torch 原生"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "基线对照"
+    not_for:
+      - "追求极限"
+    pros:
+      - "无依赖"
+    cons:
+      - "无融合"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "比 RMSNorm 多一次均值中心化；两者判据不同"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [fusion-boundary, layout-pack]
+
+updated: "2026-11-22"

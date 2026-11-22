@@ -1,0 +1,56 @@
+id: rope-mla
+title: "MLA 的解耦 RoPE"
+family: rope
+math: "仅对 q/k 的 rope 部分旋转；与 latent 部分解耦"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: FlashMLA
+    library_profile_ref: "libraries.md §7"
+    file_hint: "MLA rope 路径"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "DeepSeek MLA 系"
+    not_for:
+      - "标准 rope 场景（用 rope 卡）"
+    pros:
+      - "与 MLA 配套"
+    cons:
+      - "契约强绑定"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非标准 rot_dim"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "与标准 rope 的差别只在作用范围，但弄错会让长上下文精度崩"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [layout-pack]
+
+updated: "2026-11-22"

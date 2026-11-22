@@ -1,0 +1,56 @@
+id: sampling-topk-topp
+title: "采样：top-k / top-p"
+family: sampling
+math: "idx = topk(softmax(logits)); idx = topp(softmax(logits), p)"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "sampling 融合族"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要与 lm_head 融合"
+    not_for:
+      - "需要独立 logits 输出时"
+    pros:
+      - "省写回"
+    cons:
+      - "tie-break 语义需核对"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "torch 分步"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "调试 / 对照"
+    not_for:
+      - "生产"
+    pros:
+      - "简单"
+    cons:
+      - "写回浪费"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "tie-break 决定 determinism；通常与 lm_head 融合"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [precision-drop]
+
+updated: "2026-11-22"
