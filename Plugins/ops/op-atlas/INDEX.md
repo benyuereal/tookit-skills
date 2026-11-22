@@ -25,6 +25,7 @@
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | tilelang | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | draft | triton | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | draft | tilelang | compute | draft：选型与坑已整理，bench 与 ad… |
+| [`gemm-int8`](cards/gemm-int8.yaml) | gemm | draft | deepgemm | compute | 无实测：索引卡。达成率分母须按 INT8 单独标… |
 | [`hadamard-transform`](cards/hadamard-transform.yaml) | linear-attn | draft | tilelang | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`hc-split-sinkhorn`](cards/hc-split-sinkhorn.yaml) | linear-attn | draft | tilelang | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`kv-cache-paged-write`](cards/kv-cache-paged-write.yaml) | kv | draft | flash-attn | bandwidth | 无实测：索引卡，实现层待按证据推进 |
@@ -52,6 +53,7 @@
 | [`mtp-draft`](cards/mtp-draft.yaml) | sampling | draft | in-house | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | draft | flash-attn | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`qk-norm`](cards/qk-norm.yaml) | norm | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
+| [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | lightop | bandwidth | 无实测：索引卡。所有 FP8 路径的前置判据都挂… |
 | [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | draft | lightop | bandwidth | ref-heavy 通过正确性门；无性能实测；用… |
 | [`rope-mla`](cards/rope-mla.yaml) | rope | draft | flash-mla | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`rope`](cards/rope.yaml) | rope | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |

@@ -113,6 +113,79 @@ libraries:
     installed: false
     note: "AITER 的 MoE 后端（独立仓库 Moe）；按 (精度 × gfx) 查表。AITER 选中 MOE_C 时才有效"
 
+  # ---- 可用但此前未登记的库（版本为 2026-11-22 实测） ----
+  - canonical_id: sglang
+    aliases: [SGLang, SGLang-das]
+    pip_name: sglang
+    import_name: sglang
+    source_path: null
+    version: "0.5.18+dtk2604.torch2110"
+    installed: true
+    note: "推理框架本体；集成层，不是算子库。算子卡一般不直接引用它"
+
+  - canonical_id: sglang-kernel
+    aliases: [sgl-kernel, SGLangKernel]
+    pip_name: sglang-kernel
+    import_name: sgl_kernel
+    source_path: null
+    version: "0.4.6.post1+dtk2604.torch2110"
+    installed: true
+    note: "SGLang 的 AOT kernel 包。注：pip 名是 sglang-kernel，sgl-kernel 不存在"
+
+  - canonical_id: tokenspeed-triton
+    aliases: [tokenspeed_triton]
+    pip_name: tokenspeed-triton
+    import_name: tokenspeed_triton
+    source_path: null
+    version: "3.8.10.post20260906"
+    installed: true
+    note: "Triton 的变体分发；与 triton 3.6.0 并存，注意不要混用"
+
+  - canonical_id: lmslim
+    aliases: []
+    pip_name: lmslim
+    import_name: lmslim
+    source_path: null
+    version: "0.3.1+das.opt4.dtk2604.torch2110"
+    installed: true
+    note: "模型压缩/量化工具链"
+
+  - canonical_id: mooncake
+    aliases: [mooncake-transfer-engine, Mooncake]
+    pip_name: mooncake-transfer-engine
+    import_name: mooncake
+    source_path: null
+    version: "0.3.13.post1+dtk2604"
+    installed: true
+    note: "KV cache 传输引擎；面向分离式部署，不是算子"
+
+  - canonical_id: fastsafetensors
+    aliases: []
+    pip_name: fastsafetensors
+    import_name: fastsafetensors
+    source_path: null
+    version: "0.3.2+das185.dtk2604.torch2110"
+    installed: true
+    note: "权重加载加速；只影响启动，不是算子"
+
+  - canonical_id: flash-kda
+    aliases: [flash_kda]
+    pip_name: flash_kda
+    import_name: flash_kda
+    source_path: null
+    version: "0.0.1+dtk2604.torch2110"
+    installed: true
+    note: "KDA（线性注意力的一支）的专用实现；linear-attn 族应优先用它而非 tilelang 重写"
+
+  - canonical_id: torch
+    aliases: [PyTorch]
+    pip_name: torch
+    import_name: torch
+    source_path: null
+    version: "2.11.0+das.opt1.dtk2604"
+    installed: true
+    note: "框架本体；作为基线对照可引用，但「用 torch 分步实现」不是性能候选"
+
   - canonical_id: hbird-gemm
     aliases: [hbird, hbird-gemm, HBird]
     pip_name: null
