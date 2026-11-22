@@ -18,6 +18,18 @@ license: MIT
 
 三者正交、互不替代：**找方法**去 `dcu-perf`，**找源码**去 `dcu-operators`，**认算子 / 查结论 / 跑基准 / 判通过**来本域。
 
+### 第一站：算子图谱
+
+不知道该从哪下手时，先看 [`op-atlas/INDEX.md`](op-atlas/INDEX.md)——一页表列出
+每个算子的家族、状态、首选实现、上限与上次结论。图谱是**索引**：技术细节一律
+指向 `op-stack-design/references/libraries.md` 的 §号与 `pipeline-laws.md` 的 L 号，
+卡片里没有字段能承载技术描述（schema 白名单锁死，校验为
+`python3 -I op-atlas/validate.py --atlas op-atlas`）。
+
+> 引擎分层与决策路径（L0 认算子 → L1 选型 → L2 闭环 → L3 证据）见
+> `../../docs/ENGINE.md`（开发态解析到包根 `docs/`；安装态解析到
+> `<skills根>/_dcu-toolkit-shared/docs/ENGINE.md`，由 install.sh 同步）。
+
 > 命名约定：本域 skill 一律 `op-` 前缀、不带 `dcu-` 前缀（`dcu-` 保留给源码/框架索引类 skill）。`op-` 前缀的作用是让路由表一眼可辨，并保证 `Plugins/ops/skills/` 下全是算子卡或算子卡方法论。
 
 ## 二、目录约定：最小五件套 + 按需四件

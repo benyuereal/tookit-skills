@@ -27,6 +27,8 @@ CONVENTION_FILES = {
     'SKILL.md', 'README.md', 'CHANGELOG.md', 'LICENSE', 'AGENTS.md',
     'CONTRIBUTING.md', 'Dockerfile', 'Makefile', 'NOTICE',
     'THIRD_PARTY_NOTICES.md', 'HANDOFF.md', 'package.env', 'sanitize.py',
+    # 图谱索引页：与 SKILL.md/README.md 同级，是全大写的约定文件名
+    'INDEX.md',
 }
 PREFIX_ALLOW = ('dcu-', 'op-')
 MAIN_SCHEMA = {'name', 'description', 'version', 'license', 'kind'}

@@ -31,9 +31,9 @@
 | gemm | 纯矩阵乘，复用结构由 M 档决定 | [families/gemm.md](families/gemm.md) |
 | attention | Q/K/V 参与，瓶颈通常在 KV 搬运而非 GEMM | [families/attention.md](families/attention.md) |
 | moe | token 按专家重排后分组计算 | [families/moe.md](families/moe.md) |
-| elementwise | 逐元素 / norm / 激活，memory-bound | [families/elementwise.md](families/elementwise.md) |
-| comm | 集合通信与计算 overlap | [families/comm.md](families/comm.md) |
-| sampling | topk / 采样，形状随数据变化 | [families/sampling.md](families/sampling.md) |
+
+> 其余家族（elementwise / comm / sampling）暂无卡片，不建空壳文件。
+> 需要时再补——**空壳文件比没有更糟**（它会让人以为这里有内容）。
 
 ## 加一个新算子
 

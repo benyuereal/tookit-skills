@@ -134,10 +134,31 @@ python3 loop.py -C <卡> run <tag> [--skv ...] [--force]
 ## 十一、一条命令看懂现状
 
 ```bash
-python3 loop.py -C <卡> status|queue|report   # 现状 / 方向预算 + 待做 + 已判死附机制（违规 rc=2） / 交付表
+python3 loop.py -C <卡> resume                 # ★ 先跑这条：下一个该跑谁（上下文丢了也能接着干）
+python3 loop.py -C <卡> enumerate              # 方向菜单（OPEN/SEALED），direction 只能从这挑
+python3 loop.py -C <卡> status|queue|report    # 现状 / 方向预算 + 待做 + 已判死附机制（违规 rc=2） / 交付表
 python3 loop.py -C <卡> impl-broken <tag> --why "..."       # 实现写坏了
 python3 loop.py -C <卡> direction-refuted <tag> --why "..." # 攻击面不成立
 python3 loop.py -C <卡> verify --tag <id>                   # 跑 done_when；rc=0 才 adopted（§七）
 ```
+
+### 主张门：什么时候「快了 x%」才算数
+
+`claim_gate` 把「跑过」和「能主张」分开——**约束面是断言面，不是动作面**：
+
+| 门 | 判据 | 缺了会怎样 |
+|---|---|---|
+| 口径 | `caliber{what,alloc,state,shape,device}` 齐全 | `caliber_incomplete` |
+| 显著性 | `\|Δ\| > 3×max(MAD)` | `not_significant` |
+| 正确性 | 精度探针跑过且不是 `--no-acc` | `accuracy_missing` |
+
+`run` **永不拒绝**（`--no-acc` 也能跑，用于快速筛方向），
+但没过门的记录进 `held`，不能升级成交付结论：
+`report` 默认不显示它们，`verify`/`adopt` 对 held 候选 rc=2。
+补齐后重跑即可，`report --all` 会给出逐条补齐方法。
+
+> 方向从哪来：不要凭空想。`references/surfaces.yaml` 预枚举了 11 条攻击面，
+> 每条挂一条 `pipeline-laws.md` 的定律。`enumerate` 会标出 `SEALED`
+> （已证伪 2 次的方向），开跑前就能看见，不必跑一次才知道被封。
 
 参考实现：`op-sparse-mla`（32 条判死 + 3 条待做 + 3 个方向，`candidates.yaml` 可直接抄 schema）。
