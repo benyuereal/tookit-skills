@@ -73,6 +73,35 @@ MQA logits 里为了让 Q 常驻花了 32 KB shared，直接把 occupancy 从 2 
 净效果 **比非 persistent 还慢 1.9×**（0.245 → 0.342 ms）。放寄存器也救不回来（0.450 ms）。
 **persistent 的前提是：常驻数据不改变 occupancy 不等式**；做不到就别 persistent。
 
+### Q5 跨 iteration 的驻留与派发：persistent 到底划不划算？
+
+前四问都在算「一个 iteration 内部」怎么排。Q5 问的是**跨 iteration**：
+把 N 个 iteration 合并成一个常驻 CTA 循环，省下的重入开销是否大于驻留的机会成本？
+
+```
+算：每 iteration 的重入开销（grid launch + 地址重算 + prologue）
+    vs 驻留占用的 LDS 预算 / 寄存器机会成本
+判：
+  ① 常驻数据不吃 shared、不推高 register 峰值 → 可以走 persistent
+  ② 常驻数据必须进 LDS → 先套 Q4 的预算不等式；算不下就别做
+  ③ 单 CTA 的 iteration 时间 < 重入开销 × 5 → persistent 必亏（摊薄不了）
+```
+
+**三条实证反例（都来自 FP8 / paged-MQA 路径，比说理更硬）**：
+
+| 反例 | 现象 | 机制 | 出处 |
+|---|---|---|---|
+| FP8 + persistent | 慢 **1.28–1.51×** | persistent 的跨 iteration 驻留假设了 BF16/int8 的寄存器与 LDS 布局；FP8 路径的 scale 广播把它打破 | `lightop_bench/FP8_REPORT.md` |
+| 16-row pooled cache + persistent | 直接 **RuntimeError** | 该形状下 persistent 的 page 分组前提不成立 | 同上 |
+| 常驻 Q 占 32 KB shared | 慢 **1.9×** | occupancy 2→1 CTA/CU（见上方 Q4 推论） | 本仓库 2026-11-13 实测 |
+
+**结论**：`LIGHTOP_PAGED_MQA_LOGITS_BACKEND=1`（persistent 开关）**对 FP8 必须保持关闭**；
+int8 上 persistent/hbird 派发仍然有效。**这是按精度分岔的结论，不能跨 dtype 复用。**
+
+> 写进卡片时的纪律：persistent 相关结论必须带 `precondition`（dtype + page 布局）
+> 与 `disabled_when`（FP8 / 16-row pooled）。只写「persistent 更快」，
+> 下一个人照着跑就会撞 RuntimeError，或拿到 1.3× 的负收益。
+
 ## 三、三个「先算就不用做」的算例（本项目实测）
 
 | 设计 | Q 几判断 | 演算结论 | 实测 |

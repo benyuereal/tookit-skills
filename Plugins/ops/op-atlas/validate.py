@@ -93,6 +93,54 @@ def _registry(repo):
             {o.get("name"): o.get("path") for o in d.get("ops", [])})
 
 
+def _check_surface_laws(repo, atlas):
+    """E9：surfaces.yaml 里每条攻击面的 law 必须能解析到实体锚点。
+
+    为什么需要这条：law 曾经写成 `L1`..`L10`，而 pipeline-laws.md 根本不存在
+    ——定律本体悬空，`law` 变成装饰性编号，「判死要能追溯到机制」成了空话。
+    现在的约定是 `<file>#<anchor>`，anchor 必须在那个文件里有对应标题。
+    """
+    sp = repo / "Plugins/ops/skills/op-optimize/references/surfaces.yaml"
+    if not sp.is_file():
+        warn("E9", str(sp), "surfaces.yaml 不存在，跳过定律校验")
+        return
+    data, problem = _load_yaml(sp)
+    if problem:
+        err("E9", sp.name, problem)
+        return
+    if not isinstance(data, list):
+        err("E9", sp.name, "顶层应为列表")
+        return
+
+    refs_dir = repo / "Plugins/ops/skills/op-optimize/references"
+    for s in data:
+        if not isinstance(s, dict):
+            continue
+        sid = s.get("id", "?")
+        law = s.get("law")
+        if not law:
+            err("E9", sp.name, "surface %s 缺 law（判死时无法追溯机制）" % sid)
+            continue
+        if "#" not in str(law):
+            err("E9", sp.name,
+                "surface %s 的 law=%r 没有锚点（应写成 <file>#<anchor>）" % (sid, law))
+            continue
+        fname, _, anchor = str(law).partition("#")
+        # 允许两种写法：相对于 op-optimize/references/ 的文件名，
+        # 或相对于仓库根的路径（定律本体常在 op-roofline/references/）
+        target = refs_dir / fname
+        if not target.is_file():
+            target = repo / fname
+        if not target.is_file():
+            err("E9", sp.name, "surface %s 的 law 指向不存在的文件 %s" % (sid, fname))
+            continue
+        body = target.read_text(encoding="utf-8", errors="ignore")
+        # 锚点允许写成 `### Q5` / `## Q5` / `# Q5`，标题后必须跟着锚点名
+        if not re.search(r"(?m)^#{1,4}\s+%s\b" % re.escape(anchor), body):
+            err("E9", sp.name,
+                "surface %s 的锚点 %s 在 %s 中找不到对应标题" % (sid, anchor, fname))
+
+
 def validate(atlas, repo):
     cards_dir = atlas / "cards"
     cards = sorted(cards_dir.glob("*.yaml"))
@@ -268,6 +316,9 @@ def validate(atlas, repo):
         fam = data.get("family")
         if fam in FAMILIES and not (atlas / "families" / ("%s.md" % fam)).is_file():
             err("E8", c.name, "缺家族文件 families/%s.md" % fam)
+
+    # ---- E9 surfaces.yaml 的 law 必须解析到实体（防悬空引用）
+    _check_surface_laws(repo, atlas)
 
 
 def main():

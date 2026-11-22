@@ -614,6 +614,41 @@ def cmd_queue(a):
     return 0
 
 
+# 天花板 → 允许的动作类。这是 op-constrain 的替代：约束来自 roofline 的 verdict，
+# 不是来自一个不存在的 skill。判据：天花板决定了「哪一类改动可能有效」。
+BOUND_ACTIONS = {
+    # 访存受限：只有减字节的改动有意义；调 tile/提高发射率都是白费
+    "memory": {"reduce-bytes", "improve-locality", "reuse-across-iter"},
+    # 算力受限：只有减 FLOP 或提高发射率有意义；减字节没用（已经不是在等数据）
+    "compute": {"reduce-flops", "raise-issue-rate", "precision-drop"},
+    # 依赖链/并发受限：改流水线与驻留，不是改 tile 大小
+    "latency": {"pipeline-depth", "raise-concurrency", "persistent-dispatch"},
+}
+
+
+def load_allowed_actions(card):
+    """读卡片的天花板判定，映射成允许的动作类集合。
+
+    产物来源：`<卡>/roofline.json` 里的 `bound` 字段（由 op-roofline 的
+    derive.py 产出）。卡里没有这个文件时返回 None —— **不校验**，
+    因为不是每张卡都做过 roofline 分析；但有就必须遵守。
+    """
+    p = card / "roofline.json"
+    if not p.is_file():
+        return None, None
+    try:
+        d = json.loads(p.read_text())
+    except (ValueError, OSError):
+        return None, None
+    bound = d.get("bound")
+    if not bound:
+        return None, None
+    allowed = BOUND_ACTIONS.get(str(bound))
+    if allowed is None:
+        return None, None
+    return set(allowed), str(bound)
+
+
 def cmd_run(a):
     card = a.card
     cands = load_candidates(card)
@@ -646,6 +681,36 @@ def cmd_run(a):
     if forced:
         print(_c("⚠ --force 重跑已判死项：%s（这次不一样的理由必须写进记录）"
                  % ", ".join(sorted(forced)), WARN))
+
+    # 天花板约束：卡里有 roofline 判定时，候选的动作类必须落在允许集合内。
+    # 这一步此前是断的——allowed_actions 只有提示语，没有读取和拦截，
+    # 于是越界的改法照样能跑，薄约束在最后一步漏了。
+    allowed, bound = load_allowed_actions(card)
+    if allowed is not None:
+        offenders = []
+        for tag in a.tags:
+            cand = declared.get(tag) or {}
+            cls = cand.get("action_class")
+            if cls is None:
+                continue                    # 未声明动作类：不拦（向后兼容），但提示
+            if cls not in allowed:
+                offenders.append((tag, cls))
+            elif cls:
+                pass
+        if offenders:
+            for tag, cls in offenders:
+                print(_c("拒绝跑 %s：动作类 %r 不在允许集合 %s 内"
+                         % (tag, cls, sorted(allowed)), WARN))
+            print("原因：本卡 roofline 判定天花板为 %r ⇒ 只有 %s 类改动可能有效。"
+                  % (bound, sorted(allowed)))
+            print("要越界请先改 roofline.json 的 bound（需附新的推导），"
+                  "或在候选里把 action_class 改成允许集合内的值。")
+            return 2
+        undeclared = [t for t in a.tags
+                      if not (declared.get(t) or {}).get("action_class")]
+        if undeclared:
+            print(_c("⚠ %s 未声明 action_class，天花板约束对它们不生效"
+                     "（建议补上：%s）" % (", ".join(undeclared), sorted(allowed)), WARN))
 
     d = cands["defaults"]
     bench = card / d.get("bench", "bench/ab.py")

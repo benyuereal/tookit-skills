@@ -40,9 +40,9 @@ def _load():
     return yaml.safe_load(SURFACES.read_text(encoding="utf-8"))
 
 
-def _law_ids():
-    text = LAWS.read_text(encoding="utf-8")
-    return {m for m in re.findall(r"(?m)^##\s+L(10|[0-9])\b", text)}
+def _law_anchor(text):
+    """返回文件里所有可被引用的标题锚点（`## Q5 xxx` → `Q5`）。"""
+    return {m for m in re.findall(r"(?m)^#{1,4}\s+([A-Za-z]\d+)\b", text)}
 
 
 class TestSurfaces(unittest.TestCase):
@@ -58,15 +58,27 @@ class TestSurfaces(unittest.TestCase):
         bad = [i for i in ids if not re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", str(i))]
         self.assertEqual(bad, [], "id 不是 kebab-case：%s" % bad)
 
-    def test_laws_exist(self):
-        laws = _law_ids()
+    def test_laws_resolve_to_real_anchors(self):
+        """law 必须写成 <file>#<anchor>，且锚点在那个文件里真实存在。
+
+        早期版本用 `L1`..`L10` 编号，而定律本体文件根本不存在——
+        定律悬空，`law` 变成装饰性编号。
+        """
         bad = []
         for s in self.surfaces:
             law = str(s.get("law") or "")
-            m = re.fullmatch(r"L(10|[0-9])", law)
-            if not m or m.group(1) not in laws:
-                bad.append("%s -> %r（现有 L%s）" % (s.get("id"), law, sorted(laws, key=int)))
-        self.assertEqual(bad, [], "surface 挂到了不存在的定律上：\n" + "\n".join(bad))
+            sid = s.get("id")
+            if "#" not in law:
+                bad.append("%s -> %r（缺锚点）" % (sid, law))
+                continue
+            fname, _, anchor = law.partition("#")
+            target = REPO / fname
+            if not target.is_file():
+                bad.append("%s -> %r（文件不存在）" % (sid, fname))
+                continue
+            if anchor not in _law_anchor(target.read_text(encoding="utf-8", errors="ignore")):
+                bad.append("%s -> %r（锚点 %s 不存在）" % (sid, law, anchor))
+        self.assertEqual(bad, [], "surface 的 law 无法解析到实体：\n" + "\n".join(bad))
 
     def test_required_fields_and_enums(self):
         bad = []

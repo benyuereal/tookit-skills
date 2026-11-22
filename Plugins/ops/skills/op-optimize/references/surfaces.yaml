@@ -16,7 +16,7 @@
 
 - id: occupancy
   statement: "CTA/CU 驻留数是否被 LDS 或寄存器打到更低档"
-  law: L1
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: residency
   precondition: "已知 tile 形状，且实测 occupancy < 目标档"
   check: "pmc: GRBM_COUNT / SQ_WAVES；hipcc --resource-usage 看 LDS 与 VGPR"
@@ -25,7 +25,7 @@
 
 - id: grid-tail
   statement: "grid 是否为 CU 数的整数倍；尾波占比多少"
-  law: L1
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: residency
   precondition: "grid 不是 CU 倍数的整数倍，且 kernel 占总时间 >5%"
   check: "pmc: GRBM_COUNT；对比 grid 与 CU 数取模"
@@ -34,7 +34,7 @@
 
 - id: prefetch-depth
   statement: "预取/流水深度是否真的是延迟杠杆（多半不是）"
-  law: L3
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q2
   class: pipeline
   precondition: "load-only 消融尚未达到流式读峰值；否则调深度无效"
   check: "python3 -I scripts/probe_stream.py（拿流式峰值）+ load-only 变体计时"
@@ -43,7 +43,7 @@
 
 - id: barrier-width
   statement: "每个 barrier 之间摊了多少工作；barrier 是否过密"
-  law: L2
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
   class: pipeline
   precondition: "PMC 显示同步类指令占 VALU 发射的显著比例"
   check: "pmc: SQ_INSTS_BARRIER / SQ_INSTS_VALU"
@@ -52,7 +52,7 @@
 
 - id: layout-pack
   statement: "是否每一步都付一次 pack/shuffle/转置"
-  law: L10
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: layout
   precondition: "变体输入布局与生产 kernel 输出布局不一致"
   check: "对比变体与生产 kernel 的 tensor stride/dtype；pmc: GRBM_COUNT 看是否多一次 kernel"
@@ -61,7 +61,7 @@
 
 - id: table-miss
   statement: "该 shape 是否落在库的调优表里（未命中往往是最大收益）"
-  law: L1
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: tier
   precondition: "目标是 MoE / grouped GEMM 且走的是查表型后端"
   check: "打印 get_aiter_moe_config 的 solution_type / 查 DeepGEMM MODE 表"
@@ -70,7 +70,7 @@
 
 - id: fusion-boundary
   statement: "融合是否把本可并行的 kernel 串成了依赖链"
-  law: L2
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
   class: pipeline
   precondition: "候选是融合改动，且原 kernel 之间本可并行"
   check: "用 scripts/opbench.py bench_fn 分别量融合版与分拆版的 sum"
@@ -79,7 +79,7 @@
 
 - id: precision-drop
   statement: "能否降到 fp8/int8 且仍过契约容差"
-  law: L8
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: precision
   precondition: "主口径对 fp32 参考有足够余量；压力档无相对退化"
   check: "opcheck correctness --contract <card>/contract.yaml；看 max_abs vs 容差"
@@ -88,7 +88,7 @@
 
 - id: split-k
   statement: "split-K 切片数是否按 shape 单独搜过"
-  law: L9
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: residency
   precondition: "M 小且 N/K 大，单个 CTA 的 K 维工作量过长"
   check: "scripts/opbench.py bench_fn 扫 s = 1,2,4,8，5 轮取中位数"
@@ -97,7 +97,7 @@
 
 - id: gather-path
   statement: "数据搬运（gather/scatter）是否在关键路径且串行"
-  law: L5
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: memory-path
   precondition: "attention / indexer 类算子，且 MMA 占比远小于搬运"
   check: "pmc: 对比 MMA 指令占比与 gather 相关指令/等待时间"
@@ -106,7 +106,7 @@
 
 - id: cross-lane-fold
   statement: "跨 lane 归约是否用了更长指令序列（如 shfl 而非 bpermute）"
-  law: L5
+  law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: pipeline
   precondition: "epilogue 含跨 lane 归约，且 VALU 中非 MMAC 占比高"
   check: "pmc: SQ_INSTS_VALU 与 MMAC 指令数之比；查 epilogue 归约写法"
