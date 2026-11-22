@@ -7,33 +7,35 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: tilelang
+  - repo: flash-kda
     library_profile_ref: "libraries.md §11"
-    file_hint: "GLA 递推"
+    file_hint: "flash_kda 的 KDA 递推"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "GLA 系模型"
+      - "KDA 系模型"
+      - "linear-attn 的 decode"
     not_for:
-      - "标准 attention"
+      - "非 KDA 的门控变体"
     pros:
-      - "官方实现，省掉自己推公式"
+      - "专用实现"
+      - "与 KDA 契约配套"
     cons:
-      - "环境门槛高"
+      - "版本很新（0.0.1）"
     source: "references/libraries.md"
   - repo: tilelang
     library_profile_ref: "libraries.md §8"
     file_hint: "tilelang 的 GLA 递推"
-    tier: structural
+    tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "非标准门控"
+      - "需要自定义门控"
     not_for:
-      - "常规形状（无特殊布局需求）"
+      - "追求极限"
     pros:
-      - "完全可控，但需自己维护"
+      - "可读可改"
     cons:
-      - "线性注意力用 tilelang 表达"
+      - "布局税"
     source: "references/libraries.md"
 
 ceiling:

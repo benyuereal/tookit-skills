@@ -8,32 +8,33 @@ op_card: null
 
 impls:
   - repo: tilelang
-    library_profile_ref: "libraries.md §11"
-    file_hint: "GDN 递推"
+    library_profile_ref: "libraries.md §8"
+    file_hint: "tilelang 的 scan 表达"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "线性注意力"
+      - "需要自定义递推结构"
     not_for:
-      - "需要严格逐 token 递推"
+      - "追求手写极限"
     pros:
-      - "块并行 + 块间串行"
+      - "可读可改"
+      - "块并行可表达"
     cons:
-      - "块大小需按序列长调"
+      - "布局转换税"
     source: "references/libraries.md"
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 的 scan 实现"
-    tier: structural
+  - repo: triton
+    library_profile_ref: "libraries.md §9"
+    file_hint: "Triton 的 scan 实现"
+    tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "非标准状态维"
+      - "形状随数据变化"
     not_for:
-      - "常规形状（无特殊布局需求）"
+      - "要逼近极限"
     pros:
-      - "完全可控，但需自己维护"
+      - "表达力强"
     cons:
-      - "tilelang 可表达 scan"
+      - "非 dot 路径性能有限"
     source: "references/libraries.md"
 
 ceiling:

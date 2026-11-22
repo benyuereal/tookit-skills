@@ -7,31 +7,32 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: tilelang
+  - repo: mhc-kernels
     library_profile_ref: "libraries.md §11"
-    file_hint: "pre_big_fuse / post"
+    file_hint: "kernels/mhc_fused.hip"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "需要省中间态往返"
+      - "验证 conv1d+hadamard+norm 三者融合是否划算"
     not_for:
-      - "每个单独算子已经很优时（融合净负）"
+      - "各单独算子已很优时（融合净负）"
     pros:
-      - "省两次往返"
+      - "官方手写实现"
+      - "可对比分拆与融合"
     cons:
-      - "实测有融合慢 1.7x 的反例，必须先量分拆版"
+      - "实测有融合净负的反例，必须先量分拆版"
     source: "references/libraries.md"
   - repo: tilelang
     library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 分拆三步（作为融合失败的退路）"
+    file_hint: "tilelang 分拆三步"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "现成 tilelang 实现分拆版，不必自研"
+      - "融合失败时的退路"
     not_for:
-      - "追求极限时不如专用实现"
+      - "追求极限"
     pros:
-      - "简单可控"
+      - "可读可改"
     cons:
       - "多两次往返"
     source: "references/libraries.md"

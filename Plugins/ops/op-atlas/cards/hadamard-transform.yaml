@@ -7,33 +7,34 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: tilelang
+  - repo: mhc-kernels
     library_profile_ref: "libraries.md §11"
-    file_hint: "fast_hadamard"
+    file_hint: "kernels/ 里的蝶形变换"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "MHC 系"
+      - "MHC 三件套中的 hadamard"
     not_for:
-      - "memory-bound 链（不是它的场景）"
+      - "非 2 的幂长度"
     pros:
-      - "蝶形并行"
+      - "与 MHC 其他两件同栈"
+      - "手写可调 radix"
     cons:
-      - "radix 与 LDS 争用需调"
+      - "源码树非包，需自行编译"
     source: "references/libraries.md"
   - repo: tilelang
     library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 的蝶形变换"
-    tier: structural
+    file_hint: "tilelang 的蝶形表达"
+    tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "非 2 的幂长度"
+      - "需要快速原型"
     not_for:
-      - "常规形状（无特殊布局需求）"
+      - "追求极限"
     pros:
-      - "完全可控，但需自己维护"
+      - "可读可改"
     cons:
-      - "蝶形用 tilelang 表达"
+      - "布局税"
     source: "references/libraries.md"
 
 ceiling:

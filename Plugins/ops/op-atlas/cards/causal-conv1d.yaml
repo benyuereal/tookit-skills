@@ -7,19 +7,34 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: tilelang
+  - repo: causal-conv1d
     library_profile_ref: "libraries.md §11"
-    file_hint: "Engram 的 causal_conv1d"
+    file_hint: "causal_conv1d 包的 conv1d 实现"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
       - "MHC / Mamba2 系"
+      - "短核因果卷积"
     not_for:
-      - "需要跨 tile 的大核（依赖链长）"
+      - "需要跨 tile 的大核（依赖链变长）"
     pros:
-      - "tile 内移位实现"
+      - "官方实现，覆盖 decode 与 prefill"
     cons:
       - "核大小受 tile 高度限制"
+    source: "references/libraries.md"
+  - repo: mhc-kernels
+    library_profile_ref: "libraries.md §11"
+    file_hint: "kernels/ 里的手写 conv1d 变体"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要与 hadamard/norm 融合的定制形状"
+    not_for:
+      - "常规形状（用 causal_conv1d 包即可）"
+    pros:
+      - "可与 MHC 三件套同栈"
+    cons:
+      - "源码树非包，需自行编译"
     source: "references/libraries.md"
   - repo: boltops
     library_profile_ref: "libraries.md §10"
@@ -29,7 +44,7 @@ impls:
     best_for:
       - "decode 形态"
     not_for:
-      - "大核时依赖链变长"
+      - "大核场景（boltops 的 autotune 产物与 device 绑定，换核要重调）"
     pros:
       - "自带调优"
     cons:

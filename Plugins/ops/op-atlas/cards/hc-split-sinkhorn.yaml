@@ -7,9 +7,9 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: tilelang
+  - repo: mhc-kernels
     library_profile_ref: "libraries.md §11"
-    file_hint: "hc_split_sinkhorn"
+    file_hint: "MHC 的 sinkhorn 迭代"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
@@ -17,23 +17,23 @@ impls:
     not_for:
       - "不需要归一的路由"
     pros:
-      - "官方实现，省掉自己推公式"
+      - "与 MHC 同栈"
     cons:
       - "迭代次数需调"
     source: "references/libraries.md"
   - repo: tilelang
     library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 的 sinkhorn 迭代"
-    tier: structural
+    file_hint: "tilelang 的迭代实现"
+    tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "非标准迭代数"
+      - "快速原型"
     not_for:
-      - "常规形状（无特殊布局需求）"
+      - "追求极限"
     pros:
-      - "完全可控，但需自己维护"
+      - "可读可改"
     cons:
-      - "迭代归一用 tilelang 表达"
+      - "布局税"
     source: "references/libraries.md"
 
 ceiling:

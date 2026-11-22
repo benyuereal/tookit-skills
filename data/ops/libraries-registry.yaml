@@ -186,6 +186,15 @@ libraries:
     installed: true
     note: "框架本体；作为基线对照可引用，但「用 torch 分步实现」不是性能候选"
 
+  - canonical_id: mhc-kernels
+    aliases: [mhc_kernels, MHC kernels]
+    pip_name: null
+    import_name: null
+    source_path: /workspace/mhc_kernels
+    version: null
+    installed: false
+    note: "MHC 三件套（causal_conv1d / hadamard / fused）的手写 HIP 源码树；无 setup.py，非可安装包。与 hbird-gemm 同类：源码级参考，不作依赖"
+
   - canonical_id: hbird-gemm
     aliases: [hbird, hbird-gemm, HBird]
     pip_name: null
