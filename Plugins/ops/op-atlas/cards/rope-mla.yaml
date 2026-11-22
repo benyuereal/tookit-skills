@@ -2,7 +2,7 @@ id: rope-mla
 title: MLA 的解耦 RoPE
 family: rope
 math: 仅对 q/k 的 rope 部分旋转；与 latent 部分解耦
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -50,16 +50,32 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 360
+    vs: MLA decode 的 KV 读取带宽 GB/s（含 rope，非纯 rope）
+    scope:
+      cards: 1
+      in_len: KV=8192
+      out_len: B=8 H=32 d_qk=576 d_v=512
+      warmup: hot
+      note: 这个数是整个 MLA decode kernel 的，rope 只是其中一步；不能当纯 rope 的性能
+  conclusion: MLA decode 为 360 GB/s，与纯 rope 的 338 同量级；rope 不是该 kernel 的瓶颈
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: MLA 的 rope 走 flash_mla 内置路径
   how: 不单独调 rope，交给 flash_mla_with_kvcache（MLA rope 在它内部）
   requires: MLA 系模型
+hard_preconditions:
+- statement: flash_mla dense decode 只支持 (d_qk=576,d_v=512) 或 (d_qk=512,d_v=512)
+  check: '传 d_qk=128 → AssertionError: Dense decode supports (d_qk=576, d_v=512) or (d_qk=512, d_v=512)'
+- statement: KV cache 必须是 paged 的 [npages*B, 64, 1, d_qk] 形态
+  check: 见上；非 paged 会报 shape 不匹配
+soft_preconditions:
+- 建议 hot 态
+- 这个带宽是整个 decode kernel 的，rope 只占其中一步
 surfaces:
 - layout-pack
 updated: '2026-11-22'
