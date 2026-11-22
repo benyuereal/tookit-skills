@@ -398,7 +398,32 @@ def main():
         new = {}
         for k in v:
             old = set(base.get(k, []))
-            fresh = [x for x in v[k] if x not in old]
+            # SK008 这类条目带计数（"x.md  15 条失效链接"），数量下降时整条字符串
+            # 就变了，会被误判成「新增」。按"同文件计数不增加"比对。
+            def _key(s):
+                return s.split("  ")[0].strip() if "  " in s else s
+
+            def _count(s):
+                import re as _re
+                m = _re.search(r"(\d+)\s*条", s)
+                return int(m.group(1)) if m else 1
+
+            old_count = {}
+            for o in old:
+                kk = _key(o)
+                old_count[kk] = old_count.get(kk, 0) + _count(o)
+            cur_count = {}
+            for x in v[k]:
+                kk = _key(x)
+                cur_count[kk] = cur_count.get(kk, 0) + _count(x)
+            fresh = []
+            for x in v[k]:
+                kk = _key(x)
+                # 该文件的当前计数 <= 基线计数 ⇒ 没变差，不算新增
+                if cur_count.get(kk, 0) <= old_count.get(kk, 0):
+                    continue
+                if x not in old:
+                    fresh.append(x)
             if fresh:
                 new[k] = fresh
         n_new = sum(len(x) for x in new.values())
