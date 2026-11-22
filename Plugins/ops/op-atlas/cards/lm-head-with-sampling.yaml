@@ -38,6 +38,9 @@ impls:
   cons:
   - 中间 logits 写回是纯浪费
   source: references/libraries.md
+  import_path: aiter.topk_softmax
+  signature: topk_softmax(topk_weights, topk_ids, token_expert_ids, expert_mask, logits) —— 采样段
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"topk_softmax")"
 ceiling:
   kind: missing
   ref: null

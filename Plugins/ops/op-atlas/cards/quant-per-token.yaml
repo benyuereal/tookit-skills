@@ -39,6 +39,9 @@ impls:
   cons:
   - 不融合，多一次往返
   source: references/libraries.md
+  import_path: aiter.dynamic_per_token_scaled_quant
+  signature: dynamic_per_token_scaled_quant(out, input, scales, scale_ub=None) —— per-token 动态量化
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"dynamic_per_token_scaled_quant")"
 ceiling:
   kind: missing
   ref: null

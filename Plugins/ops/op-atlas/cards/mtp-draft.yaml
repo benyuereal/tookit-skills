@@ -41,6 +41,9 @@ impls:
   cons:
   - 不算专用
   source: references/libraries.md
+  import_path: lightop.moe_gemm_marlin_w16a16
+  signature: moe_gemm_marlin_w16a16(...) —— 小 M GEMM 路径
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_gemm_marlin_w16a16")"
 ceiling:
   kind: missing
   ref: null

@@ -37,6 +37,9 @@ impls:
   cons:
   - epilogue 灵活性有限
   source: references/libraries.md
+  import_path: deepgemm.m_grouped_fp8_gemm_nt_masked
+  signature: m_grouped_fp8_gemm_nt_masked(...) —— grouped GEMM，可与 swiglu epilogue 配
+  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_fp8_gemm_nt_masked")"
 ceiling:
   kind: missing
   ref: null

@@ -41,6 +41,41 @@ def bench(fn, rounds=9, warmup=4):
     return ts[len(ts) // 2]
 
 
+# ---- 重叠结论准入条件（见 op-optimize/references/overlap-admissibility.md）----
+WINDOW_RATIO_MIN = 0.2
+WINDOW_RATIO_MAX = 5.0
+
+
+def assert_window(ta, tb, waiver_reason=None, noise_argument=None, cross_check=None):
+    """两侧耗时量级必须可比，否则拒绝出结论。
+
+    为什么要有这个断言：同一个坑踩过两次（阶段 3 用 1.6ms 配 27.5ms 测出 92%
+    与 0%；阶段 4 用 17.4ms 配 0.31ms 测出 18.4%）。教训写成 README 不够，
+    必须固化成检查。
+
+    要 WAIVER 必须三项齐全，光说「量级确实不同」不算理由。
+    """
+    import sys as _sys
+    lo, hi = min(ta, tb), max(ta, tb)
+    if hi <= 0:
+        print("ERROR: 耗时 ≤ 0，无法计算窗口比", file=_sys.stderr)
+        _sys.exit(2)
+    r = lo / hi
+    if WINDOW_RATIO_MIN <= r <= WINDOW_RATIO_MAX:
+        return r
+    if waiver_reason and noise_argument and cross_check:
+        print("⚠ WAIVER 生效（窗口比 %.3f 越界）: %s" % (r, waiver_reason),
+              file=_sys.stderr)
+        return r
+    print("拒绝出结论：窗口比 %.3f 越界 [%.1f, %.1f]" % (r, WINDOW_RATIO_MIN, WINDOW_RATIO_MAX),
+          file=_sys.stderr)
+    print("  t_a=%.4f ms  t_b=%.4f ms  ⇒ 小的一侧会被噪声淹没" % (ta, tb), file=_sys.stderr)
+    print("  修法：把两侧耗时调到同一量级；确实做不到则传 --waiver-reason /"
+          " --noise-argument / --cross-check 三项", file=_sys.stderr)
+    print("  判据见 op-optimize/references/overlap-admissibility.md", file=_sys.stderr)
+    _sys.exit(2)
+
+
 def overlap_degree(seq, par, ta, tb):
     """重叠度。
 
@@ -92,6 +127,7 @@ def main(argv=None):
         s2.synchronize()
 
     pa = bench(par_a)
+    assert_window(ta, tb)
     ratio_ab = min(ta, tb) / max(ta, tb)
     rows.append({"case": "copy(DMA) + GEMM(compute)", "engines": "different",
                  "size_ratio": round(ratio_ab, 3),
@@ -113,6 +149,7 @@ def main(argv=None):
         s2.synchronize()
 
     pb = bench(par_b)
+    assert_window(ta2, ta2)
     deg = overlap_degree(seq2, pb, ta2, ta2)
     rows.append({"case": "GEMM + GEMM", "engines": "same",
                  "t_a_ms": ta2, "t_b_ms": ta2, "seq_ms": seq2, "par_ms": pb,
@@ -137,6 +174,7 @@ def main(argv=None):
         s2.synchronize()
 
     pc = bench(par_c)
+    assert_window(tc, tb)          # D2H vs GEMM 必须同量级（此前的坑）
     degc = overlap_degree(seqc, pc, tc, tb)
     rows.append({"case": "D2H(pinned DMA) + GEMM", "engines": "different(real DMA)",
                  "size_ratio": round(min(tc, tb) / max(tc, tb), 3),

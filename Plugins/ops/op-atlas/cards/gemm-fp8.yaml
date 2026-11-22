@@ -39,6 +39,9 @@ impls:
   cons:
   - gfx938 上无 FP8 方案
   source: references/libraries.md
+  import_path: triton.jit
+  signature: '@triton.jit 写 fp8 GEMM kernel（形状随数据变化时用）'
+  smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter GEMM 入口
@@ -53,6 +56,9 @@ impls:
   cons:
   - 查表未命中会静默换后端
   source: references/libraries.md
+  import_path: aiter.gemm_a8w8_opus
+  signature: gemm_a8w8_opus(...) —— AITER 的 INT8/fp8 GEMM 入口族
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"gemm_a8w8_opus")"
 - repo: in-house
   library_profile_ref: null
   file_hint: 手写 HIP + MFMA intrinsic

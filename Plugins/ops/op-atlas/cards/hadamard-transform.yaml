@@ -42,6 +42,9 @@ impls:
   cons:
   - 布局税
   source: references/libraries.md
+  import_path: tilelang.jit
+  signature: '@tilelang.jit 写蝶形变换（radix 可调）'
+  smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 ceiling:
   kind: missing
   ref: null

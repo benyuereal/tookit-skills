@@ -39,6 +39,9 @@ impls:
   cons:
   - 查表未命中会静默降级
   source: references/libraries.md
+  import_path: aiter.gemm_a8w8_opus
+  signature: gemm_a8w8_opus(...) —— INT8 GEMM 入口
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"gemm_a8w8_opus")"
 ceiling:
   kind: missing
   ref: null

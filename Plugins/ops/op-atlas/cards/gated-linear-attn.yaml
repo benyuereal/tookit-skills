@@ -39,6 +39,9 @@ impls:
   cons:
   - 布局税
   source: references/libraries.md
+  import_path: tilelang.jit
+  signature: '@tilelang.jit 写 GLA 递推（块并行可表达）'
+  smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 ceiling:
   kind: missing
   ref: null
