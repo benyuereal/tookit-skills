@@ -7,9 +7,9 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: moe-c
+  - repo: aiter
     library_profile_ref: "libraries.md §5"
-    file_hint: "W4A16(groupwise) 精度档"
+    file_hint: "MOE_C 后端（调优表在独立仓库 Moe 的 moe_c_configs/，按 gfx × 量化类型组织）"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:

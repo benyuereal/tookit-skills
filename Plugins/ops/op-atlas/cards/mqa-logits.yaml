@@ -39,26 +39,12 @@ impls:
     cons:
       - "不可当组织资产引用"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "shipped ungrouped"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
-    best_for:
-      - "只作为基线对照，不是性能候选"
-    not_for:
-      - "不适合生产（无融合、无调优）"
-    pros:
-      - "实现简单，但多一次往返"
-    cons:
-      - "现成库不支持：shipped 版未做跨行 KV 复用，已被 lightop 的 grouped 路径取代；保留作基线对照"
-    source: "references/libraries.md"
 
 ceiling:
   kind: roofline_model
   ref: "Plugins/ops/skills/op-roofline/models/mqa_logits.py"
-  model_name: mqa_logits
   bound: bandwidth
+  model_name: mqa_logits
   note: "decode 档 q_per_ktile=1 ⇒ AI=64 FLOP/B < 平衡点 313"
 
 shapes: [decode-m1, decode-nextn, prefill-8k]
@@ -72,9 +58,6 @@ last_verdict:
   conclusion: "epilogue 跨 lane 归约换 ds_bpermute，逐位一致；LDS 冲突非杠杆"
   verified_on: "2026-11-22"
 
-surfaces:
-  - epilogue-fold
-  - cross-row-kv-reuse
-  - fold-nextn
+surfaces: [epilogue-fold, cross-row-kv-reuse, fold-nextn]
 
 updated: "2026-11-22"
