@@ -46,12 +46,9 @@ jobs:
         working-directory: Plugins/ops/tests
         run: python3 -m unittest discover -s . -p "test_*.py" -v
 
-      # 5. 结构 lint：只拦新增违规（基线入库后）
-      #    基线未入库时跳过，避免一开始就红；入库后自动生效
+      # 5. 结构 lint：基线已入库，这里**硬依赖**它。
+      #    早先写成「基线不存在就跳过」，等于给自己留了一个静默关掉门禁的开关。
       - name: structure lint (新增违规为 0)
         run: |
-          if [ -f lint-baseline.json ]; then
-            python3 skill_lint.py --root . --baseline lint-baseline.json --out /tmp/lint-now.json
-          else
-            echo "::notice::lint-baseline.json 未入库，跳过新增违规检查"
-          fi
+          test -f lint-baseline.json || { echo "::error::lint-baseline.json 缺失——门禁不能静默跳过"; exit 1; }
+          python3 skill_lint.py --root . --baseline lint-baseline.json --out /tmp/lint-now.json
