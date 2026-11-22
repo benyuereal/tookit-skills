@@ -90,3 +90,62 @@ python3 stage_timing.py --M 32
 ```
 
 结果落盘到 `results/stage0_<M>.json`，含完整口径字段（what/alloc/state/timer/rounds）。
+
+---
+
+## 阶段 1：段级选型（两个 GEMM 的地板与达成率）
+
+```bash
+python3 stage1_gemm.py    # 见 results/stage1_gemm.json
+```
+
+### grouped vs 逐专家循环
+
+形状 E=32, M/exp=128, N=1536, K=2048, bf16：
+
+| 实现 | median | MAD | TFLOPS |
+|---|---|---|---|
+| `deepgemm.m_grouped_bf16_gemm_nt_masked`（mode 1000） | 0.3205 ms | 0.0149 | **80.4** |
+| 逐专家 `torch.mm` 循环 | 1.0171 ms | 0.0149 | 25.3 |
+| | | | **3.17x，|Δ|=0.697 > 3×MAD=0.045，显著** |
+
+### 达成率：43%（远未到顶）
+
+```
+bytes = 230.7 MB，grouped 带宽 720 GB/s
+算力地板（bf16 185 TF）= 0.1393 ms
+达成率 = 0.1393 / 0.3205 = 43%
+```
+
+**这更正了阶段 0 的推论。** 阶段 0 用的是逐专家循环（25.3 TFLOPS），
+它让两个 GEMM 看起来占了 89-96%。真实 grouped 实现快 3.17x，
+所以**非 GEMM 段的真实占比会比阶段 0 高**——但 GEMM 本身 43% 的达成率
+说明它也远没到顶。
+
+**净结论**：现在既不能断言「融合优先」，也不能断言「GEMM 优先」。
+两个方向都还有空间，需要阶段 2 的拐点来定。
+
+### 实测到的硬约束（L2 选型必须记）
+
+| 约束 | 现象 |
+|---|---|
+| masked 形态要求 **N 被 256 整除** | 真实 MoE 的 I=1408 被直接拒绝 |
+| `a` 必须 **3D `[E, M, K]`**，`b` 必须 **3D `[E, N, K]`** | 传 2D 会 IndexError |
+| `mode=1000` 是 asm layout，`pack_bf16_masked_weight` 只做 contiguous | — |
+| `mode=2000` 需真 pack | — |
+
+### ll 路径拐点：**未测定**（诚实标注）
+
+`m_grouped_fp8_gemm_nt_masked_ll` 要求 `b` 是 **6D packed layout**
+（报错：`expect tensor matrix_b is 6 which is 3`），而 deepgemm
+**没有公开的 6D pack 函数**。
+
+试过的路径：
+- 2D/3D + `pack_bf16_masked_weight` → matrix_b 维度不够
+- fp8 tuple `(tensor, scale)` 输入 → 同样维度不够
+
+**这正是 MegaMoE 的 pack5 权重布局缺口在 DCU 上的对应物。**
+按纪律标为「未测定」，**不插值、不假装测过**。
+
+> 「ll 路径在多少 token 以下才用」这个问题，在当前可见的 API 下**无法回答**。
+> 要回答它得先有 6D pack 实现——那是阶段 5 失败模式库里该记的一条。

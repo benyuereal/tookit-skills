@@ -1,0 +1,69 @@
+{
+  "case": "002-moe-pipeline",
+  "stage": 1,
+  "purpose": "段级选型：两个 GEMM 各自的地板与达成率",
+  "caliber": {
+    "what": "single GEMM call",
+    "alloc": false,
+    "state": "hot",
+    "timer": "cuda_event",
+    "rounds": 9,
+    "note": "权重预先 pack 好（不计入计时）；每轮 warmup"
+  },
+  "shape": {
+    "E": 32,
+    "M_per_expert": 128,
+    "N": 1536,
+    "K": 2048,
+    "dtype": "bfloat16"
+  },
+  "results": {
+    "deepgemm_grouped_mode1000": {
+      "median_ms": 0.3205,
+      "mad_ms": 0.0149,
+      "tflops": 80.4,
+      "bandwidth_gbs": 720
+    },
+    "per_expert_loop": {
+      "median_ms": 1.0171,
+      "mad_ms": 0.0149,
+      "tflops": 25.3
+    }
+  },
+  "significance": {
+    "ratio": 3.17,
+    "k_mad": 3,
+    "threshold": 0.0446,
+    "significant": true
+  },
+  "ceiling": {
+    "kind": "compute",
+    "peak_tflops": 185,
+    "floor_ms": 0.1393,
+    "achieved_pct": 43
+  },
+  "findings": [
+    "grouped 比逐专家循环快 3.17x（显著，|Δ|=0.6966 > 3×MAD=0.0446）",
+    "但 grouped 的算力达成率只有 43% —— 远未到顶",
+    "这更正了阶段 0 的推论：阶段 0 用的是逐专家循环（25.3 TFLOPS），当时说「两个 GEMM 占 89-96%」，在真实 grouped 下 GEMM 更快，所以非 GEMM 段占比会上升。真实占比需用 grouped 重测阶段 0"
+  ],
+  "constraints_found": [
+    "masked 形态要求 N 必须是 256 的倍数（1408 被拒，改 1536）",
+    "a 必须 3D [E, M, K]，b 必须 3D [E, N, K]；用 2D 会 IndexError",
+    "mode=1000 是 asm layout，pack_bf16_masked_weight 只做 contiguous",
+    "mode=2000 需真 pack；N 非 256 倍数会报错"
+  ],
+  "not_measured": [
+    "**ll 路径的拐点：未测定**。m_grouped_fp8_gemm_nt_masked_ll 要求 b 是 6D packed layout（报错 `expect tensor matrix_b is 6 which is 3`），而 deepgemm 没有公开的 6D pack 函数。这正是 MegaMoE 的 pack5 缺口在 DCU 上的对应物——**不假装能测，标未测定**。",
+    "N=1408 的真实形状：masked 形态要求 N 被 256 整除（实测 1408 被拒），真实 MoE 的 I=1408 需要换实现或改形状"
+  ],
+  "ll_path": {
+    "status": "unmeasured",
+    "reason": "需要 6D packed weight，deepgemm 无公开 pack 函数（pack5 缺口）",
+    "what_we_tried": [
+      "2D/3D + pack_bf16_masked_weight → 'expect tensor matrix_b is 6 which is 3'",
+      "fp8 tuple 输入 (tensor, scale) → 同上，b 维度不够"
+    ],
+    "not_a_bug_in_our_code": "是 deepgemm 的 ll 路径需要专用 pack5 布局，本仓没有"
+  }
+}
