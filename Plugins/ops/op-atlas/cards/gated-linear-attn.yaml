@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: TileKernels
+  - repo: tilelang
     library_profile_ref: "libraries.md §11"
     file_hint: "GLA 递推"
     tier: primary
@@ -21,9 +21,9 @@ impls:
     cons:
       - "环境门槛高"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "手写"
+  - repo: tilelang
+    library_profile_ref: "libraries.md §8"
+    file_hint: "tilelang 的 GLA 递推"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
@@ -33,7 +33,7 @@ impls:
     pros:
       - "完全可控，但需自己维护"
     cons:
-      - "需自行维护，无上游可 diff"
+      - "线性注意力用 tilelang 表达"
     source: "references/libraries.md"
 
 ceiling:

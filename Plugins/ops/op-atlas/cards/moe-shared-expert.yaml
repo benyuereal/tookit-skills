@@ -21,13 +21,13 @@ impls:
     cons:
       - "shared 占比变化时需重测"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "triton + Cijk（shared）"
+  - repo: triton
+    library_profile_ref: "libraries.md §9"
+    file_hint: "Triton 的 shared expert 路径"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "shared 单独跑"
+      - "现成 triton 实现，不必自研"
     not_for:
       - "需要统一实现"
     pros:

@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: FlashMLA
+  - repo: flash-mla
     library_profile_ref: "libraries.md §7"
     file_hint: "MLA full 路径"
     tier: primary
@@ -22,7 +22,7 @@ impls:
     cons:
       - "显存占用高"
     source: "references/libraries.md"
-  - repo: TileLang
+  - repo: tilelang
     library_profile_ref: "libraries.md §8"
     file_hint: "可改"
     tier: fallback

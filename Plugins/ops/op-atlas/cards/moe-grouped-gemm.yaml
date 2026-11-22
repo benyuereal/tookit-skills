@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: deepgemm-das
+  - repo: deepgemm
     library_profile_ref: "libraries.md §6"
     file_hint: "m_grouped_*_gemm_nt_masked / _contiguous / _ll"
     tier: primary
@@ -22,7 +22,7 @@ impls:
     cons:
       - "layout 选错不是慢而是静默错"
     source: "references/libraries.md"
-  - repo: aiter-das
+  - repo: aiter
     library_profile_ref: "libraries.md §4"
     file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
     tier: structural
@@ -36,7 +36,7 @@ impls:
     cons:
       - "后端选择由查表决定"
     source: "references/libraries.md"
-  - repo: moe_c
+  - repo: moe-c
     library_profile_ref: "libraries.md §5"
     file_hint: "moe_c_configs/"
     tier: fallback
@@ -58,7 +58,7 @@ impls:
     not_for:
       - "任何 grouped 场景"
     cons:
-      - "实测是 graph 化稠密路径的 2.9x"
+      - "这是反模式而非实现：现成库（deepgemm/aiter）的 grouped 路径已覆盖，本条保留只为标 avoid"
     source: "references/libraries.md"
 
 ceiling:

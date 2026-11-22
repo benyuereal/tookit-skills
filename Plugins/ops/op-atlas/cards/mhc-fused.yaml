@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: TileKernels
+  - repo: tilelang
     library_profile_ref: "libraries.md §11"
     file_hint: "pre_big_fuse / post"
     tier: primary
@@ -21,13 +21,13 @@ impls:
     cons:
       - "实测有融合慢 1.7x 的反例，必须先量分拆版"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "分拆三步"
+  - repo: tilelang
+    library_profile_ref: "libraries.md §8"
+    file_hint: "tilelang 分拆三步（作为融合失败的退路）"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "融合失败时的退路"
+      - "现成 tilelang 实现分拆版，不必自研"
     not_for:
       - "追求极限时不如专用实现"
     pros:

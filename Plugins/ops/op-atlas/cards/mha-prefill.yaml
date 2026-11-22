@@ -21,7 +21,7 @@ impls:
     cons:
       - "大 M 需调 tile"
     source: "references/libraries.md"
-  - repo: TileLang
+  - repo: tilelang
     library_profile_ref: "libraries.md §8"
     file_hint: "可改结构"
     tier: fallback

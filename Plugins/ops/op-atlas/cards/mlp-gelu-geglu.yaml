@@ -22,13 +22,13 @@ impls:
     cons:
       - "近似式需与参考核对"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "torch 分步"
+  - repo: aiter
+    library_profile_ref: "libraries.md §4"
+    file_hint: "aiter 的 gelu 族"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "只作为基线对照，不是性能候选"
+      - "现成实现"
     not_for:
       - "追求极限时不如专用实现"
     pros:

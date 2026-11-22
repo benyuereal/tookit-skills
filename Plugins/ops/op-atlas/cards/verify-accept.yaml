@@ -19,15 +19,15 @@ impls:
     pros:
       - "接受率决定整体收益"
     cons:
-      - "随机源需固定"
+      - "现成库不支持：投机解码的接受判据要绑定具体模型的分布与随机源，没有通用实现；aiter 只有采样不接受判据"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "torch 对照"
+  - repo: triton
+    library_profile_ref: "libraries.md §9"
+    file_hint: "Triton 的接受判据实现"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "验证接受判据的算法正确性（不是性能）"
+      - "torch 版只作算法对照；生产走 triton"
     not_for:
       - "生产路径（无融合、无调优）"
     pros:

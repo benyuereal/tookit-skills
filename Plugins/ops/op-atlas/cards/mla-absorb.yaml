@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: FlashMLA
+  - repo: flash-mla
     library_profile_ref: "libraries.md §7"
     file_hint: "MLA absorb 路径"
     tier: primary
@@ -22,7 +22,7 @@ impls:
     cons:
       - "收缩维正交性需逐形状核对"
     source: "references/libraries.md"
-  - repo: TileLang
+  - repo: tilelang
     library_profile_ref: "libraries.md §8"
     file_hint: "可改结构的 MLA"
     tier: fallback

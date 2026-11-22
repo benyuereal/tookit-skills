@@ -22,13 +22,13 @@ impls:
     cons:
       - "原地写残差的变体会污染多变体对比"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "torch native rms_norm（不融合残差）"
+  - repo: aiter
+    library_profile_ref: "libraries.md §4"
+    file_hint: "aiter 的 norm 族（对照用）"
     tier: fallback
     law_ref: null
     best_for:
-      - "不融合残差的基线对照"
+      - "注意：融合残差应走 lightop.RMSNormAdd；aiter 这条只作非融合对照"
     not_for:
       - "追求极限时"
     pros:

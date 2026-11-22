@@ -22,9 +22,9 @@ impls:
     cons:
       - "缩放变体支持面需核对"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "手写 HIP rope"
+  - repo: aiter
+    library_profile_ref: "libraries.md §4"
+    file_hint: "aiter.RoPE / RoPETHD / fused_qk_rmsnorm_rope"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
@@ -34,7 +34,7 @@ impls:
     pros:
       - "完全可控，但需自行维护"
     cons:
-      - "需自行维护，无上游可 diff"
+      - "aiter 有完整 RoPE 族（含与 qk-norm 融合的变体），不必自研"
     source: "references/libraries.md"
 
 ceiling:

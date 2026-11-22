@@ -21,9 +21,9 @@ impls:
     cons:
       - "累加顺序需固定"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "手写 reduce"
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "lightop 的 moe_sum"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
@@ -33,7 +33,7 @@ impls:
     pros:
       - "完全可控，但需自己维护"
     cons:
-      - "顺序易错"
+      - "lightop 有 moe_sum，不必自研"
     source: "references/libraries.md"
 
 ceiling:

@@ -51,7 +51,7 @@ impls:
     pros:
       - "实现简单，但多一次往返"
     cons:
-      - "未做跨行复用"
+      - "现成库不支持：shipped 版未做跨行 KV 复用，已被 lightop 的 grouped 路径取代；保留作基线对照"
     source: "references/libraries.md"
 
 ceiling:

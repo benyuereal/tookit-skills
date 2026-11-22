@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: TileKernels
+  - repo: tilelang
     library_profile_ref: "libraries.md §11"
     file_hint: "Engram 的 causal_conv1d"
     tier: primary
@@ -21,7 +21,7 @@ impls:
     cons:
       - "核大小受 tile 高度限制"
     source: "references/libraries.md"
-  - repo: BoltOPs
+  - repo: boltops
     library_profile_ref: "libraries.md §10"
     file_hint: "causal_conv1d_fn / causal_conv1d_update"
     tier: fallback

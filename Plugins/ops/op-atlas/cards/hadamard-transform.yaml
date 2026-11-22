@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: TileKernels
+  - repo: tilelang
     library_profile_ref: "libraries.md §11"
     file_hint: "fast_hadamard"
     tier: primary
@@ -21,9 +21,9 @@ impls:
     cons:
       - "radix 与 LDS 争用需调"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "手写蝶形"
+  - repo: tilelang
+    library_profile_ref: "libraries.md §8"
+    file_hint: "tilelang 的蝶形变换"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
@@ -33,7 +33,7 @@ impls:
     pros:
       - "完全可控，但需自己维护"
     cons:
-      - "需自行维护，无上游可 diff"
+      - "蝶形用 tilelang 表达"
     source: "references/libraries.md"
 
 ceiling:

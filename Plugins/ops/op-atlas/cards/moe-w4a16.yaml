@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: moe_c
+  - repo: moe-c
     library_profile_ref: "libraries.md §5"
     file_hint: "W4A16(groupwise) 精度档"
     tier: primary
@@ -22,7 +22,7 @@ impls:
     cons:
       - "冷门档覆盖面窄"
     source: "references/libraries.md"
-  - repo: aiter-das
+  - repo: aiter
     library_profile_ref: "libraries.md §4"
     file_hint: "AITER 四后端"
     tier: fallback

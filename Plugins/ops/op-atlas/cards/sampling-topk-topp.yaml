@@ -21,13 +21,13 @@ impls:
     cons:
       - "tie-break 语义需核对"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "torch 分步"
+  - repo: triton
+    library_profile_ref: "libraries.md §9"
+    file_hint: "Triton 的 topk/topp 路径（形状随数据变化）"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "调试 / 对照"
+      - "torch 分步只作语义对照；生产走 triton"
     not_for:
       - "不适合生产（无融合、无调优）"
     pros:

@@ -21,7 +21,7 @@ impls:
     cons:
       - "对 compute-bound 主体融合是净负"
     source: "references/libraries.md"
-  - repo: DeepGEMM
+  - repo: deepgemm
     library_profile_ref: "libraries.md §6"
     file_hint: "GEMM + swiglu epilogue"
     tier: fallback

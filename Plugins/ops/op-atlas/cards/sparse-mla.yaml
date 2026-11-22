@@ -7,7 +7,7 @@ layer: kernel
 op_card: Plugins/ops/skills/op-sparse-mla
 
 impls:
-  - repo: tilelang-hygon
+  - repo: tilelang
     library_profile_ref: "libraries.md §8"
     file_hint: "tilelang / tilelang-prefetch"
     tier: primary
@@ -54,7 +54,7 @@ impls:
     pros:
       - "完全可控，但需自行维护"
     cons:
-      - "需要长期维护一份手写 body"
+      - "现成库不支持：tilelang 版的布局转换税（每条 MMA 摊到的搬运指令是手写的 3-4 倍），绕开它只能手写主循环"
     source: "references/libraries.md"
 
 ceiling:

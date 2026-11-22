@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: hipBLASLt
+  - repo: triton
     library_profile_ref: "libraries.md §6"
     file_hint: "torch.mm 后端"
     tier: primary
@@ -21,7 +21,7 @@ impls:
     cons:
       - "gfx938 上 FP8 无方案"
     source: "references/libraries.md"
-  - repo: DeepGEMM
+  - repo: deepgemm
     library_profile_ref: "libraries.md §6"
     file_hint: "fp8_gemm（走 hipBLASLt）"
     tier: fallback

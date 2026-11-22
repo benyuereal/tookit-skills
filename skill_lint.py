@@ -29,6 +29,8 @@ CONVENTION_FILES = {
     'THIRD_PARTY_NOTICES.md', 'HANDOFF.md', 'package.env', 'sanitize.py',
     # 图谱索引页：与 SKILL.md/README.md 同级，是全大写的约定文件名
     'INDEX.md',
+    # 包级入口文档：docs/ 下已有 EVALS.md / STANDARDS.md 的先例
+    'ENGINE.md',
 }
 PREFIX_ALLOW = ('dcu-', 'op-')
 # 通用工程能力，换成非 DCU 平台同样成立，因此不加 dcu- 前缀。

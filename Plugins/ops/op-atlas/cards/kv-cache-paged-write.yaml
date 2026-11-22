@@ -33,7 +33,7 @@ impls:
     pros:
       - "完全可控，但需自己维护"
     cons:
-      - "易错在边界"
+      - "现成库不支持：非标准 page 布局（16-row vs 64-row）的写入契约不一致，各库的 block_table 语义不同，只能按目标布局自研"
     source: "references/libraries.md"
 
 ceiling:

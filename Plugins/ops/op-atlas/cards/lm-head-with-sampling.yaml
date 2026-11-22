@@ -22,13 +22,13 @@ impls:
     cons:
       - "采样语义（tie-break）需核对"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "torch 分两步"
+  - repo: aiter
+    library_profile_ref: "libraries.md §4"
+    file_hint: "aiter 的 fused sampling（若可用）"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "调试 / 对照"
+      - "torch 两步只作对照；融合版走 aiter"
     not_for:
       - "大词表生产"
     pros:

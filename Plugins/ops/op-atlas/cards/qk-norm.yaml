@@ -22,9 +22,9 @@ impls:
     cons:
       - "head_dim 契约需核对"
     source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "手写 per-head norm"
+  - repo: aiter
+    library_profile_ref: "libraries.md §4"
+    file_hint: "aiter.fused_qk_rmsnorm_rope"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
@@ -34,7 +34,7 @@ impls:
     pros:
       - "完全可控，但需自己维护"
     cons:
-      - "需自行维护，无上游可 diff"
+      - "aiter 的 fused_qk_rmsnorm_rope 已把 per-head norm 与 rope 融合"
     source: "references/libraries.md"
 
 ceiling:

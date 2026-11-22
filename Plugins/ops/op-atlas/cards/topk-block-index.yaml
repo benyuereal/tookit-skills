@@ -7,9 +7,9 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "scoring kernel 的 topk 后处理"
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "lightop sparse MQA 的 topk 后处理"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
@@ -19,9 +19,9 @@ impls:
     pros:
       - "与 mqa-logits 配套"
     cons:
-      - "-1 必须垫队尾"
+      - "lightop 的 sparse 路径已含 topk 后处理"
     source: "references/libraries.md"
-  - repo: BoltOPs
+  - repo: boltops
     library_profile_ref: "libraries.md §10"
     file_hint: "topk 类成品"
     tier: fallback

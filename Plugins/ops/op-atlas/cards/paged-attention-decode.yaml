@@ -23,7 +23,7 @@ impls:
     cons:
       - "scale 与 sink 语义需核对"
     source: "references/libraries.md"
-  - repo: FlashMLA
+  - repo: flash-mla
     library_profile_ref: "libraries.md §7"
     file_hint: "MLA 的 decode 路径"
     tier: primary
@@ -38,7 +38,7 @@ impls:
     cons:
       - "原地规范化 indices"
     source: "references/libraries.md"
-  - repo: BoltOPs
+  - repo: boltops
     library_profile_ref: "libraries.md §10"
     file_hint: "decode 形状 attention 成品"
     tier: fallback

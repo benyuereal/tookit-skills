@@ -7,13 +7,13 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "torch.index_select"
+  - repo: triton
+    library_profile_ref: "libraries.md §9"
+    file_hint: "Triton hcu 的 gather 路径（形状随数据变化，表达力优先）"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "常规词表"
+      - "现成库有更快的 gather 但需要 autotune；torch 版只作对照"
     not_for:
       - "需要与后续 norm 融合时"
     pros:
@@ -22,7 +22,7 @@ impls:
     cons:
       - "无融合，另起一趟"
     source: "references/libraries.md"
-  - repo: BoltOPs
+  - repo: boltops
     library_profile_ref: "libraries.md §10"
     file_hint: "gather 类成品"
     tier: fallback

@@ -23,7 +23,7 @@ impls:
     cons:
       - "csrc 改完要整包重编"
     source: "references/libraries.md"
-  - repo: aiter-das
+  - repo: aiter
     library_profile_ref: "libraries.md §4"
     file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
     tier: fallback

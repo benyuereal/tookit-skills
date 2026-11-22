@@ -84,6 +84,21 @@ def _truth_sources(repo):
     return lib_sections, law_ids
 
 
+def _library_registry(repo):
+    """读 data/ops/libraries-registry.yaml → (canonical 集合, removed 映射)。"""
+    p = repo / "data/ops/libraries-registry.yaml"
+    if not p.is_file():
+        return None, {}
+    data, problem = _load_yaml(p)
+    if problem or not isinstance(data, dict):
+        return None, {}
+    libs = {l.get("canonical_id") for l in (data.get("libraries") or [])
+            if isinstance(l, dict)}
+    removed = {r.get("canonical_id"): r.get("replaced_by")
+               for r in (data.get("removed") or []) if isinstance(r, dict)}
+    return libs, removed
+
+
 def _registry(repo):
     p = repo / "data/ops/registry.json"
     if not p.is_file():
@@ -153,6 +168,7 @@ def validate(atlas, repo):
 
     lib_sections, law_ids = _truth_sources(repo)
     reg_status, reg_path = _registry(repo)
+    lib_canon, lib_removed = _library_registry(repo)
 
     index_p = atlas / "INDEX.md"
     index_txt = index_p.read_text(encoding="utf-8") if index_p.is_file() else ""
@@ -250,6 +266,22 @@ def validate(atlas, repo):
                         % (i, txt, sorted(law_ids)))
             if impl.get("tier") == "avoid" and not law:
                 warn("W1", where, "impls[%d] avoid 条目无 law_ref，机制会丢失" % i)
+
+            # E12：repo 必须是 libraries-registry.yaml 里的 canonical id。
+            # 这条拦的是「同一库多个异名」（DeepGEMM / deepgemm-das 并存），
+            # 那种状态下机器无法对账，人也会以为它们是两个库。
+            repo_name = impl.get("repo")
+            if lib_canon is None:
+                warn("E12", where, "libraries-registry.yaml 不可读，跳过库名校验")
+            elif repo_name in lib_removed:
+                err("E12", where,
+                    "impls[%d] repo=%r 已从环境移除（替换为 %r）"
+                    % (i, repo_name, lib_removed[repo_name]))
+            elif repo_name not in lib_canon:
+                err("E12", where,
+                    "impls[%d] repo=%r 不在 libraries-registry.yaml 里"
+                    "（canonical id 见该文件；异名会被这条拦下）"
+                    % (i, repo_name))
 
             # 场景化字段：tier=primary 必须说清「什么场景用我、什么场景别用我」。
             # 只写 tier 只回答了「谁快」，没回答「在什么条件下快」。

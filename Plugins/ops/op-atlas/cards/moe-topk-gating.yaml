@@ -21,7 +21,7 @@ impls:
     cons:
       - "tie-break 需与参考核对"
     source: "references/libraries.md"
-  - repo: aiter-das
+  - repo: aiter
     library_profile_ref: "libraries.md §4"
     file_hint: "topk softmax 支撑算子"
     tier: fallback

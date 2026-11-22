@@ -1,0 +1,141 @@
+# 算子库注册表 —— 图谱卡片 impls[].repo 的唯一权威来源。
+#
+# 为什么需要它：42 张卡的 92 条 impl 里，同一个库有多个异名并存
+# （DeepGEMM / deepgemm-das、TileLang / tilelang-hygon、FlashMLA / flash-mla、
+#  aiter-das / aiter、BoltOPs / boltops），机器无法对账；
+# 另有两个库（hipBLASLt / TileKernels）在环境里根本不可导入却出现 8 次。
+#
+# 纪律：
+#   - canonical_id 一律小写 kebab，卡片只能写它。
+#   - installed: true 表示本机可 import 且已核过版本。
+#   - 不存在的库不许留条目；确实需要的写 not_installed_reason 并标 installed: false，
+#     且**不许**被卡片引用（validate.py 会拦）。
+
+libraries:
+  - canonical_id: lightop
+    aliases: [LightOp, lightop]
+    pip_name: lightop
+    import_name: lightop
+    source_path: /workspace/lightop
+    version: "0.6.0+dtk2604.torch2110"
+    installed: true
+    note: "自研融合算子库；memory-bound 链融合、量化族、MQA/MoE"
+
+  - canonical_id: aiter
+    aliases: [AITER, aiter, aiter-das]
+    pip_name: aiter
+    import_name: aiter
+    source_path: null
+    version: "0.1.6+dtk2604.torch2110"
+    installed: true
+    note: "四后端调度框架；RoPE / MoE / norm / quant 的统一下发面"
+
+  - canonical_id: deepgemm
+    aliases: [DeepGEMM, deepgemm-das, deepgemm]
+    pip_name: deepgemm
+    import_name: deepgemm
+    source_path: null
+    version: "2.1.0+dtk2604.torch2110"
+    installed: true
+    note: "grouped / MoE GEMM 专精；layout 分叉多，选错是静默错"
+
+  - canonical_id: flash-attn
+    aliases: [flash-attn, flash_attn, FlashAttention, flash-attention-das]
+    pip_name: flash_attn
+    import_name: flash_attn
+    source_path: null
+    version: "2.8.3+dtk2604.torch2110"
+    installed: true
+    note: "dense / paged attention；CUDA kernel 的 HIP 化，新变体语义改不动"
+
+  - canonical_id: flash-mla
+    aliases: [FlashMLA, flash_mla, flash-mla]
+    pip_name: flash_mla
+    import_name: flash_mla
+    source_path: /workspace/FlashMLA-das
+    version: "1.2.0+dtk2604.torch2110"
+    installed: true
+    note: "MLA 的 prefill/decode；会原地规范化 indices"
+
+  - canonical_id: causal-conv1d
+    profile_ref: "libraries.md §11"
+    aliases: [causal_conv1d, CausalConv1d]
+    pip_name: causal_conv1d
+    import_name: causal_conv1d
+    source_path: null
+    version: "1.5.4+dtk2604.torch2110"
+    installed: true
+    note: "线性注意力的因果卷积；串行 scan"
+
+  - canonical_id: deep-ep
+    profile_ref: "libraries.md §4"
+    aliases: [DeepEP, deep_ep, DeepEP-das]
+    pip_name: deep_ep
+    import_name: deep_ep
+    source_path: /workspace/ep_moe_fix
+    version: "1.1.0+dtk2604.torch2110"
+    installed: true
+    note: "MoE dispatch/combine 的 all2all 实现"
+
+  - canonical_id: boltops
+    aliases: [BoltOPs, boltops]
+    pip_name: boltops
+    import_name: boltops
+    source_path: null
+    version: "0.1.0+dtk2604.torch2110"
+    installed: true
+    note: "decode 形状的成品集合；自带 autotune CLI；建立在 Triton/TileLang 之上"
+
+  - canonical_id: tilelang
+    aliases: [TileLang, tilelang, tilelang-hygon]
+    pip_name: tilelang
+    import_name: tilelang
+    source_path: null
+    version: "0.1.12+dtk2604.torch2110"
+    installed: true
+    note: "DSL；先付布局转换税（每条 MMA 摊到的搬运指令是手写的 3-4 倍）"
+
+  - canonical_id: triton
+    aliases: [Triton, triton, triton-das]
+    pip_name: triton
+    import_name: triton
+    source_path: null
+    version: "3.6.0+dtk2604.torch2110"
+    installed: true
+    note: "hcu backend；tl.dot 在 DCU 上是 0.29-0.41x，适合形状不定的算子"
+
+  - canonical_id: moe-c
+    aliases: [moe_c, Moe, moe_c_configs]
+    pip_name: null
+    import_name: null
+    source_path: null
+    version: null
+    installed: false
+    note: "AITER 的 MoE 后端（独立仓库 Moe）；按 (精度 × gfx) 查表。AITER 选中 MOE_C 时才有效"
+
+  - canonical_id: hbird-gemm
+    aliases: [hbird, hbird-gemm, HBird]
+    pip_name: null
+    import_name: null
+    source_path: /workspace/hbird-gemm
+    version: null
+    installed: false
+    note: "方法论原型，非组织资产（个人仓库）；只作参考，不作依赖"
+
+  - canonical_id: in-house
+    aliases: []
+    pip_name: null
+    import_name: null
+    source_path: null
+    version: null
+    installed: null
+    note: "自研。**仅当现成库确实不支持时使用**，且必须在 cons 写明「现成库不支持 X」"
+
+# 从环境移除的库（曾出现在卡片里，实际不可导入或不存在）
+removed:
+  - canonical_id: hipblaslt
+    reason: "import hipblaslt 失败；torch 侧的 hipBLASLt 是 torch 内部后端，不是独立可调库"
+    replaced_by: triton
+  - canonical_id: tilekernels
+    reason: "不是可导入包（TileKernels 是按模型层组织的 tilelang 算子集合，不是库）"
+    replaced_by: tilelang

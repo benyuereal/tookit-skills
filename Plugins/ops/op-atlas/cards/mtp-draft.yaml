@@ -19,7 +19,7 @@ impls:
     pros:
       - "与主模型同栈"
     cons:
-      - "草稿质量决定收益"
+      - "现成库不支持：MTP 的 draft head 与主模型共享 KV 语义，没有通用库能表达这个耦合，需随模型结构自研"
     source: "references/libraries.md"
   - repo: lightop
     library_profile_ref: "libraries.md §3"

@@ -7,7 +7,7 @@ layer: kernel
 op_card: null
 
 impls:
-  - repo: DeepGEMM
+  - repo: deepgemm
     library_profile_ref: "libraries.md §6"
     file_hint: "m_grouped_*_gemm_nt_masked"
     tier: primary
@@ -21,7 +21,7 @@ impls:
     cons:
       - "layout 选错是静默错"
     source: "references/libraries.md"
-  - repo: aiter-das
+  - repo: aiter
     library_profile_ref: "libraries.md §4"
     file_hint: "get_aiter_moe_config"
     tier: fallback

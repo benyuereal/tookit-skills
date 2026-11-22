@@ -1,0 +1,24 @@
+--- a/lightop/attention/mqa.py	2026-11-19 10:38:48.000000000 +0800
++++ b/lightop/attention/mqa.py	2026-11-22 13:52:35.755958397 +0800
+@@ -107,10 +107,17 @@
+                 and q.dtype == torch.int8
+                 and fused_kv_cache.dtype == torch.int8)
+     if arch == "gfx938" and props.multi_processor_count in (64, 72):
+-        return ((q.dtype == torch.int8
+-                 and fused_kv_cache.dtype == torch.int8)
+-                or (q.dtype == torch.float8_e4m3fn
+-                    and fused_kv_cache.dtype == torch.uint8))
++        # FP8 从 persistent 白名单里移除。
++        #
++        # 原实现对 FP8 也返回 True，但实测表明：
++        #   1. FP8 + persistent 比 default 后端慢——跨 iteration 的驻留假设
++        #      建立在 BF16/int8 的寄存器与 LDS 布局上，FP8 的 scale 广播
++        #      打破了这个假设；
++        #   2. 在强制的小 page 分组形状上，persistent 路径直接 RuntimeError
++        #      （page 分组前提不成立）。
++        # 因此 FP8 只保留 default 后端。判据见 pipeline.md 的 Q5 与 Q6。
++        return (q.dtype == torch.int8
++                and fused_kv_cache.dtype == torch.int8)
+     return False
+ 
+ 

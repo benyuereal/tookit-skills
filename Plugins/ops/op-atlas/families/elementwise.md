@@ -30,3 +30,16 @@
 ## 库选择
 
 优先 `libraries.md §3`（LightOp 融合族）；单条无链算子不必融合。
+
+## 实现横评
+
+| 实现 | 层级 | 适合什么 | 不适合什么 | 证据 |
+|---|---|---|---|---|
+| `lightop` 融合族 | kernel | memory-bound 链（norm / 激活 / rope / 量化 / 采样），希望一个 kernel 吃掉整条链 | compute-bound 的 GEMM 主体（融合净负） | `libraries.md §3` |
+| `TileKernels` | kernel | 模型结构层算子（mHC / Engram / GDN）+ 可训练层 | 单条 memory-bound 链（LightOp 更成熟）；融合链本身可能更慢 | `libraries.md §11` |
+| `torch` 原生 | kernel | 基线对照；快速验证语义 | 追求极限（无融合、多次往返） | 本仓实测 |
+| `BoltOPs` | kernel | decode 形状的成品集合，自带 autotune CLI | 大 M prefill（Triton 路线固有税） | `libraries.md §10` |
+
+**读这张表的方式**：这一族没有"选谁更快"的问题，只有"要不要融合"。
+先确认是不是 memory-bound 链（字节数确定、无计算主体），是才融；
+否则直接用 torch 原生反而省事。
