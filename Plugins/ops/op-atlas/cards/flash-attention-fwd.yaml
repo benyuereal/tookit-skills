@@ -2,7 +2,7 @@ id: flash-attention-fwd
 title: Flash attention 前向
 family: attention
 math: out = softmax(QK^T*scale + mask)·V；分块在线 softmax
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -51,16 +51,30 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 1.66
+    vs: causal 相对 non-causal 的耗时比（1.780/2.961）
+    scope:
+      cards: 1
+      in_len: S=2048
+      out_len: 同长
+      warmup: hot
+      note: B=8 H=32 D=128 bf16；非加速比，是两种 mask 形态的差距
+  conclusion: causal 相对 non-causal 耗时比为 0.60；两条路径 TFLOPS 均远低于 bf16 峰值
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: varlen 换固定长度（消除变长调度开销）
   how: 形状固定时用 flash_attn_func 替代 flash_attn_varlen_func，省掉 cu_seqlens 的间接寻址
   requires: batch 内序列等长
+hard_preconditions:
+- statement: flash_attn 输入必须是 [B,S,H,D]，D 需在支持范围（128 可用）
+  check: python3 -I -c "import flash_attn,torch; flash_attn.flash_attn_func(*[torch.randn(2,64,4,128,dtype=torch.bfloat16,device='cuda')]*3)"
+soft_preconditions:
+- 建议 hot 态测量
+- TFLOPS 分母按 causal 半三角折算，不能用 S²
 surfaces:
 - prefetch-depth
 - cross-lane-fold

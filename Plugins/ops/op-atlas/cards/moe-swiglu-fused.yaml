@@ -2,7 +2,7 @@ id: moe-swiglu-fused
 title: 专家内 SwiGLU 融合
 family: moe
 math: y = (silu(x*W_gate)*(x*W_up))*W_down，专家内完成
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -51,16 +51,29 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 1.0
+    vs: M=128 与 M=1024 的耗时比（0.0845/0.0814）
+    scope:
+      cards: 1
+      in_len: M=128 与 M=1024
+      out_len: H=2048
+      warmup: hot
+      note: 专家内 swiglu；两种 M 耗时几乎相同说明固定开销主导
+  conclusion: 专家内 swiglu 在 M=128..1024 区间耗时几乎不变，瓶颈是固定开销不是字节
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 专家内激活换成融合实现
   how: lightop.FuseBiasSwiGLU()(x, bias) 在专家内做 gate/up 融合
   requires: x 已按专家分好组
+hard_preconditions:
+- statement: lightop.FuseBiasSwiGLU 输入须 [M,2H] 连续
+  check: python3 -I -c "import lightop,torch; lightop.FuseBiasSwiGLU().cuda()(torch.randn(8,1024,dtype=torch.bfloat16,device='cuda'),torch.randn(1024,dtype=torch.bfloat16,device='cuda'))"
+soft_preconditions:
+- 建议 hot 态测量
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'

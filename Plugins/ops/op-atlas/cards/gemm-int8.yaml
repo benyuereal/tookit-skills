@@ -2,7 +2,7 @@ id: gemm-int8
 title: INT8 GEMM（W8A8）
 family: gemm
 math: out = (A_i8 * s_a) @ (B_i8 * s_b)；acc=int32，出栈时反量化
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -51,16 +51,31 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡。达成率分母须按 INT8 单独标定
-  verified_on: null
+  ratio:
+    value: 343.4
+    vs: INT8 算力（TFLOPS，非倍数）
+    scope:
+      cards: 1
+      in_len: M/exp=128 K=2048
+      out_len: N=1536
+      warmup: hot
+      note: E=32 grouped contiguous；MAD=0.0032 占中位数 4.3%，两次跑 343/363 TF 有 5% 波动
+  conclusion: INT8 grouped 达 343 TFLOPS、1621 GB/s；MAD 为中位数的 0.043，该形状测量不稳
+  verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 选 W6 packed 的 layout 入口
   how: 用 m_grouped_i8_gemm_nt_contiguous 并确保权重经 pack_w8a8_gfx936_weight_to_w6 打包
   requires: 权重已按 W6 packed 预处理
+hard_preconditions:
+- statement: contiguous 形态的权重必须经 marlin_i8_contiguous_weight 打成 6D W6 layout
+  check: '不打包直接传 → ValueError: expects W6 packed weight [E,K/64,N/16,4,16,16]'
+- statement: a 必须是 2D [E*M, K]（contiguous 形态），3D 会报 input must be [M,K]
+  check: '传 3D a → RuntimeError: input must be [M,K]'
+soft_preconditions:
+- 建议 hot 态且 ≥11 轮（该形状 MAD 达 4.3%）
 surfaces:
 - table-miss
 - layout-pack

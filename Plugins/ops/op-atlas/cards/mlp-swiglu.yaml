@@ -2,7 +2,7 @@ id: mlp-swiglu
 title: MLP SwiGLU 前向
 family: activation
 math: y = (silu(x*W_gate) * (x*W_up)) * W_down
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -50,16 +50,32 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/001-swiglu-fused-vs-split/README.md
+  ratio:
+    value: 2.26
+    vs: torch 三步分拆（x+b → silu → 乘）
+    scope:
+      cards: 1
+      in_len: M=32768
+      out_len: H=4096 输出宽 4096
+      warmup: hot
+      note: bf16；fused 1.5174ms vs split 3.4262ms，3×MAD=0.0158 显著
+  conclusion: 融合快 2.26x；带宽达成率为 copy 峰值的 0.39-0.46，空间在布局而非参数
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 三步 torch 换成 lightop 融合
   how: lightop.FuseBiasSwiGLU()(x, bias) 替代 (x+b) → silu → 乘 三次调用
   requires: x 形状 [M,2H]，bias [2H]；实测融合快 2.25x
+hard_preconditions:
+- statement: lightop.FuseBiasSwiGLU 的输入必须是 [M, 2H] 连续张量
+  check: python3 -I -c "import lightop,torch; m=lightop.FuseBiasSwiGLU().cuda(); m(torch.randn(8,1024,dtype=torch.bfloat16,device='cuda'), torch.randn(1024,dtype=torch.bfloat16,device='cuda'))"
+- statement: 拆成两个 [M,H] 再 cat 回去会慢 1.49x（实测），不要拆
+  check: python3 cases/001-swiglu-fused-vs-split/bench.py 看 fused 与 split 两行
+soft_preconditions:
+- 建议 hot 态测量（冷启动被首调虚高污染）
+- 达成率分母按访存比选：读 2 写 1，用 copy 峰值而非只读峰值
 surfaces:
 - fusion-boundary
 - precision-drop

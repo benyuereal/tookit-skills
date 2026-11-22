@@ -73,13 +73,20 @@ last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  conclusion: 未测定：flash_attn 的 paged 路径在当前版本内部报错（见下）
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 从 flash_attn 换到 flash_mla 的 decode 路径
   how: 把 flash_attn_varlen_func 换成 flash_mla_with_kvcache（后者专为 decode 的 paged KV 优化）
   requires: KV 是 paged 布局且 head_dim 在 flash_mla 支持范围内
+hard_preconditions:
+- statement: flash_attn_varlen_func 的 block_table 路径在当前版本抛 empty_like(NoneType)
+  check: 'python3 -I -c "import flash_attn,torch; q=torch.randn(8,1,32,128,dtype=torch.bfloat16,device=''cuda''); kv=torch.randn(2048,16,32,128,dtype=torch.bfloat16,device=''cuda''); bt=torch.arange(2048,dtype=torch.int32,device=''cuda'').view(8,256);
+    flash_attn.flash_attn_varlen_func(q,kv,kv,max_seqlen_q=1,max_seqlen_k=4096,seqused_k=torch.full((8,),4096,dtype=torch.int32,device=''cuda''),block_table=bt)" → TypeError: empty_like(): argument input
+    must be Tensor, not NoneType'
+soft_preconditions:
+- 未测定，不计入统计
 surfaces:
 - gather-path
 - occupancy
