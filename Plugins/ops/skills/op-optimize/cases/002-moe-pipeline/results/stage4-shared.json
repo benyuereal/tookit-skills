@@ -1,0 +1,38 @@
+{
+  "case": "002-moe-pipeline",
+  "stage": 4,
+  "purpose": "共享专家挪到独立 stream 能否与 routed 并发",
+  "caliber": {
+    "what": "two GEMMs (shared vs routed)",
+    "alloc": true,
+    "state": "hot",
+    "timer": "cuda_event",
+    "rounds": 11
+  },
+  "shape": {
+    "E": 32,
+    "M_per_expert": 128,
+    "N": 1536,
+    "K": 2048,
+    "H": 2048,
+    "I": 1536,
+    "dtype": "bfloat16"
+  },
+  "shared_vs_routed": {
+    "routed_ms": 0.32335999608039856,
+    "shared_ms": 0.14735999703407288,
+    "seq_ms": 0.4495989978313446,
+    "par_ms": 0.4673599898815155,
+    "overlap_pct": 0,
+    "verdict": "不能并发（同属算力引擎）"
+  },
+  "control_d2h": {
+    "d2h_ms": 1.1748789548873901,
+    "seq_ms": 1.5019179582595825,
+    "par_ms": 1.0742390155792236,
+    "overlap_pct": 100.0,
+    "note": "对照项：证明测量方法有效（真 DMA 能到 ~100%）"
+  },
+  "mechanism": "共享专家与 routed 专家都是 GEMM，同属算力引擎。双流只是把两个 kernel 排到同一队列的不同流，硬件仍串行发射。这与阶段 3 的 GEMM+GEMM 5.8% 一致，与 D2H+GEMM 的 100% 形成反差——反差本身证明不是测量方法的问题，是引擎类型的问题。",
+  "conclusion_for_megamoe": "MegaMoE 把「共享专家挪到独立 stream」列为改进方向，但在 DCU 上这条路不成立：它不是「没做」，是「做了也没用」。要缩短共享专家的等待，只能从减少它的绝对耗时入手，不是并发。"
+}
