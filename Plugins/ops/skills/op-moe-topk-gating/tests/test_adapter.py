@@ -14,9 +14,18 @@ REQUIRED = ("build_inputs", "reference", "runner_kwargs", "get_runner", "run_iso
 class TestAdapterContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import importlib
-        cls.c = importlib.import_module("_common")
-        cls.shape = cls.c.load_shape("tiny")
+        # 用文件路径加载，不用模块名：三张卡都有 _common.py，
+        # `import _common` 会命中 sys.modules 里第一个加载的那个，
+        # 导致后跑的卡实际在测前一张卡的 adapter。
+        import importlib.util
+        path = CARD / "_common.py"
+        spec = importlib.util.spec_from_file_location(
+            "_common_%s" % CARD.name.replace("-", "_"), path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        cls.c = mod
+        cls.shape = mod.load_shape("tiny")
         cls.params = dict(cls.shape.get("params") or {})
 
     def test_required_symbols_present(self):

@@ -39,7 +39,7 @@ kind: tool
 
 | 库 | 位置 | 可做的案例 |
 |---|---|---|
-| LightOp | `/workspace/lightop/*.tgz`（源码 tar）、`lvfl_glm/`、`lzh_glm_new/`（已解包） | 改 `lightop/attention/mqa.py` 的 persistent 分组 |
+| LightOp | `/workspace/lightop/*.tgz`（源码 tar）、`lvfl_glm/`、`lzh_glm_new/`（已解包） | 改 `lightop` 的 attention/mqa 模块 的 persistent 分组 |
 | FlashMLA | `/workspace/FlashMLA-das`、`/workspace/FlashMLA-upstream` | 改注意力计算，das 与 upstream 对拍 |
 | MHC | `/workspace/mhc_kernels` | 改 MHC 三件套 |
 | hbird | `/workspace/hbird-gemm` | 改 grouped GEMM / persistent dispatch |
@@ -67,7 +67,7 @@ kind: tool
 ## 六、一个完整的真实闭环（LightOp MQA）
 
 ```bash
-# ① 定位：card.impls[0].file_hint → lightop/attention/mqa.py 的 paged_mqa_logits
+# ① 定位：card.impls[0].file_hint → 目标库的 attention/mqa 入口（paged_mqa_logits）
 # ② 取源：本地已有
 ls /workspace/lightop/*.tgz        # 源码 tar，不要再 git clone
 # ③ 编译：按 gfx 显式指定（漏了会用错架构）
@@ -76,10 +76,10 @@ PYTORCH_ROCM_ARCH=gfx938 python3 setup.py install
 mkdir -p patches && $EDITOR patches/0001-<name>.patch
 cd <src> && patch -p1 --dry-run < patches/0001-<name>.patch
 # ⑤ 回归
-python3 scripts/opcheck.py correctness --contract .../contract.yaml --variants <tag>
+python3 scripts/opcheck.py correctness --contract <card>/contract.yaml --variants <tag>
 python3 scripts/opbench.py ...
-# ⑥ 留痕
-./reproduce.sh all      # 把上面四步固化成一条命令
+# ⑥ 留痕：把上面四步固化成卡目录下的 reproduce.sh，一条命令跑完
+<卡目录>/reproduce.sh all
 ```
 
 ## 七、已知的坑

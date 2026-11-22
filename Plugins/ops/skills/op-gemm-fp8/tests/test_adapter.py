@@ -24,8 +24,16 @@ TINY = {"M": 4, "N": 256, "K": 256, "_name": "tiny"}
 class TestAdapterContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import importlib
-        cls.c = importlib.import_module("_common")
+        # 用文件路径加载，不用模块名：多张卡都有 _common.py，
+        # `import _common` 会命中 sys.modules 里第一个加载的那个。
+        import importlib.util
+        path = CARD / "_common.py"
+        spec = importlib.util.spec_from_file_location(
+            "_common_%s" % CARD.name.replace("-", "_"), path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        cls.c = mod
 
     def test_required_symbols_present(self):
         missing = [s for s in REQUIRED if not callable(getattr(self.c, s, None))]

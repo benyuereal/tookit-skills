@@ -42,9 +42,16 @@ jobs:
         run: python3 -I Plugins/ops/op-atlas/validate.py --atlas Plugins/ops/op-atlas
 
       # 4. ops 域单测（含 engine 的显著性、三道门、loop 状态机）
+      #
+      # 用 pytest 而不是 unittest discover：后者在 Plugins/ops/tests 下
+      # 会输出 "Ran 0 tests ... OK"（空跑），CI 因此一直是假绿。
+      # 实测同一目录 pytest 能收集到 350 个用例。
+      # importmode 固定在 pytest.ini 里，不要删——多个卡都有同名
+      # _common.py / test_adapter.py，默认模式会互相覆盖。
       - name: ops tests
-        working-directory: Plugins/ops/tests
-        run: python3 -m unittest discover -s . -p "test_*.py" -v
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest -q
 
       # 5. 结构 lint：基线已入库，这里**硬依赖**它。
       #    早先写成「基线不存在就跳过」，等于给自己留了一个静默关掉门禁的开关。
