@@ -274,9 +274,13 @@ def validate(atlas, repo):
         if c.get("layer") == "engine":
             lv = c.get("last_verdict") or {}
             if isinstance(lv, dict) and lv.get("status") not in (None, "none"):
-                err("E11", where,
-                    "layer=engine 的条目不许有 last_verdict 结论"
-                    "（引擎层端到端数字受并行策略与显存水位影响，会污染算子层判断）")
+                # engine 卡**可以**有自己的结论，但必须标明是 engine 级，
+                # 且 ratio 必须带 scope——否则「受并行策略/显存水位影响的数字」
+                # 会看起来像算子级结论，污染算子层判断。
+                if (lv.get("ratio") or {}).get("scope") is None:
+                    err("E11", where,
+                        "layer=engine 的 last_verdict.ratio 必须带 scope"
+                        "（引擎层数字受并行策略与显存水位影响，无 scope 会被误当算子级结论）")
 
         # ---- E1 cards ↔ INDEX 双向
         if index_txt and ("cards/%s.yaml" % card_path.stem) not in index_txt:

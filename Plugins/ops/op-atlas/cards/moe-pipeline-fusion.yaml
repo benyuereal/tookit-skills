@@ -1,0 +1,79 @@
+id: moe-pipeline-fusion
+title: MoE pipeline 融合策略（P/D 分档）
+family: moe
+math: 五段 pipeline（dispatch→gate_up→swiglu→down→combine）的融合边界选择
+status: measured
+layer: engine
+op_card: null
+impls:
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: fuse_groupgemm_permute_quant（L1 部分融合）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q6
+  best_for:
+  - M/exp < 32 的 decode 档（小 M 时 permute/quant 落盘占比高）
+  not_for:
+  - M/exp > 64 的 prefill 档（融合的固定开销被 GEMM 摊薄，不如全拆分）
+  pros:
+  - 省 permute 与 quant 的中间落盘
+  cons:
+  - 大 M 时反被固定开销拖累，实测 M/exp=256 时慢 3.72x
+  source: references/libraries.md
+  import_path: lightop.fuse_groupgemm_permute_quant
+  signature: fuse_groupgemm_permute_quant(tokens, routing_map) -> tuple
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"fuse_groupgemm_permute_quant")"
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: m_grouped_bf16_gemm_nt_masked（L0 全拆分的主体）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - M/exp > 64 的 prefill 档
+  not_for:
+  - N 非 256 倍数时直接拒绝（I=1408 被拒）
+  - 需要 2D 输入时（必须 3D [E,M,K]）
+  pros:
+  - 大 M 时 grouped 比逐专家循环快 3.17x
+  cons:
+  - 达成率仅 43%，离算力地板还远
+  source: references/libraries.md
+  import_path: deepgemm.m_grouped_bf16_gemm_nt_masked
+  signature: m_grouped_bf16_gemm_nt_masked(a,b,d,masked_m,expected_m_per_group,config)
+  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_bf16_gemm_nt_masked")"
+ceiling:
+  kind: measured
+  ref: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage2b-ladder.json
+  bound: mixed
+  note: 交叉点 M/exp∈[32,64]；小 M 用 L1、大 M 用 L0
+shapes:
+- decode-m16
+- decode-m32
+- prefill-m64
+- prefill-m256
+last_verdict:
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/README.md
+  ratio:
+    value: 1.69
+    vs: L0 全拆分（M/exp=16 档，L1 0.2014 vs L0 0.3427）
+    scope:
+      cards: 1
+      in_len: E=32 时 M/exp=16
+      out_len: H=2048 I=1536
+      warmup: hot
+      note: engine 级：含 permute+quant 的整链，非单 kernel
+  conclusion: M/exp<32 用部分融合，>64 用全拆分；全融合不可用
+  verified_on: '2026-11-23'
+surfaces:
+- fusion-boundary
+- layout-pack
+hard_preconditions:
+- statement: asm_fmoe_a8 全融合在本平台不可用（110 个 solution 全被拒）
+  check: python3 -I -c "import aiter; aiter.asm_fmoe_a8(...)" → Input not supput Mode
+- statement: deepgemm masked GEMM 要求 N 被 256 整除，I=1408 会被拒
+  check: '传 N=1408 → ValueError: N must be divisible by 256'
+soft_preconditions:
+- 建议 hot 态测量（冷启动会被首调虚高污染）
+- M/exp 在 32-64 之间时建议两端各测一次再定，不要插值
+updated: '2026-11-23'

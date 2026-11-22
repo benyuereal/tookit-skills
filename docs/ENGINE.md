@@ -94,3 +94,72 @@ CI 跑的是同一套（`.github/workflows/ci.yml`），外加 `skill_lint.py --
 4. 进闭环前先 `enumerate` 挑方向，别凭空想
 
 **不需要**改任何代码。加一个算子 = 加一张卡 + 一行索引。
+
+## 七、Engine 层：P / D 两套配置边界
+
+> 前面六节讲的是**单算子**级优化（一个 kernel、一个场景、一个 ratio）。
+> 这一节讲 **pipeline** 级——五段下发收进一个算子时该怎么配。
+>
+> 数据来源：`Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/`，
+> 全部可复跑。**这里的结论只属于 engine 层，不进任何单算子卡的 last_verdict。**
+
+### 7.1 为什么必须分 P / D
+
+MoE 的 pipeline 在两种形态下瓶颈完全不同：
+
+| 档 | 触发条件 | 五段耗时占比（实测，M/exp） | 优化重心 |
+|---|---|---|---|
+| **P**（prefill） | M/exp ≥ 64 | 两个 GEMM 占 89.2%（M=4096 档） | 融合**不划算**，直接跑 GEMM |
+| **D**（decode） | M/exp ≤ 32 | 两个 GEMM 占 95.9%（M=32 档） | 部分融合**划算** |
+
+### 7.2 融合策略的边界（可执行）
+
+实测三级阶梯（`stage2b_ladder.py`）：
+
+| M/exp | L0 全拆分 | L1 部分融合 | L1/L0 | 选 |
+|---|---|---|---|---|
+| 16 | 0.3427 | **0.2014** | 0.59x | L1 |
+| 32 | 0.3376 | **0.2782** | 0.82x | L1 |
+| 64 | **0.3661** | 0.4534 | 1.24x | L0 |
+| 128 | **0.4088** | 0.8342 | 2.04x | L0 |
+| 256 | **0.4504** | 1.6758 | 3.72x | L0 |
+
+```
+M/exp < 32        ⇒ L1 部分融合（fuse_groupgemm_permute_quant）
+M/exp ∈ [32, 64]  ⇒ 实测决定（两者接近，建议在两个端点各测一次）
+M/exp > 64        ⇒ L0 全拆分（permute → grouped GEMM → swiglu）
+L2 全融合         ⇒ 不可用（asm_fmoe_a8 在这一档拒所有 dtype/mode，见 failure-modes）
+```
+
+**机制**：L1 省的是 permute 与 quant 的中间落盘。这部分开销在小 M 时
+占比高（因为 GEMM 本身小），大 M 时被 GEMM 摊薄。
+
+### 7.3 并发：哪些能叠、哪些不能
+
+实测（`stage3_overlap.py` / `stage4_shared.py`）：
+
+| 组合 | 重叠度 | 能不能叠 |
+|---|---|---|
+| GEMM + GEMM（含共享专家 vs 路由专家） | **0-5.8%** | **不能**——同属算力引擎 |
+| `copy_`(D2D) + GEMM | **11.9%** | **不能**——D2D 也在算力队列上 |
+| **D2H(pinned DMA) + GEMM** | **100%** | **能**——独立 DMA 引擎 |
+
+**结论**：
+- 「把两段 GEMM 放两个流」**在本平台无效**
+- 「把共享专家挪到独立 stream」**无效**（MegaMoE 的这条改进不成立）
+- 只有「计算 vs 真 DMA」能叠——对应 HiCache KV 备份、权重预取这类 D2H/H2D
+
+### 7.4 已知走不通的路（engine 级）
+
+| 路 | 为什么 | 出处 |
+|---|---|---|
+| 全融合（asm_fmoe_a8） | 110 个 solution 全部被拒；bf16/fp8/cu 都不接受 | `failure-modes.yaml` 第 1/2 条 |
+| 双流叠两段 GEMM | 同引擎争用，实测 5.8% | `stage3-overlap.json` |
+| 共享专家独立流 | 同引擎，实测 0.0% | `stage4-shared.json` |
+| `ll` 低延迟路径 | 需要 6D packed weight，deepgemm 无公开 pack 函数 | `stage1-gemm.json` |
+
+### 7.5 落点纪律
+
+**engine 级结论只落这里和 `failure-modes.yaml`，不进单算子卡的 `last_verdict`。**
+理由：engine 结论受并行策略、显存水位、预热策略共同影响，
+写进算子卡会污染算子层判断——这正是本仓库反复强调的「口径打架」。

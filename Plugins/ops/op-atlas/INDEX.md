@@ -48,6 +48,7 @@
 | [`moe-swiglu-fused`](cards/moe-swiglu-fused.yaml) | moe | draft | lightop | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`moe-topk-gating`](cards/moe-topk-gating.yaml) | moe | draft | lightop | bandwidth | ref-heavy 通过正确性门；无性能实测；本… |
 | [`moe-w4a16`](cards/moe-w4a16.yaml) | moe | draft | moe-c | bandwidth | 无实测：索引卡，实现层待按证据推进 |
+| [`moe-pipeline-fusion`](cards/moe-pipeline-fusion.yaml) | moe | measured | lightop / deepgemm | mixed | M/exp<32 部分融合、>64 全拆 |
 | [`moe-w8a8`](cards/moe-w8a8.yaml) | moe | draft | lightop | mixed | Marlin GEMM 分量达峰值带宽的 0.8… |
 | [`mqa-logits`](cards/mqa-logits.yaml) | attention | measured | lightop | bandwidth | epilogue 跨 lane 归约换 ds_b… |
 | [`mtp-draft`](cards/mtp-draft.yaml) | sampling | draft | in-house | compute | 无实测：索引卡，实现层待按证据推进 |
