@@ -161,4 +161,21 @@ python3 loop.py -C <卡> verify --tag <id>                   # 跑 done_when；r
 > 每条挂一条 `pipeline-laws.md` 的定律。`enumerate` 会标出 `SEALED`
 > （已证伪 2 次的方向），开跑前就能看见，不必跑一次才知道被封。
 
-参考实现：`op-sparse-mla`（32 条判死 + 3 条待做 + 3 个方向，`candidates.yaml` 可直接抄 schema）。
+参考实现：`op-sparse-mla`（43 条判死 + 3 条待做 + 3 个方向，`candidates.yaml` 可直接抄 schema）。
+
+### 完整链路的示范：`cases/`
+
+[`cases/001-swiglu-fused-vs-split/`](cases/001-swiglu-fused-vs-split/) 是一次
+**从场景到结论**的完整走通，建议新任务先读它：
+
+| 环节 | 该 case 怎么做的 |
+|---|---|
+| 场景判定 | 按 `scenarios.yaml` 的 detect 判为 bandwidth-bound |
+| 取攻击面 | `enumerate --scenario bandwidth-bound` → 第 1 优先 fusion-boundary |
+| 定位 | `lightop.FuseBiasSwiGLU` + signature + 一行 smoke_test |
+| 实测 | 融合 1.5696 ms vs 分拆 3.5242 ms = 2.25x，3×MAD 显著 |
+| 分母 | 按访存比选口径：读 2 写 1 ⇒ 用 copy 峰值 1125，不用只读 1728 |
+| 结论 | 46% 达成率 ⇒ **没到顶**，下一个攻击面已列出 |
+
+里面有一条特别值得读的**踩坑记录**：用 25MB buffer 测带宽得到 4571 GB/s，
+是小 buffer 命中 L2 的假象。所有带宽数字必须用 ≥1GB buffer 实测。
