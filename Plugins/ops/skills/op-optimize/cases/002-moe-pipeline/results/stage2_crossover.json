@@ -1,0 +1,96 @@
+{
+  "case": "002-moe-pipeline",
+  "stage": 2,
+  "purpose": "融合 vs 拆分的交叉点 M*",
+  "shape": {
+    "E": 32,
+    "N": 1536,
+    "K": 2048
+  },
+  "caliber": {
+    "what": "pipeline",
+    "alloc": true,
+    "state": "hot",
+    "timer": "cuda_event",
+    "rounds": 7
+  },
+  "points": [
+    {
+      "m_per_expert": 8,
+      "split_ms": 0.2659200131893158,
+      "split_mad": 0.0004799962043762207,
+      "fused_ms": null,
+      "fused_status": "unmeasured: 无五段合一的公开入口"
+    },
+    {
+      "m_per_expert": 16,
+      "split_ms": 0.26848000288009644,
+      "split_mad": 0.0006409883499145508,
+      "fused_ms": null,
+      "fused_status": "unmeasured: 无五段合一的公开入口"
+    },
+    {
+      "m_per_expert": 32,
+      "split_ms": 0.2712000012397766,
+      "split_mad": 0.0007990002632141113,
+      "fused_ms": null,
+      "fused_status": "unmeasured: 无五段合一的公开入口"
+    },
+    {
+      "m_per_expert": 64,
+      "split_ms": 0.2897599935531616,
+      "split_mad": 0.0006409883499145508,
+      "fused_ms": null,
+      "fused_status": "unmeasured: 无五段合一的公开入口"
+    },
+    {
+      "m_per_expert": 128,
+      "split_ms": 0.32287999987602234,
+      "split_mad": 0.0011200010776519775,
+      "fused_ms": null,
+      "fused_status": "unmeasured: 无五段合一的公开入口"
+    },
+    {
+      "m_per_expert": 256,
+      "split_ms": 0.390720009803772,
+      "split_mad": 0.0008009970188140869,
+      "fused_ms": null,
+      "fused_status": "unmeasured: 无五段合一的公开入口"
+    },
+    {
+      "m_per_expert": 512,
+      "split_ms": 0.7081599831581116,
+      "split_mad": 0.0003209710121154785,
+      "fused_ms": null,
+      "fused_status": "unmeasured: 无五段合一的公开入口"
+    }
+  ],
+  "crossover": {
+    "m_star": null,
+    "status": "unmeasured",
+    "reason": "融合侧无可用的可测入口——试过三个，全部不可用",
+    "attempts": [
+      {
+        "candidate": "aiter.asm_fmoe_stage1",
+        "result": "有完整可用的 schema（out, input, gate, down, sorted_token_ids, sorted_weights, sorted_expert_ids, num_valid_ids, top_k, scale_a, scale_b, ...），但两种 dtype 都被拒：BFloat16 → 'unsupport current input type:BFloat16'；float8_e4m3fn → 'unsupport current input type:Float8_e4m3fn'",
+        "verdict": "**此卡（gfx938）上 asm 后端不可用**；源码不在包里（预编译 .so），无法确认它支持什么"
+      },
+      {
+        "candidate": "aiter.asm_fmoe_stage2",
+        "result": "同一组 asm 后端，未单独测（stage1 已不可用）",
+        "verdict": "跟随不可用"
+      },
+      {
+        "candidate": "lightop.fuse_groupgemm_permute_quant",
+        "result": "存在，但只融合 permute+quant 两段，不含 dispatch/combine/两段 GEMM",
+        "verdict": "不是五段合一，不能用作融合侧对照"
+      }
+    ],
+    "what_this_means": "M* 无法在 DCU 上测定，**不是没试，是融合侧根本没有能跑的入口**。要测 M* 必须先有可用的五段合一实现（asm 后端要在 gfx938 上编出来，或另找一个 fp8 grouped-fused-MoE 实现）。"
+  },
+  "what_we_can_say": [
+    "分段路径在 7 个 M 点上的耗时全部可测（0.2659 → 0.7082 ms，见 points）",
+    "分段路径随 M 增长的斜率明显：M/exp 从 8 到 512 耗时涨 2.66x",
+    "融合侧无可用入口 ⇒ 交叉点 M* 未测定，按纪律不插值"
+  ]
+}

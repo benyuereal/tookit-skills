@@ -149,3 +149,52 @@ bytes = 230.7 MB，grouped 带宽 720 GB/s
 
 > 「ll 路径在多少 token 以下才用」这个问题，在当前可见的 API 下**无法回答**。
 > 要回答它得先有 6D pack 实现——那是阶段 5 失败模式库里该记的一条。
+
+---
+
+## 阶段 2：融合 vs 拆分的交叉点 M* —— **未测定，但试过三个入口**
+
+```bash
+python3 stage2_crossover.py    # 见 results/stage2_crossover.json
+```
+
+### 分段路径：7 个 M 点全部可测
+
+| M/exp | 分段 median |
+|---|---|
+| 8 | 0.2659 ms |
+| 16 | 0.2685 ms |
+| 32 | 0.2712 ms |
+| 64 | 0.2898 ms |
+| 128 | 0.3229 ms |
+| 256 | 0.3907 ms |
+| 512 | 0.7082 ms |
+
+M/exp 从 8 涨到 512，耗时涨 **2.66x**——斜率明显，说明分段路径的固定开销
+在小 M 时被摊薄得不够。
+
+### 融合侧：三个候选全部不可用
+
+| 候选 | 结果 | 判定 |
+|---|---|---|
+| `aiter.asm_fmoe_stage1` | **有完整可用的 schema**（`out, input, gate, down, sorted_token_ids, sorted_weights, sorted_expert_ids, num_valid_ids, top_k, scale_a, scale_b, …`），但两种 dtype 都被拒：`BFloat16 → unsupport current input type`；`float8_e4m3fn → 同样报错` | **此卡（gfx938）上 asm 后端不可用** |
+| `aiter.asm_fmoe_stage2` | 同一组 asm 后端 | 跟随不可用 |
+| `lightop.fuse_groupgemm_permute_quant` | 存在，但只融合 permute+quant 两段 | 不是五段合一，不能当融合侧对照 |
+
+> `asm_fmoe_stage1` 的 schema 是完整的——这说明**接口设计上它就是要做
+> 五段融合的**（gate/down 两段 GEMM + 激活，一次调用）。问题不在接口，
+> 在于当前的 gfx938 构建不支持它需要的 dtype。asm 源码不在包里
+> （预编译 .so），无法进一步确认它到底支持什么。
+
+### 结论
+
+**M* 未测定，且不是「没试」而是「融合侧没有能跑的入口」。**
+
+要测 M*，必须先满足其一：
+1. asm 后端在 gfx938 上按需要的 dtype 编出来
+2. 另找一个 fp8 grouped-fused-MoE 实现
+
+在满足之前，**任何「M<M* 拆分、M>M* 融合」的说法都是编的**。
+
+这条应进阶段 5 的失败模式库（class: hard —— 不是性能问题，
+是路径根本不存在）。
