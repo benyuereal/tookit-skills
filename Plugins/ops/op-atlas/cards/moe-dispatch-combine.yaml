@@ -52,6 +52,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: all2all 换 deep-ep 的实现
+  how: 用 deep_ep 的 dispatch/combine 替代手写 all2all
+  requires: 多卡环境；deep_ep 1.1.0
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'

@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 选对 rotate_style 并合入 norm
+  how: aiter.RoPE.forward(x, freqs, rotate_style=0/1, ...)；若有前置 norm 用 fused_qk_rmsnorm_rope
+  requires: freqs 形状 [B,S,1,D/2]（实测：写成 [B,S,D/2] 会报维度错）
 surfaces:
 - layout-pack
 - fusion-boundary

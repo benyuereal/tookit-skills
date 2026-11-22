@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: torch.nn.LayerNorm 换成 lightop.LayerNorm
+  how: lightop.LayerNorm(H, eps) 替代 torch 版本，前者有融合变体
+  requires: lightop 0.6.0
 surfaces:
 - fusion-boundary
 - layout-pack

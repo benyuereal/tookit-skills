@@ -89,6 +89,11 @@ last_verdict:
   ratio: null
   conclusion: draft：选型与坑已整理，bench 与 adapter 未落地，无实测结论
   verified_on: null
+modify_path:
+  kind: source-patch
+  what: 修 deepgemm.fp8_gemm 的 CPU alpha/beta bug
+  how: patch deepgemm 包装层把 alpha/beta 从 device="cpu" 改成 device="cuda"；否则卡上调用直接抛 device 不匹配
+  requires: deepgemm 2.1.0；改的是库源码
 surfaces:
 - occupancy
 - split-k

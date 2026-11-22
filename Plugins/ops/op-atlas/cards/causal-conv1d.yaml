@@ -70,6 +70,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: torch conv1d 换专用包
+  how: causal_conv1d.causal_conv1d_fn(x, weight, bias, activation=...) 替代 F.conv1d + 手动因果掩码
+  requires: causal_conv1d 1.5.4
 surfaces:
 - pipeline-depth
 updated: '2026-11-22'

@@ -83,6 +83,11 @@ last_verdict:
   ratio: null
   conclusion: 无本算子独立实测；grouped 比稠密循环快一条来自 libraries.md，非本卡结论
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 选对 masked / contiguous / ll 三条路径
+  how: 按 token 组织方式选：未重排用 masked、已连续用 contiguous、decode 小 M 用 ll
+  requires: 权重 layout（HIPC/W6/marlin）必须与该路径匹配，错配是静默错
 surfaces:
 - table-miss
 - layout-pack

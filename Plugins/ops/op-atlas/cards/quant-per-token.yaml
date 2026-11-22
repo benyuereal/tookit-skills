@@ -54,6 +54,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡。所有 FP8 路径的前置判据都挂在这张卡上
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 激活量化与上游融合
+  how: lightop.fuse_silu_mul_clamp_quant_ep 把「激活 + per-token 量化」合成一次
+  requires: 标度粒度必须与下游 GEMM 一致
 surfaces:
 - layout-pack
 - precision-drop

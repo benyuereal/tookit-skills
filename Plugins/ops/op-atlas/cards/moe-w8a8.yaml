@@ -71,6 +71,11 @@ last_verdict:
     vs: 峰值带宽（仅 Marlin GEMM 分量）
   conclusion: Marlin GEMM 分量达峰值带宽的 0.888；整体未判；asm mode>=1000 禁用
   verified_on: '2026-10-20'
+modify_path:
+  kind: env-flag
+  what: 切 Marlin MoE GEMM 的 mode 档
+  how: 在 lightop.moe_gemm_marlin_w16a16 的 mode 参数上设 500-525（安全区）；mode>=1000 禁用
+  requires: lightop 0.6.0；mode>=1000 会串读其他 token
 surfaces:
 - table-miss
 - fusion-boundary

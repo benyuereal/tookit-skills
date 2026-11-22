@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 切 4bit 权重的精度档
+  how: 在 aiter 的 get_aiter_moe_config 里指定 W4A16 档，确认查表命中后再调 tile
+  requires: 权重的 4bit 打包格式与 kernel 期望一致
 surfaces:
 - table-miss
 - precision-drop

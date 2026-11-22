@@ -52,6 +52,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 换 grouped 路径入口
+  how: 按 token 组织方式在 m_grouped_bf16_gemm_nt_masked 与 _contiguous 之间选
+  requires: deepgemm 2.1.0
 surfaces:
 - table-miss
 - occupancy

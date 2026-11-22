@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 专家内激活换成融合实现
+  how: lightop.FuseBiasSwiGLU()(x, bias) 在专家内做 gate/up 融合
+  requires: x 已按专家分好组
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'

@@ -52,6 +52,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: source-patch
+  what: 接受判据与主模型的分布绑定
+  how: 改接受判据用主模型的实际 logits 分布，随机源固定 seed
+  requires: 无通用库；必须随模型自研
 surfaces:
 - precision-drop
 updated: '2026-11-22'

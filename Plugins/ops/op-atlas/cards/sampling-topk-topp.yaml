@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 分步采样换成融合 topk 变换
+  how: lightop.fast_topk_transform_fused 替代 sort → topk → topp 三步
+  requires: tie-break 语义固定
 surfaces:
 - precision-drop
 updated: '2026-11-22'

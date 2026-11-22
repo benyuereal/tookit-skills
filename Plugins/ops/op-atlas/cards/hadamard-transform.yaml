@@ -1,57 +1,61 @@
 id: hadamard-transform
-title: "Fast Hadamard Transform（MHC 三件之一）"
+title: Fast Hadamard Transform（MHC 三件之一）
 family: linear-attn
-math: "H_n = H_2 ⊗ H_{n/2}；蝶形变换，O(n log n)"
+math: H_n = H_2 ⊗ H_{n/2}；蝶形变换，O(n log n)
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: mhc-kernels
-    library_profile_ref: "libraries.md §11"
-    file_hint: "kernels/ 里的蝶形变换"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "MHC 三件套中的 hadamard"
-    not_for:
-      - "非 2 的幂长度"
-    pros:
-      - "与 MHC 其他两件同栈"
-      - "手写可调 radix"
-    cons:
-      - "源码树非包，需自行编译"
-    source: "references/libraries.md"
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 的蝶形表达"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要快速原型"
-    not_for:
-      - "追求极限"
-    pros:
-      - "可读可改"
-    cons:
-      - "布局税"
-    source: "references/libraries.md"
-
+- repo: mhc-kernels
+  library_profile_ref: libraries.md §11
+  file_hint: kernels/ 里的蝶形变换
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - MHC 三件套中的 hadamard
+  not_for:
+  - 非 2 的幂长度
+  pros:
+  - 与 MHC 其他两件同栈
+  - 手写可调 radix
+  cons:
+  - 源码树非包，需自行编译
+  source: references/libraries.md
+- repo: tilelang
+  library_profile_ref: libraries.md §8
+  file_hint: tilelang 的蝶形表达
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要快速原型
+  not_for:
+  - 追求极限
+  pros:
+  - 可读可改
+  cons:
+  - 布局税
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "蝶形运算，算力型；判据在指令数不在字节数"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 蝶形运算，算力型；判据在指令数不在字节数
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [cross-lane-fold, layout-pack]
-
-updated: "2026-11-22"
+modify_path:
+  kind: source-patch
+  what: 改蝶形的 radix 与 LDS 占用
+  how: 改 /workspace/mhc_kernels/kernels/ 里的 .hip 源，调 radix 与 LDS 分块
+  requires: 手写 HIP，需自行编译
+surfaces:
+- cross-lane-fold
+- layout-pack
+updated: '2026-11-22'

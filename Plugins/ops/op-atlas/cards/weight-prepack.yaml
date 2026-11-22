@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡。核心价值是提醒「漏 prepack 是静默错误」
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 用 deepgemm 的打包函数替代手写 shuffle
+  how: deepgemm.group_gemm_weight_pack(...) 或 pack_fp8_masked_weight，替代自己写 shuffle
+  requires: 目标 kernel 的 layout 已知
 surfaces:
 - layout-pack
 - table-miss

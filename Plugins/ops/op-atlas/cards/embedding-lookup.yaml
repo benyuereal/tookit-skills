@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 调 gather 的 BLOCK 与 num_warps
+  how: triton.jit 写 gather kernel 后，autotune 或手设 BLOCK_SIZE/num_warps；随机 gather 的实际上限由行激活效率决定
+  requires: triton 3.6.0；分母要用该 pattern 的 ceiling 不是流式峰值
 surfaces:
 - gather-path
 updated: '2026-11-22'

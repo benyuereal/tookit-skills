@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 反 permute 的加权求和换融合
+  how: lightop.moe_align_sum(...) 替代「gather 回原位再按 gate 加权」两步
+  requires: topk_weights 与 permuted 布局对齐
 surfaces:
 - cross-lane-fold
 - layout-pack

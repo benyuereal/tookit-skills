@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡；实现层见 op-fused-add-rmsnorm 卡
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: torch 分步换成 lightop.RMSNormAdd
+  how: lightop.RMSNormAdd(H, eps)(x, residual)，一次 kernel 完成残差加法+归一
+  requires: lightop 0.6.0
 surfaces:
 - fusion-boundary
 - layout-pack

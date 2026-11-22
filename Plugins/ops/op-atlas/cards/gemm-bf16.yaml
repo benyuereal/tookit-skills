@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 走 hipBLASLt 的算法选择
+  how: torch.mm 背后是 hipBLASLt，用 torch.backends 的 benchmark 模式允许它选算法
+  requires: 形状固定（benchmark 模式首次会扫算法）
 surfaces:
 - occupancy
 - split-k

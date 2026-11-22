@@ -54,6 +54,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 换 flash-kda 的 chunk-parallel 实现
+  how: 用 flash_kda.cp 的 chunk-parallel 布局替代逐 token 递推
+  requires: flash_kda 0.0.1
 surfaces:
 - pipeline-depth
 updated: '2026-11-22'

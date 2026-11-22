@@ -36,7 +36,9 @@ LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
 ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
-               "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer"}
+               "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer",
+               # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
+               "modify_path"}
 REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
                 "ceiling", "last_verdict", "updated"}
 ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
@@ -224,6 +226,25 @@ def validate(atlas, repo):
             err("E8", where, "family=%r 不在 %s" % (c.get("family"), sorted(FAMILIES)))
         if c.get("status") not in STATUSES:
             err("E6", where, "status=%r 非法" % c.get("status"))
+        mp = c.get("modify_path")
+        if mp is not None:
+            if not isinstance(mp, dict):
+                err("E14", where, "modify_path 必须是 mapping")
+            else:
+                extra = set(mp) - {"kind", "what", "how", "requires"}
+                if extra:
+                    err("E14", where, "modify_path 未知字段 %s" % sorted(extra))
+                if mp.get("kind") not in {"env-flag", "replace-call", "source-patch"}:
+                    err("E14", where,
+                        "modify_path.kind=%r 非法（env-flag / replace-call / source-patch）"
+                        % mp.get("kind"))
+                for f in ("what", "how"):
+                    if not str(mp.get(f) or "").strip():
+                        err("E14", where, "modify_path 缺 %s" % f)
+                if mp.get("how") and len(str(mp["how"])) < 15:
+                    err("E14", where, "modify_path.how 太短（%r 是废话，要写具体动作）"
+                        % mp.get("how"))
+
         if c.get("layer") not in LAYERS:
             err("E11", where, "layer=%r 非法或缺失（kernel / engine）" % c.get("layer"))
         if c.get("layer") == "engine":

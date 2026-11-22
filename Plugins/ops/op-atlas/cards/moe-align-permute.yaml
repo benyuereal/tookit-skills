@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: ref-heavy 通过正确性门；容差为零（纯搬运）；无性能实测
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: torch 重排换 aiter 融合
+  how: aiter.moe_align_block_size(topk_ids, num_experts, block_size, ...) 替代排序+补 padding
+  requires: padding 必须垫队尾
 surfaces:
 - layout-pack
 - gather-path

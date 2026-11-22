@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: varlen 换固定长度（消除变长调度开销）
+  how: 形状固定时用 flash_attn_func 替代 flash_attn_varlen_func，省掉 cu_seqlens 的间接寻址
+  requires: batch 内序列等长
 surfaces:
 - prefetch-depth
 - cross-lane-fold

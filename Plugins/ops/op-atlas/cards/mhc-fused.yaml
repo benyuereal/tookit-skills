@@ -53,6 +53,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 融合版 vs 分拆版二选一
+  how: 本卡存在的意义就是验证这个：跑 boltops.mhc.mhc_fused_tilelang 与分拆三步各一次再定
+  requires: 已知有融合慢 1.7x 的反例，必须先量分拆版
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'

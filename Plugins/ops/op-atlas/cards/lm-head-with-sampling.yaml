@@ -53,6 +53,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: logits 直接进 topk 不落盘
+  how: lm_head 输出直接喂 lightop.fast_topk_transform_fused，省掉 [M,128k] 的写回
+  requires: 不需要中间 logits 做别的事
 surfaces:
 - fusion-boundary
 - precision-drop

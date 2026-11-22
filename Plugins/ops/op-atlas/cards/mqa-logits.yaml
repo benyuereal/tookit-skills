@@ -59,6 +59,11 @@ last_verdict:
     vs: grouped G=3 (0.887 ms)
   conclusion: epilogue 跨 lane 归约换 ds_bpermute，逐位一致；LDS 冲突非杠杆
   verified_on: '2026-11-22'
+modify_path:
+  kind: env-flag
+  what: 切 grouped 分组调度
+  how: 设 LIGHTOP_PAGED_MQA_LOGITS_GROUP_SIZE=3（实测 grouped G=3 比 ungrouped 快 1.56x）
+  requires: lightop 的 paged_mqa_logits 入口；head_dim=128
 surfaces:
 - epilogue-fold
 - cross-row-kv-reuse

@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 改走吸收式（KV 压进 latent）
+  how: 不用完整 K/V，改调 get_mla_metadata + flash_mla_with_kvcache 的 absorb 路径
+  requires: 模型权重已按吸收式预变换
 surfaces:
 - layout-pack
 - occupancy

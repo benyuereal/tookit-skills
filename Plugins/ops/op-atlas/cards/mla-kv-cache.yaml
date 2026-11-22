@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: latent 缓存布局交给 flash_mla
+  how: 用 get_mla_metadata 计算布局，不要自己维护 latent 的 stride
+  requires: MLA 系模型
 surfaces:
 - layout-pack
 updated: '2026-11-22'

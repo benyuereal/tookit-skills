@@ -52,6 +52,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 调 sinkhorn 迭代次数
+  how: 在 boltops.mhc.hc_split_sinkhorn 的迭代参数上扫 3/4/5（默认通常 3-5）
+  requires: 迭代数与精度要求绑定
 surfaces:
 - cross-lane-fold
 updated: '2026-11-22'

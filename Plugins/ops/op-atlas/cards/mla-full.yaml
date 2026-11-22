@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 调 MLA 的 tile 调度元数据
+  how: 在 get_mla_metadata 里按实际 cache_seqlens 重算 tile_scheduler_metadata，不要复用 canonical 形状的
+  requires: 能拿到真实 cache_seqlens 分布
 surfaces:
 - occupancy
 - split-k

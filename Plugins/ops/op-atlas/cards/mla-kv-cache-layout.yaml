@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: latent 布局与 flash_mla 契约对齐
+  how: 按 get_mla_metadata 返回的 tile_scheduler_metadata 组织 cache
+  requires: 同上
 surfaces:
 - layout-pack
 updated: '2026-11-22'

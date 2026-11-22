@@ -82,6 +82,11 @@ last_verdict:
     vs: 流式峰值（mem-only 变体达成率）
   conclusion: 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REPLICATE_H 结构税
   verified_on: '2026-10-29'
+modify_path:
+  kind: env-flag
+  what: 切 tilelang 的 persistent 后端与 page 分组
+  how: 设 LIGHTOP_PAGED_MQA_LOGITS_BACKEND=1 与 LIGHTOP_PAGED_MQA_LOGITS_GROUP_SIZE=3；FP8 路径必须保持 0
+  requires: lightop 0.6.0 且非 FP8（FP8+persistent 会变慢/崩）
 surfaces:
 - gather-path
 - occupancy

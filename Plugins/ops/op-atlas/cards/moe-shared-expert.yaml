@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: gate+topk 融合，减少一次往返
+  how: lightop.moe_fuse_gate_per_gourp_topk(...) 替代「gate 矩阵乘 + topk」两步
+  requires: 共享专家与 routed 的比例已知
 surfaces:
 - fusion-boundary
 - table-miss

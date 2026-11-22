@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: torch 激活换 lightop.GNSilu
+  how: lightop.GNSilu()(x) 替代 F.gelu/geglu 的分步实现
+  requires: lightop 0.6.0
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'

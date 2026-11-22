@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 调 split-KV 的切分数
+  how: 给 flash_attn_func 的 num_splits 参数显式设值（默认自动），长 ctx 下扫 1/2/4
+  requires: flash_attn 版本支持 num_splits 参数
 surfaces:
 - occupancy
 - split-k

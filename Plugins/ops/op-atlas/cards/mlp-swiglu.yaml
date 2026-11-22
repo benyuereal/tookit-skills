@@ -52,6 +52,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 三步 torch 换成 lightop 融合
+  how: lightop.FuseBiasSwiGLU()(x, bias) 替代 (x+b) → silu → 乘 三次调用
+  requires: x 形状 [M,2H]，bias [2H]；实测融合快 2.25x
 surfaces:
 - fusion-boundary
 - precision-drop

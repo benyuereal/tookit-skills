@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: ref-heavy 通过正确性门；无性能实测；用于校准带宽判据
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: torch 分步换成 lightop 融合
+  how: RMSNormAdd(H, eps).cuda()(x, residual) 替代 x+r 后两次 torch 调用
+  requires: lightop 0.6.0；注意 inplace 参数会改写残差
 surfaces:
 - layout-pack
 - fusion-boundary

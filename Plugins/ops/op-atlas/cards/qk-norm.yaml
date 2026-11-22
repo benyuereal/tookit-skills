@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: QK-norm 与 RoPE 合并成一次调用
+  how: 用 aiter.fused_qk_rmsnorm_rope 替代「先 norm 再 rope」两次调用
+  requires: aiter 0.1.6；head_dim 与 rope 的 rot_dim 需匹配
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'

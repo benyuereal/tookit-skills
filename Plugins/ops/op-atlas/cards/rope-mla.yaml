@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: MLA 的 rope 走 flash_mla 内置路径
+  how: 不单独调 rope，交给 flash_mla_with_kvcache（MLA rope 在它内部）
+  requires: MLA 系模型
 surfaces:
 - layout-pack
 updated: '2026-11-22'

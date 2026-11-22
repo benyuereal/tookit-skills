@@ -56,6 +56,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 调块大小（块内并行 vs 块间串行）
+  how: 在 tilelang 实现里调 chunk size：块大→并行度高但串行深度增加，按序列长扫
+  requires: tilelang 0.1.12
 surfaces:
 - pipeline-depth
 - occupancy

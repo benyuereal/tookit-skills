@@ -52,6 +52,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 写入路径并入 attention 调用
+  how: 用 flash_attn_varlen_func 的 block_table 参数，省掉单独的 scatter kernel
+  requires: page 布局与 attention 的 block_table 语义一致
 surfaces:
 - layout-pack
 - gather-path

@@ -55,6 +55,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 切 fused topk 变换变体
+  how: 在 fast_topk_transform_fused 系列里选带 sparse_mask 的变体（fast_topk_transform_sparse_mask_fused）
+  requires: lightop；indices 带 -1 哨兵时必须垫队尾
 surfaces:
 - gather-path
 - precision-drop

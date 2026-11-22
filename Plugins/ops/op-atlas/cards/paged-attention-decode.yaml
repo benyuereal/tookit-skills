@@ -75,6 +75,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
+modify_path:
+  kind: replace-call
+  what: 从 flash_attn 换到 flash_mla 的 decode 路径
+  how: 把 flash_attn_varlen_func 换成 flash_mla_with_kvcache（后者专为 decode 的 paged KV 优化）
+  requires: KV 是 paged 布局且 head_dim 在 flash_mla 支持范围内
 surfaces:
 - gather-path
 - occupancy

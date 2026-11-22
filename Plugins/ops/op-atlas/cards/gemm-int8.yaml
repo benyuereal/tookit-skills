@@ -53,6 +53,11 @@ last_verdict:
   ratio: null
   conclusion: 无实测：索引卡。达成率分母须按 INT8 单独标定
   verified_on: null
+modify_path:
+  kind: env-flag
+  what: 选 W6 packed 的 layout 入口
+  how: 用 m_grouped_i8_gemm_nt_contiguous 并确保权重经 pack_w8a8_gfx936_weight_to_w6 打包
+  requires: 权重已按 W6 packed 预处理
 surfaces:
 - table-miss
 - layout-pack

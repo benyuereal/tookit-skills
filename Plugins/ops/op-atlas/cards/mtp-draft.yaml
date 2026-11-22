@@ -1,56 +1,59 @@
 id: mtp-draft
-title: "MTP 投机草稿"
+title: MTP 投机草稿
 family: sampling
-math: "draft head 逐步生成候选 token，供主模型验证"
+math: draft head 逐步生成候选 token，供主模型验证
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "draft head 前向"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "MTP 投机解码"
-    not_for:
-      - "非投机场景"
-    pros:
-      - "与主模型同栈"
-    cons:
-      - "现成库不支持：MTP 的 draft head 与主模型共享 KV 语义，没有通用库能表达这个耦合，需随模型结构自研"
-    source: "references/libraries.md"
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "小 M GEMM 路径"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "草稿 head 的 GEMM"
-    not_for:
-      - "需要完整 attention"
-    pros:
-      - "复用现有 kernel"
-    cons:
-      - "不算专用"
-    source: "references/libraries.md"
-
+- repo: in-house
+  library_profile_ref: null
+  file_hint: draft head 前向
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - MTP 投机解码
+  not_for:
+  - 非投机场景
+  pros:
+  - 与主模型同栈
+  cons:
+  - 现成库不支持：MTP 的 draft head 与主模型共享 KV 语义，没有通用库能表达这个耦合，需随模型结构自研
+  source: references/libraries.md
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: 小 M GEMM 路径
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 草稿 head 的 GEMM
+  not_for:
+  - 需要完整 attention
+  pros:
+  - 复用现有 kernel
+  cons:
+  - 不算专用
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "草稿模型与主模型必须共享 KV 语义；不共享则验证必失败"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 草稿模型与主模型必须共享 KV 语义；不共享则验证必失败
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [occupancy]
-
-updated: "2026-11-22"
+modify_path:
+  kind: source-patch
+  what: draft head 与主模型的 KV 共享
+  how: 改 draft head 的前向，使其复用主模型的 KV cache 而非自建一份
+  requires: 需改模型代码；无通用库支持
+surfaces:
+- occupancy
+updated: '2026-11-22'
