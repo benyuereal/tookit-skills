@@ -177,6 +177,31 @@
         "lightop-fused 的残差融合版实际达成率",
         "hidden 非 2 的幂时的向量化损失"
       ]
+    },
+    {
+      "name": "fused-add-rmsnorm",
+      "path": "Plugins/ops/skills/op-fused-add-rmsnorm",
+      "status": "draft",
+      "shapes": [
+        "decode-m1",
+        "decode-m32",
+        "prefill-8k",
+        "tiny"
+      ],
+      "variants": [
+        "ref-heavy",
+        "lightop-rmsnormadd",
+        "aiter-norm"
+      ],
+      "best_variant": "lightop-rmsnormadd（lightop 0.6.0 的 RMSNormAdd）",
+      "floor_status": "bandwidth_bound（未实测达成率；门已跑通）",
+      "last_verified": "2026-11-22",
+      "evidence": "op-fused-add-rmsnorm/{contract.yaml,_common.py,ledger.md}；correctness 门 PASS",
+      "open_questions": [
+        "真机 A/B 达成率",
+        "inplace=True 是否原地写残差",
+        "hidden 非 2 的幂的向量化损失"
+      ]
     }
   ]
 }

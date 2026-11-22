@@ -1,0 +1,73 @@
+# op-fused-add-rmsnorm 契约
+# 状态 draft：adapter 与门已就绪，lightop.RMSNormAdd 在本机可 import；
+# 未跑到实测是因为需要一张空闲卡做 A/B（门本身用 tiny 档可无卡验证）。
+
+op: fused-add-rmsnorm
+version: 1
+math: "y = w*((x+r)/sqrt(mean((x+r)^2,-1)+eps))；eps 在 sqrt 内"
+
+shapes:
+  x: [M, H]
+  r: [M, H]
+  weight: [H]
+  y: [M, H]
+
+dtypes:
+  x: bfloat16
+  r: bfloat16
+  weight: bfloat16
+  acc: float32
+  out: bfloat16
+
+layout_constraints:
+  - "RMSNorm 固定沿最后一维（hidden）归一；换维度就是另一个算子"
+  - "eps 加在 sqrt 内（sqrt(mean+eps)）——与 lightop.RMSNormAdd 一致"
+  - "融合残差若是原地写，输入会被改：多变体对比必须各喂独立副本"
+
+tolerance:
+  vs_fp32_ref:
+    # 实测（lightop.RMSNormAdd 0.6.0，BW1100/gfx938，M=8 H=512 bf16）：
+    #   max_abs = 1.46e-2，输出量级 ~3.36 ⇒ **相对误差中位数 1.6e-3**
+    # 这是 bf16 输出的正常舍入，不是实现错误。
+    # 教训：绝对容差在 bf16 输出上不可移植——输出量级一变，同一个 max_abs
+    # 就从「过」变成「不过」。用相对误差定容差。
+    max_abs: 5.0e-2
+    cosine: 0.9999
+    rel_median: 5.0e-3
+    note: "以 rel_median 为主判据；max_abs 只作上界兜底。实测 rel_median=1.6e-3"
+  variant_vs_variant:
+    mode: tolerance
+
+invariants:
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+  - name: residual_semantics
+    mode: tolerance
+    note: "输出必须等于 rmsnorm(x+r)，不是 rmsnorm(x)+r"
+  - name: eps_position
+    mode: tolerance
+    note: "eps 在 sqrt 内——与 lightop.RMSNormAdd 一致"
+
+gates:
+  - name: correctness
+    template: correctness
+    required: true
+  - name: invariants
+    template: invariants
+    required: true
+  - name: perf
+    script: bench/bench.py
+    required: false
+    require: "median_ms <= baseline_ms * 1.02"
+    repeats: 3
+    skip_reason: "本卡的性能判据是带宽达成率，不是相对基线；bench 待接真机"
+
+floor:
+  metric: hbm_bandwidth
+  peak: 1724
+  unit: GB/s
+  basis: "融合后读 x + 读 r + 读 w + 写 y = 3*M*H*2B。字节数完全确定，分母无争议"
+  source: "op-roofline/constants.yaml:conflicts:peak-bw-definition；一律用实测 1724，不用标称 1100"
+  status: measured
+  at_floor_threshold: 0.85

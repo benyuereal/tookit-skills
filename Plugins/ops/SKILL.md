@@ -158,6 +158,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-gemm-fp8` | `draft` | FP8 GEMM（batched / 分组）：tilelang / hipBLASLt 两条路、gfx938 FP8/BF8 限制 |
 | `op-moe-topk-gating` | `draft` | **MoE 第 2 段**：gate→topk→归一化。索引是离散量必须逐位一致；tie-break 需固定 |
 | `op-moe-align-permute` | `draft` | **MoE 第 3 段**：align_block_size + permute。`-1` 只能垫队尾，前置会让输出恒为 0 |
+| `op-fused-add-rmsnorm` | `draft` | 残差 + RMSNorm 融合：**校准件**，字节数完全确定；用 lightop.RMSNormAdd（已跑通门禁） |
 | `op-rmsnorm-fused` | `draft` | 融合 RMSNorm：最典型的 bandwidth-bound，**最适合用来校准带宽判据** |
 
 ## 六、数据分层（红线，必须遵守）

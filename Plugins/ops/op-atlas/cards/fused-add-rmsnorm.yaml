@@ -1,0 +1,59 @@
+id: fused-add-rmsnorm
+title: "残差 + RMSNorm 融合（fused_add_rmsnorm）"
+family: norm
+math: "y = w*((x+r)/sqrt(mean((x+r)^2, -1)+eps))；残差先加再归一"
+status: draft
+layer: kernel
+op_card: Plugins/ops/skills/op-fused-add-rmsnorm
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "lightop.RMSNormAdd（同族：RMSNorm / RMSNormAddDropout / RMSNormAddDropoutBias）"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要融合残差的 decoder 前 norm（逐层必经）"
+      - "dropout 也要融合的训练路径（RMSNormAddDropout）"
+    not_for:
+      - "单条无链算子（融合没有可省的往返）"
+      - "需要 eps 位置与参考实现严格一致时先核对（RMSNormAdd 的 eps 在 sqrt 内）"
+    pros:
+      - "省一次 HBM 往返（3*M*H*2B vs 4*M*H*2B）"
+      - "同族覆盖 dropout / bias 变体，不必自研"
+    cons:
+      - "原地写残差的变体会污染多变体对比，每个变体须喂独立副本"
+    source: "references/libraries.md"
+  - repo: aiter
+    library_profile_ref: "libraries.md §4"
+    file_hint: "aiter 的 norm 族（非融合对照）"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "不融合残差的基线对照"
+    not_for:
+      - "需要融合残差时（那是 lightop.RMSNormAdd 的场景）"
+    pros:
+      - "统一 API，便于与 RoPE 串联（fused_qk_rmsnorm_rope）"
+    cons:
+      - "不融合残差，字节数比融合版多一次往返"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: roofline_model
+  ref: "Plugins/ops/skills/op-fused-add-rmsnorm/contract.yaml"
+  bound: bandwidth
+  note: "字节数完全确定（融合后 3*M*H*2B），分母无争议，是校准带宽判据的载体"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡；实现层见 op-fused-add-rmsnorm 卡"
+  verified_on: null
+
+surfaces: [fusion-boundary, layout-pack, occupancy]
+
+updated: "2026-11-22"
