@@ -168,10 +168,11 @@ def main():
     const = _load_constants()
     clock_cfg = _num(const.get("compute", {}).get("clock_ghz"), 1.15)
     bw = _num(const.get("memory", {}).get("stream_read_peak"), 1724)
+    mma_peak = _num(const.get("compute", {}).get("mma_issue_peak"), 31.6)
     model = _load_model(a.op)
 
     # --- 时钟口径（D12）----------------------------------------------------
-    # 算力地板 = MMAs / (19.7 条/cyc × sclk)。sclk 是唯一一个会在两次测量之间
+    # 算力地板 = MMAs / (31.6 条/cyc × sclk)。sclk 是唯一一个会在两次测量之间
     # 自己变的常数（DPM 档位，未锁频），不显式钉住就可能把「算力受限」判成「内存受限」。
     clock = a.clock_ghz if a.clock_ghz else clock_cfg
     clock_note = []
@@ -235,7 +236,7 @@ def main():
     print()
     print("  内存地板 %8.1f µs  ( %.1f MB / 峰值 %.0f GB/s )" % (r["mem_us"], r["kv_mb"], bw))
     print("  算力地板 %8.1f µs  ( %.2f M 条 / %.1f MFMA/cyc @ %.2f GHz )"
-          % (r["mma_us"], r["mmas"] / 1e6, 19.7, clock))
+          % (r["mma_us"], r["mmas"] / 1e6, mma_peak, clock))
     print()
     # 时钟口径：写在结论前面，因为它能改变结论本身
     if probed and abs(probed - clock) / clock > 0.10:

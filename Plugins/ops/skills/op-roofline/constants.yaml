@@ -41,12 +41,37 @@ compute:
     shape: [16, 16, 16]
     flops: 8192
     status: measured
+  bf16_gemm_peak_tf:
+    value: 310
+    unit: TFLOPS
+    status: measured
+    at_sclk_mhz: 1200
+    verified_on: 2026-11-23
+    source: >
+      本机 hipBLASLt 大 GEMM 实测：N=6144 bf16 1.493 ms = 310.6 TF，fp16 同形状 312.4 TF
+      （两条独立库路径吻合，比值 1.006）。20 s 持续加热后掉到 273.9 TF（sclk 仍 1200 MHz）。
+      扫描见 Plugins/ops/skills/op-roofline/results/bf16-peak.json，
+      复跑用 tools/calibrate_bf16_peak.py。
+    note: >
+      **达成率的分母一律用这个实测值**，口径与带宽一致（1724 实测 vs 1100 标称）。
+      峰值随 sclk 线性变：600 MHz 减半。跨次比较必须同时记 sclk。
+      小 N 不能当峰值——N=1024 只有 41 TF（固定开销/块数不足），N=2048 只有 178 TF。
   mma_issue_peak:
-    value: 19.7
+    value: 31.6
     unit: "条 MFMA(16x16x16 bf16)/cycle（全 GPU）"
     status: derived
-    source: "2048^3 bf16 matmul 实测 217 TF ≈ 88% 峰值反推，且反代回该 matmul 得 88%，自洽"
-    note: "用来判「谁被算力卡住」；单算子占用率 80%+ 才算。本项目稀疏 MLA 只有 18~38%。"
+    verified_on: 2026-11-23
+    source: >
+      由上面的实测峰值反解：310.6 TF / (8192 flop × 1200 MHz) = 31.6 条/cycle，
+      即 0.49 条/CU/cycle（64 CU）。fp16 独立测得 312 TF，反解 31.8，吻合。
+    note: >
+      用来判「谁被算力卡住」；单算子占用率 80%+ 才算。本项目稀疏 MLA 只有 11~24%。
+    history: >
+      ⚠️ 2026-11-23 更正：旧值 19.7 条/cycle（声称由「2048^3 实测 217 TF ≈ 88% 峰值」反推）
+      是错的。两个毛病：①2048³ 只有 0.097 ms，固定开销占比大，根本不能代表峰值；
+      ②按 19.7 反推的峰值 185 TF **低于同机实测的 310 TF**——实测超过声称的峰值，
+      说明常数错而不是测量错。后果是所有 bf16 算力达成率被高估 ~1.7×
+      （例：MoE grouped GEMM 原本记 0.43，实际 0.26）。
   clock_ghz:
     value: 1.15
     unit: GHz
@@ -60,8 +85,9 @@ compute:
     status: measured
     source: "本机 fp8 GEMM 实测 479 TF = 89% 达成，反推峰值 540 TF（kb: qwen38-prefill-floor）"
     note: >
-      **fp8 与 bf16 的峰值不可混用**：bf16 反推峰值 ≈185 TF（19.7 MFMA/cyc @1.15GHz），
-      fp8 实测可达 540 TF ≈ 2.9×。用错分母会把「还有 4× 空间」判成「已经到顶」。
+      **fp8 与 bf16 的峰值不可混用**：bf16 实测峰值 310 TF（N=6144 hipBLASLt，sclk 1200 MHz），
+      fp8 实测 540 TF ≈ 1.7×。用错分母会把「还有 4× 空间」判成「已经到顶」，
+      或者反过来把「已经到顶」判成「还有空间」。
       MMA 形状 16x16x16 的常数只对 bf16 成立，fp8 的发射率**尚未直接标定**，此处只用实测整体峰值。
 
 memory:

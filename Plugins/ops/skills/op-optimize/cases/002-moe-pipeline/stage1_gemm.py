@@ -50,8 +50,12 @@ def main():
     print("grouped : %.4f ms  MAD=%.4f  %.1f TFLOPS" % (g, gm, flops / (g * 1e-3) / 1e12))
     print("逐专家  : %.4f ms  MAD=%.4f  %.1f TFLOPS" % (l, lm, flops / (l * 1e-3) / 1e12))
     print("ratio   : %.2fx  显著=%s" % (l / g, abs(l - g) > 3 * max(gm, lm)))
-    print("达成率  : %.0f%%（地板 %.4f ms）" % (100 * (flops / 185e12 * 1e3) / g,
-                                              flops / 185e12 * 1e3))
+    # 分母用本机实测 bf16 峰值（constants.yaml:compute.bf16_gemm_peak_tf）。
+    # 旧版写 185e12 是「由 19.7 条 MFMA/cyc 反推」的值，2026-11-23 实测证明它低了 1.7×
+    # （同机 hipBLASLt 大 GEMM 310 TF）。见 op-roofline/tools/calibrate_bf16_peak.py。
+    peak = 310e12
+    print("达成率  : %.0f%%（地板 %.4f ms，分母 %.0f TF 实测）"
+          % (100 * (flops / peak * 1e3) / g, flops / peak * 1e3, peak / 1e12))
     return 0
 
 

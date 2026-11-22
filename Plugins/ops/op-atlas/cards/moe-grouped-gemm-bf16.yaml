@@ -51,7 +51,7 @@ last_verdict:
   kb_path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/README.md
   ratio:
     value: 80.1
-    vs: BF16 算力 TFLOPS（相对 bf16 峰值 185 为 0.43）
+    vs: BF16 算力 TFLOPS（相对本机实测峰值 310 为 0.26）
     scope:
       cards: 1
       in_len: M/exp=128 K=2048

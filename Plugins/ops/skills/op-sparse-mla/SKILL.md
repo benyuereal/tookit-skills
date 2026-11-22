@@ -105,7 +105,7 @@ GLM5.3-Flash（H=64 / d_qk=512 / topk=2048，有档位）与 DeepSeek V4.1 Flash
 - 改 kernel 提重叠用 `bench/prefetch.py`（下一块 gather 提前到本次 GEMM 之前，寄存器当预取缓冲）：快 5~6% 且**逐位一致**。**不要把 spilt3/tail 搬进 shared 一起预取**——它们是寄存器直喂 MMA，搬进 shared 会慢 1.7×（LDS 流水被压满）。
 - **判「慢在哪个单元」用硬件计数器**（`bench/pmc_collect.py` 跑，解析照 `op-profiling/SKILL.md §六` 的参考实现自己算；`hipprof --pmc --pmc-type 3`）。
   四个判据，**比值比绝对值稳，且必须用同一形状三方对照（本实现 / 对手实现 / 一个已知高效的 matmul）**：
-  - **算力**：`MFMA 条数 = FLOPs / 8192`（bf16 16×16×16；gfx938 实测，其他 gfx 未验证），发射上限 **19.7 条/cycle 全 GPU**（2048³ matmul 标定，反算它自己恰得 88% 占用率，与 TF 实测吻合）。占用率 80%+ 才算被算力卡住；本算子只有 18~38%，**从来不是 GEMM 慢**。
+  - **算力**：`MFMA 条数 = FLOPs / 8192`（bf16 16×16×16；gfx938 实测，其他 gfx 未验证），发射上限 **31.6 条/cycle 全 GPU**（= 实测 310 TF ÷ (8192 × 1200 MHz)；2026-11-23 由 hipBLASLt 大 GEMM 标定，见 `op-roofline/tools/calibrate_bf16_peak.py`）。占用率 80%+ 才算被算力卡住；本算子只有 11~24%，**从来不是 GEMM 慢**。
   - **内存**：**DRAM 读字节 = (TCC_HIT+TCC_MISS 的 miss 项)×128B**，要同时看 `TCP_TCP_TA_DATA_STALL`（等数据）与池子敏感性（`--mode workset`）。三项都指向「不缺内存」才算排除。
   - **片上开销**：看两个比值 **`(SQ_INSTS_VALU − MFMA) / MFMA`** 和 **`SQ_INSTS_LDS / MFMA`**（跨形状可比）。调优 matmul 0.23 / 0.25，flash_mla 0.73 / 0.53，本实现 **3.11 / 1.67** ⇒ 差距在「每条 MMA 配多少搬运指令」。
   - **别把 `SQ_LDS_BANK_CONFLICT` 当优化目标**：厂商调优 matmul 自己有 13% 的冲突占用率照样跑到 88% 峰值，本实现只有 10%，比它还低。

@@ -10,7 +10,7 @@
 
 三个地板：
   内存地板 = 字节 / 实测流式峰值带宽
-  算力地板 = MMAs / (19.7 条/cycle × 时钟)
+  算力地板 = MMAs / (31.6 条/cycle × 时钟)
   并发上限 = 每 CU 驻留 CTA 数 × CU 数 × 每 CTA 的 wave 数（决定能有多少个独立依赖链同时在飞）
 """
 
@@ -39,7 +39,11 @@ def _cu_count(device=None):
     return CU_FALLBACK
 
 
-MMA_PEAK_PER_CYCLE = 19.7
+MMA_PEAK_PER_CYCLE = 31.6   # constants.yaml:compute.mma_issue_peak
+MMA_PEAK_SOURCE = "constants.yaml:compute.mma_issue_peak（由实测 310 TF @1200MHz 反解，2026-11-23）"
+# 历史：旧值 19.7 由「2048^3 实测 217 TF = 88% 峰值」反推，两头都错——
+# 2048³ 只要 0.097 ms，固定开销占比大，不能当峰值；按它反推的 185 TF 低于同机实测 310 TF。
+# 后果是 bf16 达成率被高估 ~1.7×。见 constants.yaml 的 history 段。
 CU = _cu_count()
 # 每 CU 的 VGPR 文件（32-bit 寄存器数）。本项目所有 kernel 都用
 # `-mllvm=-support-768-vgprs=true` 编译，故为 768 模式 = 4 SIMD × 64 lane × 768 = 196608；
