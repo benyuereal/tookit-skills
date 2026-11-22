@@ -1,0 +1,66 @@
+{
+  "case": "002-moe-pipeline",
+  "stage": "2b",
+  "purpose": "融合三级阶梯的拐点（可执行版 M*）",
+  "ladder": {
+    "L0": "全拆分：手工 permute → deepgemm grouped → swiglu",
+    "L1": "部分融合：lightop.fuse_groupgemm_permute_quant（topk+permute+quant 融）",
+    "L2": "全融合：asm_fmoe_a8 —— 不可用（failure-modes 第 1 条 hard）"
+  },
+  "caliber": {
+    "what": "pipeline",
+    "alloc": true,
+    "state": "hot",
+    "timer": "cuda_event",
+    "rounds": 9
+  },
+  "shape": {
+    "E": 32,
+    "H": 2048,
+    "N": 1536,
+    "K": 2048,
+    "dtype": "bfloat16"
+  },
+  "points": [
+    {
+      "m_per_expert": 16,
+      "l0_split_ms": 0.3427180051803589,
+      "l1_partial_ms": 0.2014400064945221,
+      "ratio_l1_over_l0": 0.588,
+      "faster": "L1 部分融合"
+    },
+    {
+      "m_per_expert": 32,
+      "l0_split_ms": 0.3375999927520752,
+      "l1_partial_ms": 0.27823999524116516,
+      "ratio_l1_over_l0": 0.824,
+      "faster": "L1 部分融合"
+    },
+    {
+      "m_per_expert": 64,
+      "l0_split_ms": 0.36607998609542847,
+      "l1_partial_ms": 0.45343899726867676,
+      "ratio_l1_over_l0": 1.239,
+      "faster": "L0 全拆分"
+    },
+    {
+      "m_per_expert": 128,
+      "l0_split_ms": 0.4087980091571808,
+      "l1_partial_ms": 0.8342400193214417,
+      "ratio_l1_over_l0": 2.041,
+      "faster": "L0 全拆分"
+    },
+    {
+      "m_per_expert": 256,
+      "l0_split_ms": 0.4503990113735199,
+      "l1_partial_ms": 1.6758389472961426,
+      "ratio_l1_over_l0": 3.721,
+      "faster": "L0 全拆分"
+    }
+  ],
+  "crossover_ms_per_expert": [
+    32,
+    64
+  ],
+  "conclusion": "M/exp < 64 用 L1 部分融合；M/exp > 32 用 L0 全拆分。"
+}
