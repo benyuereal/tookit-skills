@@ -24,6 +24,14 @@ version: 1
 #   machine_balance_point : float，机器平衡点（constants.yaml 的 peak_tf/peak_bw）
 #   time_scales_with_M    : bool，M 变化时 kernel 时间是否显著变化（需实测填入）
 #
+# engine_ref：指向 engine 层的结论卡。**不是所有场景都有**——只有涉及
+# pipeline 级决策（多段下发、融合边界）的场景才填。它的作用是把
+# docs/ENGINE.md 的结论接到场景表上，让「场景驱动」真的闭环，
+# 而不是让人自己去翻文档。
+#
+# 注意：engine_ref 指向的卡是 layer: engine，其 ratio 带 scope 标明是
+# engine 级数字——不要把它当单算子结论引用。
+#
 # 为什么需要它：detect 是自然语言，只能靠模型自述归场景；
 # detect_expr 可以被 loop.py 求值，让「场景驱动」变成可机检的。
 
@@ -46,6 +54,11 @@ scenarios:
       - id: layout-pack
         why: "小 M 时一次布局转换的固定开销占比被放大"
         check: "看变体输入与生产输出的 layout 是否一致"
+    engine_ref:
+      card: moe-pipeline-fusion
+      applies_when: "算子是 MoE pipeline（不是单个 kernel）时"
+      decision: "M/exp < 32 ⇒ 用 L1 部分融合（fuse_groupgemm_permute_quant）"
+      why: "小 M 时 permute/quant 的中间落盘占比高，融掉划得来"
     dead_ends:
       - "调 tile 尺寸：小 M 下 tile 再大也是浪费（padding 占比高）"
       - "split-K：M 已经很小，再切只会增加 combine 开销"
@@ -69,6 +82,11 @@ scenarios:
       - id: prefetch-depth
         why: "只有在 load-only 还没到峰值时才有意义"
         check: "先跑 load-only 消融确认；2-stage 双缓冲可能把 occupancy 减半"
+    engine_ref:
+      card: moe-pipeline-fusion
+      applies_when: "算子是 MoE pipeline 且 M/exp > 64 时"
+      decision: "用 L0 全拆分（permute → grouped GEMM → swiglu），不要融合"
+      why: "大 M 时 GEMM 主导，融合的固定开销被摊薄但收益归零，实测 M/exp=256 时融合慢 3.72x"
     dead_ends:
       - "盲加预取深度：大 M 时 occupancy 已经被压到很低，加 buffer 更糟"
       - "换更小的 tile 求高 occupancy：大 M 上会牺牲复用"
@@ -151,6 +169,11 @@ scenarios:
       - id: split-k
         why: "K 维并行能提升 MMA 发射密度"
         check: "扫 s=1,2,4,8"
+    engine_ref:
+      card: moe-pipeline-fusion
+      applies_when: "MoE pipeline 且 M/exp ∈ [32, 64] 时"
+      decision: "两个端点各测一次再定，不要插值"
+      why: "交叉区间的两侧耗时接近，插值会得出错误结论"
     dead_ends:
       - "减字节：数据供给已经不是瓶颈"
       - "加预取：同理，没在等数据"

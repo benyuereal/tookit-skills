@@ -109,6 +109,35 @@ class TestScenarios(unittest.TestCase):
                            % (s.get("id"), type(e).__name__, e))
         self.assertEqual(bad, [], "\n".join(bad))
 
+    def test_engine_ref_points_to_a_real_engine_card(self):
+        """engine_ref 必须指向真实存在的 layer: engine 卡。
+
+        为什么守这条：engine_ref 是把 docs/ENGINE.md 的结论接进场景表的桥。
+        指向一个不存在的卡，场景表就会给出一条无法追溯的「决策」——
+        比没有更糟，因为读者会以为背后有实测支撑。
+        """
+        import yaml as _yaml
+        cards_dir = REPO / "Plugins/ops/op-atlas/cards"
+        engine_cards = {}
+        for cp in cards_dir.glob("*.yaml"):
+            cd = _yaml.safe_load(cp.read_text(encoding="utf-8")) or {}
+            if cd.get("layer") == "engine":
+                engine_cards[cd.get("id") or cp.stem] = cd
+
+        bad = []
+        for s in self.data.get("scenarios") or []:
+            er = s.get("engine_ref")
+            if not er:
+                continue
+            card = er.get("card")
+            if card not in engine_cards:
+                bad.append("%s 的 engine_ref.card=%r 不是真实的 engine 卡（现有 %s）"
+                           % (s.get("id"), card, sorted(engine_cards)))
+            for f in ("applies_when", "decision"):
+                if not er.get(f):
+                    bad.append("%s 的 engine_ref 缺 %s" % (s.get("id"), f))
+        self.assertEqual(bad, [], "\n".join(bad))
+
     def test_boundaries_document_conflicts(self):
         """场景可能同时匹配；必须有冲突规则，否则攻击面优先序会用反。"""
         bs = self.data.get("boundaries") or []

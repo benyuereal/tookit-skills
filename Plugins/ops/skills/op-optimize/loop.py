@@ -580,6 +580,19 @@ def _enumerate_by_scenario(a):
         print(_c(line, WARN) if state == "SEALED" else line)
         if state == "SEALED":
             print("     └ 已封（证伪 %d 次）——本场景跳过它" % info["refutes"])
+    er = s.get("engine_ref")
+    if er:
+        # engine 层结论：pipeline 级决策，不是单算子结论。
+        # 指向 op-atlas/cards/<card>.yaml，那里有完整 scope。
+        print("\n适用本场景的 engine 层结论（layer: engine，非单算子）：")
+        print("  卡       %s（op-atlas/cards/%s.yaml）" % (er.get("card"), er.get("card")))
+        if er.get("applies_when"):
+            print("  适用条件 %s" % er["applies_when"])
+        print("  决策     %s" % er.get("decision", ""))
+        if er.get("why"):
+            print("  理由     %s" % er["why"])
+        print("  注意     engine 级数字带 scope，不要当单算子结论引用")
+
     if s.get("dead_ends"):
         print("\n本场景的已知死路（先排掉，别试）：")
         for d in s["dead_ends"]:
