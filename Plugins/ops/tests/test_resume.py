@@ -85,8 +85,9 @@ class TestResume(unittest.TestCase):
             "refuted: []\n")
         d = self._data()
         self.assertEqual(d["next"], [])
-        self.assertEqual(len(d["blocked"]), 1)
-        self.assertIn("exhausted", d["blocked"][0]["reason"])
+        dir_blocked = [b for b in d["blocked"] if b["tag"] == "c1"]
+        self.assertEqual(len(dir_blocked), 1)
+        self.assertIn("exhausted", dir_blocked[0]["reason"])
 
     def test_claimed_candidate_is_blocked(self):
         self._write(
@@ -100,7 +101,9 @@ class TestResume(unittest.TestCase):
             json.dumps({"worker": "w2", "pid": 123}), encoding="utf-8")
         d = self._data()
         self.assertEqual(d["next"], [])
-        self.assertIn("w2", d["blocked"][0]["reason"])
+        claim_blocked = [b for b in d["blocked"] if b["tag"] == "c1"]
+        self.assertEqual(len(claim_blocked), 1)
+        self.assertIn("w2", claim_blocked[0]["reason"])
 
     def test_held_candidate_is_reported_separately(self):
         self._write(
@@ -148,6 +151,37 @@ class TestResume(unittest.TestCase):
         self._write("directions: []\ncandidates: []\nrefuted: []\n")
         out = self._run(as_json=False)
         self.assertIn("enumerate --new", out)
+
+
+    def test_missing_bench_adapter_is_flagged(self):
+        """冷启动最伤人的体验是「照着提示跑，立刻被拒」。
+
+        resume 建议的 run 命令依赖卡内 A/B 适配器；缺了就明确标出来，
+        不要给一条注定失败的命令。
+        """
+        self._write(
+            "directions:\n"
+            "  - {id: occupancy, statement: t, status: open, refutes: 0}\n"
+            "candidates:\n"
+            "  - {id: c1, direction: occupancy, status: pending}\n"
+            "refuted: []\n")
+        d = self._data()
+        self.assertFalse(d["bench_ready"])
+        self.assertTrue(any("ab.py" in b["reason"] for b in d["blocked"]))
+
+    def test_present_bench_adapter_clears_the_flag(self):
+        self._write(
+            "directions:\n"
+            "  - {id: occupancy, statement: t, status: open, refutes: 0}\n"
+            "candidates:\n"
+            "  - {id: c1, direction: occupancy, status: pending}\n"
+            "refuted: []\n")
+        (self.card / "bench").mkdir(exist_ok=True)
+        (self.card / "bench" / "ab.py").write_text("# stub\n", encoding="utf-8")
+        d = self._data()
+        self.assertTrue(d["bench_ready"])
+        self.assertFalse(any("ab.py" in b["reason"] for b in d["blocked"]))
+
 
 
 if __name__ == "__main__":

@@ -481,31 +481,46 @@ def cmd_resume(a):
                     "priority": c.get("priority"), "status": "open"})
 
     nxt.sort(key=lambda x: (x.get("priority") is None, x.get("priority") or 0, x["tag"]))
+
+    # 前置检查：run 需要卡内 A/B 适配器。缺了就别建议一条注定失败的命令——
+    # 冷启动最伤人的体验就是「照着提示跑，立刻被拒」。
+    defaults = cands.get("defaults") or {}
+    bench_rel = defaults.get("bench", "bench/ab.py")
+    bench_ok = (card / bench_rel).exists()
+    if not bench_ok:
+        blocked.append({"tag": "(全部)", "reason": "缺 A/B 适配器 %s —— 先补齐再跑"
+                        % bench_rel})
+
     counts = {"pending": len(pending), "refuted": len(cands["refuted"]),
               "next": len(nxt), "blocked": len(blocked), "held": len(held)}
 
     if a.json:
         print(json.dumps({"next": nxt, "blocked": blocked, "held": held,
+                          "bench_ready": bench_ok,
                           "counts": counts}, ensure_ascii=False, indent=2))
         return 0
 
     print("下一个该跑谁（全部从落盘状态算出，不依赖记忆）\n")
     if nxt:
-        print("可跑 %d 条：" % len(nxt))
+        print("可跑 %d 条%s：" % (len(nxt), "" if bench_ok else "（但当前跑不了，见下）"))
         for x in nxt:
             law = x.get("law") or ("(算子特有方向，无定律)" if not x["in_table"] else "-")
             print("  %-22s direction=%-24s law=%s"
                   % (x["tag"], x["surface"] or "(未声明)", law))
-        print("\n  → python3 loop.py -C %s run %s" % (a.card.name, nxt[0]["tag"]))
+        if bench_ok:
+            print("\n  → python3 loop.py -C %s run %s" % (a.card.name, nxt[0]["tag"]))
+        else:
+            print("\n  ✗ 先补 %s 才能跑（当前卡片没有 A/B 适配器）" % bench_rel)
     else:
         print(_c("没有可跑的候选。", WARN))
         if not pending:
             print("  candidates.yaml 里没有 pending 候选 —— 用 enumerate --new 生成方向片段。")
         print("  → python3 loop.py -C %s enumerate --new" % a.card.name)
 
-    if blocked:
-        print("\n不该跑 %d 条：" % len(blocked))
-        for x in blocked:
+    real_blocked = [x for x in blocked if x["tag"] != "(全部)"]
+    if real_blocked:
+        print("\n不该跑 %d 条：" % len(real_blocked))
+        for x in real_blocked:
             print("  %-22s %s" % (x["tag"], x["reason"]))
     if held:
         print("\n跑过但不够格 %d 条（补证据，不是重跑）：" % len(held))
