@@ -74,3 +74,37 @@ class TestAtlasContentQuality(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNoDuplicateCards(unittest.TestCase):
+    """索引卡的唯一性守卫。
+
+    本轮反复出现「同一个算子建了两张卡」：mqa-logits-grouped / mqa-logits、
+    embedding-lookup-large-vocab / embedding-lookup、
+    fused-add-rmsnorm / rmsnorm-fused。
+    两张卡描述同一算子时，检索会返回两个可能矛盾的答案——
+    索引层的价值在**唯一入口**，不在条目数量。
+    """
+
+    def test_no_two_cards_share_math_signature(self):
+        import re
+        sig = {}
+        for p in sorted(CARDS.glob("*.yaml")):
+            t = p.read_text(encoding="utf-8")
+            m = re.search(r'(?m)^math:\s*"(.+)"', t)
+            if not m:
+                continue
+            key = re.sub(r"\s+", "", m.group(1).lower())[:40]
+            sig.setdefault(key, []).append(p.stem)
+        dups = [v for v in sig.values() if len(v) > 1]
+        self.assertEqual(dups, [],
+                         "以下卡片描述同一个算子（math 签名相同），应合并而非并存：%s" % dups)
+
+    def test_card_ids_are_unique(self):
+        import re
+        ids = []
+        for p in sorted(CARDS.glob("*.yaml")):
+            m = re.search(r"(?m)^id:\s*(\S+)", p.read_text(encoding="utf-8"))
+            if m:
+                ids.append(m.group(1))
+        self.assertEqual(len(ids), len(set(ids)), "卡片 id 有重复")

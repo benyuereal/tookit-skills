@@ -14,6 +14,7 @@ impls:
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
       - "需要融合残差（省一次 HBM 往返）"
+      - "绝大多数 decoder（残差 + norm 是逐层必经）"
     not_for:
       - "单条无链算子（融合没有可省的往返）"
     pros:

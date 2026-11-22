@@ -21,7 +21,6 @@
 | [`chunked-scan`](cards/chunked-scan.yaml) | linear-attn | draft | TileKernels | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`embedding-lookup`](cards/embedding-lookup.yaml) | memory | draft | in-house | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`flash-attention-fwd`](cards/flash-attention-fwd.yaml) | attention | draft | flash-attn | mixed | 无实测：索引卡，实现层待按证据推进 |
-| [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | TileKernels | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | draft | hipBLASLt | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | draft | tilelang-hygon | compute | draft：选型与坑已整理，bench 与 adap… |
