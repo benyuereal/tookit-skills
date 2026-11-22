@@ -16,6 +16,8 @@ impls:
       - "192x32K decode"
       - "需要 grouped 跨行 KV 复用"
     not_for:
+      - "16-row pooled cache 形状（persistent 后端在此形状直接 RuntimeError）"
+      - "FP8 + persistent（scale 广播打破驻留假设）"
       - "FP8 + persistent（RuntimeError）"
     pros:
       - "跨行共享 KV page"

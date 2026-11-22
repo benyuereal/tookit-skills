@@ -13,3 +13,9 @@
 |---|---|---|---|---|
 | `lightop` 融合族 | kernel | 需要融合 | 单条无链 | `libraries.md §3` |
 | `in-house` | kernel | 特殊布局 | 常规形状 | 本仓实测 |
+
+## 本族不建卡的条目
+
+| 条目 | 为什么不建卡 | 归处 |
+|---|---|---|
+| `gqa_repeat_kv` | 这段的唯一正确做法是**不做**——用 stride/索引访问代替物理复制。建卡会让人以为有优化空间，而实际结论是「删掉它」 | 写进 `attention` 家族的判据 + `paged-attention-decode` 卡的 `not_for` |
