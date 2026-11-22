@@ -1,0 +1,45 @@
+# op-gemm-fp8 实现变体矩阵。状态取自 registry.json 与 SKILL.md。
+
+variants:
+  - name: hipblaslt
+    source: "torch._scaled_mm → hipBLASLt"
+    status: unavailable
+    applies_to: []
+    constraints:
+      - "gfx938 上无 FP8 方案（实测）"
+    mutates_inputs: false
+
+  - name: tilelang
+    source: "TileLang DSL（示例 gemm_fp8）"
+    status: primary
+    applies_to: [decode-m32, prefill-8k]
+    constraints:
+      - "必须显式 warp_size=64、target=hip"
+      - "k_pack=2 为 CDNA 系取向"
+      - "bf16 用不了 MLS 路径"
+    mutates_inputs: false
+
+  - name: tilelang-rs
+    source: "TileLang reshuffle 变体"
+    status: unevaluated
+    applies_to: [prefill-8k]
+    constraints:
+      - "需要 preshuffle 预处理，多一份布局转换"
+    mutates_inputs: false
+
+  - name: aiter
+    source: "aiter-das GEMM 入口"
+    status: fallback
+    applies_to: [decode-m32, prefill-8k]
+    constraints:
+      - "查表命中才可用；未命中会降级"
+    mutates_inputs: false
+
+  - name: hand-hip
+    source: "手写 HIP + MFMA intrinsic"
+    status: structural
+    applies_to: [decode-m32]
+    constraints:
+      - "裸 cvt_pk_fp8_f32 需 fp8-insts，gfx938 不提供；须用 cast_to_f8/cast_from_f8"
+      - "ROCm 上 fp8 是 fnuz 语义（gfx950 除外），不能照搬 NVIDIA e4m3"
+    mutates_inputs: false

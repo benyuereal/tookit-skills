@@ -1,0 +1,23 @@
+# op-gemm-fp8 形状档位。
+# M 决定瓶颈类型：M<=32 带宽型，M>=128 算力型；两者不可用同一地板判据。
+
+tiny:
+  params:
+    M: 4
+    N: 512
+    K: 512
+  note: "只做正确性门的自检；绝不用于 bench 或达成率"
+
+decode-m32:
+  params:
+    M: 32
+    N: 4096
+    K: 4096
+  note: "带宽型：权重读取主导，杠杆是字节流与 CTA 数"
+
+prefill-8k:
+  params:
+    M: 8192
+    N: 4096
+    K: 4096
+  note: "算力型：杠杆是 MMAC 发射率与每 barrier 工作量"

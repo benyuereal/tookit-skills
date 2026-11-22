@@ -1,0 +1,41 @@
+# op-moe-w8a8 形状档位。
+# M 是决定性变量：decode(M=1~64) 与 prefill(M>=1024) 是两个算子形态，结论不可互换。
+# 数值按 op-moe-w8a8/contract.yaml 的符号约定展开；bench 时由 _common.py 消费。
+
+# CI / adapter 自检档：形状真实（同 topk 语义、同 fp8 模拟），但规模缩小
+# 到参考实现能在 CPU 上几秒跑完。**不用于性能结论**，只用于验证门本身是通的。
+tiny:
+  params:
+    M: 2
+    H: 512
+    I: 1024
+    E: 8
+    K: 2
+  note: "只做正确性/不变量门的自检；绝不用于 bench 或达成率"
+
+decode-m1:
+  params:
+    M: 1
+    H: 4096
+    I: 14336
+    E: 128
+    K: 8
+  note: "单 token decode，权重读取完全主导；除 ASM 外所有变体都应接近同一带宽地板"
+
+decode-m32:
+  params:
+    M: 32
+    H: 4096
+    I: 14336
+    E: 128
+    K: 8
+  note: "小 batch decode，仍是权重主导；lightop-4stage 的安全区 mode 500-525"
+
+prefill-8k:
+  params:
+    M: 8192
+    H: 4096
+    I: 14336
+    E: 128
+    K: 8
+  note: "prefill 算力主导，杠杆从带宽变成 MMAC 发射率与每 barrier 工作量"

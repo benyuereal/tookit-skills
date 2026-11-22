@@ -1,0 +1,48 @@
+# op-moe-w8a8 实现变体矩阵。
+# 状态取自 data/ops/registry.json:variants 与 SKILL.md 的实测记录，不新增判断。
+
+variants:
+  - name: lightop-4stage
+    source: "Plugins/ops/skills/op-moe-w8a8（lightop csrc/moe_w8a8 四段式）"
+    status: primary
+    applies_to: [decode-m1, decode-m32, prefill-8k]
+    constraints:
+      - "mode 500-525 为安全区"
+      - "csrc 改完要整包重编，按 gfx 显式指定 PYTORCH_ROCM_ARCH"
+    mutates_inputs: false
+
+  - name: lightop-asm
+    source: "lightop ASM 路径"
+    status: avoid
+    applies_to: []
+    constraints:
+      - "mode>=1000 在混合专家 batch 下串读其他 token 数据"
+      - "违反 contract.yaml 的 batch_independence 不变量"
+    mutates_inputs: false
+    refuted_reason: "batch 间数据串读；安全区是 mode 500-525"
+
+  - name: aiter-moe
+    source: "aiter-das（get_aiter_moe_config 调度）"
+    status: unevaluated
+    applies_to: [decode-m1, decode-m32, prefill-8k]
+    constraints:
+      - "必须先 shuffle 权重（aiter_moe_shfl_weight），漏了是静默错误"
+      - "能否用取决于 (量化格式 × gfx) 查表是否命中"
+    mutates_inputs: false
+
+  - name: triton-shared
+    source: "triton + Cijk（shared expert 路径）"
+    status: partial
+    applies_to: [decode-m1]
+    constraints:
+      - "只覆盖 shared 专家，不覆盖 routed"
+      - "与 routed 路径测同一形状会得出互相矛盾的达成率"
+    mutates_inputs: false
+
+  - name: tilelang
+    source: "TileLang DSL 实现"
+    status: unevaluated
+    applies_to: [prefill-8k]
+    constraints:
+      - "先付布局转换税（每条 MMA 摊到的搬运指令是手写的 3-4 倍）"
+    mutates_inputs: false
