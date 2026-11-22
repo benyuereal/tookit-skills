@@ -416,6 +416,108 @@ def cmd_enumerate(a):
     return 0
 
 
+def cmd_resume(a):
+    """一句话回答「上下文丢了以后，下一个该跑谁」。
+
+    这是「状态机 ≥ 上下文」的最小实现：所有判断都从落盘状态算出来，
+    不依赖任何模型记忆。上下文清空、换人接手、隔天重开，跑这一条就够。
+
+    输出四段：
+      next     可以立刻跑的（方向 open、无 claim、未超预算）
+      blocked  不该跑的（方向已封 / 被 claim 占着）
+      held     跑过但不达主张门槛的（要补口径/轮数/精度，不是重跑）
+      counts   总量
+
+    --json 给机器读；默认给人读。
+    """
+    card = a.card
+    cands = load_candidates(card)
+    table = direction_table(cands)
+    pending = [c for c in cands["candidates"] if isinstance(c, dict)
+               and str(c.get("status") or "pending") == "pending"]
+
+    # 每条 tag 的最新记录：用来判 held（最后跑过的那次是否达门槛）
+    latest = {}
+    for r in read_records(card):
+        if r.get("tag") and "cand_ms" in r:
+            latest[r["tag"]] = r
+
+    claims = {}
+    cdir = card / "runs" / "loop" / "claims"
+    if cdir.is_dir():
+        for p in cdir.glob("*.claim"):
+            try:
+                claims[p.stem] = json.loads(p.read_text())
+            except (ValueError, OSError):
+                claims[p.stem] = {"worker": "?", "pid": 0}
+
+    nxt, blocked, held = [], [], []
+    for c in pending:
+        tag = str(c.get("id") or "?")
+        d = str(c.get("direction") or "")
+        rec = latest.get(tag)
+
+        if rec is not None:
+            ok, reasons = claim_gate(rec)
+            if not ok:
+                held.append({"tag": tag, "surface": d, "reasons": reasons})
+                continue
+
+        info = table.get(d)
+        if info and info["exhausted"]:
+            blocked.append({"tag": tag, "reason": "direction exhausted (%s %d/%d)"
+                            % (d, info["refutes"], MAX_DIRECTION_REFUTES)})
+            continue
+        if tag in claims:
+            blocked.append({"tag": tag, "reason": "claim held by %s"
+                            % claims[tag].get("worker", "?")})
+            continue
+
+        surf = {s["id"]: s for s in load_surfaces()}.get(d, {})
+        nxt.append({"tag": tag, "surface": d, "law": surf.get("law"),
+                    # 方向不在 surfaces.yaml 里 = 本算子特有的方向，没挂定律。
+                    # 不隐藏这一点：判死时就没法追溯到机制。
+                    "in_table": bool(surf),
+                    "priority": c.get("priority"), "status": "open"})
+
+    nxt.sort(key=lambda x: (x.get("priority") is None, x.get("priority") or 0, x["tag"]))
+    counts = {"pending": len(pending), "refuted": len(cands["refuted"]),
+              "next": len(nxt), "blocked": len(blocked), "held": len(held)}
+
+    if a.json:
+        print(json.dumps({"next": nxt, "blocked": blocked, "held": held,
+                          "counts": counts}, ensure_ascii=False, indent=2))
+        return 0
+
+    print("下一个该跑谁（全部从落盘状态算出，不依赖记忆）\n")
+    if nxt:
+        print("可跑 %d 条：" % len(nxt))
+        for x in nxt:
+            law = x.get("law") or ("(算子特有方向，无定律)" if not x["in_table"] else "-")
+            print("  %-22s direction=%-24s law=%s"
+                  % (x["tag"], x["surface"] or "(未声明)", law))
+        print("\n  → python3 loop.py -C %s run %s" % (a.card.name, nxt[0]["tag"]))
+    else:
+        print(_c("没有可跑的候选。", WARN))
+        if not pending:
+            print("  candidates.yaml 里没有 pending 候选 —— 用 enumerate --new 生成方向片段。")
+        print("  → python3 loop.py -C %s enumerate --new" % a.card.name)
+
+    if blocked:
+        print("\n不该跑 %d 条：" % len(blocked))
+        for x in blocked:
+            print("  %-22s %s" % (x["tag"], x["reason"]))
+    if held:
+        print("\n跑过但不够格 %d 条（补证据，不是重跑）：" % len(held))
+        for x in held:
+            print("  %-22s %s" % (x["tag"], ", ".join(x["reasons"])))
+        print("  → python3 loop.py -C %s report --all 看逐条补齐方法" % a.card.name)
+
+    print("\n合计：pending %(pending)d / 可跑 %(next)d / 阻塞 %(blocked)d / 待补 %(held)d"
+          " / 已判死 %(refuted)d" % counts)
+    return 0
+
+
 def cmd_status(a):
     card, cands, recs = a.card, load_candidates(a.card), read_records(a.card)
     pend = [c for c in cands["candidates"]
@@ -1036,6 +1138,9 @@ def main():
     e = sub.add_parser("enumerate", help="列出攻击面（direction 只能从这挑），标出已封的")
     e.add_argument("--new", action="store_true", help="只打印可用的 candidates.yaml 片段")
 
+    rs = sub.add_parser("resume", help="上下文丢了以后：下一个该跑谁")
+    rs.add_argument("--json", action="store_true", help="机器可读输出")
+
     r = sub.add_parser("run", help="跑一个实验并判定")
     r.add_argument("tags", nargs="+")
     r.add_argument("--skv", type=int, nargs="+")
@@ -1076,6 +1181,7 @@ def main():
     a.card = Path(a.card).resolve()
     return {"status": cmd_status, "queue": cmd_queue, "run": cmd_run,
             "report": cmd_report, "enumerate": cmd_enumerate,
+            "resume": cmd_resume,
             "impl-broken": cmd_impl_broken,
             "direction-refuted": cmd_direction_refuted,
             "refute": cmd_refute, "verify": cmd_verify,
