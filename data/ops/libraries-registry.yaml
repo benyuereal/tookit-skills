@@ -22,13 +22,19 @@ libraries:
     note: "自研融合算子库；memory-bound 链融合、量化族、MQA/MoE"
 
   - canonical_id: aiter
-    aliases: [AITER, aiter, aiter-das]
+    aliases: [AITER, aiter, aiter-das, moe-c, moe_c]
     pip_name: aiter
     import_name: aiter
     source_path: null
     version: "0.1.6+dtk2604.torch2110"
     installed: true
-    note: "四后端调度框架；RoPE / MoE / norm / quant 的统一下发面"
+    note: "四后端调度框架（moe_c / asm / triton / ck）；RoPE / MoE / norm / quant 的统一下发面"
+    submodule: moe_c
+    submodule_note: >
+      MOE_C 后端的调优表在**独立仓库 Moe** 的 moe_c_configs/（按 gfx × 量化类型组织），
+      不在 aiter 本仓——aiter 只通过子模块引用它。所以「AITER 选中 MOE_C 且慢」时，
+      该直接去改 Moe 仓的配置表，比换库便宜得多。卡片写 repo: aiter 即可，
+      这条信息保留在 registry 与 file_hint 里。
 
   - canonical_id: deepgemm
     aliases: [DeepGEMM, deepgemm-das, deepgemm]
@@ -103,15 +109,6 @@ libraries:
     version: "3.6.0+dtk2604.torch2110"
     installed: true
     note: "hcu backend；tl.dot 在 DCU 上是 0.29-0.41x，适合形状不定的算子"
-
-  - canonical_id: moe-c
-    aliases: [moe_c, Moe, moe_c_configs]
-    pip_name: null
-    import_name: null
-    source_path: null
-    version: null
-    installed: false
-    note: "AITER 的 MoE 后端（独立仓库 Moe）；按 (精度 × gfx) 查表。AITER 选中 MOE_C 时才有效"
 
   # ---- 可用但此前未登记的库（版本为 2026-11-22 实测） ----
   - canonical_id: sglang
@@ -212,6 +209,16 @@ libraries:
     version: null
     installed: null
     note: "自研。**仅当现成库确实不支持时使用**，且必须在 cons 写明「现成库不支持 X」"
+
+# ── tier 语义（卡片 impls[].tier，不是本文件的字段，但常被误读）──
+#   primary     首选实现
+#   structural  特殊形状的结构性选择
+#   reference   只用于读算法，不作为性能候选
+#   fallback    查表/条件未命中时的退路
+#   avoid       **反模式**：表达「别这么做」，**不是实现候选**
+#               ⇒ 对 avoid 条目要求「换成现成库」是范畴错误（2026-11-22 实际发生过）
+#               ⇒ avoid 条目应写清「为什么这条路不成立」，不需要有库实现
+#   unavailable 本平台不支持
 
 # 从环境移除的库（曾出现在卡片里，实际不可导入或不存在）
 removed:
