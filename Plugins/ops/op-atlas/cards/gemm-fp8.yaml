@@ -3,6 +3,7 @@ title: FP8 GEMM（含 batched / grouped）
 family: gemm
 math: "out[M,N] = A[M,K] @ B[K,N]；A/B fp8-e4m3, acc=fp32, out=bf16"
 status: draft
+layer: kernel
 op_card: Plugins/ops/skills/op-gemm-fp8
 
 impls:
@@ -11,21 +12,59 @@ impls:
     file_hint: "examples/gemm_fp8"
     tier: primary
     law_ref: null
+    best_for:
+      - "大 M 且需自定义 epilogue"
+    not_for:
+      - "M<=32 的 decode（带宽型，thin-M 桶更快）"
+    pros:
+      - "可读可改"
+      - "可融 epilogue"
+    cons:
+      - "DSL 布局税（每条 MMA 摊到的搬运指令高 3-4 倍）"
+    source: "references/libraries.md"
   - repo: hipBLASLt
     library_profile_ref: "libraries.md §6"
     file_hint: "torch._scaled_mm"
     tier: fallback
     law_ref: null
+    best_for:
+      - "常规稠密 GEMM"
+    not_for:
+      - "需要精细 layout 控制"
+      - "gfx938 上的 FP8（本平台无方案）"
+    pros:
+      - "省一层封装"
+    cons:
+      - "gfx938 上无 FP8 方案"
+    source: "references/libraries.md"
   - repo: aiter-das
     library_profile_ref: "libraries.md §4"
     file_hint: "aiter GEMM 入口"
     tier: fallback
     law_ref: null
+    best_for:
+      - "标准接入"
+    not_for:
+      - "需要单一路径可预测性能"
+    pros:
+      - "统一 API + 回退"
+    cons:
+      - "查表未命中会静默换后端"
+    source: "references/libraries.md"
   - repo: in-house
     library_profile_ref: null
     file_hint: "手写 HIP + MFMA intrinsic"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "特殊形状兜底"
+    not_for:
+      - "通用形状"
+    pros:
+      - "完全可控"
+    cons:
+      - "周期以周计"
+    source: "references/libraries.md"
 
 ceiling:
   kind: constants

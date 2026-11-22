@@ -3,24 +3,59 @@ title: 稀疏 MLA 前向（DSA 长上下文注意力）
 family: attention
 math: "out[i,:] = Σ_{j∈TopK(i)} softmax(q_i·k_j)·v_j；索引 j 来自稀疏块生成器"
 status: tuned
+layer: kernel
 op_card: Plugins/ops/skills/op-sparse-mla
 
 impls:
   - repo: tilelang-hygon
     library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang / tilelang-prefetch（ctx>=128k 长上下文）"
+    file_hint: "tilelang / tilelang-prefetch"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
+    best_for:
+      - "ctx>=128k 长上下文"
+      - "GLM5.3 tail_dim=0 / d=512 形状"
+    not_for:
+      - "极短 ctx（launch 开销主导）"
+      - "需要绕开 DSL 布局税时"
+    pros:
+      - "官方实现可读可改"
+      - "长上下文优先调优"
+    cons:
+      - "每条 MMA 摊到的搬运指令是手写的 3-4 倍"
+      - "改源码不生效（内核缓存）"
+    source: "references/libraries.md"
   - repo: flash-mla
     library_profile_ref: "libraries.md §7"
-    file_hint: "flash_mla（ctx~8k 且 S>=128；GLM5.3 prefill 快 2x）"
+    file_hint: "flash_mla"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
+    best_for:
+      - "ctx~8k 且 S>=128"
+      - "GLM5.3 prefill S=4096"
+    not_for:
+      - "小 M 且 KV 极短"
+      - "需要新的 attention 变体语义"
+    pros:
+      - "prefill 快"
+      - "与 vLLM/SGLang 路径天然集成"
+    cons:
+      - "会原地改写 indices（多变体对比须各喂副本）"
+    source: "references/libraries.md"
   - repo: in-house
     library_profile_ref: null
     file_hint: "hip-glm（手写主循环，绕开 tilelang 布局转换）"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要绕开布局转换的特殊形状"
+    not_for:
+      - "常规形状（不如现成实现）"
+    pros:
+      - "完全可控"
+    cons:
+      - "维护成本高"
+    source: "references/libraries.md"
 
 ceiling:
   kind: roofline_model

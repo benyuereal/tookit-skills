@@ -3,6 +3,7 @@ title: 融合 RMSNorm（含残差）
 family: elementwise
 math: "y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))"
 status: draft
+layer: kernel
 op_card: Plugins/ops/skills/op-rmsnorm-fused
 
 impls:
@@ -11,11 +12,29 @@ impls:
     file_hint: "融合 norm 族"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要融合残差（省一次 HBM 往返）"
+    not_for:
+      - "单条无链算子（融合没有可省的往返）"
+    pros:
+      - "融合族成熟"
+    cons:
+      - "原地写残差的变体会污染多变体对比"
+    source: "references/libraries.md"
   - repo: in-house
     library_profile_ref: null
     file_hint: "torch native rms_norm（不融合残差）"
     tier: fallback
     law_ref: null
+    best_for:
+      - "不融合残差的基线对照"
+    not_for:
+      - "追求极限时"
+    pros:
+      - "无依赖"
+    cons:
+      - "字节数多一次往返"
+    source: "references/libraries.md"
 
 ceiling:
   kind: roofline_model

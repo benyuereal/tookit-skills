@@ -31,13 +31,15 @@ STATUSES = {"draft", "measured", "tuned", "at_floor", "deprecated"}
 TIERS = {"primary", "structural", "reference", "fallback", "avoid", "unavailable"}
 CEIL_KINDS = {"roofline_model", "constants", "measured", "analytic", "missing"}
 VERDICT_STATUSES = {"none", "predicted", "measured", "refuted", "at_floor"}
+LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
 ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
-               "ceiling", "shapes", "last_verdict", "surfaces", "updated"}
+               "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer"}
 REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
                 "ceiling", "last_verdict", "updated"}
-ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref"}
+ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
+                "best_for", "not_for", "pros", "cons", "source"}
 REQUIRED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier"}
 ALLOWED_CEIL = {"kind", "ref", "bound", "model_name", "note"}
 REQUIRED_CEIL = {"kind", "ref"}
@@ -186,6 +188,14 @@ def validate(atlas, repo):
             err("E8", where, "family=%r 不在 %s" % (c.get("family"), sorted(FAMILIES)))
         if c.get("status") not in STATUSES:
             err("E6", where, "status=%r 非法" % c.get("status"))
+        if c.get("layer") not in LAYERS:
+            err("E11", where, "layer=%r 非法或缺失（kernel / engine）" % c.get("layer"))
+        if c.get("layer") == "engine":
+            lv = c.get("last_verdict") or {}
+            if isinstance(lv, dict) and lv.get("status") not in (None, "none"):
+                err("E11", where,
+                    "layer=engine 的条目不许有 last_verdict 结论"
+                    "（引擎层端到端数字受并行策略与显存水位影响，会污染算子层判断）")
 
         # ---- E1 cards ↔ INDEX 双向
         if index_txt and ("cards/%s.yaml" % card_path.stem) not in index_txt:
@@ -239,6 +249,18 @@ def validate(atlas, repo):
                         % (i, txt, sorted(law_ids)))
             if impl.get("tier") == "avoid" and not law:
                 warn("W1", where, "impls[%d] avoid 条目无 law_ref，机制会丢失" % i)
+
+            # 场景化字段：tier=primary 必须说清「什么场景用我、什么场景别用我」。
+            # 只写 tier 只回答了「谁快」，没回答「在什么条件下快」。
+            if impl.get("tier") == "primary":
+                for f in ("best_for", "not_for"):
+                    v = impl.get(f)
+                    if not v:
+                        err("E10", where, "impls[%d] tier=primary 缺 %s" % (i, f))
+            for f in ("best_for", "not_for", "pros", "cons"):
+                v = impl.get(f)
+                if v is not None and not isinstance(v, list):
+                    err("E10", where, "impls[%d] %s 必须是列表" % (i, f))
 
         # ---- E4 status 与 registry 对齐
         reg = reg_status.get(cid)

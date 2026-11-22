@@ -3,6 +3,7 @@ title: MoE top-k gating（第 2 段：gate → topk → 归一）
 family: moe
 math: "w, idx = normalize(topk(softmax(x @ W_gate^T), K))；idx 是离散量"
 status: draft
+layer: kernel
 op_card: Plugins/ops/skills/op-moe-topk-gating
 
 impls:
@@ -11,11 +12,29 @@ impls:
     file_hint: "gate+topk 融合 kernel"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "decode m1/m32"
+    not_for:
+      - "E 非 2 的幂时需先核实 padding 假设"
+    pros:
+      - "融合省一次往返"
+    cons:
+      - "tie-break 需与参考核对"
+    source: "references/libraries.md"
   - repo: aiter-das
     library_profile_ref: "libraries.md §4"
     file_hint: "topk softmax 支撑算子"
     tier: fallback
     law_ref: null
+    best_for:
+      - "兜底"
+    not_for:
+      - "需要确定性 tie-break 时先核"
+    pros:
+      - "统一 API"
+    cons:
+      - "查表命中"
+    source: "references/libraries.md"
 
 ceiling:
   kind: roofline_model

@@ -3,24 +3,50 @@ title: MoE W8A8 融合（routed + shared 专家）
 family: moe
 math: "y = Σ_shared W_s x + Σ_{e∈topk} g_e · (W_e x)；W 为 int8 权重，激活 per-token 量化"
 status: draft
+layer: kernel
 op_card: Plugins/ops/skills/op-moe-w8a8
 
 impls:
   - repo: lightop
     library_profile_ref: "libraries.md §3"
-    file_hint: "lightop-4stage（mode 500-525，推荐）"
+    file_hint: "lightop-4stage（mode 500-525）"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q3"
+    best_for:
+      - "decode 小 batch（16-row pooled cache）"
+      - "共享专家与 routed 同 kernel"
+    not_for:
+      - "FP8 + persistent 后端（会 RuntimeError）"
+      - "需要跨 gfx 单一二进制"
+    pros:
+      - "四段融合，包内无持久化调度开销"
+    cons:
+      - "csrc 改完要整包重编"
+    source: "references/libraries.md"
   - repo: aiter-das
     library_profile_ref: "libraries.md §4"
     file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
     tier: fallback
     law_ref: null
+    best_for:
+      - "标准接入兜底"
+    not_for:
+      - "需要单一路径可预测性能"
+    pros:
+      - "四后端回退"
+    cons:
+      - "查表命中率决定成败"
+    source: "references/libraries.md"
   - repo: lightop
     library_profile_ref: "libraries.md §3"
     file_hint: "lightop-asm（mode>=1000）"
     tier: avoid
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    not_for:
+      - "混合专家 batch（会串读其他 token 数据）"
+    cons:
+      - "违反 batch_independence 不变量"
+    source: "references/libraries.md"
 
 ceiling:
   kind: missing

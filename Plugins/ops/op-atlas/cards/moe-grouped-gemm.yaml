@@ -3,6 +3,7 @@ title: MoE grouped GEMM（routed experts）
 family: moe
 math: "y = concat_e ( x_e @ W_e ), e ∈ topk(token)；x_e 为按专家重排后的 token 块"
 status: draft
+layer: kernel
 op_card: null
 
 impls:
@@ -11,21 +12,54 @@ impls:
     file_hint: "m_grouped_*_gemm_nt_masked / _contiguous / _ll"
     tier: primary
     law_ref: null
+    best_for:
+      - "grouped/MoE GEMM"
+      - "需要按 layout 或 arch 精细控制"
+    not_for:
+      - "普通稠密大 GEMM（直接用 hipBLASLt 即可）"
+    pros:
+      - "layout 可精细控制"
+    cons:
+      - "layout 选错不是慢而是静默错"
+    source: "references/libraries.md"
   - repo: aiter-das
     library_profile_ref: "libraries.md §4"
     file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
     tier: structural
     law_ref: null
+    best_for:
+      - "标准接入"
+    not_for:
+      - "需要单一路径可预测性能"
+    pros:
+      - "四后端回退"
+    cons:
+      - "后端选择由查表决定"
+    source: "references/libraries.md"
   - repo: moe_c
     library_profile_ref: "libraries.md §5"
     file_hint: "moe_c_configs/"
     tier: fallback
     law_ref: null
+    best_for:
+      - "AITER 选中 MOE_C 且慢时直接改表"
+    not_for:
+      - "AITER 根本没选它时（改表无效）"
+    pros:
+      - "按 gfx 维护调优资产"
+    cons:
+      - "表没命中的 shape 走 fallback"
+    source: "references/libraries.md"
   - repo: in-house
     library_profile_ref: null
     file_hint: "稠密 GEMM 循环调 per-expert"
     tier: avoid
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    not_for:
+      - "任何 grouped 场景"
+    cons:
+      - "实测是 graph 化稠密路径的 2.9x"
+    source: "references/libraries.md"
 
 ceiling:
   kind: missing

@@ -3,6 +3,7 @@ title: MQA logits（DSA indexer 打分）
 family: attention
 math: "logits[i,j] = Σ_h max(0, Q[i,h,:]·K[j,:]) · W[i,h]；H=32, D=128"
 status: measured
+layer: kernel
 op_card: null
 
 impls:
@@ -11,16 +12,45 @@ impls:
     file_hint: "csrc/mqa_logits/paged/paged_mqa_logits_grouped.cu"
     tier: primary
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "192x32K decode"
+      - "需要 grouped 跨行 KV 复用"
+    not_for:
+      - "FP8 + persistent（RuntimeError）"
+    pros:
+      - "跨行共享 KV page"
+      - "ds_bpermute epilogue"
+    cons:
+      - "head_dim 仅支持 128"
+    source: "references/libraries.md"
   - repo: hbird-gemm
     library_profile_ref: "libraries.md §1"
-    file_hint: "grouped G=3 + ds_bpermute epilogue（0.691 ms @192x32K）"
+    file_hint: "grouped G=3 + ds_bpermute epilogue"
     tier: structural
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "与 lightop 对拍"
+    not_for:
+      - "非本仓资产（个人仓库）"
+    pros:
+      - "可参考方法论"
+    cons:
+      - "不可当组织资产引用"
+    source: "references/libraries.md"
   - repo: in-house
     library_profile_ref: null
-    file_hint: "shipped ungrouped（ee7b710，1.385 ms）"
+    file_hint: "shipped ungrouped"
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
+    best_for:
+      - "基线对照"
+    not_for:
+      - "生产"
+    pros:
+      - "简单"
+    cons:
+      - "未做跨行复用"
+    source: "references/libraries.md"
 
 ceiling:
   kind: roofline_model
