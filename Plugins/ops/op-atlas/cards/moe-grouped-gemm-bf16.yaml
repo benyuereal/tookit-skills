@@ -1,56 +1,58 @@
 id: moe-grouped-gemm-bf16
-title: "MoE grouped GEMM（BF16 基础档）"
+title: MoE grouped GEMM（BF16 基础档）
 family: moe
-math: "y_e = x_e * W_e；按专家分组，每组 token 数不等"
+math: y_e = x_e * W_e；按专家分组，每组 token 数不等
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: deepgemm
-    library_profile_ref: "libraries.md §6"
-    file_hint: "m_grouped_*_gemm_nt_masked"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "grouped/MoE GEMM"
-    not_for:
-      - "普通稠密大 GEMM（用 hipBLASLt）"
-    pros:
-      - "按 layout 精细控制"
-    cons:
-      - "layout 选错是静默错"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "get_aiter_moe_config"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "标准接入路径，有统一 API"
-    not_for:
-      - "需要单一路径可预测"
-    pros:
-      - "四后端回退，单路径性能不可预测"
-    cons:
-      - "查表决定"
-    source: "references/libraries.md"
-
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: m_grouped_*_gemm_nt_masked
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - grouped/MoE GEMM
+  not_for:
+  - 普通稠密大 GEMM（用 hipBLASLt）
+  pros:
+  - 按 layout 精细控制
+  cons:
+  - layout 选错是静默错
+  source: references/libraries.md
+  import_path: deepgemm.m_grouped_fp8_gemm_nt_masked
+  signature: m_grouped_fp8_gemm_nt_masked(...)
+  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_fp8_gemm_nt_masked")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: get_aiter_moe_config
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 标准接入路径，有统一 API
+  not_for:
+  - 需要单一路径可预测
+  pros:
+  - 四后端回退，单路径性能不可预测
+  cons:
+  - 查表决定
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "其余量化档的基准；bf16 口径不能与 fp8 达成率混比"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 其余量化档的基准；bf16 口径不能与 fp8 达成率混比
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [table-miss, occupancy]
-
-updated: "2026-11-22"
+surfaces:
+- table-miss
+- occupancy
+updated: '2026-11-22'

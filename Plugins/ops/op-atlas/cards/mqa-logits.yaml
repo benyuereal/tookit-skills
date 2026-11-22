@@ -1,63 +1,66 @@
 id: mqa-logits
-title: "MQA logits（DSA indexer 打分；支持分组调度）"
+title: MQA logits（DSA indexer 打分；支持分组调度）
 family: attention
-math: "logits[i,j] = Σ_h max(0, Q[i,h,:]·K[j,:]) · W[i,h]；H=32, D=128"
+math: logits[i,j] = Σ_h max(0, Q[i,h,:]·K[j,:]) · W[i,h]；H=32, D=128
 status: measured
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "csrc/mqa_logits/paged/paged_mqa_logits_grouped.cu"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "192x32K decode"
-      - "需要 grouped 跨行 KV 复用"
-    not_for:
-      - "16-row pooled cache 形状（persistent 后端在此形状直接 RuntimeError）"
-      - "FP8 + persistent（scale 广播打破驻留假设）"
-      - "FP8 + persistent（RuntimeError）"
-    pros:
-      - "跨行共享 KV page"
-      - "ds_bpermute epilogue"
-    cons:
-      - "head_dim 仅支持 128"
-    source: "references/libraries.md"
-  - repo: hbird-gemm
-    library_profile_ref: "libraries.md §1"
-    file_hint: "grouped G=3 + ds_bpermute epilogue"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "与 lightop 对拍"
-    not_for:
-      - "非本仓资产（个人仓库）"
-    pros:
-      - "可参考方法论"
-    cons:
-      - "不可当组织资产引用"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: csrc/mqa_logits/paged/paged_mqa_logits_grouped.cu
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 192x32K decode
+  - 需要 grouped 跨行 KV 复用
+  not_for:
+  - 16-row pooled cache 形状（persistent 后端在此形状直接 RuntimeError）
+  - FP8 + persistent（scale 广播打破驻留假设）
+  - FP8 + persistent（RuntimeError）
+  pros:
+  - 跨行共享 KV page
+  - ds_bpermute epilogue
+  cons:
+  - head_dim 仅支持 128
+  source: references/libraries.md
+  import_path: lightop.mqa_logits
+  signature: mqa_logits(q, k, ...) 按 lightop 绑定
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"mqa_logits")"
+- repo: hbird-gemm
+  library_profile_ref: libraries.md §1
+  file_hint: grouped G=3 + ds_bpermute epilogue
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 与 lightop 对拍
+  not_for:
+  - 非本仓资产（个人仓库）
+  pros:
+  - 可参考方法论
+  cons:
+  - 不可当组织资产引用
+  source: references/libraries.md
 ceiling:
   kind: roofline_model
-  ref: "Plugins/ops/skills/op-roofline/models/mqa_logits.py"
+  ref: Plugins/ops/skills/op-roofline/models/mqa_logits.py
   bound: bandwidth
   model_name: mqa_logits
-  note: "decode 档 q_per_ktile=1 ⇒ AI=64 FLOP/B < 平衡点 313"
-
-shapes: [decode-m1, decode-nextn, prefill-8k]
-
+  note: decode 档 q_per_ktile=1 ⇒ AI=64 FLOP/B < 平衡点 313
+shapes:
+- decode-m1
+- decode-nextn
+- prefill-8k
 last_verdict:
   status: measured
-  kb_path: "/workspace/op_engine_design/MQA.md"
+  kb_path: /workspace/op_engine_design/MQA.md
   ratio:
     value: 1.29
-    vs: "grouped G=3 (0.887 ms)"
-  conclusion: "epilogue 跨 lane 归约换 ds_bpermute，逐位一致；LDS 冲突非杠杆"
-  verified_on: "2026-11-22"
-
-surfaces: [epilogue-fold, cross-row-kv-reuse, fold-nextn]
-
-updated: "2026-11-22"
+    vs: grouped G=3 (0.887 ms)
+  conclusion: epilogue 跨 lane 归约换 ds_bpermute，逐位一致；LDS 冲突非杠杆
+  verified_on: '2026-11-22'
+surfaces:
+- epilogue-fold
+- cross-row-kv-reuse
+- fold-nextn
+updated: '2026-11-22'

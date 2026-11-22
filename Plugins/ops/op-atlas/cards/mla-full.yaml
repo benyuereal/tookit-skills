@@ -1,57 +1,62 @@
 id: mla-full
-title: "MLA 非吸收（完整 K/V）"
+title: MLA 非吸收（完整 K/V）
 family: attention
-math: "out = softmax(q*W_uk*c_kv^T)*W_uv*c_kv；不预先吸收"
+math: out = softmax(q*W_uk*c_kv^T)*W_uv*c_kv；不预先吸收
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: flash-mla
-    library_profile_ref: "libraries.md §7"
-    file_hint: "MLA full 路径"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "长上下文 prefill"
-      - "需要完整注意力权重"
-    not_for:
-      - "decode 小 M（吸收式更省）"
-    pros:
-      - "精度无损"
-    cons:
-      - "显存占用高"
-    source: "references/libraries.md"
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "可改"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "实验性结构"
-    not_for:
-      - "不适合生产（无融合、无调优）"
-    pros:
-      - "灵活但不如专用实现快"
-    cons:
-      - "先付布局转换税（3-4x 搬运指令）"
-    source: "references/libraries.md"
-
+- repo: flash-mla
+  library_profile_ref: libraries.md §7
+  file_hint: MLA full 路径
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 长上下文 prefill
+  - 需要完整注意力权重
+  not_for:
+  - decode 小 M（吸收式更省）
+  pros:
+  - 精度无损
+  cons:
+  - 显存占用高
+  source: references/libraries.md
+  import_path: flash_mla.get_mla_metadata
+  signature: get_mla_metadata(cache_seqlens,num_heads_per_rank,head_dim)
+  smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"get_mla_metadata")"
+- repo: tilelang
+  library_profile_ref: libraries.md §8
+  file_hint: 可改
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 实验性结构
+  not_for:
+  - 不适合生产（无融合、无调优）
+  pros:
+  - 灵活但不如专用实现快
+  cons:
+  - 先付布局转换税（3-4x 搬运指令）
+  source: references/libraries.md
+  import_path: tilelang.jit
+  signature: '@tilelang.jit'
+  smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "长上下文口径；与吸收式是两种形态，结论不可互换"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 长上下文口径；与吸收式是两种形态，结论不可互换
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [occupancy, split-k]
-
-updated: "2026-11-22"
+surfaces:
+- occupancy
+- split-k
+updated: '2026-11-22'

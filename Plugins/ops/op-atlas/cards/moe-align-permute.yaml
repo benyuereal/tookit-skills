@@ -1,56 +1,61 @@
 id: moe-align-permute
 title: MoE align_block_size + permute（第 3 段）
 family: moe
-math: "dst = permute(src, slot_map)；slot_map 由 counts/offsets 按 align 倍数推出"
+math: dst = permute(src, slot_map)；slot_map 由 counts/offsets 按 align 倍数推出
 status: draft
 layer: kernel
 op_card: Plugins/ops/skills/op-moe-align-permute
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "align_block_size + permute"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "decode m32 / prefill 8k"
-    not_for:
-      - "需要前置 padding（会让输出恒为 0）"
-    pros:
-      - "padding 只垫队尾，语义清晰"
-    cons:
-      - "align 倍数必须与下游 tile 高度匹配"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "token permute 支撑算子"
-    tier: fallback
-    law_ref: null
-    best_for:
-      - "查表未命中时的兜底路径"
-    not_for:
-      - "大 M*K 时注意 int32 溢出"
-    pros:
-      - "统一 API"
-    cons:
-      - "能否用取决于 (量化x gfx) 查表是否命中"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: align_block_size + permute
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - decode m32 / prefill 8k
+  not_for:
+  - 需要前置 padding（会让输出恒为 0）
+  pros:
+  - padding 只垫队尾，语义清晰
+  cons:
+  - align 倍数必须与下游 tile 高度匹配
+  source: references/libraries.md
+  import_path: lightop.moe_align_block_size
+  signature: moe_align_block_size(topk_ids,num_experts,block_size,...)
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_align_block_size")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: token permute 支撑算子
+  tier: fallback
+  law_ref: null
+  best_for:
+  - 查表未命中时的兜底路径
+  not_for:
+  - 大 M*K 时注意 int32 溢出
+  pros:
+  - 统一 API
+  cons:
+  - 能否用取决于 (量化x gfx) 查表是否命中
+  source: references/libraries.md
+  import_path: aiter.moe_align_block_size
+  signature: moe_align_block_size(topk_ids,num_experts,block_size,sorted_ids,experts_ids,num_tokens_post_pad)
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
 ceiling:
   kind: roofline_model
-  ref: "Plugins/ops/skills/op-moe-align-permute/contract.yaml"
+  ref: Plugins/ops/skills/op-moe-align-permute/contract.yaml
   bound: bandwidth
-  note: "纯读写搬运，字节数完全确定；达成率低于地板说明访存模式有问题"
-
-shapes: [decode-m32, prefill-8k, align-64]
-
+  note: 纯读写搬运，字节数完全确定；达成率低于地板说明访存模式有问题
+shapes:
+- decode-m32
+- prefill-8k
+- align-64
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "ref-heavy 通过正确性门；容差为零（纯搬运）；无性能实测"
+  conclusion: ref-heavy 通过正确性门；容差为零（纯搬运）；无性能实测
   verified_on: null
-
-surfaces: [layout-pack, gather-path]
-
-updated: "2026-11-22"
+surfaces:
+- layout-pack
+- gather-path
+updated: '2026-11-22'

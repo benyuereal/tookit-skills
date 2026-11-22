@@ -1,83 +1,89 @@
 id: moe-grouped-gemm
 title: MoE grouped GEMM（routed experts）
 family: moe
-math: "y = concat_e ( x_e @ W_e ), e ∈ topk(token)；x_e 为按专家重排后的 token 块"
+math: y = concat_e ( x_e @ W_e ), e ∈ topk(token)；x_e 为按专家重排后的 token 块
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: deepgemm
-    library_profile_ref: "libraries.md §6"
-    file_hint: "m_grouped_*_gemm_nt_masked / _contiguous / _ll"
-    tier: primary
-    law_ref: null
-    best_for:
-      - "grouped/MoE GEMM"
-      - "需要按 layout 或 arch 精细控制"
-    not_for:
-      - "普通稠密大 GEMM（直接用 hipBLASLt 即可）"
-    pros:
-      - "layout 可精细控制"
-    cons:
-      - "layout 选错不是慢而是静默错"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
-    tier: structural
-    law_ref: null
-    best_for:
-      - "标准接入路径，有统一 API"
-    not_for:
-      - "需要单一路径可预测性能"
-    pros:
-      - "四后端回退，单路径性能不可预测"
-    cons:
-      - "后端选择由查表决定"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §5"
-    file_hint: "MOE_C 后端（调优表在独立仓库 Moe 的 moe_c_configs/，按 gfx × 量化类型组织）"
-    tier: fallback
-    law_ref: null
-    best_for:
-      - "AITER 选中 MOE_C 且慢时直接改表"
-    not_for:
-      - "AITER 根本没选它时（改表无效）"
-    pros:
-      - "按 gfx 维护调优资产"
-    cons:
-      - "表没命中的 shape 走 fallback"
-    source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "稠密 GEMM 循环调 per-expert"
-    tier: avoid
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    not_for:
-      - "任何 grouped 场景"
-    cons:
-      - "这是反模式而非实现：现成库（deepgemm/aiter）的 grouped 路径已覆盖，本条保留只为标 avoid"
-    source: "references/libraries.md"
-
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: m_grouped_*_gemm_nt_masked / _contiguous / _ll
+  tier: primary
+  law_ref: null
+  best_for:
+  - grouped/MoE GEMM
+  - 需要按 layout 或 arch 精细控制
+  not_for:
+  - 普通稠密大 GEMM（直接用 hipBLASLt 即可）
+  pros:
+  - layout 可精细控制
+  cons:
+  - layout 选错不是慢而是静默错
+  source: references/libraries.md
+  import_path: deepgemm.m_grouped_fp8_gemm_nt_masked
+  signature: m_grouped_fp8_gemm_nt_masked(...)
+  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_fp8_gemm_nt_masked")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: get_aiter_moe_config → moe_c / asm / triton / ck
+  tier: structural
+  law_ref: null
+  best_for:
+  - 标准接入路径，有统一 API
+  not_for:
+  - 需要单一路径可预测性能
+  pros:
+  - 四后端回退，单路径性能不可预测
+  cons:
+  - 后端选择由查表决定
+  source: references/libraries.md
+  import_path: aiter.moe_align_block_size
+  signature: moe_align_block_size(...)
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
+- repo: aiter
+  library_profile_ref: libraries.md §5
+  file_hint: MOE_C 后端（调优表在独立仓库 Moe 的 moe_c_configs/，按 gfx × 量化类型组织）
+  tier: fallback
+  law_ref: null
+  best_for:
+  - AITER 选中 MOE_C 且慢时直接改表
+  not_for:
+  - AITER 根本没选它时（改表无效）
+  pros:
+  - 按 gfx 维护调优资产
+  cons:
+  - 表没命中的 shape 走 fallback
+  source: references/libraries.md
+  import_path: aiter.moe_align_block_size
+  signature: moe_align_block_size(...)
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
+- repo: in-house
+  library_profile_ref: null
+  file_hint: 稠密 GEMM 循环调 per-expert
+  tier: avoid
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  not_for:
+  - 任何 grouped 场景
+  cons:
+  - 这是反模式而非实现：现成库（deepgemm/aiter）的 grouped 路径已覆盖，本条保留只为标 avoid
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: mixed
-  note: "无 models/ 模型，待补 moe_grouped_gemm.py；当前只给不等式，不算达成率"
-
-shapes: [decode-m1, decode-m64, prefill-8k]
-
+  note: 无 models/ 模型，待补 moe_grouped_gemm.py；当前只给不等式，不算达成率
+shapes:
+- decode-m1
+- decode-m64
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无本算子独立实测；grouped 比稠密循环快一条来自 libraries.md，非本卡结论"
+  conclusion: 无本算子独立实测；grouped 比稠密循环快一条来自 libraries.md，非本卡结论
   verified_on: null
-
 surfaces:
-  - table-miss
-  - layout-pack
-
-updated: "2026-11-22"
+- table-miss
+- layout-pack
+updated: '2026-11-22'

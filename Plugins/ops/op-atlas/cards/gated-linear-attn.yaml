@@ -1,58 +1,59 @@
 id: gated-linear-attn
-title: "GLA 门控线性注意力"
+title: GLA 门控线性注意力
 family: linear-attn
-math: "o_t = (q_t ⊙ sum_{s<=t} (prod gates)*k_s^T v_s) 的门控递推"
+math: o_t = (q_t ⊙ sum_{s<=t} (prod gates)*k_s^T v_s) 的门控递推
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: flash-kda
-    library_profile_ref: "libraries.md §11"
-    file_hint: "flash_kda 的 KDA 递推"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "KDA 系模型"
-      - "linear-attn 的 decode"
-    not_for:
-      - "非 KDA 的门控变体"
-    pros:
-      - "专用实现"
-      - "与 KDA 契约配套"
-    cons:
-      - "版本很新（0.0.1）"
-    source: "references/libraries.md"
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 的 GLA 递推"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要自定义门控"
-    not_for:
-      - "追求极限"
-    pros:
-      - "可读可改"
-    cons:
-      - "布局税"
-    source: "references/libraries.md"
-
+- repo: flash-kda
+  library_profile_ref: libraries.md §11
+  file_hint: flash_kda 的 KDA 递推
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - KDA 系模型
+  - linear-attn 的 decode
+  not_for:
+  - 非 KDA 的门控变体
+  pros:
+  - 专用实现
+  - 与 KDA 契约配套
+  cons:
+  - 版本很新（0.0.1）
+  source: references/libraries.md
+  import_path: flash_kda.cp
+  signature: cp 模块（KDA 的 chunk-parallel 布局）
+  smoke_test: python3 -I -c "import flash_kda; assert hasattr(flash_kda,"cp")"
+- repo: tilelang
+  library_profile_ref: libraries.md §8
+  file_hint: tilelang 的 GLA 递推
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要自定义门控
+  not_for:
+  - 追求极限
+  pros:
+  - 可读可改
+  cons:
+  - 布局税
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: mixed
-  note: "门控引入额外乘；递推结构与 chunked-scan 同族"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 门控引入额外乘；递推结构与 chunked-scan 同族
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [pipeline-depth]
-
-updated: "2026-11-22"
+surfaces:
+- pipeline-depth
+updated: '2026-11-22'

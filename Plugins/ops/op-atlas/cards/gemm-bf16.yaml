@@ -1,56 +1,61 @@
 id: gemm-bf16
-title: "BF16 GEMM（基础档）"
+title: BF16 GEMM（基础档）
 family: gemm
-math: "out = A*B；A/B bf16，acc fp32"
+math: out = A*B；A/B bf16，acc fp32
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: triton
-    library_profile_ref: "libraries.md §6"
-    file_hint: "torch.mm 后端"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "常规稠密 GEMM"
-    not_for:
-      - "需要精细 layout 控制"
-    pros:
-      - "少一层封装，直接调库"
-    cons:
-      - "gfx938 上 FP8 无方案"
-    source: "references/libraries.md"
-  - repo: deepgemm
-    library_profile_ref: "libraries.md §6"
-    file_hint: "fp8_gemm（走 hipBLASLt）"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "grouped 场景"
-    not_for:
-      - "纯稠密"
-    pros:
-      - "灵活但不如专用实现快"
-    cons:
-      - "多一层"
-    source: "references/libraries.md"
-
+- repo: triton
+  library_profile_ref: libraries.md §6
+  file_hint: torch.mm 后端
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 常规稠密 GEMM
+  not_for:
+  - 需要精细 layout 控制
+  pros:
+  - 少一层封装，直接调库
+  cons:
+  - gfx938 上 FP8 无方案
+  source: references/libraries.md
+  import_path: triton.jit
+  signature: '@triton.jit 写 GEMM kernel'
+  smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: fp8_gemm（走 hipBLASLt）
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - grouped 场景
+  not_for:
+  - 纯稠密
+  pros:
+  - 灵活但不如专用实现快
+  cons:
+  - 多一层
+  source: references/libraries.md
+  import_path: deepgemm.fp8_gemm
+  signature: fp8_gemm(a,b,d,c=None,recipe=None)
+  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"fp8_gemm")"
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "量化档的基准；bf16 与 fp8 的达成率分母不同，不可混比"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 量化档的基准；bf16 与 fp8 的达成率分母不同，不可混比
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [occupancy, split-k]
-
-updated: "2026-11-22"
+surfaces:
+- occupancy
+- split-k
+updated: '2026-11-22'

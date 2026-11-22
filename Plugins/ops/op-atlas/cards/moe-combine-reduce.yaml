@@ -1,56 +1,61 @@
 id: moe-combine-reduce
-title: "MoE combine：反 permute + 加权求和"
+title: MoE combine：反 permute + 加权求和
 family: moe
-math: "y_i = sum_k w_ik*permuted[slot_ik]；按 gate 权重加权"
+math: y_i = sum_k w_ik*permuted[slot_ik]；按 gate 权重加权
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "moe_sum"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要与 permute 配对"
-    not_for:
-      - "需要确定性累加顺序（顺序变了结果位不同）"
-    pros:
-      - "与 4stage 配套"
-    cons:
-      - "累加顺序需固定"
-    source: "references/libraries.md"
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "lightop 的 moe_sum"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "非标准合并语义"
-    not_for:
-      - "常规形状（无特殊布局需求）"
-    pros:
-      - "完全可控，但需自己维护"
-    cons:
-      - "lightop 有 moe_sum，不必自研"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: moe_sum
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要与 permute 配对
+  not_for:
+  - 需要确定性累加顺序（顺序变了结果位不同）
+  pros:
+  - 与 4stage 配套
+  cons:
+  - 累加顺序需固定
+  source: references/libraries.md
+  import_path: lightop.moe_align_sum
+  signature: moe_align_sum(...) 反 permute 的加权求和
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_align_sum")"
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop 的 moe_sum
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 非标准合并语义
+  not_for:
+  - 常规形状（无特殊布局需求）
+  pros:
+  - 完全可控，但需自己维护
+  cons:
+  - lightop 有 moe_sum，不必自研
+  source: references/libraries.md
+  import_path: lightop.moe_align_sum
+  signature: moe_align_sum(...) 反 permute 的加权求和
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_align_sum")"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "累加顺序影响 determinism；与 permute 必须成对验证"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 累加顺序影响 determinism；与 permute 必须成对验证
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [cross-lane-fold, layout-pack]
-
-updated: "2026-11-22"
+surfaces:
+- cross-lane-fold
+- layout-pack
+updated: '2026-11-22'

@@ -1,56 +1,57 @@
 id: verify-accept
-title: "投机验证与接受"
+title: 投机验证与接受
 family: sampling
-math: "比较 draft 与 target 的分布，按概率接受 / 拒绝采样"
+math: 比较 draft 与 target 的分布，按概率接受 / 拒绝采样
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "接受判据实现"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "投机解码验证"
-    not_for:
-      - "非投机解码场景不适用"
-    pros:
-      - "接受率决定整体收益"
-    cons:
-      - "现成库不支持：投机解码的接受判据要绑定具体模型的分布与随机源，没有通用实现；aiter 只有采样不接受判据"
-    source: "references/libraries.md"
-  - repo: triton
-    library_profile_ref: "libraries.md §9"
-    file_hint: "Triton 的接受判据实现"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "torch 版只作算法对照；生产走 triton"
-    not_for:
-      - "生产路径（无融合、无调优）"
-    pros:
-      - "实现简单，但多一次往返"
-    cons:
-      - "实现慢，仅作算法对照"
-    source: "references/libraries.md"
-
+- repo: in-house
+  library_profile_ref: null
+  file_hint: 接受判据实现
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 投机解码验证
+  not_for:
+  - 非投机解码场景不适用
+  pros:
+  - 接受率决定整体收益
+  cons:
+  - 现成库不支持：投机解码的接受判据要绑定具体模型的分布与随机源，没有通用实现；aiter 只有采样不接受判据
+  source: references/libraries.md
+- repo: triton
+  library_profile_ref: libraries.md §9
+  file_hint: Triton 的接受判据实现
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - torch 版只作算法对照；生产走 triton
+  not_for:
+  - 生产路径（无融合、无调优）
+  pros:
+  - 实现简单，但多一次往返
+  cons:
+  - 实现慢，仅作算法对照
+  source: references/libraries.md
+  import_path: triton.jit
+  signature: '@triton.jit'
+  smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "tie-break 与随机源必须固定，否则 determinism 判不了"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: tie-break 与随机源必须固定，否则 determinism 判不了
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [precision-drop]
-
-updated: "2026-11-22"
+surfaces:
+- precision-drop
+updated: '2026-11-22'

@@ -1,83 +1,89 @@
 id: sparse-mla
 title: 稀疏 MLA 前向（DSA 长上下文注意力）
 family: attention
-math: "out[i,:] = Σ_{j∈TopK(i)} softmax(q_i·k_j)·v_j；索引 j 来自稀疏块生成器"
+math: out[i,:] = Σ_{j∈TopK(i)} softmax(q_i·k_j)·v_j；索引 j 来自稀疏块生成器
 status: tuned
 layer: kernel
 op_card: Plugins/ops/skills/op-sparse-mla
-
 impls:
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang / tilelang-prefetch"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
-    best_for:
-      - "ctx>=128k 长上下文"
-      - "GLM5.3 tail_dim=0 / d=512 形状"
-    not_for:
-      - "极短 ctx（launch 开销主导）"
-      - "需要绕开 DSL 布局税时"
-    pros:
-      - "官方实现可读可改"
-      - "长上下文优先调优"
-    cons:
-      - "每条 MMA 摊到的搬运指令是手写的 3-4 倍"
-      - "改源码不生效（内核缓存）"
-    source: "references/libraries.md"
-  - repo: flash-mla
-    library_profile_ref: "libraries.md §7"
-    file_hint: "flash_mla"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
-    best_for:
-      - "ctx~8k 且 S>=128"
-      - "GLM5.3 prefill S=4096"
-    not_for:
-      - "小 M 且 KV 极短"
-      - "需要新的 attention 变体语义"
-    pros:
-      - "prefill 快"
-      - "与 vLLM/SGLang 路径天然集成"
-    cons:
-      - "会原地改写 indices（多变体对比须各喂副本）"
-    source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "hip-glm（手写主循环，绕开 tilelang 布局转换）"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要绕开布局转换的特殊形状"
-    not_for:
-      - "常规形状（不如现成实现）"
-    pros:
-      - "完全可控，但需自行维护"
-    cons:
-      - "现成库不支持：tilelang 版的布局转换税（每条 MMA 摊到的搬运指令是手写的 3-4 倍），绕开它只能手写主循环"
-    source: "references/libraries.md"
-
+- repo: tilelang
+  library_profile_ref: libraries.md §8
+  file_hint: tilelang / tilelang-prefetch
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
+  best_for:
+  - ctx>=128k 长上下文
+  - GLM5.3 tail_dim=0 / d=512 形状
+  not_for:
+  - 极短 ctx（launch 开销主导）
+  - 需要绕开 DSL 布局税时
+  pros:
+  - 官方实现可读可改
+  - 长上下文优先调优
+  cons:
+  - 每条 MMA 摊到的搬运指令是手写的 3-4 倍
+  - 改源码不生效（内核缓存）
+  source: references/libraries.md
+  import_path: tilelang.jit
+  signature: '@tilelang.jit'
+  smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+- repo: flash-mla
+  library_profile_ref: libraries.md §7
+  file_hint: flash_mla
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
+  best_for:
+  - ctx~8k 且 S>=128
+  - GLM5.3 prefill S=4096
+  not_for:
+  - 小 M 且 KV 极短
+  - 需要新的 attention 变体语义
+  pros:
+  - prefill 快
+  - 与 vLLM/SGLang 路径天然集成
+  cons:
+  - 会原地改写 indices（多变体对比须各喂副本）
+  source: references/libraries.md
+  import_path: boltops.mla.flash_mla_sparse_fwd
+  signature: flash_mla_sparse_fwd(...)
+  smoke_test: python3 -I -c "import boltops; assert hasattr(importlib.import_module("boltops.mla"),"flash_mla_sparse_fwd")"
+- repo: in-house
+  library_profile_ref: null
+  file_hint: hip-glm（手写主循环，绕开 tilelang 布局转换）
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要绕开布局转换的特殊形状
+  not_for:
+  - 常规形状（不如现成实现）
+  pros:
+  - 完全可控，但需自行维护
+  cons:
+  - 现成库不支持：tilelang 版的布局转换税（每条 MMA 摊到的搬运指令是手写的 3-4 倍），绕开它只能手写主循环
+  source: references/libraries.md
 ceiling:
   kind: roofline_model
-  ref: "Plugins/ops/skills/op-roofline/models/sparse_mla.py"
+  ref: Plugins/ops/skills/op-roofline/models/sparse_mla.py
   model_name: sparse_mla
   bound: mixed
-  note: "绑定约束是依赖链/并发；内存地板仅占实测 39%、算力 23%"
-
-shapes: [decode-s128, decode-m1, decode-m32, prefill-8k, prefill-320k, decode-glm53]
-
+  note: 绑定约束是依赖链/并发；内存地板仅占实测 39%、算力 23%
+shapes:
+- decode-s128
+- decode-m1
+- decode-m32
+- prefill-8k
+- prefill-320k
+- decode-glm53
 last_verdict:
   status: measured
-  kb_path: "~/.config/dcu-toolkit/kb/op-opt/sparse-mla-20261027.md"
+  kb_path: ~/.config/dcu-toolkit/kb/op-opt/sparse-mla-20261027.md
   ratio:
     value: 0.94
-    vs: "流式峰值（mem-only 变体达成率）"
-  conclusion: "已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REPLICATE_H 结构税"
-  verified_on: "2026-10-29"
-
+    vs: 流式峰值（mem-only 变体达成率）
+  conclusion: 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REPLICATE_H 结构税
+  verified_on: '2026-10-29'
 surfaces:
-  - gather-path
-  - occupancy
-  - layout-pack
-
-updated: "2026-11-22"
+- gather-path
+- occupancy
+- layout-pack
+updated: '2026-11-22'

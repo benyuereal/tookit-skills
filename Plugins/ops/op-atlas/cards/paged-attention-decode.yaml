@@ -1,73 +1,81 @@
 id: paged-attention-decode
-title: "Paged attention decode"
+title: Paged attention decode
 family: attention
-math: "out = softmax(q·K_page^T/sqrt(d))·V_page；K/V 按 page 间接寻址"
+math: out = softmax(q·K_page^T/sqrt(d))·V_page；K/V 按 page 间接寻址
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: flash-attn
-    library_profile_ref: "libraries.md §7"
-    file_hint: "paged attention decode 路径"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "page 16/64 行、GQA 分组"
-      - "decode 小 M"
-    not_for:
-      - "需要新的 attention 变体语义"
-    pros:
-      - "实现成熟稳定，与框架集成好"
-      - "与 vLLM/SGLang 集成"
-    cons:
-      - "scale 与 sink 语义需核对"
-    source: "references/libraries.md"
-  - repo: flash-mla
-    library_profile_ref: "libraries.md §7"
-    file_hint: "MLA 的 decode 路径"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "MLA 系 decode"
-      - "长上下文"
-    not_for:
-      - "非 MLA 的 GQA/MHA"
-    pros:
-      - "长上下文优先"
-    cons:
-      - "原地规范化 indices"
-    source: "references/libraries.md"
-  - repo: boltops
-    library_profile_ref: "libraries.md §10"
-    file_hint: "decode 形状 attention 成品"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要 autotune 的 decode"
-    not_for:
-      - "大 M prefill"
-    pros:
-      - "自带调参 CLI"
-    cons:
-      - "DSL 层税"
-    source: "references/libraries.md"
-
+- repo: flash-attn
+  library_profile_ref: libraries.md §7
+  file_hint: paged attention decode 路径
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - page 16/64 行、GQA 分组
+  - decode 小 M
+  not_for:
+  - 需要新的 attention 变体语义
+  pros:
+  - 实现成熟稳定，与框架集成好
+  - 与 vLLM/SGLang 集成
+  cons:
+  - scale 与 sink 语义需核对
+  source: references/libraries.md
+  import_path: flash_attn.flash_attn_varlen_func
+  signature: flash_attn_varlen_func(q,k,v,max_seqlen_q,max_seqlen_k,cu_seqlens_q,cu_seqlens_k,block_table=...)
+  smoke_test: python3 -I -c "import flash_attn; assert hasattr(flash_attn,"flash_attn_varlen_func")"
+- repo: flash-mla
+  library_profile_ref: libraries.md §7
+  file_hint: MLA 的 decode 路径
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - MLA 系 decode
+  - 长上下文
+  not_for:
+  - 非 MLA 的 GQA/MHA
+  pros:
+  - 长上下文优先
+  cons:
+  - 原地规范化 indices
+  source: references/libraries.md
+  import_path: flash_mla.flash_mla_with_kvcache
+  signature: flash_mla_with_kvcache(q,k_cache,block_table,cache_seqlens,head_dim_v,tile_scheduler_metadata,num_splits)
+  smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"flash_mla_with_kvcache")"
+- repo: boltops
+  library_profile_ref: libraries.md §10
+  file_hint: decode 形状 attention 成品
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要 autotune 的 decode
+  not_for:
+  - 大 M prefill
+  pros:
+  - 自带调参 CLI
+  cons:
+  - DSL 层税
+  source: references/libraries.md
+  import_path: boltops.mla.decode_attention_fwd
+  signature: decode_attention_fwd(q,kv_cache,...)
+  smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.mla").decode_attention_fwd is not None"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "decode 档 KV 读取主导；page 布局决定访存合并度"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: decode 档 KV 读取主导；page 布局决定访存合并度
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [gather-path, occupancy]
-
-updated: "2026-11-22"
+surfaces:
+- gather-path
+- occupancy
+updated: '2026-11-22'

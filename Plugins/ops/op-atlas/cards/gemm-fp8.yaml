@@ -21,6 +21,9 @@ impls:
   cons:
   - DSL 布局税（每条 MMA 摊到的搬运指令高 3-4 倍）
   source: references/libraries.md
+  import_path: tilelang.jit
+  signature: '@tilelang.jit 写 fp8 GEMM'
+  smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 - repo: triton
   library_profile_ref: libraries.md §6
   file_hint: torch._scaled_mm

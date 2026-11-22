@@ -1,57 +1,62 @@
 id: flash-attention-fwd
-title: "Flash attention 前向"
+title: Flash attention 前向
 family: attention
-math: "out = softmax(QK^T*scale + mask)·V；分块在线 softmax"
+math: out = softmax(QK^T*scale + mask)·V；分块在线 softmax
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: flash-attn
-    library_profile_ref: "libraries.md §7"
-    file_hint: "flash attention 前向"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "causal / sliding window / 变长 batch"
-    not_for:
-      - "需要自定义 mask 语义（改 fork 成本高）"
-    pros:
-      - "实现成熟，变体覆盖广"
-      - "变体覆盖广"
-    cons:
-      - "不同 gfx 路径不同"
-    source: "references/libraries.md"
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "可改 kernel 的 attention"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要改算法结构"
-    not_for:
-      - "要逼近手写极限"
-    pros:
-      - "源码可读可改，适合实验"
-    cons:
-      - "先付布局转换税（3-4x 搬运指令）"
-    source: "references/libraries.md"
-
+- repo: flash-attn
+  library_profile_ref: libraries.md §7
+  file_hint: flash attention 前向
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - causal / sliding window / 变长 batch
+  not_for:
+  - 需要自定义 mask 语义（改 fork 成本高）
+  pros:
+  - 实现成熟，变体覆盖广
+  - 变体覆盖广
+  cons:
+  - 不同 gfx 路径不同
+  source: references/libraries.md
+  import_path: flash_attn.flash_attn_func
+  signature: flash_attn_func(q,k,v,dropout_p=0.0,causal=False)
+  smoke_test: python3 -I -c "import flash_attn; assert hasattr(flash_attn,"flash_attn_func")"
+- repo: tilelang
+  library_profile_ref: libraries.md §8
+  file_hint: 可改 kernel 的 attention
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要改算法结构
+  not_for:
+  - 要逼近手写极限
+  pros:
+  - 源码可读可改，适合实验
+  cons:
+  - 先付布局转换税（3-4x 搬运指令）
+  source: references/libraries.md
+  import_path: tilelang.jit
+  signature: '@tilelang.jit 装饰器'
+  smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 ceiling:
   kind: missing
   ref: null
   bound: mixed
-  note: "prefill 档依赖 softmax 与 MMA 的重叠；sliding window 与 sink 是变体参数"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: prefill 档依赖 softmax 与 MMA 的重叠；sliding window 与 sink 是变体参数
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [prefetch-depth, cross-lane-fold]
-
-updated: "2026-11-22"
+surfaces:
+- prefetch-depth
+- cross-lane-fold
+updated: '2026-11-22'

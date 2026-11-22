@@ -1,58 +1,61 @@
 id: quant-per-token
-title: "per-token 动态量化（激活动态量化）"
+title: per-token 动态量化（激活动态量化）
 family: quant
-math: "scale[m] = amax(x[m,:])/QMAX；q[m,:] = round(x[m,:]/scale[m])"
+math: scale[m] = amax(x[m,:])/QMAX；q[m,:] = round(x[m,:]/scale[m])
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "lightop 的量化融合族（per-token / per-block）"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "FP8 GEMM 的激活侧预处理（所有 FP8 路径的前置步骤）"
-      - "需要与上游算子融合（省一次 HBM 往返）"
-    not_for:
-      - "权重静态量化（那是 prepack，一次性的）"
-      - "标度粒度与下游 GEMM 契约不一致时（会静默算错）"
-    pros:
-      - "融合进上游 epilogue 可省一次往返"
-    cons:
-      - "标度粒度（per-token / per-block / per-tensor）必须与下游 GEMM 一致，混用是静默错"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter 的量化支撑算子"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "标准接入路径"
-    not_for:
-      - "需要极致融合时（lightop 的融合族更省）"
-    pros:
-      - "统一 API"
-    cons:
-      - "不融合，多一次往返"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop 的量化融合族（per-token / per-block）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - FP8 GEMM 的激活侧预处理（所有 FP8 路径的前置步骤）
+  - 需要与上游算子融合（省一次 HBM 往返）
+  not_for:
+  - 权重静态量化（那是 prepack，一次性的）
+  - 标度粒度与下游 GEMM 契约不一致时（会静默算错）
+  pros:
+  - 融合进上游 epilogue 可省一次往返
+  cons:
+  - 标度粒度（per-token / per-block / per-tensor）必须与下游 GEMM 一致，混用是静默错
+  source: references/libraries.md
+  import_path: lightop.fuse_silu_mul_clamp_quant_ep
+  signature: fuse_silu_mul_clamp_quant_ep(...) 激活+量化的 per-token 融合
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"fuse_silu_mul_clamp_quant_ep")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter 的量化支撑算子
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 标准接入路径
+  not_for:
+  - 需要极致融合时（lightop 的融合族更省）
+  pros:
+  - 统一 API
+  cons:
+  - 不融合，多一次往返
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "读 x 一遍 + 写 q 与 scale；若融合进上游则省掉读"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 读 x 一遍 + 写 q 与 scale；若融合进上游则省掉读
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡。所有 FP8 路径的前置判据都挂在这张卡上"
+  conclusion: 无实测：索引卡。所有 FP8 路径的前置判据都挂在这张卡上
   verified_on: null
-
-surfaces: [layout-pack, precision-drop, fusion-boundary]
-
-updated: "2026-11-22"
+surfaces:
+- layout-pack
+- precision-drop
+- fusion-boundary
+updated: '2026-11-22'

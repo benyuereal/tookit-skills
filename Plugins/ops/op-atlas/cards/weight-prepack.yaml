@@ -1,58 +1,61 @@
 id: weight-prepack
-title: "权重预处理（pack / shuffle / 量化重排）"
+title: 权重预处理（pack / shuffle / 量化重排）
 family: quant
-math: "W_packed = prepack(W, fmt)；fmt ∈ {W6 packed, HIPC, marlin, aiter shuffle}"
+math: W_packed = prepack(W, fmt)；fmt ∈ {W6 packed, HIPC, marlin, aiter shuffle}
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter_moe_shfl_weight"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "AITER 的 MoE 路径（调用前必须先 shuffle）"
-      - "权重格式固定的生产部署"
-    not_for:
-      - "权重每次请求都变化的场景（prepack 成本摊不掉）"
-    pros:
-      - "一次 prepack，后续每个 token 都省"
-    cons:
-      - "漏了不是慢，是静默算错——这是本条目存在的首要理由"
-    source: "references/libraries.md"
-  - repo: deepgemm
-    library_profile_ref: "libraries.md §6"
-    file_hint: "pack_w8a8_gfx936_weight_to_w6 / pack_w4a8_moe_hipc_weight"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "gfx936 的 W6 packed layout"
-      - "W4A8 的 HIPC layout"
-    not_for:
-      - "需要跨 gfx 复用的权重（layout 不通用）"
-    pros:
-      - "按 arch 精细控制 layout"
-    cons:
-      - "三种 layout（HIPC / W6 / marlin）不可混用，选错不是慢而是静默算错"
-    source: "references/libraries.md"
-
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter_moe_shfl_weight
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - AITER 的 MoE 路径（调用前必须先 shuffle）
+  - 权重格式固定的生产部署
+  not_for:
+  - 权重每次请求都变化的场景（prepack 成本摊不掉）
+  pros:
+  - 一次 prepack，后续每个 token 都省
+  cons:
+  - 漏了不是慢，是静默算错——这是本条目存在的首要理由
+  source: references/libraries.md
+  import_path: aiter.moe_align_block_size
+  signature: AITER 的 MoE 入口族（shuffle 在 moe_c 侧）
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: pack_w8a8_gfx936_weight_to_w6 / pack_w4a8_moe_hipc_weight
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - gfx936 的 W6 packed layout
+  - W4A8 的 HIPC layout
+  not_for:
+  - 需要跨 gfx 复用的权重（layout 不通用）
+  pros:
+  - 按 arch 精细控制 layout
+  cons:
+  - 三种 layout（HIPC / W6 / marlin）不可混用，选错不是慢而是静默算错
+  source: references/libraries.md
+  import_path: deepgemm.group_gemm_weight_pack
+  signature: group_gemm_weight_pack(...) 权重预打包
+  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"group_gemm_weight_pack")"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "一次性成本：读原权重 + 写 packed 权重。与推理时的每 token 收益成反比"
-
-shapes: [prepack-once]
-
+  note: 一次性成本：读原权重 + 写 packed 权重。与推理时的每 token 收益成反比
+shapes:
+- prepack-once
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡。核心价值是提醒「漏 prepack 是静默错误」"
+  conclusion: 无实测：索引卡。核心价值是提醒「漏 prepack 是静默错误」
   verified_on: null
-
-surfaces: [layout-pack, table-miss]
-
-updated: "2026-11-22"
+surfaces:
+- layout-pack
+- table-miss
+updated: '2026-11-22'

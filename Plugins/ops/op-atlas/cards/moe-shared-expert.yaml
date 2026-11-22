@@ -1,56 +1,61 @@
 id: moe-shared-expert
-title: "MoE 共享专家合并"
+title: MoE 共享专家合并
 family: moe
-math: "y = shared(x)*w_s + sum_e g_e*expert_e(x)"
+math: y = shared(x)*w_s + sum_e g_e*expert_e(x)
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "shared + routed 同 kernel"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要 shared 与 routed 同容器"
-    not_for:
-      - "只做 routed 的场景"
-    pros:
-      - "一次 kernel 吃掉两条路"
-    cons:
-      - "shared 占比变化时需重测"
-    source: "references/libraries.md"
-  - repo: triton
-    library_profile_ref: "libraries.md §9"
-    file_hint: "Triton 的 shared expert 路径"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "现成 triton 实现，不必自研"
-    not_for:
-      - "需要统一实现"
-    pros:
-      - "实现简单，但多一次往返"
-    cons:
-      - "多一次 HBM 往返"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: shared + routed 同 kernel
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要 shared 与 routed 同容器
+  not_for:
+  - 只做 routed 的场景
+  pros:
+  - 一次 kernel 吃掉两条路
+  cons:
+  - shared 占比变化时需重测
+  source: references/libraries.md
+  import_path: lightop.moe_fuse_gate_per_gourp_topk
+  signature: moe_fuse_gate_per_gourp_topk(...) gate+topk 融合
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_fuse_gate_per_gourp_topk")"
+- repo: triton
+  library_profile_ref: libraries.md §9
+  file_hint: Triton 的 shared expert 路径
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 现成 triton 实现，不必自研
+  not_for:
+  - 需要统一实现
+  pros:
+  - 实现简单，但多一次往返
+  cons:
+  - 多一次 HBM 往返
+  source: references/libraries.md
+  import_path: triton.jit
+  signature: '@triton.jit'
+  smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "shared 与 routed 是两条路径，只测一条会漏一半耗时"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: shared 与 routed 是两条路径，只测一条会漏一半耗时
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [fusion-boundary, table-miss]
-
-updated: "2026-11-22"
+surfaces:
+- fusion-boundary
+- table-miss
+updated: '2026-11-22'

@@ -1,58 +1,60 @@
 id: gemm-int8
-title: "INT8 GEMM（W8A8）"
+title: INT8 GEMM（W8A8）
 family: gemm
-math: "out = (A_i8 * s_a) @ (B_i8 * s_b)；acc=int32，出栈时反量化"
+math: out = (A_i8 * s_a) @ (B_i8 * s_b)；acc=int32，出栈时反量化
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: deepgemm
-    library_profile_ref: "libraries.md §6"
-    file_hint: "m_grouped_i8_gemm_nt_contiguous（W6 packed）"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "grouped / MoE 的 INT8 路径"
-      - "需要按 layout 精细控制（W6 packed）"
-    not_for:
-      - "普通稠密大 GEMM（hipBLASLt 走 torch 路径即可）"
-      - "layout 没配对时（不是慢，是静默错）"
-    pros:
-      - "int32 累加无精度损失风险"
-    cons:
-      - "W6 packed 需要配套 prepack；layout 选错静默错"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter 的 INT8 GEMM 入口"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "标准接入"
-    not_for:
-      - "需要单一路径可预测性能"
-    pros:
-      - "统一 API"
-    cons:
-      - "查表未命中会静默降级"
-    source: "references/libraries.md"
-
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: m_grouped_i8_gemm_nt_contiguous（W6 packed）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - grouped / MoE 的 INT8 路径
+  - 需要按 layout 精细控制（W6 packed）
+  not_for:
+  - 普通稠密大 GEMM（hipBLASLt 走 torch 路径即可）
+  - layout 没配对时（不是慢，是静默错）
+  pros:
+  - int32 累加无精度损失风险
+  cons:
+  - W6 packed 需要配套 prepack；layout 选错静默错
+  source: references/libraries.md
+  import_path: deepgemm.m_grouped_i8_gemm_nt_contiguous
+  signature: m_grouped_i8_gemm_nt_contiguous(...)
+  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_i8_gemm_nt_contiguous")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter 的 INT8 GEMM 入口
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 标准接入
+  not_for:
+  - 需要单一路径可预测性能
+  pros:
+  - 统一 API
+  cons:
+  - 查表未命中会静默降级
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "INT8 的算力峰值与 FP8 不同；分母必须按 dtype 分开取，不能沿用 FP8 的"
-
-shapes: [decode-m32, prefill-8k]
-
+  note: INT8 的算力峰值与 FP8 不同；分母必须按 dtype 分开取，不能沿用 FP8 的
+shapes:
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡。达成率分母须按 INT8 单独标定"
+  conclusion: 无实测：索引卡。达成率分母须按 INT8 单独标定
   verified_on: null
-
-surfaces: [table-miss, layout-pack, split-k]
-
-updated: "2026-11-22"
+surfaces:
+- table-miss
+- layout-pack
+- split-k
+updated: '2026-11-22'

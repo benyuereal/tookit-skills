@@ -20,6 +20,9 @@ impls:
   cons:
   - 比 rmsnorm 多一次遍历
   source: references/libraries.md
+  import_path: lightop.LayerNorm
+  signature: LayerNorm(normalized_shape, eps=1e-5) 是 nn.Module
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"LayerNorm")"
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter 的 layernorm/norm 族

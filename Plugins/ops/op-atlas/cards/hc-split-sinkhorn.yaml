@@ -1,56 +1,57 @@
 id: hc-split-sinkhorn
-title: "HC split + Sinkhorn 归一"
+title: HC split + Sinkhorn 归一
 family: linear-attn
-math: "对路由矩阵做 Sinkhorn 迭代归一（行列交替）"
+math: 对路由矩阵做 Sinkhorn 迭代归一（行列交替）
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: mhc-kernels
-    library_profile_ref: "libraries.md §11"
-    file_hint: "MHC 的 sinkhorn 迭代"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要双随机矩阵归一"
-    not_for:
-      - "不需要归一的路由"
-    pros:
-      - "与 MHC 同栈"
-    cons:
-      - "迭代次数需调"
-    source: "references/libraries.md"
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 的迭代实现"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "快速原型"
-    not_for:
-      - "追求极限"
-    pros:
-      - "可读可改"
-    cons:
-      - "布局税"
-    source: "references/libraries.md"
-
+- repo: mhc-kernels
+  library_profile_ref: libraries.md §11
+  file_hint: MHC 的 sinkhorn 迭代
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要双随机矩阵归一
+  not_for:
+  - 不需要归一的路由
+  pros:
+  - 与 MHC 同栈
+  cons:
+  - 迭代次数需调
+  source: references/libraries.md
+- repo: tilelang
+  library_profile_ref: libraries.md §8
+  file_hint: tilelang 的迭代实现
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 快速原型
+  not_for:
+  - 追求极限
+  pros:
+  - 可读可改
+  cons:
+  - 布局税
+  source: references/libraries.md
+  import_path: boltops.mhc.hc_split_sinkhorn
+  signature: hc_split_sinkhorn(...)
+  smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.mhc").hc_split_sinkhorn is not None"
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "迭代次数决定精度与耗时；通常 3-5 次"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 迭代次数决定精度与耗时；通常 3-5 次
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [cross-lane-fold]
-
-updated: "2026-11-22"
+surfaces:
+- cross-lane-fold
+updated: '2026-11-22'

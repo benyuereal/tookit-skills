@@ -56,6 +56,8 @@ BARE_PCT = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*%")
 
 errors, warns = [], []
 L1_PENDING = [0]   # L1 回填进度计数（全部填完后改为 err）
+L1_EXEMPT = [0]    # 不适用 L1 的条目数（in-house / 源码树）
+_NON_INSTALLABLE = set()
 
 
 def err(code, where, msg):
@@ -100,6 +102,18 @@ def _library_registry(repo):
     removed = {r.get("canonical_id"): r.get("replaced_by")
                for r in (data.get("removed") or []) if isinstance(r, dict)}
     return libs, removed
+
+
+def _non_installable_libs(repo):
+    """registry 里 installed: false 的库（源码树/未装），L1 不适用。"""
+    p = repo / "data/ops/libraries-registry.yaml"
+    if not p.is_file():
+        return set()
+    data, problem = _load_yaml(p)
+    if problem or not isinstance(data, dict):
+        return set()
+    return {l.get("canonical_id") for l in (data.get("libraries") or [])
+            if isinstance(l, dict) and l.get("installed") is False}
 
 
 def _registry(repo):
@@ -172,6 +186,8 @@ def validate(atlas, repo):
     lib_sections, law_ids = _truth_sources(repo)
     reg_status, reg_path = _registry(repo)
     lib_canon, lib_removed = _library_registry(repo)
+    _NON_INSTALLABLE.clear()
+    _NON_INSTALLABLE.update(_non_installable_libs(repo))
 
     index_p = atlas / "INDEX.md"
     index_txt = index_p.read_text(encoding="utf-8") if index_p.is_file() else ""
@@ -295,10 +311,16 @@ def validate(atlas, repo):
                         err("E10", where, "impls[%d] tier=primary 缺 %s" % (i, f))
                 # L1：primary 必须能落到具体函数并验证它存在。
                 # 只写「lightop 有 rope 融合族」只是知道在哪个库，不是映射。
+                # in-house 与源码树类库（installed: false）没有可导入的函数，
+                # L1 对它不适用——它们的「映射」是源码路径而非 库.函数。
+                _no_import = impl.get("repo") in ("in-house",) or \
+                    impl.get("repo") in _NON_INSTALLABLE
                 for f in ("import_path", "signature", "smoke_test"):
                     if not impl.get(f):
-                        # L1 回填进行中：先用 warn 计数，全部填完后升为 err
-                        L1_PENDING[0] += 1
+                        if _no_import:
+                            L1_EXEMPT[0] += 1
+                        else:
+                            L1_PENDING[0] += 1
             for f in ("best_for", "not_for", "pros", "cons"):
                 v = impl.get(f)
                 if v is not None and not isinstance(v, list):
@@ -392,7 +414,8 @@ def validate(atlas, repo):
 
     if L1_PENDING[0]:
         print("[L1] 还有 %d 个 primary impl 缺 import_path/signature/smoke_test"
-              % L1_PENDING[0], file=sys.stderr)
+              "（%d 个不适用：in-house/源码树）"
+              % (L1_PENDING[0], L1_EXEMPT[0]), file=sys.stderr)
 
     # ---- E9 surfaces.yaml 的 law 必须解析到实体（防悬空引用）
     _check_surface_laws(repo, atlas)

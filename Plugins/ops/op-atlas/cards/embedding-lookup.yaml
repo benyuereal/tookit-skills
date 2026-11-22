@@ -1,57 +1,61 @@
 id: embedding-lookup
-title: "Embedding 查表"
+title: Embedding 查表
 family: memory
-math: "y = weight[token_ids]；gather 型"
+math: y = weight[token_ids]；gather 型
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: triton
-    library_profile_ref: "libraries.md §9"
-    file_hint: "Triton hcu 的 gather 路径（形状随数据变化，表达力优先）"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "现成库有更快的 gather 但需要 autotune；torch 版只作对照"
-    not_for:
-      - "需要与后续 norm 融合时"
-    pros:
-      - "无外部依赖，适合做基线对照"
-      - "足够用，但没有融合"
-    cons:
-      - "无融合，另起一趟"
-    source: "references/libraries.md"
-  - repo: boltops
-    library_profile_ref: "libraries.md §10"
-    file_hint: "gather 类成品"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要低时延"
-    not_for:
-      - "大词表且要求极限"
-    pros:
-      - "自带调优"
-    cons:
-      - "版本较新"
-    source: "references/libraries.md"
-
+- repo: triton
+  library_profile_ref: libraries.md §9
+  file_hint: Triton hcu 的 gather 路径（形状随数据变化，表达力优先）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 现成库有更快的 gather 但需要 autotune；torch 版只作对照
+  not_for:
+  - 需要与后续 norm 融合时
+  pros:
+  - 无外部依赖，适合做基线对照
+  - 足够用，但没有融合
+  cons:
+  - 无融合，另起一趟
+  source: references/libraries.md
+  import_path: triton.jit
+  signature: '@triton.jit'
+  smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
+- repo: boltops
+  library_profile_ref: libraries.md §10
+  file_hint: gather 类成品
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要低时延
+  not_for:
+  - 大词表且要求极限
+  pros:
+  - 自带调优
+  cons:
+  - 版本较新
+  source: references/libraries.md
+  import_path: boltops.gemm.gemm_a16w16
+  signature: gemm_a16w16(...) 可作为 gather 对照
+  smoke_test: python3 -I -c "import boltops; assert hasattr(importlib.import_module("boltops.gemm"),"gemm_a16w16")"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "随机 gather，DRAM 行激活效率决定实际上限（不是流式峰值）"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 随机 gather，DRAM 行激活效率决定实际上限（不是流式峰值）
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [gather-path]
-
-updated: "2026-11-22"
+surfaces:
+- gather-path
+updated: '2026-11-22'

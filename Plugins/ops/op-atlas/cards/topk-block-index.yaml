@@ -1,56 +1,61 @@
 id: topk-block-index
-title: "Top-k block 选择（含 -1 哨兵）"
+title: Top-k block 选择（含 -1 哨兵）
 family: attention
-math: "idx = topk(scores, K)；无效槽位填 -1（必须垫队尾）"
+math: idx = topk(scores, K)；无效槽位填 -1（必须垫队尾）
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "lightop sparse MQA 的 topk 后处理"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "DSA 稀疏选择"
-    not_for:
-      - "需要队首 -1（会静默算错）"
-    pros:
-      - "与 mqa-logits 配套"
-    cons:
-      - "lightop 的 sparse 路径已含 topk 后处理"
-    source: "references/libraries.md"
-  - repo: boltops
-    library_profile_ref: "libraries.md §10"
-    file_hint: "topk 类成品"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要低时延"
-    not_for:
-      - "大 K 时收益明显"
-    pros:
-      - "自带调优"
-    cons:
-      - "版本较新"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop sparse MQA 的 topk 后处理
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - DSA 稀疏选择
+  not_for:
+  - 需要队首 -1（会静默算错）
+  pros:
+  - 与 mqa-logits 配套
+  cons:
+  - lightop 的 sparse 路径已含 topk 后处理
+  source: references/libraries.md
+  import_path: lightop.mqa_logits
+  signature: mqa_logits 的 topk 后处理
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"mqa_logits")"
+- repo: boltops
+  library_profile_ref: libraries.md §10
+  file_hint: topk 类成品
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要低时延
+  not_for:
+  - 大 K 时收益明显
+  pros:
+  - 自带调优
+  cons:
+  - 版本较新
+  source: references/libraries.md
+  import_path: boltops.mqa_logits.fp8_mqa_logits
+  signature: fp8_mqa_logits(q,fused_kv_cache,weights,...)
+  smoke_test: python3 -I -c "import boltops; assert hasattr(importlib.import_module("boltops.mqa_logits"),"fp8_mqa_logits")"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "DSA 的稀疏选择；-1 语义与 MoE 的 padding 不同，不可混用"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: DSA 的稀疏选择；-1 语义与 MoE 的 padding 不同，不可混用
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [gather-path, precision-drop]
-
-updated: "2026-11-22"
+surfaces:
+- gather-path
+- precision-drop
+updated: '2026-11-22'

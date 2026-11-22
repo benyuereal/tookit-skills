@@ -1,71 +1,75 @@
 id: causal-conv1d
-title: "Causal conv1d（MHC 三件之一）"
+title: Causal conv1d（MHC 三件之一）
 family: linear-attn
-math: "y_t = sum_{k=0..K-1} w_k*x_{t-k}；因果卷积，tile 内移位"
+math: y_t = sum_{k=0..K-1} w_k*x_{t-k}；因果卷积，tile 内移位
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: causal-conv1d
-    library_profile_ref: "libraries.md §11"
-    file_hint: "causal_conv1d 包的 conv1d 实现"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "MHC / Mamba2 系"
-      - "短核因果卷积"
-    not_for:
-      - "需要跨 tile 的大核（依赖链变长）"
-    pros:
-      - "官方实现，覆盖 decode 与 prefill"
-    cons:
-      - "核大小受 tile 高度限制"
-    source: "references/libraries.md"
-  - repo: mhc-kernels
-    library_profile_ref: "libraries.md §11"
-    file_hint: "kernels/ 里的手写 conv1d 变体"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要与 hadamard/norm 融合的定制形状"
-    not_for:
-      - "常规形状（用 causal_conv1d 包即可）"
-    pros:
-      - "可与 MHC 三件套同栈"
-    cons:
-      - "源码树非包，需自行编译"
-    source: "references/libraries.md"
-  - repo: boltops
-    library_profile_ref: "libraries.md §10"
-    file_hint: "causal_conv1d_fn / causal_conv1d_update"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "decode 形态"
-    not_for:
-      - "大核场景（boltops 的 autotune 产物与 device 绑定，换核要重调）"
-    pros:
-      - "自带调优"
-    cons:
-      - "版本较新"
-    source: "references/libraries.md"
-
+- repo: causal-conv1d
+  library_profile_ref: libraries.md §11
+  file_hint: causal_conv1d 包的 conv1d 实现
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - MHC / Mamba2 系
+  - 短核因果卷积
+  not_for:
+  - 需要跨 tile 的大核（依赖链变长）
+  pros:
+  - 官方实现，覆盖 decode 与 prefill
+  cons:
+  - 核大小受 tile 高度限制
+  source: references/libraries.md
+  import_path: causal_conv1d.causal_conv1d_fn
+  signature: causal_conv1d_fn(x,weight,bias,seq_idx=None,activation=None)
+  smoke_test: python3 -I -c "import causal_conv1d; assert hasattr(causal_conv1d,"causal_conv1d_fn")"
+- repo: mhc-kernels
+  library_profile_ref: libraries.md §11
+  file_hint: kernels/ 里的手写 conv1d 变体
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要与 hadamard/norm 融合的定制形状
+  not_for:
+  - 常规形状（用 causal_conv1d 包即可）
+  pros:
+  - 可与 MHC 三件套同栈
+  cons:
+  - 源码树非包，需自行编译
+  source: references/libraries.md
+- repo: boltops
+  library_profile_ref: libraries.md §10
+  file_hint: causal_conv1d_fn / causal_conv1d_update
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - decode 形态
+  not_for:
+  - 大核场景（boltops 的 autotune 产物与 device 绑定，换核要重调）
+  pros:
+  - 自带调优
+  cons:
+  - 版本较新
+  source: references/libraries.md
+  import_path: boltops.generic.fused_mamba_state_scatter_with_mask
+  signature: fused_mamba_state_scatter_with_mask(...)
+  smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.generic").fused_mamba_state_scatter_with_mask is not None"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "串行 scan 依赖；优化手段是 tile 内移位，不是 GEMM 那套"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 串行 scan 依赖；优化手段是 tile 内移位，不是 GEMM 那套
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [pipeline-depth]
-
-updated: "2026-11-22"
+surfaces:
+- pipeline-depth
+updated: '2026-11-22'

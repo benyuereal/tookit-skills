@@ -1,73 +1,78 @@
 id: moe-w8a8
 title: MoE W8A8 融合（routed + shared 专家）
 family: moe
-math: "y = Σ_shared W_s x + Σ_{e∈topk} g_e · (W_e x)；W 为 int8 权重，激活 per-token 量化"
+math: y = Σ_shared W_s x + Σ_{e∈topk} g_e · (W_e x)；W 为 int8 权重，激活 per-token 量化
 status: draft
 layer: kernel
 op_card: Plugins/ops/skills/op-moe-w8a8
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "lightop-4stage（mode 500-525）"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q3"
-    best_for:
-      - "decode 小 batch（16-row pooled cache）"
-      - "共享专家与 routed 同 kernel"
-    not_for:
-      - "FP8 + persistent 后端（会 RuntimeError）"
-      - "需要跨 gfx 单一二进制"
-    pros:
-      - "四段融合，包内无持久化调度开销"
-    cons:
-      - "csrc 改完要整包重编"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
-    tier: fallback
-    law_ref: null
-    best_for:
-      - "标准接入兜底"
-    not_for:
-      - "需要单一路径可预测性能"
-    pros:
-      - "四后端回退，单路径性能不可预测"
-    cons:
-      - "查表命中率决定成败"
-    source: "references/libraries.md"
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "lightop-asm（mode>=1000）"
-    tier: avoid
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    not_for:
-      - "混合专家 batch（会串读其他 token 数据）"
-    cons:
-      - "违反 batch_independence 不变量"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop-4stage（mode 500-525）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
+  best_for:
+  - decode 小 batch（16-row pooled cache）
+  - 共享专家与 routed 同 kernel
+  not_for:
+  - FP8 + persistent 后端（会 RuntimeError）
+  - 需要跨 gfx 单一二进制
+  pros:
+  - 四段融合，包内无持久化调度开销
+  cons:
+  - csrc 改完要整包重编
+  source: references/libraries.md
+  import_path: lightop.moe_gemm_marlin_w16a16
+  signature: moe_gemm_marlin_w16a16(...) Marlin MoE GEMM 入口（mode 参数控制后端）
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_gemm_marlin_w16a16")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: get_aiter_moe_config → moe_c / asm / triton / ck
+  tier: fallback
+  law_ref: null
+  best_for:
+  - 标准接入兜底
+  not_for:
+  - 需要单一路径可预测性能
+  pros:
+  - 四后端回退，单路径性能不可预测
+  cons:
+  - 查表命中率决定成败
+  source: references/libraries.md
+  import_path: aiter.moe_align_block_size
+  signature: moe_align_block_size(...) AITER 的 MoE 入口族
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop-asm（mode>=1000）
+  tier: avoid
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  not_for:
+  - 混合专家 batch（会串读其他 token 数据）
+  cons:
+  - 违反 batch_independence 不变量
+  source: references/libraries.md
+  import_path: lightop.moe_gemm_marlin_w16a16
+  signature: moe_gemm_marlin_w16a16(...) Marlin MoE GEMM 入口（mode 参数控制后端）
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_gemm_marlin_w16a16")"
 ceiling:
   kind: missing
   ref: null
   bound: mixed
-  note: "整体未判；Marlin GEMM 分量已隔离实测达 88.8% 峰值带宽"
-
-shapes: [decode-m32, prefill-8k]
-
+  note: 整体未判；Marlin GEMM 分量已隔离实测达 88.8% 峰值带宽
+shapes:
+- decode-m32
+- prefill-8k
 last_verdict:
   status: measured
   kb_path: null
   ratio:
     value: 0.888
-    vs: "峰值带宽（仅 Marlin GEMM 分量）"
-  conclusion: "Marlin GEMM 分量达峰值带宽的 0.888；整体未判；asm mode>=1000 禁用"
-  verified_on: "2026-10-20"
-
+    vs: 峰值带宽（仅 Marlin GEMM 分量）
+  conclusion: Marlin GEMM 分量达峰值带宽的 0.888；整体未判；asm mode>=1000 禁用
+  verified_on: '2026-10-20'
 surfaces:
-  - table-miss
-  - fusion-boundary
-  - precision-drop
-
-updated: "2026-11-22"
+- table-miss
+- fusion-boundary
+- precision-drop
+updated: '2026-11-22'

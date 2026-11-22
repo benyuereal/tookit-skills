@@ -1,56 +1,58 @@
 id: kv-cache-paged-write
-title: "KV cache 分页写入"
+title: KV cache 分页写入
 family: kv
-math: "cache[block_table[slot], offset, :] = k/v"
+math: cache[block_table[slot], offset, :] = k/v
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: flash-attn
-    library_profile_ref: "libraries.md §7"
-    file_hint: "paged KV 写入"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "page 16/64 行布局"
-    not_for:
-      - "需要连续布局的 kernel"
-    pros:
-      - "与 attention 配套"
-    cons:
-      - "布局绑定强"
-    source: "references/libraries.md"
-  - repo: in-house
-    library_profile_ref: null
-    file_hint: "手写 scatter"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "非标准 page 布局"
-    not_for:
-      - "常规形状（无特殊布局需求）"
-    pros:
-      - "完全可控，但需自己维护"
-    cons:
-      - "现成库不支持：非标准 page 布局（16-row vs 64-row）的写入契约不一致，各库的 block_table 语义不同，只能按目标布局自研"
-    source: "references/libraries.md"
-
+- repo: flash-attn
+  library_profile_ref: libraries.md §7
+  file_hint: paged KV 写入
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - page 16/64 行布局
+  not_for:
+  - 需要连续布局的 kernel
+  pros:
+  - 与 attention 配套
+  cons:
+  - 布局绑定强
+  source: references/libraries.md
+  import_path: flash_attn.flash_attn_varlen_func
+  signature: flash_attn_varlen_func(..., block_table=...)
+  smoke_test: python3 -I -c "import flash_attn; assert hasattr(flash_attn,"flash_attn_varlen_func")"
+- repo: in-house
+  library_profile_ref: null
+  file_hint: 手写 scatter
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 非标准 page 布局
+  not_for:
+  - 常规形状（无特殊布局需求）
+  pros:
+  - 完全可控，但需自己维护
+  cons:
+  - 现成库不支持：非标准 page 布局（16-row vs 64-row）的写入契约不一致，各库的 block_table 语义不同，只能按目标布局自研
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "mutates_inputs 的典型：写入会改缓存，多变体对比必须各喂副本"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: mutates_inputs 的典型：写入会改缓存，多变体对比必须各喂副本
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [layout-pack, gather-path]
-
-updated: "2026-11-22"
+surfaces:
+- layout-pack
+- gather-path
+updated: '2026-11-22'

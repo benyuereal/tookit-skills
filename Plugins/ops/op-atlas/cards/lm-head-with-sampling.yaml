@@ -1,57 +1,59 @@
 id: lm-head-with-sampling
-title: "LM head + 采样（融合）"
+title: LM head + 采样（融合）
 family: gemm
-math: "logits = h*W_vocab^T；idx = topk/topp(softmax(logits))"
+math: logits = h*W_vocab^T；idx = topk/topp(softmax(logits))
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "lm_head + sampling 融合"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "大词表（128k+）"
-      - "decode 档"
-    not_for:
-      - "需要中间 logits 做别的事时"
-    pros:
-      - "省一次 M*128k 的写回"
-    cons:
-      - "采样语义（tie-break）需核对"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter 的 fused sampling（若可用）"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "torch 两步只作对照；融合版走 aiter"
-    not_for:
-      - "大词表生产"
-    pros:
-      - "实现简单，但多一次往返"
-    cons:
-      - "中间 logits 写回是纯浪费"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lm_head + sampling 融合
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 大词表（128k+）
+  - decode 档
+  not_for:
+  - 需要中间 logits 做别的事时
+  pros:
+  - 省一次 M*128k 的写回
+  cons:
+  - 采样语义（tie-break）需核对
+  source: references/libraries.md
+  import_path: lightop.fast_topk_transform_fused
+  signature: fast_topk_transform_fused(...) 与 lm_head 配合
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"fast_topk_transform_fused")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter 的 fused sampling（若可用）
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - torch 两步只作对照；融合版走 aiter
+  not_for:
+  - 大词表生产
+  pros:
+  - 实现简单，但多一次往返
+  cons:
+  - 中间 logits 写回是纯浪费
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: mixed
-  note: "大词表 GEMM 的输出直接喂采样，中间 logits 写回是纯浪费"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 大词表 GEMM 的输出直接喂采样，中间 logits 写回是纯浪费
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [fusion-boundary, precision-drop]
-
-updated: "2026-11-22"
+surfaces:
+- fusion-boundary
+- precision-drop
+updated: '2026-11-22'

@@ -1,57 +1,58 @@
 id: mhc-fused
-title: "MHC 三件融合"
+title: MHC 三件融合
 family: linear-attn
-math: "conv1d + hadamard + norm 的融合链"
+math: conv1d + hadamard + norm 的融合链
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: mhc-kernels
-    library_profile_ref: "libraries.md §11"
-    file_hint: "kernels/mhc_fused.hip"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "验证 conv1d+hadamard+norm 三者融合是否划算"
-    not_for:
-      - "各单独算子已很优时（融合净负）"
-    pros:
-      - "官方手写实现"
-      - "可对比分拆与融合"
-    cons:
-      - "实测有融合净负的反例，必须先量分拆版"
-    source: "references/libraries.md"
-  - repo: tilelang
-    library_profile_ref: "libraries.md §8"
-    file_hint: "tilelang 分拆三步"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "融合失败时的退路"
-    not_for:
-      - "追求极限"
-    pros:
-      - "可读可改"
-    cons:
-      - "多两次往返"
-    source: "references/libraries.md"
-
+- repo: mhc-kernels
+  library_profile_ref: libraries.md §11
+  file_hint: kernels/mhc_fused.hip
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 验证 conv1d+hadamard+norm 三者融合是否划算
+  not_for:
+  - 各单独算子已很优时（融合净负）
+  pros:
+  - 官方手写实现
+  - 可对比分拆与融合
+  cons:
+  - 实测有融合净负的反例，必须先量分拆版
+  source: references/libraries.md
+- repo: tilelang
+  library_profile_ref: libraries.md §8
+  file_hint: tilelang 分拆三步
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 融合失败时的退路
+  not_for:
+  - 追求极限
+  pros:
+  - 可读可改
+  cons:
+  - 多两次往返
+  source: references/libraries.md
+  import_path: boltops.mhc.mhc_fused_tilelang
+  signature: mhc_fused_tilelang(...)
+  smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.mhc").mhc_fused_tilelang is not None"
 ceiling:
   kind: missing
   ref: null
   bound: mixed
-  note: "它存在的意义就是验证前两张的融合是否划算——融合不一定赢"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 它存在的意义就是验证前两张的融合是否划算——融合不一定赢
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [fusion-boundary]
-
-updated: "2026-11-22"
+surfaces:
+- fusion-boundary
+updated: '2026-11-22'

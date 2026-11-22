@@ -1,56 +1,60 @@
 id: mla-kv-cache
-title: "MLA latent 缓存布局"
+title: MLA latent 缓存布局
 family: kv
-math: "cache[slot] = c_kv_latent；压缩后的 KV，非完整 K/V"
+math: cache[slot] = c_kv_latent；压缩后的 KV，非完整 K/V
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: flash-mla
-    library_profile_ref: "libraries.md §7"
-    file_hint: "MLA latent 缓存"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "DeepSeek MLA 系"
-    not_for:
-      - "普通 GQA/MHA（用 paged KV）"
-    pros:
-      - "与 MLA 配套"
-    cons:
-      - "布局契约强"
-    source: "references/libraries.md"
-  - repo: flash-mla
-    library_profile_ref: "libraries.md §7"
-    file_hint: "flash_mla 的 latent cache 布局"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "非标准 latent 维度"
-    not_for:
-      - "常规形状（无特殊布局需求）"
-    pros:
-      - "完全可控，但需自己维护"
-    cons:
-      - "MLA latent cache 由 flash-mla 管理"
-    source: "references/libraries.md"
-
+- repo: flash-mla
+  library_profile_ref: libraries.md §7
+  file_hint: MLA latent 缓存
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - DeepSeek MLA 系
+  not_for:
+  - 普通 GQA/MHA（用 paged KV）
+  pros:
+  - 与 MLA 配套
+  cons:
+  - 布局契约强
+  source: references/libraries.md
+  import_path: flash_mla.get_mla_metadata
+  signature: get_mla_metadata(cache_seqlens,num_heads_per_rank,head_dim)
+  smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"get_mla_metadata")"
+- repo: flash-mla
+  library_profile_ref: libraries.md §7
+  file_hint: flash_mla 的 latent cache 布局
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 非标准 latent 维度
+  not_for:
+  - 常规形状（无特殊布局需求）
+  pros:
+  - 完全可控，但需自己维护
+  cons:
+  - MLA latent cache 由 flash-mla 管理
+  source: references/libraries.md
+  import_path: flash_mla.get_mla_metadata
+  signature: get_mla_metadata(cache_seqlens,num_heads_per_rank,head_dim)
+  smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"get_mla_metadata")"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "latent 缓存布局与普通 paged KV 完全不同，判据不可混"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: latent 缓存布局与普通 paged KV 完全不同，判据不可混
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [layout-pack]
-
-updated: "2026-11-22"
+surfaces:
+- layout-pack
+updated: '2026-11-22'
