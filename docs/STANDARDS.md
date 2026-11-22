@@ -7,6 +7,24 @@
 - Skill 目录用 `{domain}-{name}` kebab-case（如 `dcu-vllm-deploy`）
 - `SKILL.md` frontmatter 必须含 `name`（与目录名一致）、`description`（触发条件 + 不适用反例）、`version`、`license: MIT`
 
+### 前缀例外清单
+
+`dcu-` / `op-` 前缀表示**本平台特有**的技能。以下技能是**通用工程能力**
+（上游框架的 CI、重构、profiling、部署等），加 `dcu-` 前缀会给它们
+虚假的平台归属，因此**允许不带前缀**，登记在 `skill_lint.py:PREFIX_EXEMPT`：
+
+| 类别 | skill |
+|---|---|
+| 工程规范与重构 | `ci-workflow-guide`、`clean-startup-log`、`env-var-conventions`、`large-class-init-style`、`mechanical-refactor-verify`、`scripted-runtime-notes` |
+| cookbook | `cookbook-add-model`、`cookbook-migrate-model`、`cookbook-review-pr` |
+| 上游框架操作 | `sglang-bisect-ci-regression`、`sglang-cherrypick`、`sglang-diffusion-add-model`、`sglang-humanize-review`、`sglang-model-day0-support`、`sglang-prod-incident-triage`、`vllm-pr-summary` |
+| 内核接入 | `add-jit-kernel`、`add-sgl-kernel`、`generate-profile` |
+| profiling / 分析 | `humanize-gen-plan`、`humanize-rlcr`、`llm-pipeline-analysis`、`llm-serving-auto-benchmark`、`llm-serving-capacity-planner`、`llm-torch-profiler-analysis`、`model-architecture-diagram`、`model-compute-simulation`、`model-pr-optimization-history`、`model-pr-history-knowledge`、`torch-profiler-layer-track` |
+| 调试 | `cross-engine-acceptance-gate`、`debug-cuda-crash`、`debug-distributed-hang` |
+
+**新增例外要改两处**：本表 + `skill_lint.py:PREFIX_EXEMPT`。判据只有一条——
+「这个技能换成非 DCU 平台是否同样成立？成立就不加 `dcu-`」。
+
 ## 结构
 
 ```

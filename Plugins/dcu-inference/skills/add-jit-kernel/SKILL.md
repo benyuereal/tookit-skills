@@ -1,6 +1,6 @@
 ---
 name: add-jit-kernel
-description: Add a lightweight upstream SGLang JIT CUDA kernel with bindings, correctness tests, benchmarks, CI registration, and serving-path validation. Use only when the current checkout contains python/sglang/jit_kernel and the operator fits its supported CUDA toolchain; use a platform-native workflow for standalone HIP/DCU kernels.
+description: "给上游 SGLang 加轻量 JIT CUDA kernel（sglang jit kernel）：bindings、正确性测试、基准、CI 注册、服务路径验证。何时用：checkout 里有 python/sglang/jit_kernel 且算子适配其 CUDA 工具链；平台原生实现走别的流程。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

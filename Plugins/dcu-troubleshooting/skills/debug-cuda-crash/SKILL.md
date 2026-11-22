@@ -1,6 +1,6 @@
 ---
 name: debug-cuda-crash
-description: Debug CUDA or HIP kernel crashes in SGLang and vLLM with pre-call logging, synchronized reproduction, tensor validation, and architecture-aware tools. Use for illegal memory access, device assertions, VMFault, NaN/Inf, OOM, or suspected custom-op corruption on NVIDIA, DCU, or HCU systems.
+description: "调试 SGLang / vLLM 里的 CUDA 或 HIP kernel 崩溃（debug cuda crash）：调用前日志、同步复现、张量校验、架构感知工具。何时用：非法内存访问、device 断言、VMFault、NaN/Inf、OOM，或怀疑自定义算子写坏，跨 NVIDIA/DCU/HCU。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT
@@ -261,3 +261,16 @@ Reduce the level: `export SGLANG_KERNEL_API_LOGLEVEL=3`
 
 ### Statistics/Tensor Dumps Skipped During CUDA Graph Capture
 Expected behavior. Level-5 statistics and level-10 dumps require copying tensors to CPU, which is not allowed during CUDA graph capture.
+
+## 验收
+
+1. 复现是**同步**的（每次都在同一位置崩）。
+2. 调用前日志能定位到具体的 kernel 启动参数。
+3. 张量校验排除了 NaN/Inf 与越界形状。
+4. 结论指出是自定义算子、框架内核、还是调用方传参。
+
+## 不适用场景
+
+分布式卡住而非崩溃（走 `debug-distributed-hang`）；
+VMFault 且已有 coredump（走 `dcu-vmfault-coredump`）；
+问题不可复现（先解决可复现性，否则任何结论都不可信）。

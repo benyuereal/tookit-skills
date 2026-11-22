@@ -1,6 +1,6 @@
 ---
 name: scripted-runtime-notes
-description: Design and review SGLang scripted-runtime tests and harness APIs while preserving real scheduler lifecycle semantics. Use when adding probes, control primitives, hooks, or tests around request, batch, KV-cache, pause/resume, abort, or scheduler behavior.
+description: "设计并审阅 SGLang scripted-runtime 测试与 harness API（scripted runtime notes），保持真实 scheduler 生命周期语义。何时用：围绕 request、batch、KV cache、pause/resume、abort、scheduler 行为加探针、控制原语、hook 或测试。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

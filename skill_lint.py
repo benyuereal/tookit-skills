@@ -31,6 +31,30 @@ CONVENTION_FILES = {
     'INDEX.md',
 }
 PREFIX_ALLOW = ('dcu-', 'op-')
+# 通用工程能力，换成非 DCU 平台同样成立，因此不加 dcu- 前缀。
+# 与 docs/STANDARDS.md 的「前缀例外清单」必须同步；判据：
+# 「这个技能换成非 DCU 平台是否同样成立？成立就不加 dcu-」。
+PREFIX_EXEMPT = {
+    # 工程规范与重构
+    'ci-workflow-guide', 'clean-startup-log', 'env-var-conventions',
+    'large-class-init-style', 'mechanical-refactor-verify', 'scripted-runtime-notes',
+    # cookbook
+    'cookbook-add-model', 'cookbook-migrate-model', 'cookbook-review-pr',
+    # 上游框架操作
+    'sglang-bisect-ci-regression', 'sglang-cherrypick', 'sglang-diffusion-add-model',
+    'sglang-humanize-review', 'sglang-model-day0-support',
+    'sglang-prod-incident-triage', 'vllm-pr-summary',
+    # 内核接入
+    'add-jit-kernel', 'add-sgl-kernel', 'generate-profile',
+    # profiling / 分析
+    'humanize-gen-plan', 'humanize-rlcr', 'llm-pipeline-analysis',
+    'llm-serving-auto-benchmark', 'llm-serving-capacity-planner',
+    'llm-torch-profiler-analysis', 'model-architecture-diagram',
+    'model-compute-simulation', 'model-pr-optimization-history',
+    'model-pr-history-knowledge', 'torch-profiler-layer-track',
+    # 调试
+    'cross-engine-acceptance-gate', 'debug-cuda-crash', 'debug-distributed-hang',
+}
 MAIN_SCHEMA = {'name', 'description', 'version', 'license', 'kind'}
 LEGACY_FIELDS = {'metadata', 'shard', 'standalone', 'capabilities', 'intents',
                  'recommended_companions', 'category', 'related_skills'}
@@ -192,10 +216,10 @@ def lint(root):
         if not NA_PAT.search(body):
             v['SK002'].append(f'{sk}:0  缺「不适用场景」章节')
 
-        # SK004 前缀
+        # SK004 前缀（通用工程技能走例外清单，见 PREFIX_EXEMPT）
         name = os.path.basename(d)
-        if not name.startswith(PREFIX_ALLOW):
-            v['SK004'].append(f'{rel}  前缀不在白名单')
+        if not name.startswith(PREFIX_ALLOW) and name not in PREFIX_EXEMPT:
+            v['SK004'].append(f'{rel}  前缀不在白名单，也不在例外清单')
 
         # SK005 frontmatter
         fields = set(re.findall(r'^([A-Za-z_-]+)\s*:', fm, re.M))

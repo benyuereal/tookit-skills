@@ -1,6 +1,6 @@
 ---
 name: sglang-bisect-ci-regression
-description: Investigate repeatable SGLang CI failures by normalizing the signature, separating code regressions from runner, hardware, image, dependency, or workload drift, and bisecting a valid passing/failing window. Use for scheduled or rerun workflow failures and authorized remote reproduction.
+description: "排查可复现的 SGLang CI 失败（sglang bisect ci regression）：归一化签名，区分代码回归与 runner/硬件/镜像/依赖/负载漂移，再在有效的通过-失败区间内 bisect。何时用：定时或重跑流水线失败，且有授权的远程复现环境。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

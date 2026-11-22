@@ -1,6 +1,6 @@
 ---
 name: dcu-lightop-fusion
-description: Use when writing or understanding LightOp fusion kernels.
+description: "编写或理解 LightOp 融合算子（LightOp fusion kernel）。何时用：走 memory-bound 算子链融合，或要读懂 LightOp 的融合实现。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

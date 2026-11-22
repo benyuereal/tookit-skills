@@ -1,6 +1,6 @@
 ---
 name: model-pr-history-knowledge
-description: Build and query an evidence-backed history of model and runtime decisions, including accepted, rejected, inconclusive, and reverted optimization attempts. Use during SGLang code review, regression analysis, architecture evolution, experiment planning, or when a previous rationale and its hardware/workload scope must be recovered.
+description: "构建与查询有证据支撑的模型/运行时决策史（model pr history knowledge）：已采纳、已否决、无结论、已回退的优化尝试。何时用：代码审阅、回归分析、架构演进、实验规划，或需要查某次优化的原始理由与当时硬件前提。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

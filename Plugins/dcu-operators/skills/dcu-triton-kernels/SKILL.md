@@ -1,6 +1,6 @@
 ---
 name: dcu-triton-kernels
-description: "Use when writing/optimizing Triton kernels on DCU (Hygon BW1000), or migrating PyTorch operators to Triton — covers correctness-first workflow, five optimization patterns, ten task solutions, and DCU-specific pitfalls."
+description: "在 DCU（海光 BW1000）上写/优化 Triton kernel（Triton kernels on DCU），或把 PyTorch 算子迁到 Triton。覆盖：正确性优先流程、五种优化范式、十类任务解法、DCU 特有陷阱。"
 version: "1.0.0"
 author: <internal-user>
 license: MIT

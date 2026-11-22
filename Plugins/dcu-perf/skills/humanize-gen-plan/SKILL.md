@@ -1,6 +1,6 @@
 ---
 name: humanize-gen-plan
-description: Convert an LLM inference optimization request into a pre-registered experiment plan with immutable workload, control/candidate identity, correctness oracles, operator and E2E gates, environment fingerprints, rollback, artifact contract, milestones, and stop conditions. Use before remote GPU profiling, kernel work, serving configuration search, or multi-round optimization.
+description: "把一句 LLM 推理优化需求转成预注册的实验计划（pre-registered experiment plan）：不可变负载、对照/候选身份、正确性判据、算子与端到端门、环境指纹、回滚、产物契约、里程碑、停止条件。何时用：上远程 GPU 做 profiling 之前。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

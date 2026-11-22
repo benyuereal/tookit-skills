@@ -1,6 +1,6 @@
 ---
 name: dcu-offline-container-deps
-description: "Use when an offline DCU container lacks a Python package."
+description: "离线 DCU 容器缺 Python 包时的安装与取证流程（offline container deps）。何时用：容器无外网、pip 装不上、需要从本地 wheel 或镜像内已有包补齐。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT
@@ -74,3 +74,16 @@ device` while disk is fine — see dcu-docker.)
 - For the weight download itself onto the offline device, see
   `china-network-model-download` (probe, resume, integrity check); this skill is only
   the in-container dependency step.
+
+## 验收
+
+1. 容器内 `python -c "import <包>"` 成功。
+2. 版本与宿主机/镜像预期的版本一致（不能装到别的大版本）。
+3. 该包的全部子依赖都能 import（sdist-only 的子依赖要单独处理）。
+4. 重进容器后仍可用（写进镜像层或持久化路径，不是临时目录）。
+
+## 不适用场景
+
+容器有外网（直接 pip 装即可）；
+缺的是系统库（`.so`）而非 Python 包（走 DTK/驱动检查）；
+需要编译 CUDA/HIP 扩展的包（不是纯 Python 依赖）。

@@ -1,6 +1,6 @@
 ---
 name: large-class-init-style
-description: Structure SGLang Scheduler, TokenizerManager, and ModelRunner constructors as explicit, overridable lifecycle steps. Use when modifying or reviewing initialization logic in those three classes, especially resource allocation, backend selection, graph setup, or distributed construction.
+description: "把 SGLang 的 Scheduler / TokenizerManager / ModelRunner 构造函数拆成显式、可覆写的生命周期步骤（large class init style）。何时用：改动或审阅这三个类的初始化逻辑，尤其是资源分配、后端选择、图捕获、分布式构建。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: llm-serving-auto-benchmark
-description: Framework-independent LLM serving benchmark skill for comparing SGLang, vLLM, TensorRT-LLM, or another serving framework. Use when a user wants to find the best deployment command for one model across multiple serving frameworks under the same workload, GPU budget, and latency SLA.
+description: "跨框架的 LLM 服务基准（serving auto benchmark），比较 SGLang / vLLM / TensorRT-LLM 等。何时用：同一模型、同一负载、同一 GPU 预算与延迟 SLA 下，找最优部署命令。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

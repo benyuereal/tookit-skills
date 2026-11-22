@@ -1,6 +1,6 @@
 ---
 name: llm-pipeline-analysis
-description: Decompose LLM serving traces into mutually exclusive latency groups, explicit layer ranges, kernel families, streams, and rank tails. Use after global torch-profiler triage to localize prefill, decode, MoE, attention, GEMV, collective, elementwise, scheduler, or speculative-decoding bottlenecks without overclaiming attribution hidden by graph capture.
+description: "把 LLM 服务 trace 拆成互斥的延迟分组（pipeline analysis）：显式层范围、kernel 族、stream、rank 尾部。何时用：全局 torch-profiler 分诊之后，定位 prefill/decode/MoE/attention/GEMV/collective/elementwise/scheduler/投机解码的具体瓶颈。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

@@ -129,3 +129,16 @@ SSH 辅助：凭证从 `~/.config/dcu-toolkit/credentials.json` 读入 `SSHPASS`
 
 - `references/bw150-gfx936-verification-2026-08.md` — <device-A> 设备(BW150/gfx936)验证完整命令脚手架 + 设备快照 + 各技能对照结果
 - `references/bw1100-gfx938-verification-2026-09.md` — BW1100 设备(<device-alias>/gfx938/OAM+HSW)验证完整命令脚手架 + 设备快照 + 各技能对照结果
+
+## 验收
+
+1. 每个被验证的 skill 给出「可验证性层级」（本 skill 的核心判据）。
+2. 真机结论带环境指纹：卡型 / gfx / DTK / 驱动。
+3. 无法上机验证的部分明确标 `unverified`，不许写成已验证。
+4. 验证脚本可复跑，路径写进 skill 树而非临时目录。
+
+## 不适用场景
+
+纯文档类 skill（无可执行步骤，只能做静态校验）；
+没有对应硬件的 skill（应标 unverified 而非硬验）；
+只想跑单测（那走 `pytest`，不是真机验证）。

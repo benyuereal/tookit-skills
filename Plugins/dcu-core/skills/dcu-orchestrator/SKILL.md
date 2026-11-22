@@ -152,3 +152,16 @@ evidence:
 - 本 orchestration 是通用骨架；具体领域方法在 `dcu-env` / `dcu-perf` / `dcu-inference`
   / `dcu-operators` 等域的 `dcu-*` skill 中。
 - `dcu-skill-router` 提供全量路由表；本 orchestrator 只做编排，不替代路由。
+
+## 验收
+
+1. `render_workflow.py` 能渲染出就绪节点与依赖顺序，无环。
+2. 每个 task 的 evidence 字段能被 `verify_evidence.py` 校验通过。
+3. `proceed: ask` 的节点确实在改状态/占卡前停下来等审批。
+4. 一次 run 的产物能被 `dcu_distill.py` 转成知识库台账。
+
+## 不适用场景
+
+单步明确任务（直接点名叶子 skill，不必经编排层）；
+需要的是「怎么优化」的方法本身（本 skill 只做编排，不定义判定口径）；
+想改 workflow 契约字段（那是 `task/*.yaml` 的 schema 变更，需单独评审）。

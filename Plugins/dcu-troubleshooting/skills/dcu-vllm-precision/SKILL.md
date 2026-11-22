@@ -174,3 +174,16 @@ python3 examples/generate_report.py \
 
 `examples/quickstart_antangelmed.py` 是端到端冒烟入口（HF vs vLLM token 对比）。
 新模型定位前可先跑它确认环境与启动链路正常；`tests/` 下为 lib 单测。
+
+## 验收
+
+1. 定位到具体算子（不是「整个模型有问题」）。
+2. 该算子在海光 vLLM 与上游/参照实现上的数值差有明确量化。
+3. 能判断差异来自 Kernel 实现、量化、还是融合边界。
+4. 结论可回归：修复后同一用例通过。
+
+## 不适用场景
+
+训练精度（走 `dcu-train-precision`）；
+非 vLLM 引擎（走通用的 `dcu-engine-precision-localization`）；
+差异在契约容差内（属正常数值误差，不必排）。

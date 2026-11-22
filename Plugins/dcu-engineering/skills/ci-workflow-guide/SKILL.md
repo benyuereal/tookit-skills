@@ -1,6 +1,6 @@
 ---
 name: ci-workflow-guide
-description: Modify and diagnose upstream SGLang CI orchestration, including stages, gating, partitioning, runner matrices, fast-fail, and workflow dispatch. Use only in a checkout whose current workflow and test-registration files have been inspected; paths and runner labels may vary by revision.
+description: "读懂并修改上游 SGLang CI 编排（SGLang CI orchestration）：stage、gating、partitioning、runner matrix、fast-fail、workflow dispatch。何时用：CI 跑不通或要改流水线；需先在目标 checkout 里核对当前 workflow 与 test-registration 文件——路径与 runner label 随 revision 变。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

@@ -264,3 +264,16 @@ kind: knowledge
 | `dcu-hipprof-baseline-trace`（及 `dcu-hipprof-*` 其余子域） | `perf/dcu-hipprof` | 五个子 skill 并入父 skill 方法论总纲 |
 | `dcu-model-offline-delivery` | `inference/dcu-model-deploy-verify` + `env/dcu-docker` | 已下架；离线交付（docker save 成品 tar + README）场景拆入两者 |
 | `dcu/env/dcu-image-hub` 等带斜杠路径式调用 | `env/dcu-image-hub` | skill 调用只认 name（不带域前缀），域前缀仅本表导航用 |
+
+## 验收
+
+1. 路由表覆盖全部 `dcu-*` skill，无遗漏、无死链。
+2. 按意图搜索时，首选 skill 与 skill 自身 description 的能力边界一致。
+3. 七域分组下每个 skill 只出现一次（不重复登记）。
+4. 改名/合并的 alias 对照表能查到旧名。
+
+## 不适用场景
+
+单步明确任务（直接点名叶子 skill，经 router 反而多一跳）；
+找的是具体方法内容（router 只指路，不给方法）；
+多步链的执行与审批（走 `dcu-orchestrator`）。

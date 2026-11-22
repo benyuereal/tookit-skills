@@ -1,6 +1,6 @@
 ---
 name: llm-serving-capacity-planner
-description: Plan and audit LLM serving memory capacity from startup logs, model geometry, checkpoint bytes, KV-cache format, graph pools, temporary workspaces, allocator behavior, and TP/PP/EP topology. Use for fit checks, OOM or VMFault diagnosis, concurrency limits, mem-fraction tuning, quantized checkpoints, or capacity comparisons on CUDA, HIP, DCU, and HCU systems.
+description: "从启动日志、模型几何、checkpoint 字节、KV cache 格式、graph pool、临时 workspace、allocator 行为、TP/PP/EP 拓扑来规划与审计显存容量（capacity planner）。何时用：fit check、OOM 或 VMFault 诊断、并发上限、mem-fraction 调参、量化 checkpoint 评估。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

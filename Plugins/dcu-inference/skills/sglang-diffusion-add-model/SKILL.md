@@ -1,6 +1,6 @@
 ---
 name: sglang-diffusion-add-model
-description: Integrate an image or video diffusion model from Diffusers or a reference pipeline into SGLang's native pipeline, stage, model, and config structure. Use for diffusion model ports and serving integration, not autoregressive LLM model support.
+description: "把 Diffusers 或参考流水线的图像/视频扩散模型接入 SGLang 原生 pipeline / stage / model / config 结构（sglang diffusion add model）。何时用：扩散模型移植与服务集成；不是自回归 LLM。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

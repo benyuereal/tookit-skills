@@ -1,6 +1,6 @@
 ---
 name: dcu-external-opt-scout
-description: "Vet GitHub GPU/DCU optimization projects for DCU testing."
+description: "筛查 GitHub 上的 GPU/DCU 优化项目（external opt scout），判断哪些值得在 DCU 上实测。何时用：寻找可借鉴的外部优化，而不是直接采信其宣传数字。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

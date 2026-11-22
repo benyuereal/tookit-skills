@@ -1,6 +1,6 @@
 ---
 name: model-pr-optimization-history
-description: Use when an SGLang, vLLM, or TensorRT-LLM serving/model optimization task needs open-source community PR evidence. Query and read the PR-driven history docs under model-pr-optimization-history before choosing source paths, fast paths, kernel/fusion ideas, regression risks, or validation lanes.
+description: "查开源社区 PR 证据（model pr optimization history）来支撑 SGLang / vLLM / TensorRT-LLM 的服务与模型优化决策。何时用：选源码路径、快路径、kernel/融合思路、回归风险、验证通道之前，先读对应的 PR 历史文档。"
 version: 1.0.1
 author: DCU Engineer
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: cookbook-review-pr
-description: Review an SGLang Mintlify cookbook PR for config-driven structure, provenance, factual accuracy, benchmark scope, navigation, MDX validity, and disclosure safety. Use for pull requests targeting the current docs_new cookbook layout.
+description: "审阅 SGLang Mintlify cookbook 的 PR（cookbook review pr）：配置驱动结构、来源可溯、事实准确、基准范围、导航、MDX 合法性、披露安全。何时用：面向当前 docs_new 布局的 cookbook 拉取请求。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: clean-startup-log
-description: Clean noisy SGLang startup logs without suppressing actionable compatibility, fallback, correctness, health, or performance evidence. Use when removing duplicate prints, expected deprecations, unformatted third-party output, or rank-repeated informational messages from server startup.
+description: "清理 SGLang 启动日志噪声（startup log）而不掩盖可行动的兼容性、回退、正确性、健康与性能证据。何时用：去除重复打印、预期内的弃用告警、第三方未格式化输出、各 rank 重复的信息性消息。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: dcu-custom-fusion-kernel
-description: "Write a DCU HIP fusion kernel for unsupported model configs."
+description: "为模型不支持的结构手写 DCU HIP 融合 kernel（HIP fusion kernel）。何时用：现有算子库缺这个组合、或需要把多个算子合成一个 kernel。"
 version: 1.0.1
 author: DCU Engineer
 license: MIT
@@ -96,3 +96,16 @@ float rstd = rsqrtf(sumsq / HEAD + eps);
 - 本 skill 的 kernel 是 Qwen3.8 配置（head_size=256 / rotary_dim=64）的已验证实现；换模型配置需改 kernel 常量并重新验证。
 - 数字以真机 METRIC 行为准；本 skill 只留方法 + 坑 + 一个案例。
 - 与 `dcu-kernel-dev`（通用 HIP 方法学）、`dcu-lightop-fusion`（LightOp 融合方法论）、`dcu-vllm-op-replace`（算子替换进 vLLM）有交叉，可考虑整合。
+
+## 验收
+
+1. 融合 kernel 编译通过（`hipcc` 无 warning 视为通过的下限）。
+2. 与「未融合的两个独立算子」逐位对比 `max_abs <= contract 容差`；不逐位必须给理由。
+3. 端到端 step 时间**显著下降**（`|Δ| > 3×MAD`），不是单 kernel 快。
+4. warp=64 规约正确：全 lane 参与、尾部 lane 不读垃圾值。
+
+## 不适用场景
+
+现有算子库已覆盖这个组合（先查 `libraries.md` 的匹配表，别重复造）；
+只想调某个已有 kernel 的参数（走 `op-optimize`）；
+compute-bound 主体做融合（净负，见 `libraries.md §3`）。

@@ -1,6 +1,6 @@
 ---
 name: generate-profile
-description: Capture reproducible SGLang or vLLM serving profiles on CUDA, HIP, DCU, or HCU targets. Use when collecting graph-off source-mapping traces, graph-on production traces, prefill/decode profiles, rank-specific traces, or evidence for an LLM inference bottleneck. Enforce correctness, exact process ownership, remote-environment checks, and artifact provenance.
+description: "采集可复现的 SGLang / vLLM 服务端 profile（serving profile on CUDA/HIP/DCU/HCU）。何时用：graph-off 源映射 trace、graph-on 生产 trace、prefill/decode 分离、分 rank trace，或为推理瓶颈取证。强制：正确性、精确的进程归属。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

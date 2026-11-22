@@ -40,3 +40,16 @@ When the profiler can't tell you where decode time goes on DCU, micro-benchmarks
 
 ## Overlap note
 内容与 `dcu-op-optimization`、`dcu-perf-profiling`、`llm-torch-profiler-analysis` 互补：那两个 skill 给 profiling 方法与闭环流程，本 skill 专注微基准手段与陷阱。
+
+## 验收
+
+1. 每个结论都有 median + MAD，且 `|Δ| > 3×MAD`。
+2. 口径三问答全：测什么（kernel / op_call / e2e）、含不含分配、冷还是热。
+3. 微基准的加速倍数与端到端方向一致（微基准快、生产掉分必须解释）。
+4. 有 floor 判定：达成率的分母写明来源。
+
+## 不适用场景
+
+有完整 GPU-kernel profile 可用时（直接用 profile 结论，不必微基准）；
+形状不确定、无法固定负载的探索阶段；
+只想确认「对不对」（走 `opcheck`，不是本 skill）。

@@ -1,6 +1,6 @@
 ---
 name: dcu-env
-description: "Detect DCU server env (CPU/NUMA/DTK/driver) pre-tuning."
+description: "调优前的 DCU 服务器环境探测（DCU env detect）：CPU、NUMA、DTK、驱动。何时用：接手一台机器、准备做性能优化前先摸清环境底数。"
 version: 1.1.1
 author: DCU Engineer
 license: MIT

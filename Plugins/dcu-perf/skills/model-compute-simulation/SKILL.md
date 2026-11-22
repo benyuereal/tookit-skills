@@ -1,6 +1,6 @@
 ---
 name: model-compute-simulation
-description: "Build an operator-level compute template for an LLM and estimate FLOPs/MFU for a serving shape. Use when you need tensor shapes, per-op FLOPs, kernel-to-op MFU mapping, or parallelism what-if analysis."
+description: "为 LLM 建算子级算力模板（compute simulation），估算服务形状下的 FLOPs/MFU。何时用：需要张量形状、逐算子 FLOPs、kernel 到 op 的 MFU 映射，或并行度 what-if 分析。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

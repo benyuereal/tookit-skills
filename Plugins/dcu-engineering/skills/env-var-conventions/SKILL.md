@@ -1,6 +1,6 @@
 ---
 name: env-var-conventions
-description: Apply SGLang environment-variable conventions and lifecycle checks for definitions, access, subprocess propagation, defaults, aliases, tests, and deprecation. Use when adding, renaming, or reviewing `SGLANG_*` variables, legacy `SGL_*` aliases, or `python/sglang/srt/environ.py` in an SGLang source tree.
+description: "按 SGLang 环境变量规范做声明、访问、子进程传递、默认值、别名、测试与弃用（env var conventions）。何时用：新增/重命名/审阅 SGLANG_* 变量、旧版 SGL_* 别名，或改 python/sglang/srt/environ.py。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

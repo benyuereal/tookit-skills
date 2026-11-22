@@ -1,6 +1,6 @@
 ---
 name: debug-distributed-hang
-description: Debug stalls and hangs in distributed SGLang inference across TP, PP, DP, and EP by separating true collective deadlock from slow-rank tails, crashes, or resource exhaustion. Use when a multi-GPU run freezes, times out, loses rank progress, or blocks in NCCL, RCCL, or another collective backend.
+description: "调试分布式 SGLang 推理在 TP/PP/DP/EP 下的卡住与挂起（debug distributed hang）：区分真正的集合通信死锁与慢 rank 拖尾、崩溃或资源耗尽。何时用：多卡运行冻结、超时、rank 无进展，或阻塞在 NCCL/RCCL 等集合通信后端。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT
@@ -254,3 +254,16 @@ Run the failing test multiple times to confirm the fix is stable. Intermittent h
 | Hash of tensors | Efficiently compare large tensors across ranks |
 | `diff` on extracted events | Find the exact step of divergence |
 | `broadcast(result, src=0)` | Fix floating-point or sampling non-determinism |
+
+## 验收
+
+1. 先判定是**真死锁**还是慢 rank 拖尾（本 skill 的核心区分）。
+2. 卡住时各 rank 的进度可读（哪个 rank 没到集合点）。
+3. 给出阻塞的集合通信调用名与 backend（NCCL / RCCL 等）。
+4. 修复后同一负载能跑完，且无 rank 掉队。
+
+## 不适用场景
+
+单卡问题（走 `debug-cuda-crash`）；
+OOM 导致的退出（走容量规划）；
+网络/驱动层面的问题（走 `dcu-env` 的 RCCL/RoCE 检查）。

@@ -1,6 +1,6 @@
 ---
 name: dcu-external-kernel-validation
-description: "Vet external GPU kernel optimizations end-to-end on DCU."
+description: "在 DCU 上端到端验证外部 GPU kernel 优化（external kernel validation）。何时用：拿到一个号称更快的第三方 kernel，要判断它在 DCU 上是否真的成立。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

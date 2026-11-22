@@ -71,3 +71,16 @@ docker exec <容器> python -c "import <pkg>; print(<pkg>.__version__)"
    `python3.10 -m compileall -q src/ scripts/`，exit 0 即兼容（开源仓库声明偏保守很常见）。
 5. 只适用于纯 Python 依赖；带 C 扩展/编译组件的包需要对应 cp 标签的预编译 wheel 或源码
    构建，不要硬离线装。
+
+## 验收
+
+1. 目标包及其全部子依赖 `import` 成功。
+2. `pip check` 无冲突。
+3. 版本锁定：`pip freeze` 里该包版本与来源 wheel 一致。
+4. 镜像重建后仍可复现（依赖清单入库）。
+
+## 不适用场景
+
+容器有外网；
+依赖含需要 CUDA/HIP 编译的扩展（走源码构建流程）；
+只想临时修一个包而不管依赖一致性。

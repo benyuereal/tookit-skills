@@ -1,6 +1,6 @@
 ---
 name: dcu-cuda-to-hip-port
-description: "Port a standalone CUDA C++ project to Hygon DCU/HIP."
+description: "把独立的 CUDA C++ 工程整体移植到海光 DCU/HIP（CUDA project port）。何时用：有完整工程（构建系统、多文件），不只是零散 kernel。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

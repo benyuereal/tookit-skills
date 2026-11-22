@@ -1,6 +1,6 @@
 ---
 name: cookbook-migrate-model
-description: Migrate an existing legacy SGLang cookbook page to the config-driven Mintlify layout while preserving its verified commands, versions, and benchmark data. Use only for a legacy page in a checkout containing docs_new; use cookbook-add-model for a brand-new model.
+description: "把旧的 SGLang cookbook 页面迁移到配置驱动的 Mintlify 布局（cookbook migrate model），保留已验证的命令、版本与基准数据。何时用：checkout 里有 docs_new 且要迁移旧页面；全新模型改用 cookbook-add-model。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

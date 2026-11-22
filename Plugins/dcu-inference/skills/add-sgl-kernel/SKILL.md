@@ -1,6 +1,6 @@
 ---
 name: add-sgl-kernel
-description: Add a heavyweight upstream sgl-kernel AOT CUDA/C++ operator with registration, Python API, build integration, tests, benchmarks, and serving validation. Use when the current checkout contains sgl-kernel and the implementation needs CUTLASS or wheel integration; do not use for standalone HIP ctypes kernels.
+description: "给上游 sgl-kernel 加重量级 AOT CUDA/C++ 算子（sgl kernel aot）：注册、Python API、构建集成、测试、基准、服务验证。何时用：checkout 里有 sgl-kernel 且需要 CUTLASS 或 wheel 集成；独立 HIP ctypes kernel 不用这条。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

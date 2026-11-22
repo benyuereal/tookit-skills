@@ -99,3 +99,16 @@ python3 ../_dcu-toolkit-shared/scripts/hygon-upstream-sync.py --full    # 全量
 - 先 `../_dcu-toolkit-shared/references/hygon-upstream/repos-index.md` 看每个仓库的最新基线/特性，再进对应仓库 README（缓存于 `<agent-home>/cache/hygon-upstream/`）。
 - RL 框架版本锚点：verl(无固定 tag)、slime v0.3.0、AReaL v1.0.4、Megatron core_v0.18.2；上线前用 `--check` 复核。
 - 更换环境先核对 PyTorch/DTK/卡型，RL 框架对 DCU 软件栈版本敏感（`--no-deps` + 预装组件的原则）。
+
+## 验收
+
+1. 给出的版本锚点（PyTorch / DTK / 训练框架）可在目标环境核实。
+2. 配方可复现：按步骤能拉起训练，且 loss 曲线正常。
+3. RL / 微调配方标明适用的模型规模与卡数前提。
+4. 上游更新后能通过快照机制比对差异（不靠记忆）。
+
+## 不适用场景
+
+推理优化（走 `dcu-perf` / `ops`）；
+训练精度问题排查（走 `dcu-train-precision`）；
+环境还没装好（先走 `dcu-env`）。

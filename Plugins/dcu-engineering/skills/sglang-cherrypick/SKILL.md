@@ -1,6 +1,6 @@
 ---
 name: sglang-cherrypick
-description: Validate, dispatch, and monitor SGLang bot cherry-picks of merged PRs onto an existing release branch, then report conflicts and created PRs. Use only when an authorized release manager explicitly requests the external workflow action.
+description: "校验、派发并跟踪 SGLang bot 把已合并 PR cherry-pick 到发布分支（sglang cherrypick），汇报冲突与新建 PR。何时用：仅当获授权的 release manager 明确要求执行该外部工作流动作。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

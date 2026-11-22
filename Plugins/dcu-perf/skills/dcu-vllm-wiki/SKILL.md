@@ -1,6 +1,6 @@
 ---
 name: dcu-vllm-wiki
-description: Navigate project evidence for vLLM and SGLang adaptation on DCU, HCU, and MACA accelerators. Use for architecture, version comparison, HIP porting, DTK/DAS compatibility, Docker images, API mapping, historical optimization decisions, accepted/rejected experiments, or when searching all dcu-adapt worktrees before answering a project-specific question.
+description: "检索 vLLM 与 SGLang 在 DCU/HCU/MACA 上的适配证据（vLLM/SGLang wiki）：架构、版本对比、HIP 移植、DTK/DAS 兼容、镜像、API 映射、历史优化决策、已采纳/已否决实验。何时用：查 dcu-adapt 相关全部工作。"
 version: 1.0.1
 author: DCU Engineer
 license: MIT

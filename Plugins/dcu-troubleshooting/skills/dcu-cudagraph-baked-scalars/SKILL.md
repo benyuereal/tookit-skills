@@ -42,3 +42,16 @@ CUDA/HIP graph capture 时，**每 batch 变化的 Python 标量**（int/float�
 - 根因：fa2 回退调用 `max_seqlen_k=metadata.max_seq_len_k`（每 batch Python int）被烧死；capture 时 fill=1 → 烧死值 5。
 - 修复：flashattention_backend.py 三处改 `max_seqlen_k=self.max_context_len`。
 - 结果：98.2/98.4 tok/s（+30%），accept 0.68-0.82 与 eager 基线一致，独立验证 PASS（29 样本 0 个 0.00）。
+
+## 验收
+
+1. 定位到具体是哪个 Python 标量被 graph 捕获成了常量。
+2. 修复后 graph 重放的结果与 eager 一致（逐位或契约容差内）。
+3. 性能未因修复而回退（过 3×MAD 才算）。
+4. 给出该标量的正确传递路径（tensor / 输入端口 / 每次重捕获）。
+
+## 不适用场景
+
+graph 关闭时的问题（那是普通执行路径的 bug）；
+标量变化不影响输出（属预期行为，不必修）；
+只想提速而不关心语义（会掩盖正确性 bug）。

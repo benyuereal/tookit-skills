@@ -1,6 +1,6 @@
 ---
 name: mechanical-refactor-verify
-description: Verify file splits, function moves, renames, and module extractions with a reproducible transform and a strict semantic-change boundary. Use when creating or reviewing a mechanical refactor commit or PR in a Git repository.
+description: "用可复现的变换 + 严格的语义变更边界来验证机械重构（mechanical refactor verify）：拆文件、移函数、重命名、抽模块。何时用：提交或审阅机械重构 commit/PR。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

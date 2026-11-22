@@ -1,6 +1,6 @@
 ---
 name: dcu-vmfault-coredump
-description: Locate the faulting kernel and the offending memory value from a Hygon DCU / ROCm HSA VMFault crash (HSA_STATUS_ERROR_EXCEPTION 0x1016, TRAPSTS=0x80000000), using the crash log's HSA QUEUE ANALYSIS (kernel name + args hex dump) and the HSA_ENABLE_COREDUMP=1 gpucore ELF memory snapshot. Answers "which kernel, which tensor, which index value" when hy-coredump faultinfo alone shows nothing useful.
+description: "从海光 DCU / ROCm HSA VMFault 崩溃定位出错 kernel 与越界内存值（vmfault coredump）：HSA_STATUS_ERROR_EXCEPTION 0x1016、TRAPSTS=0x80000000。依据 crash log 的 HSA QUEUE ANALYSIS（kernel 名 + 参数 hex dump）与 HSA_ENABLE_COREDUMP=1 产出的 gpucore ELF 内存快照。"
 version: 1.1.0
 author: DCU Engineer
 license: MIT
@@ -330,3 +330,16 @@ python scripts/demangle.py 'KERNEL_NAME'
 
 > 关联：`hiplogdump`（`/opt/hyhal/bin/hiplogdump sort|thread|unsort|rcdf <log>`）解码 HIP_LOG 压缩日志，
 > 崩溃日志里的 HSA QUEUE ANALYSIS 若来自 HIP 日志文件，可先用它解压排序再喂给本 skill 的 `find_faulting_kernel.py`。
+
+## 验收
+
+1. 先判定「是不是 VMFault」（闸门通过才继续）。
+2. 从 HSA QUEUE ANALYSIS 定位到具体 kernel 名与参数。
+3. 从 gpucore ELF 快照定位到出错的内存地址与越界值。
+4. 结论能指到具体代码行或具体张量（不是「某个 kernel 崩了」）。
+
+## 不适用场景
+
+普通 CUDA/HIP 断言失败（非 VMFault，走 `debug-cuda-crash`）；
+没有 crash log 或 coredump 快照（先按本 skill 的输入规范采集）；
+OOM 而非非法访存（走容量规划）。

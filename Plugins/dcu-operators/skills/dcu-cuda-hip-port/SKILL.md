@@ -1,6 +1,6 @@
 ---
 name: dcu-cuda-hip-port
-description: "Port CUDA code to DCU/HIP on DTK. Use for CUDA→HIP porting."
+description: "在 DTK 上把 CUDA 代码移植到 DCU/HIP（CUDA to HIP port）。何时用：只需做 CUDA→HIP 语法与 API 层面的转换。"
 version: 1.1.0
 author: DCU Engineer
 license: MIT

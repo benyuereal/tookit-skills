@@ -1,6 +1,6 @@
 ---
 name: cookbook-add-model
-description: Add a new model to the config-driven SGLang Mintlify cookbook with a per-model config, optional verified benchmarks, MDX page, navigation, and homepage wiring. Use only in an SGLang checkout containing the documented docs_new template layout; use cookbook-migrate-model for an existing legacy page.
+description: "把新模型加进配置驱动的 SGLang Mintlify cookbook（cookbook add model）：per-model config、可选基准、MDX 页面、导航与首页接线。何时用：checkout 里有 docs_new 模板布局；已有旧页面则改用 cookbook-migrate-model。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

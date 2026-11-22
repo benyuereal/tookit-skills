@@ -1,6 +1,6 @@
 ---
 name: sglang-prod-incident-triage
-description: Replay-first debug flow for SGLang serving problems. Use when a live or recent server shows health-check failures, latency or throughput regressions, queue growth, timeouts, distributed stalls, crash dumps, wrong outputs after deploys, or PD/EP/HiCache issues, and the job is to turn the problem into a replay plus the right next debug tool.
+description: "SGLang 服务问题的「先复现再调试」流程（prod incident triage）。何时用：线上或近期服务出现健康检查失败、延迟/吞吐回退、队列增长、超时、分布式卡住、crash dump、部署后输出错误、PD/EP/HiCache 异常。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT

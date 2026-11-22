@@ -1,6 +1,6 @@
 ---
 name: model-architecture-diagram
-description: Return public original model architecture diagrams for user-specified LLM, VLM, MoE, diffusion, OCR, and SGLang/sgl-cookbook model families. Use when the user asks for a model structure chart, architecture diagram, or rendered image link for a specific model such as DeepSeek, GLM, Qwen, Kimi, MiniMax, Step, Hunyuan, or Qwen3-VL.
+description: "返回公开的原始模型架构图（model architecture diagram）：LLM、VLM、MoE、diffusion、OCR 及 SGLang/sgl-cookbook 模型族。何时用：用户要某个模型（DeepSeek、GLM、Qwen、Kimi、MiniMax 等）的结构图、架构图或渲染图链接。"
 version: 1.0.0
 author: DCU Engineer
 license: MIT
