@@ -1,5 +1,5 @@
 id: mqa-logits
-title: MQA logits（DSA indexer 打分）
+title: "MQA logits（DSA indexer 打分；支持分组调度）"
 family: attention
 math: "logits[i,j] = Σ_h max(0, Q[i,h,:]·K[j,:]) · W[i,h]；H=32, D=128"
 status: measured

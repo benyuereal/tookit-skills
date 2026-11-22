@@ -1,0 +1,57 @@
+id: moe-swiglu-fused
+title: "专家内 SwiGLU 融合"
+family: moe
+math: "y = (silu(x*W_gate)*(x*W_up))*W_down，专家内完成"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "moe silu-mul 融合"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要省写回"
+      - "decode 档"
+    not_for:
+      - "需要中间激活值做别的事"
+    pros:
+      - "融合省往返"
+    cons:
+      - "对 compute-bound 融合是净负"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "分步 torch"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "基线对照"
+    not_for:
+      - "生产"
+    pros:
+      - "简单"
+    cons:
+      - "多一次往返"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: compute
+  note: "与 GEMM1 的 epilogue 融合能省一次写回，但打断流水线"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [fusion-boundary]
+
+updated: "2026-11-22"

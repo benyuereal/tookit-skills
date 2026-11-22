@@ -1,0 +1,56 @@
+id: moe-combine-reduce
+title: "MoE combine：反 permute + 加权求和"
+family: moe
+math: "y_i = sum_k w_ik*permuted[slot_ik]；按 gate 权重加权"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "moe_sum"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要与 permute 配对"
+    not_for:
+      - "需要确定性累加顺序（顺序变了结果位不同）"
+    pros:
+      - "与 4stage 配套"
+    cons:
+      - "累加顺序需固定"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写 reduce"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非标准合并语义"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "顺序易错"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "累加顺序影响 determinism；与 permute 必须成对验证"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [cross-lane-fold, layout-pack]
+
+updated: "2026-11-22"

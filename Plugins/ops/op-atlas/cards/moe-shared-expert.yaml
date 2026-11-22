@@ -1,0 +1,56 @@
+id: moe-shared-expert
+title: "MoE 共享专家合并"
+family: moe
+math: "y = shared(x)*w_s + sum_e g_e*expert_e(x)"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "shared + routed 同 kernel"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要 shared 与 routed 同容器"
+    not_for:
+      - "只做 routed 的场景"
+    pros:
+      - "一次 kernel 吃掉两条路"
+    cons:
+      - "shared 占比变化时需重测"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "triton + Cijk（shared）"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "shared 单独跑"
+    not_for:
+      - "需要统一实现"
+    pros:
+      - "简单"
+    cons:
+      - "多一次往返"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: compute
+  note: "shared 与 routed 是两条路径，只测一条会漏一半耗时"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [fusion-boundary, table-miss]
+
+updated: "2026-11-22"

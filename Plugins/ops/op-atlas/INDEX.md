@@ -20,17 +20,27 @@
 | [`embedding-lookup`](cards/embedding-lookup.yaml) | memory | draft | in-house | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`flash-attention-fwd`](cards/flash-attention-fwd.yaml) | attention | draft | flash-attn | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
+| [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | draft | hipBLASLt | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | draft | tilelang-hygon | compute | draft：选型与坑已整理，bench 与 adap… |
 | [`kv-cache-paged-write`](cards/kv-cache-paged-write.yaml) | kv | draft | flash-attn | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`layernorm`](cards/layernorm.yaml) | norm | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`lm-head-with-sampling`](cards/lm-head-with-sampling.yaml) | gemm | draft | lightop | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`mha-prefill`](cards/mha-prefill.yaml) | attention | draft | flash-attn | compute | 无实测：索引卡，实现层待按证据推进 |
+| [`mla-absorb`](cards/mla-absorb.yaml) | attention | draft | FlashMLA | mixed | 无实测：索引卡，实现层待按证据推进 |
+| [`mla-full`](cards/mla-full.yaml) | attention | draft | FlashMLA | compute | 无实测：索引卡，实现层待按证据推进 |
+| [`mla-kv-cache-layout`](cards/mla-kv-cache-layout.yaml) | kv | draft | FlashMLA | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`mla-kv-cache`](cards/mla-kv-cache.yaml) | kv | draft | FlashMLA | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`mlp-gelu-geglu`](cards/mlp-gelu-geglu.yaml) | activation | draft | lightop | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`mlp-swiglu`](cards/mlp-swiglu.yaml) | activation | draft | lightop | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`moe-align-permute`](cards/moe-align-permute.yaml) | moe | draft | lightop | bandwidth | ref-heavy 通过正确性门；容差为零（纯搬运）… |
+| [`moe-combine-reduce`](cards/moe-combine-reduce.yaml) | moe | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
+| [`moe-dispatch-combine`](cards/moe-dispatch-combine.yaml) | moe | draft | DeepGEMM | mixed | 无实测：索引卡，实现层待按证据推进 |
+| [`moe-grouped-gemm-bf16`](cards/moe-grouped-gemm-bf16.yaml) | moe | draft | DeepGEMM | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`moe-grouped-gemm`](cards/moe-grouped-gemm.yaml) | moe | draft | deepgemm-das | mixed | 无本算子独立实测；grouped 比稠密循环快一条来… |
+| [`moe-shared-expert`](cards/moe-shared-expert.yaml) | moe | draft | lightop | compute | 无实测：索引卡，实现层待按证据推进 |
+| [`moe-swiglu-fused`](cards/moe-swiglu-fused.yaml) | moe | draft | lightop | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`moe-topk-gating`](cards/moe-topk-gating.yaml) | moe | draft | lightop | bandwidth | ref-heavy 通过正确性门；无性能实测；本段通… |
+| [`moe-w4a16`](cards/moe-w4a16.yaml) | moe | draft | moe_c | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`moe-w8a8`](cards/moe-w8a8.yaml) | moe | draft | lightop | mixed | Marlin GEMM 分量达峰值带宽的 0.888… |
 | [`mqa-logits`](cards/mqa-logits.yaml) | attention | measured | lightop | bandwidth | epilogue 跨 lane 归约换 ds_bpe… |
 | [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | draft | flash-attn | bandwidth | 无实测：索引卡，实现层待按证据推进 |
@@ -40,6 +50,7 @@
 | [`rope`](cards/rope.yaml) | rope | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`sampling-topk-topp`](cards/sampling-topk-topp.yaml) | sampling | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`sparse-mla`](cards/sparse-mla.yaml) | attention | tuned | tilelang-hygon | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7… |
+| [`topk-block-index`](cards/topk-block-index.yaml) | attention | draft | in-house | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`weight-prepack`](cards/weight-prepack.yaml) | quant | draft | aiter-das | bandwidth | 无实测：索引卡。核心价值是提醒「漏 prepack … |
 
 ## 家族

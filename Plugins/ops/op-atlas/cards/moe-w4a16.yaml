@@ -1,0 +1,57 @@
+id: moe-w4a16
+title: "MoE W4A16"
+family: moe
+math: "y = sum_e g_e*(x * dequant(W4_e)^T)；权重 4bit，激活 16bit"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: moe_c
+    library_profile_ref: "libraries.md §5"
+    file_hint: "W4A16(groupwise) 精度档"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "decode 小 batch"
+      - "显存受限部署"
+    not_for:
+      - "需要高吞吐 prefill"
+    pros:
+      - "权重最省显存"
+    cons:
+      - "冷门档覆盖面窄"
+    source: "references/libraries.md"
+  - repo: aiter-das
+    library_profile_ref: "libraries.md §4"
+    file_hint: "AITER 四后端"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "标准接入"
+    not_for:
+      - "需要可预测性能"
+    pros:
+      - "回退"
+    cons:
+      - "查表"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "decode 档权重读取主导；4bit 的 unpack 开销可能吃掉收益"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [table-miss, precision-drop]
+
+updated: "2026-11-22"

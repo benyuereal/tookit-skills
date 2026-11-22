@@ -1,0 +1,57 @@
+id: mla-absorb
+title: "MLA 吸收式（KV 进 latent）"
+family: attention
+math: "q_eff = q*W_kv；out = softmax(q_eff*c_kv^T)*V；收缩维正交"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: FlashMLA
+    library_profile_ref: "libraries.md §7"
+    file_hint: "MLA absorb 路径"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "DeepSeek V2/V3 decode"
+      - "需要把 KV 压进 latent"
+    not_for:
+      - "需要完整 K/V 的场景"
+    pros:
+      - "显存省一个量级"
+    cons:
+      - "收缩维正交性需逐形状核对"
+    source: "references/libraries.md"
+  - repo: TileLang
+    library_profile_ref: "libraries.md §8"
+    file_hint: "可改结构的 MLA"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要改算法"
+    not_for:
+      - "逼近极限"
+    pros:
+      - "可读可改"
+    cons:
+      - "布局税"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: mixed
+  note: "pipeline Q1 的经典例：q_eff 与 c_kv 的收缩维是否同一决定整条流水线"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [layout-pack, occupancy]
+
+updated: "2026-11-22"

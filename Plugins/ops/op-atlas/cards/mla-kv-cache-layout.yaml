@@ -1,0 +1,56 @@
+id: mla-kv-cache-layout
+title: "MLA latent 缓存布局"
+family: kv
+math: "cache[slot] = c_kv；压缩后的 latent，非完整 K/V"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: FlashMLA
+    library_profile_ref: "libraries.md §7"
+    file_hint: "MLA latent 缓存"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "DeepSeek MLA 系"
+    not_for:
+      - "需要与 paged KV 混用（布局不兼容）"
+    pros:
+      - "布局与 MLA 配套"
+    cons:
+      - "契约强绑定"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写 latent 布局"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非标准 latent 维"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "latent 布局与 paged KV 完全不同，判据不可混"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [layout-pack]
+
+updated: "2026-11-22"

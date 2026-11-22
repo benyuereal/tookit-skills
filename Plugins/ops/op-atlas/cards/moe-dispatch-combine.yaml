@@ -1,0 +1,56 @@
+id: moe-dispatch-combine
+title: "MoE dispatch / combine（all2all）"
+family: moe
+math: "token 跨卡 dispatch 到专家所在 rank，算完 combine 回来"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: DeepGEMM
+    library_profile_ref: "libraries.md §6"
+    file_hint: "low-latency 路径（与通信 overlap）"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要与通信重叠"
+    not_for:
+      - "单卡场景"
+    pros:
+      - "与通信设计配套"
+    cons:
+      - "属引擎层决策"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写 all2all"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "特殊拓扑"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: mixed
+  note: "引擎层成分重：真正的杠杆是通信与计算重叠，不是 kernel"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [fusion-boundary]
+
+updated: "2026-11-22"

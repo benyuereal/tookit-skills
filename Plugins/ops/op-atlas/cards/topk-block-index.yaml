@@ -1,0 +1,56 @@
+id: topk-block-index
+title: "Top-k block 选择（含 -1 哨兵）"
+family: attention
+math: "idx = topk(scores, K)；无效槽位填 -1（必须垫队尾）"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "scoring kernel 的 topk 后处理"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "DSA 稀疏选择"
+    not_for:
+      - "需要队首 -1（会静默算错）"
+    pros:
+      - "与 mqa-logits 配套"
+    cons:
+      - "-1 必须垫队尾"
+    source: "references/libraries.md"
+  - repo: BoltOPs
+    library_profile_ref: "libraries.md §10"
+    file_hint: "topk 类成品"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要低时延"
+    not_for:
+      - "大 K"
+    pros:
+      - "自带调优"
+    cons:
+      - "版本较新"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "DSA 的稀疏选择；-1 语义与 MoE 的 padding 不同，不可混用"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [gather-path, precision-drop]
+
+updated: "2026-11-22"
