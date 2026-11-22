@@ -181,7 +181,7 @@
     {
       "name": "fused-add-rmsnorm",
       "path": "Plugins/ops/skills/op-fused-add-rmsnorm",
-      "status": "draft",
+      "status": "measured",
       "shapes": [
         "decode-m1",
         "decode-m32",
@@ -194,8 +194,8 @@
         "aiter-norm"
       ],
       "best_variant": "lightop-rmsnormadd（lightop 0.6.0 的 RMSNormAdd）",
-      "floor_status": "bandwidth_bound（未实测达成率；门已跑通）",
-      "last_verified": "2026-11-22",
+      "floor_status": "bandwidth_bound（M=8192 时 862 GB/s，达峰值 0.50）",
+      "last_verified": "2026-11-23",
       "evidence": "op-fused-add-rmsnorm/{contract.yaml,_common.py,ledger.md}；correctness 门 PASS",
       "open_questions": [
         "真机 A/B 达成率",

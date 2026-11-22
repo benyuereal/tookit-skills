@@ -2,7 +2,7 @@ id: fused-add-rmsnorm
 title: 残差 + RMSNorm 融合（fused_add_rmsnorm）
 family: norm
 math: y = w*((x+r)/sqrt(mean((x+r)^2, -1)+eps))；残差先加再归一
-status: draft
+status: measured
 layer: kernel
 op_card: Plugins/ops/skills/op-fused-add-rmsnorm
 impls:
@@ -53,16 +53,32 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡；实现层见 op-fused-add-rmsnorm 卡
-  verified_on: null
+  ratio:
+    value: 2.39
+    vs: torch 分步（x+r → rms → 除）的耗时比（M=8192 档）
+    scope:
+      cards: 1
+      in_len: M=8192
+      out_len: H=4096
+      warmup: hot
+      note: bf16；M=1024 档为 1.70x，M=8192 档为 2.39x；融合带宽 862 GB/s
+  conclusion: 融合比分步快 1.70x(M=1024)/2.39x(M=8192)；M 越大收益越高
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop.RMSNormAdd
   how: lightop.RMSNormAdd(H, eps)(x, residual)，一次 kernel 完成残差加法+归一
   requires: lightop 0.6.0
+hard_preconditions:
+- statement: lightop.RMSNormAdd 是 nn.Module，需 .cuda().to(bf16)；forward(X, residual)
+  check: python3 -I -c "import lightop,torch; m=lightop.RMSNormAdd(512,eps=1e-6).cuda().to(torch.bfloat16); m(torch.randn(8,512,dtype=torch.bfloat16,device='cuda'),torch.randn(8,512,dtype=torch.bfloat16,device='cuda'))"
+- statement: 分步实现必须用 fp32 算 rms，否则 bf16 累加误差大
+  check: 对比 fused 与 split 的 max_abs（本卡实测相对误差中位数 1.6e-3）
+soft_preconditions:
+- 建议 hot 态
+- M 越大融合收益越高（1.70x → 2.39x），小 M 时固定开销占比高
 surfaces:
 - fusion-boundary
 - layout-pack
