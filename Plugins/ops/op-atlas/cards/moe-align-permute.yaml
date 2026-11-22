@@ -27,13 +27,13 @@ impls:
     tier: fallback
     law_ref: null
     best_for:
-      - "兜底"
+      - "查表未命中时的兜底路径"
     not_for:
       - "大 M*K 时注意 int32 溢出"
     pros:
       - "统一 API"
     cons:
-      - "查表命中"
+      - "能否用取决于 (量化x gfx) 查表是否命中"
     source: "references/libraries.md"
 
 ceiling:

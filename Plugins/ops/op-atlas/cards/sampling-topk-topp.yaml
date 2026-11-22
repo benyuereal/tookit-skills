@@ -17,7 +17,7 @@ impls:
     not_for:
       - "需要独立 logits 输出时"
     pros:
-      - "省写回"
+      - "融合省一次写回"
     cons:
       - "tie-break 语义需核对"
     source: "references/libraries.md"
@@ -29,11 +29,11 @@ impls:
     best_for:
       - "调试 / 对照"
     not_for:
-      - "生产"
+      - "不适合生产（无融合、无调优）"
     pros:
-      - "简单"
+      - "实现简单，但多一次往返"
     cons:
-      - "写回浪费"
+      - "中间 logits 写回是纯浪费"
     source: "references/libraries.md"
 
 ceiling:

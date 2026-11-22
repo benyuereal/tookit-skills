@@ -30,11 +30,11 @@ impls:
     best_for:
       - "实验性结构"
     not_for:
-      - "生产"
+      - "不适合生产（无融合、无调优）"
     pros:
-      - "灵活"
+      - "灵活但不如专用实现快"
     cons:
-      - "布局税"
+      - "先付布局转换税（3-4x 搬运指令）"
     source: "references/libraries.md"
 
 ceiling:

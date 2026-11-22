@@ -28,13 +28,13 @@ impls:
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "基线对照"
+      - "只作为基线对照，不是性能候选"
     not_for:
-      - "追求极限"
+      - "追求极限时不如专用实现"
     pros:
-      - "无依赖"
+      - "无外部依赖，适合做基线对照"
     cons:
-      - "多一次往返"
+      - "多一次 HBM 往返"
     source: "references/libraries.md"
 
 ceiling:

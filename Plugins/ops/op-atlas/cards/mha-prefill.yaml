@@ -17,7 +17,7 @@ impls:
     not_for:
       - "decode 小 M"
     pros:
-      - "成熟"
+      - "实现成熟，变体覆盖广"
     cons:
       - "大 M 需调 tile"
     source: "references/libraries.md"
@@ -31,9 +31,9 @@ impls:
     not_for:
       - "逼近极限"
     pros:
-      - "可读可改"
+      - "源码可读可改，适合实验"
     cons:
-      - "布局税"
+      - "先付布局转换税（3-4x 搬运指令）"
     source: "references/libraries.md"
 
 ceiling:

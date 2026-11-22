@@ -31,7 +31,7 @@ impls:
     not_for:
       - "追求极限时"
     pros:
-      - "无依赖"
+      - "无外部依赖，适合做基线对照"
     cons:
       - "字节数多一次往返"
     source: "references/libraries.md"

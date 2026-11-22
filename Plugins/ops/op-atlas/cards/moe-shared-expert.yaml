@@ -31,9 +31,9 @@ impls:
     not_for:
       - "需要统一实现"
     pros:
-      - "简单"
+      - "实现简单，但多一次往返"
     cons:
-      - "多一次往返"
+      - "多一次 HBM 往返"
     source: "references/libraries.md"
 
 ceiling:

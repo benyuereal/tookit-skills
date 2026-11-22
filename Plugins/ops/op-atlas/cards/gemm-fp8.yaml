@@ -17,7 +17,7 @@ impls:
     not_for:
       - "M<=32 的 decode（带宽型，thin-M 桶更快）"
     pros:
-      - "可读可改"
+      - "源码可读可改，适合实验"
       - "可融 epilogue"
     cons:
       - "DSL 布局税（每条 MMA 摊到的搬运指令高 3-4 倍）"
@@ -33,7 +33,7 @@ impls:
       - "需要精细 layout 控制"
       - "gfx938 上的 FP8（本平台无方案）"
     pros:
-      - "省一层封装"
+      - "少一层封装，直接调库"
     cons:
       - "gfx938 上无 FP8 方案"
     source: "references/libraries.md"
@@ -43,7 +43,7 @@ impls:
     tier: fallback
     law_ref: null
     best_for:
-      - "标准接入"
+      - "标准接入路径，有统一 API"
     not_for:
       - "需要单一路径可预测性能"
     pros:
@@ -59,9 +59,9 @@ impls:
     best_for:
       - "特殊形状兜底"
     not_for:
-      - "通用形状"
+      - "常规稠密 GEMM（无特殊布局需求）"
     pros:
-      - "完全可控"
+      - "完全可控，但需自行维护"
     cons:
       - "周期以周计"
     source: "references/libraries.md"

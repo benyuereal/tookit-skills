@@ -32,9 +32,9 @@ impls:
     not_for:
       - "逼近极限"
     pros:
-      - "可读可改"
+      - "源码可读可改，适合实验"
     cons:
-      - "布局税"
+      - "先付布局转换税（3-4x 搬运指令）"
     source: "references/libraries.md"
 
 ceiling:

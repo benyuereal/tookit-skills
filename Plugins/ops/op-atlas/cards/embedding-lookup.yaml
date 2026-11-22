@@ -17,8 +17,8 @@ impls:
     not_for:
       - "需要与后续 norm 融合时"
     pros:
-      - "无依赖"
-      - "够用"
+      - "无外部依赖，适合做基线对照"
+      - "足够用，但没有融合"
     cons:
       - "无融合，另起一趟"
     source: "references/libraries.md"

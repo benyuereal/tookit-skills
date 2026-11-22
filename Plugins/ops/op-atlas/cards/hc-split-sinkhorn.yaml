@@ -17,7 +17,7 @@ impls:
     not_for:
       - "不需要归一的路由"
     pros:
-      - "官方实现"
+      - "官方实现，省掉自己推公式"
     cons:
       - "迭代次数需调"
     source: "references/libraries.md"
@@ -29,9 +29,9 @@ impls:
     best_for:
       - "非标准迭代数"
     not_for:
-      - "常规"
+      - "常规形状（无特殊布局需求）"
     pros:
-      - "可控"
+      - "完全可控，但需自己维护"
     cons:
       - "收敛性需验证"
     source: "references/libraries.md"

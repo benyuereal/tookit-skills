@@ -29,7 +29,7 @@ impls:
     best_for:
       - "需要低时延"
     not_for:
-      - "大 K"
+      - "大 K 时收益明显"
     pros:
       - "自带调优"
     cons:

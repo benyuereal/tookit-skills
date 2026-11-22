@@ -33,7 +33,7 @@ impls:
     not_for:
       - "需要单一路径可预测性能"
     pros:
-      - "四后端回退"
+      - "四后端回退，单路径性能不可预测"
     cons:
       - "查表命中率决定成败"
     source: "references/libraries.md"

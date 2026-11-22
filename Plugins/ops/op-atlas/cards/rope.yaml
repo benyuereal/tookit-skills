@@ -30,11 +30,11 @@ impls:
     best_for:
       - "非标准 rot_dim 组合"
     not_for:
-      - "常规形状"
+      - "常规形状（无特殊布局需求）"
     pros:
-      - "完全可控"
+      - "完全可控，但需自行维护"
     cons:
-      - "维护成本"
+      - "需自行维护，无上游可 diff"
     source: "references/libraries.md"
 
 ceiling:

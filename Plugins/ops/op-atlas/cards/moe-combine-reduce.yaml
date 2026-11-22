@@ -29,9 +29,9 @@ impls:
     best_for:
       - "非标准合并语义"
     not_for:
-      - "常规"
+      - "常规形状（无特殊布局需求）"
     pros:
-      - "可控"
+      - "完全可控，但需自己维护"
     cons:
       - "顺序易错"
     source: "references/libraries.md"

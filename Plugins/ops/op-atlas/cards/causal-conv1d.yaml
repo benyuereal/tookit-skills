@@ -29,7 +29,7 @@ impls:
     best_for:
       - "decode 形态"
     not_for:
-      - "大核"
+      - "大核时依赖链变长"
     pros:
       - "自带调优"
     cons:

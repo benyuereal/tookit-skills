@@ -32,9 +32,9 @@ impls:
     not_for:
       - "大词表生产"
     pros:
-      - "简单"
+      - "实现简单，但多一次往返"
     cons:
-      - "写回浪费"
+      - "中间 logits 写回是纯浪费"
     source: "references/libraries.md"
 
 ceiling:

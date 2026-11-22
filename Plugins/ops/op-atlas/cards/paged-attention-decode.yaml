@@ -18,7 +18,7 @@ impls:
     not_for:
       - "需要新的 attention 变体语义"
     pros:
-      - "成熟稳定"
+      - "实现成熟稳定，与框架集成好"
       - "与 vLLM/SGLang 集成"
     cons:
       - "scale 与 sink 语义需核对"

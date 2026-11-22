@@ -18,7 +18,7 @@ impls:
     not_for:
       - "需要中间激活值做别的事"
     pros:
-      - "融合省往返"
+      - "融合省一次 HBM 往返"
     cons:
       - "对 compute-bound 融合是净负"
     source: "references/libraries.md"
@@ -28,13 +28,13 @@ impls:
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "基线对照"
+      - "只作为基线对照，不是性能候选"
     not_for:
-      - "生产"
+      - "不适合生产（无融合、无调优）"
     pros:
-      - "简单"
+      - "实现简单，但多一次往返"
     cons:
-      - "多一次往返"
+      - "多一次 HBM 往返"
     source: "references/libraries.md"
 
 ceiling:

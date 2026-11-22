@@ -17,7 +17,7 @@ impls:
     not_for:
       - "需要精细 layout 控制"
     pros:
-      - "省一层"
+      - "少一层封装，直接调库"
     cons:
       - "gfx938 上 FP8 无方案"
     source: "references/libraries.md"
@@ -31,7 +31,7 @@ impls:
     not_for:
       - "纯稠密"
     pros:
-      - "灵活"
+      - "灵活但不如专用实现快"
     cons:
       - "多一层"
     source: "references/libraries.md"

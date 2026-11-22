@@ -29,9 +29,9 @@ impls:
     best_for:
       - "非标准 page 布局"
     not_for:
-      - "常规形状"
+      - "常规形状（无特殊布局需求）"
     pros:
-      - "可控"
+      - "完全可控，但需自己维护"
     cons:
       - "易错在边界"
     source: "references/libraries.md"

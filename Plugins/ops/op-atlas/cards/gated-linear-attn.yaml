@@ -17,7 +17,7 @@ impls:
     not_for:
       - "标准 attention"
     pros:
-      - "官方实现"
+      - "官方实现，省掉自己推公式"
     cons:
       - "环境门槛高"
     source: "references/libraries.md"
@@ -29,11 +29,11 @@ impls:
     best_for:
       - "非标准门控"
     not_for:
-      - "常规"
+      - "常规形状（无特殊布局需求）"
     pros:
-      - "可控"
+      - "完全可控，但需自己维护"
     cons:
-      - "维护成本"
+      - "需自行维护，无上游可 diff"
     source: "references/libraries.md"
 
 ceiling:

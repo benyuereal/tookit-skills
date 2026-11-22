@@ -15,7 +15,7 @@ impls:
     best_for:
       - "投机解码验证"
     not_for:
-      - "非投机"
+      - "非投机解码场景不适用"
     pros:
       - "接受率决定整体收益"
     cons:
@@ -27,13 +27,13 @@ impls:
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "算法对照"
+      - "验证接受判据的算法正确性（不是性能）"
     not_for:
-      - "生产"
+      - "生产路径（无融合、无调优）"
     pros:
-      - "简单"
+      - "实现简单，但多一次往返"
     cons:
-      - "慢"
+      - "实现慢，仅作算法对照"
     source: "references/libraries.md"
 
 ceiling:

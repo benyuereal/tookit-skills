@@ -17,7 +17,7 @@ impls:
     not_for:
       - "需要自定义 mask 语义（改 fork 成本高）"
     pros:
-      - "成熟"
+      - "实现成熟，变体覆盖广"
       - "变体覆盖广"
     cons:
       - "不同 gfx 路径不同"
@@ -32,9 +32,9 @@ impls:
     not_for:
       - "要逼近手写极限"
     pros:
-      - "可读可改"
+      - "源码可读可改，适合实验"
     cons:
-      - "布局税"
+      - "先付布局转换税（3-4x 搬运指令）"
     source: "references/libraries.md"
 
 ceiling:

@@ -45,11 +45,11 @@ impls:
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
     best_for:
-      - "基线对照"
+      - "只作为基线对照，不是性能候选"
     not_for:
-      - "生产"
+      - "不适合生产（无融合、无调优）"
     pros:
-      - "简单"
+      - "实现简单，但多一次往返"
     cons:
       - "未做跨行复用"
     source: "references/libraries.md"

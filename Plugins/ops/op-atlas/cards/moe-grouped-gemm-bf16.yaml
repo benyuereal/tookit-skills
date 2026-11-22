@@ -27,11 +27,11 @@ impls:
     tier: fallback
     law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
     best_for:
-      - "标准接入"
+      - "标准接入路径，有统一 API"
     not_for:
       - "需要单一路径可预测"
     pros:
-      - "四后端回退"
+      - "四后端回退，单路径性能不可预测"
     cons:
       - "查表决定"
     source: "references/libraries.md"
