@@ -87,6 +87,12 @@ last_verdict:
   ratio:
     value: 0.94
     vs: 流式峰值（mem-only 变体达成率）
+    scope:
+      cards: 1
+      in_len: ctx 32k-320k
+      out_len: S=128
+      warmup: hot
+      note: mem-only 变体，非整 kernel
   conclusion: 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REPLICATE_H 结构税
   verified_on: '2026-10-29'
 modify_path:

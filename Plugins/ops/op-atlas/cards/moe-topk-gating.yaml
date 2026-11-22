@@ -61,6 +61,12 @@ modify_path:
   what: torch topk+softmax 换 aiter 融合
   how: aiter.topk_softmax(topk_weights, topk_ids, token_expert_ids, expert_mask, logits) 一次调用
   requires: aiter 0.1.6；tie-break 需与参考核对
+hard_preconditions:
+- statement: topk_idx 是离散量，任何数值容差都不适用，必须逐位比较
+  check: python3 scripts/opcheck.py correctness --contract <card>/contract.yaml 看 index_mismatch 是否为 0
+soft_preconditions:
+- 建议 hot 态测量（冷启动会被首调虚高污染）
+- 建议同卡同频（跨卡比 ratio 时须在 scope 里写明）
 surfaces:
 - table-miss
 - layout-pack

@@ -38,7 +38,9 @@ LAYERS = {"kernel", "engine"}
 ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
                "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer",
                # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
-               "modify_path"}
+               "modify_path",
+               # 风险分级：不满足会崩 vs 不满足只是不赚
+               "hard_preconditions", "soft_preconditions"}
 REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
                 "ceiling", "last_verdict", "updated"}
 ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
@@ -228,6 +230,26 @@ def validate(atlas, repo):
             err("E8", where, "family=%r 不在 %s" % (c.get("family"), sorted(FAMILIES)))
         if c.get("status") not in STATUSES:
             err("E6", where, "status=%r 非法" % c.get("status"))
+        hps = c.get("hard_preconditions")
+        if hps is not None:
+            if not isinstance(hps, list):
+                err("E17", where, "hard_preconditions 必须是列表")
+            else:
+                for i, hp in enumerate(hps):
+                    if not isinstance(hp, dict):
+                        err("E17", where, "hard_preconditions[%d] 必须是 mapping" % i)
+                        continue
+                    extra = set(hp) - {"statement", "check"}
+                    if extra:
+                        err("E17", where,
+                            "hard_preconditions[%d] 未知字段 %s" % (i, sorted(extra)))
+                    for f in ("statement", "check"):
+                        if not str(hp.get(f) or "").strip():
+                            # hard 类不满足会崩，必须有可执行 check 才拦得住
+                            err("E17", where,
+                                "hard_preconditions[%d] 缺 %s（hard 类每条都要有可执行 check）"
+                                % (i, f))
+
         mp = c.get("modify_path")
         if mp is not None:
             if not isinstance(mp, dict):
@@ -437,9 +459,17 @@ def validate(atlas, repo):
             if not isinstance(ratio, dict):
                 err("E6", where, "last_verdict.ratio 必须是 mapping 或 null")
             else:
-                rextra = set(ratio) - {"value", "vs"}
+                # scope：跨口径比较是最隐蔽的错误来源。
+                # 内部材料里就有一句自我纠正——「那个 1.67–1.86 倍是 4 卡
+                # rocBLAS 换核的结果，不是 8 卡同口径对比」。
+                rextra = set(ratio) - {"value", "vs", "scope"}
                 if rextra:
                     err("E6", where, "ratio 未知字段 %s" % sorted(rextra))
+                # 有 value 就必须有 scope：没有口径的倍数不可比
+                if ratio.get("value") is not None and not ratio.get("scope"):
+                    err("E16", where,
+                        "ratio 有 value 但缺 scope（cards/concurrency/in_len/out_len/warmup）"
+                        "——跨口径比较是最隐蔽的错误来源")
                 if "value" not in ratio or "vs" not in ratio:
                     err("E6", where, "ratio 必须带 value 与 vs（分母不许省略）")
 

@@ -1,0 +1,141 @@
+# MoE W8A8 的失败模式库（进出都会崩/静默错，不是"慢"）
+#
+# 为什么单独建这个文件：`candidates.yaml:refuted` 记的是「某个改动没收益」，
+# 而这里记的是「这条路根本走不通」——两者的处置完全不同：
+#   没收益 → 换个方向再试
+#   走不通 → 别在这上面花时间，改基础设施或换实现
+#
+# 字段：
+#   class: hard（会崩/OOM/静默错）| soft（只是不赚）
+#   check: 一条可执行的验证命令或判据；hard 类**必须**有
+#   scope: 在什么环境下成立（gfx / dtype / 形状）
+#   evidence: 实测报错原文或出处
+
+version: 1
+
+failure_modes:
+  # ============ hard：会崩或静默错 ============
+
+  - id: asm-fmoe-a8-mode-namespace-mismatch
+    class: hard
+    summary: "aiter.asm_moe_get_solutions 返回的 mode 与 asm_fmoe_a8 接受的 mode 不是同一套"
+    detail: >
+      asm_moe_get_solutions 对 (fp8 输入, E=32, H=2048, I=1536, K=4, tok=1024)
+      返回 110 个解（mode 10000-13001 等），但 asm_fmoe_a8 对这 110 个解
+      **全部报 Input not supput Mode**。改用简单 mode 0..3 报
+      **unsupport current input Mode: N,Solution:0**。
+      说明 get_solutions 的解空间与 a8 kernel 的 mode 空间不对齐。
+    check: >
+      python3 -I -c "import aiter,torch;
+      print(len(aiter.asm_moe_get_solutions(x,w1,w2,tw,ti)))  # 有解
+      # 但 asm_fmoe_a8(mode=解里的 mode) 全报 Input not supput Mode"
+    scope: "gfx938 / aiter 0.1.6 / fp8_e4m3 输入"
+    evidence: "实测 2026-11-23：110/110 个解全部失败，错误原文 'asm_fmoe_a8 Input not supput Mode: 12000'"
+
+  - id: asm-fmoe-stage1-rejects-all-dtypes
+    class: hard
+    summary: "asm_fmoe_stage1/stage2 在 gfx938 上不接受任何常见 dtype"
+    detail: >
+      asm_fmoe_stage1 的 schema 是完整的（out, input, gate, down, sorted_token_ids,
+      sorted_weights, sorted_expert_ids, num_valid_ids, top_k, scale_a, scale_b,
+      zero_points, mode, solidx, block_size, persist_groups），说明接口设计上
+      它就是要做五段融合的。但实测两种 dtype 都被拒：
+        BFloat16      → unsupport current input type:BFloat16
+        float8_e4m3fn → unsupport current input type:Float8_e4m3fn
+      asm 源码不在安装包里（预编译 .so），无法进一步确认它支持什么。
+    check: >
+      python3 -I -c "import aiter; aiter.asm_fmoe_stage1(...)" 
+      传 bf16 或 fp8 输入，均应报 'unsupport current input type'
+    scope: "gfx938 / aiter 0.1.6"
+    evidence: "实测 2026-11-23，报错来自 asm_fmoe_2stage.hip:610"
+
+  - id: asm-mode-ge-1000-silent-cross-read
+    class: hard
+    summary: "lightop 的 ASM mode>=1000 在混合专家 batch 下串读其他 token 数据"
+    detail: >
+      该 kernel 在混合专家 batch 下会读到其他 token / 其他专家的数据。
+      **不是性能问题，是正确性问题**——结果会静默错。
+      安全区是 mode 500-525。
+    check: >
+      python3 scripts/opcheck.py invariants --contract <card>/contract.yaml
+      必跑 batch_independence 不变量；用 mode>=1000 应失败
+    scope: "lightop 4stage / 混合专家 batch"
+    evidence: "op-moe-w8a8/SKILL.md 已知 bug 记录"
+
+  - id: masked-gemm-weight-prepack-required
+    class: hard
+    summary: "deepgemm masked GEMM 未 pack 权重时直接 ValueError"
+    detail: >
+      m_grouped_bf16_gemm_nt_masked 在 mode 属于 BM64/BN256/BK128 系列时，
+      要求权重经 pack_bf16_masked_weight 处理并传回 config；
+      直接传原始权重会报 "require pre-packed weights"。
+      mode=1000（asm layout）例外，它只做 contiguous。
+    check: >
+      不 pack 直接调用 → ValueError: BF16 masked BM64/BN256/BK128 kernels
+      require pre-packed weights
+    scope: "deepgemm 2.1.0 / mode in {2000,2001,2002}"
+    evidence: "实测 2026-11-23"
+
+  - id: masked-gemm-n-256-divisible
+    class: hard
+    summary: "deepgemm masked GEMM 要求 N 被 256 整除"
+    detail: >
+      真实 MoE 的中间维 I=1408（DeepSeek 系常见）**不是 256 的倍数**，
+      会被直接拒绝：ValueError: N must be divisible by 256, got 1408。
+      要跑得改成 1536，或换别的 grouped GEMM 实现。
+    check: >
+      python3 -I -c "deepgemm.m_grouped_bf16_gemm_nt_masked(..., N=1408, ...)"
+      → ValueError: N must be divisible by 256
+    scope: "deepgemm 2.1.0 / masked 形态"
+    evidence: "实测 2026-11-23"
+
+  - id: masked-gemm-requires-3d
+    class: hard
+    summary: "masked GEMM 的 a/b 必须是 3D [E, M, K] / [E, N, K]"
+    detail: >
+      传 2D 张量会在 C++ 层抛 IndexError: Dimension out of range
+      (expected to be in range of [-2, 1], but got 2)，
+      错误信息完全没提形状要求，很难从报错反推。
+    check: >
+      传 2D a/b → IndexError: Dimension out of range
+    scope: "deepgemm 2.1.0 / 全部 masked 入口"
+    evidence: "实测 2026-11-23，花了几轮才定位到是维度问题"
+
+  - id: lightop-pad-sorted-ids-broken
+    class: hard
+    summary: "lightop.moe_align_block_size(pad_sorted_ids=True) 抛 NameError"
+    detail: >
+      lightop 在 pad_sorted_ids=True 分支引用了未定义的符号 round_up。
+      参数名与位置都按 inspect.signature 传的，不是用法错。
+      影响：想用「显式 padding」核对哨兵位置的尝试全部走不通。
+    check: >
+      python3 -I -c "import lightop; lightop.moe_align_block_size(ids, 128, 32, pad_sorted_ids=True)"
+      → NameError: name 'round_up' is not defined
+    scope: "lightop 0.6.0+dtk2604"
+    evidence: "实测 2026-11-23（S3 轮 1）"
+
+  # ============ soft：只是不赚 ============
+
+  - id: fuse-moe-sum-epilogue-slower
+    class: soft
+    summary: "把 moe_sum 融进 grouped GEMM epilogue 反而慢 2.5-3x"
+    detail: >
+      融合把本可并行的 moe_sum 串进依赖链并多占 smem。
+      对已有 4 段的流水线，多一段融合反而减少 CTA 驻留。
+    check: >
+      对比融合版与分拆版的和：scripts/opbench.py bench_fn 各跑一次
+    scope: "lightop 4stage"
+    evidence: "libraries.md §3 与 SKILL.md 的融合判据"
+
+  - id: dual-stream-same-engine-no-overlap
+    class: soft
+    summary: "两个 GEMM 放两个流并发不会更快（同引擎争用）"
+    detail: >
+      实测 GEMM + GEMM 双流并行重叠度仅 5.8%。
+      只有「计算 vs 真 DMA（D2H/H2D）」才能真重叠（100%）。
+      MoE 的两段 GEMM 同属算力引擎，分流无效。
+    check: >
+      python3 cases/002-moe-pipeline/stage3_overlap.py
+      看 GEMM+GEMM 那一行的重叠度（应 <20%）
+    scope: "gfx938 / 任意 GEMM"
+    evidence: "实测 2026-11-23（批次 9 阶段 3）"

@@ -101,6 +101,14 @@ modify_path:
   what: 修 deepgemm.fp8_gemm 的 CPU alpha/beta bug
   how: patch deepgemm 包装层把 alpha/beta 从 device="cpu" 改成 device="cuda"；否则卡上调用直接抛 device 不匹配
   requires: deepgemm 2.1.0；改的是库源码
+hard_preconditions:
+- statement: deepgemm.fp8_gemm 的包装层把 alpha/beta 写死在 CPU，卡上调用会崩
+  check: 'python3 -I -c "import torch,deepgemm; deepgemm.fp8_gemm((a,sa),(b,sb),d)" → RuntimeError: Expected all tensors to be on the same device'
+- statement: hipBLASLt 在本机不可导入
+  check: python3 -I -c "import hipblaslt" → ModuleNotFoundError
+soft_preconditions:
+- 建议 hot 态测量（冷启动会被首调虚高污染）
+- 建议同卡同频（跨卡比 ratio 时须在 scope 里写明）
 surfaces:
 - occupancy
 - split-k

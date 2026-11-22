@@ -60,6 +60,14 @@ modify_path:
   what: torch 重排换 aiter 融合
   how: aiter.moe_align_block_size(topk_ids, num_experts, block_size, ...) 替代排序+补 padding
   requires: padding 必须垫队尾
+hard_preconditions:
+- statement: padding 哨兵只能垫队尾，前置会让输出恒为 0
+  check: python3 scripts/opcheck.py padding --contract <card>/contract.yaml 必须通过
+- statement: lightop.moe_align_block_size(pad_sorted_ids=True) 会抛 NameError
+  check: python3 -I -c "import lightop; lightop.moe_align_block_size(ids,128,32,pad_sorted_ids=True)" → NameError
+soft_preconditions:
+- 建议 hot 态测量（冷启动会被首调虚高污染）
+- 建议同卡同频（跨卡比 ratio 时须在 scope 里写明）
 surfaces:
 - layout-pack
 - gather-path

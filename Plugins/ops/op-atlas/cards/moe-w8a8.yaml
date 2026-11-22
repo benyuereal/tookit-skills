@@ -69,6 +69,12 @@ last_verdict:
   ratio:
     value: 0.888
     vs: 峰值带宽（仅 Marlin GEMM 分量）
+    scope:
+      cards: 1
+      in_len: decode-m32
+      out_len: per-token
+      warmup: hot
+      note: 仅 Marlin GEMM 分量，不含整 pipeline
   conclusion: Marlin GEMM 分量达峰值带宽的 0.888；整体未判；asm mode>=1000 禁用
   verified_on: '2026-10-20'
 modify_path:
@@ -76,6 +82,16 @@ modify_path:
   what: 切 Marlin MoE GEMM 的 mode 档
   how: 在 lightop.moe_gemm_marlin_w16a16 的 mode 参数上设 500-525（安全区）；mode>=1000 禁用
   requires: lightop 0.6.0；mode>=1000 会串读其他 token
+hard_preconditions:
+- statement: 权重必须经 aiter_moe_shfl_weight 或对应 pack 处理
+  check: python3 -I -c "import aiter; assert hasattr(aiter,'moe_align_block_size')"（漏 shuffle 是静默错，须在 adapter 里显式调用）
+- statement: ASM 路径 mode 必须落在 500-525，不得 >=1000
+  check: grep -n 'mode' <card>/candidates.yaml 确认 mode 取值在 500-525
+- statement: deepgemm masked 形态要求 N 被 256 整除
+  check: python3 -I -c "import deepgemm,torch; deepgemm.m_grouped_bf16_gemm_nt_masked(a,b,d,m,m_expected,None)" 传 N=1408 应报 ValueError
+soft_preconditions:
+- 建议 hot 态测量（冷启动会被首调虚高污染）
+- 建议同卡同频（跨卡比 ratio 时须在 scope 里写明）
 surfaces:
 - table-miss
 - fusion-boundary

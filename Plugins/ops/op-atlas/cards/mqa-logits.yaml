@@ -64,6 +64,12 @@ last_verdict:
   ratio:
     value: 1.29
     vs: grouped G=3 (0.887 ms)
+    scope:
+      cards: 1
+      in_len: ctx 32K
+      out_len: S=192
+      warmup: hot
+      note: 192x32K，grouped G=3 为基线
   conclusion: epilogue 跨 lane 归约换 ds_bpermute，逐位一致；LDS 冲突非杠杆
   verified_on: '2026-11-22'
 modify_path:
