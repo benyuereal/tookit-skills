@@ -1,0 +1,56 @@
+id: hadamard-transform
+title: "Fast Hadamard Transform（MHC 三件之一）"
+family: linear-attn
+math: "H_n = H_2 ⊗ H_{n/2}；蝶形变换，O(n log n)"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: TileKernels
+    library_profile_ref: "libraries.md §11"
+    file_hint: "fast_hadamard"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "MHC 系"
+    not_for:
+      - "memory-bound 链（不是它的场景）"
+    pros:
+      - "蝶形并行"
+    cons:
+      - "radix 与 LDS 争用需调"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写蝶形"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非 2 的幂长度"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: compute
+  note: "蝶形运算，算力型；判据在指令数不在字节数"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [cross-lane-fold, layout-pack]
+
+updated: "2026-11-22"

@@ -1,0 +1,56 @@
+id: gated-linear-attn
+title: "GLA 门控线性注意力"
+family: linear-attn
+math: "o_t = (q_t ⊙ sum_{s<=t} (prod gates)*k_s^T v_s) 的门控递推"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: TileKernels
+    library_profile_ref: "libraries.md §11"
+    file_hint: "GLA 递推"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "GLA 系模型"
+    not_for:
+      - "标准 attention"
+    pros:
+      - "官方实现"
+    cons:
+      - "环境门槛高"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非标准门控"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: mixed
+  note: "门控引入额外乘；递推结构与 chunked-scan 同族"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [pipeline-depth]
+
+updated: "2026-11-22"

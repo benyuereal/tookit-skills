@@ -1,0 +1,56 @@
+id: chunked-scan
+title: "分块选择性扫描"
+family: linear-attn
+math: "h_t = A_t*h_{t-1} + B_t*x_t；按块并行，块间串行"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: TileKernels
+    library_profile_ref: "libraries.md §11"
+    file_hint: "GDN 递推"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "线性注意力"
+    not_for:
+      - "需要严格逐 token 递推"
+    pros:
+      - "块并行 + 块间串行"
+    cons:
+      - "块大小需按序列长调"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写 scan"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非标准状态维"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "维护成本"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: mixed
+  note: "块内并行、块间串行；块大小决定并行度与串行深度"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [pipeline-depth, occupancy]
+
+updated: "2026-11-22"

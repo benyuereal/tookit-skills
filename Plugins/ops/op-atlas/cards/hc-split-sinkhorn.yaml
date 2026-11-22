@@ -1,0 +1,56 @@
+id: hc-split-sinkhorn
+title: "HC split + Sinkhorn 归一"
+family: linear-attn
+math: "对路由矩阵做 Sinkhorn 迭代归一（行列交替）"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: TileKernels
+    library_profile_ref: "libraries.md §11"
+    file_hint: "hc_split_sinkhorn"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "需要双随机矩阵归一"
+    not_for:
+      - "不需要归一的路由"
+    pros:
+      - "官方实现"
+    cons:
+      - "迭代次数需调"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "手写迭代"
+    tier: structural
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "非标准迭代数"
+    not_for:
+      - "常规"
+    pros:
+      - "可控"
+    cons:
+      - "收敛性需验证"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: compute
+  note: "迭代次数决定精度与耗时；通常 3-5 次"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [cross-lane-fold]
+
+updated: "2026-11-22"

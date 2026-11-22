@@ -1,0 +1,56 @@
+id: verify-accept
+title: "投机验证与接受"
+family: sampling
+math: "比较 draft 与 target 的分布，按概率接受 / 拒绝采样"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "接受判据实现"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "投机解码验证"
+    not_for:
+      - "非投机"
+    pros:
+      - "接受率决定整体收益"
+    cons:
+      - "随机源需固定"
+    source: "references/libraries.md"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "torch 对照"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "算法对照"
+    not_for:
+      - "生产"
+    pros:
+      - "简单"
+    cons:
+      - "慢"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: compute
+  note: "tie-break 与随机源必须固定，否则 determinism 判不了"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [precision-drop]
+
+updated: "2026-11-22"

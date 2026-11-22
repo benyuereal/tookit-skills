@@ -1,0 +1,56 @@
+id: causal-conv1d
+title: "Causal conv1d（MHC 三件之一）"
+family: linear-attn
+math: "y_t = sum_{k=0..K-1} w_k*x_{t-k}；因果卷积，tile 内移位"
+status: draft
+layer: kernel
+op_card: null
+
+impls:
+  - repo: TileKernels
+    library_profile_ref: "libraries.md §11"
+    file_hint: "Engram 的 causal_conv1d"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "MHC / Mamba2 系"
+    not_for:
+      - "需要跨 tile 的大核（依赖链长）"
+    pros:
+      - "tile 内移位实现"
+    cons:
+      - "核大小受 tile 高度限制"
+    source: "references/libraries.md"
+  - repo: BoltOPs
+    library_profile_ref: "libraries.md §10"
+    file_hint: "causal_conv1d_fn / causal_conv1d_update"
+    tier: fallback
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+    best_for:
+      - "decode 形态"
+    not_for:
+      - "大核"
+    pros:
+      - "自带调优"
+    cons:
+      - "版本较新"
+    source: "references/libraries.md"
+
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: "串行 scan 依赖；优化手段是 tile 内移位，不是 GEMM 那套"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "无实测：索引卡，实现层待按证据推进"
+  verified_on: null
+
+surfaces: [pipeline-depth]
+
+updated: "2026-11-22"
