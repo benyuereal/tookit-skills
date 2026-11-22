@@ -60,6 +60,14 @@ BARE_TIME = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*(?:ms|µs|us|ns)\b", re.I)
 # E7：无分母百分比（97% / 87 %）——必须写清"相对谁"
 BARE_PCT = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*%")
 
+# E18：卡片正文里引用的机器峰值，必须与 constants.yaml 的实测值一致。
+# 由来：bf16 峰值曾在 5 处各写各的（185/217/310），带宽峰值写 1728（常数是 1724）。
+# 一个常数散落多处、只有一处对，就是「分母用错、结论反转」的温床。
+PEAK_CLAIMS = {
+    "bf16": re.compile(r"bf16[^。；\n]{0,20}?峰值[^0-9\n]{0,10}(\d{2,4})", re.I),
+    "bw": re.compile(r"流式峰值\s*(\d{3,4})"),
+}
+
 errors, warns = [], []
 L1_PENDING = [0]   # L1 回填进度计数（全部填完后改为 err）
 L1_EXEMPT = [0]    # 不适用 L1 的条目数（in-house / 源码树）
@@ -93,6 +101,29 @@ def _truth_sources(repo):
     lib_sections = {int(m) for m in re.findall(r"(?m)^###\s+(\d+)\.\s", lib)}
     law_ids = {m for m in re.findall(r"(?m)^#{1,4}\s+([A-Za-z]\d+)\b", laws)}
     return lib_sections, law_ids
+
+
+def _peak_constants(repo):
+    """从 constants.yaml 取两个达成率分母：bf16 峰值 TFLOPS、流式峰值带宽 GB/s。
+
+    只认实测值。取不到返回 None，让 E18 明确报「读不到」而不是静默跳过——
+    静默跳过正是 185 那个错了几个月没被发现的原因。
+    """
+    p = repo / "Plugins/ops/skills/op-roofline/constants.yaml"
+    if not p.is_file():
+        return None, None
+    txt = p.read_text(encoding="utf-8")
+
+    def _val(key, section):
+        # 在指定 section 下找 key 的 value
+        m = re.search(r"(?ms)^%s:\s*\n(.*?)(?=^\S)" % section, txt)
+        if not m:
+            return None
+        blk = m.group(1)
+        m2 = re.search(r"(?m)^\s{2}%s:\s*\n\s{4}value:\s*([\d.]+)" % re.escape(key), blk)
+        return float(m2.group(1)) if m2 else None
+
+    return _val("bf16_gemm_peak_tf", "compute"), _val("stream_read_peak", "memory")
 
 
 def _library_registry(repo):
@@ -192,6 +223,7 @@ def validate(atlas, repo):
     lib_sections, law_ids = _truth_sources(repo)
     reg_status, reg_path = _registry(repo)
     lib_canon, lib_removed = _library_registry(repo)
+    peak_bf16, peak_bw = _peak_constants(repo)
     _NON_INSTALLABLE.clear()
     _NON_INSTALLABLE.update(_non_installable_libs(repo))
 
@@ -476,6 +508,26 @@ def validate(atlas, repo):
                         "——跨口径比较是最隐蔽的错误来源")
                 if "value" not in ratio or "vs" not in ratio:
                     err("E6", where, "ratio 必须带 value 与 vs（分母不许省略）")
+
+                # E18：vs 里若引用了机器峰值，必须等于 constants.yaml 的实测值。
+                # 历史：bf16 峰值在 5 处各写各的（185/217/310），带宽写 1728（常数 1724）。
+                # 「一个常数散落多处、只有一处对」正是分母用错的温床。
+                vs = str(ratio.get("vs") or "")
+                m = PEAK_CLAIMS["bf16"].search(vs)
+                if m and peak_bf16 is not None:
+                    got = float(m.group(1))
+                    if abs(got - peak_bf16) / peak_bf16 > 0.02:
+                        err("E18", where,
+                            "vs 里写的 bf16 峰值 %g 与 constants.yaml 实测 %g 不符"
+                            "（偏差 %.0f%%）——达成率分母必须引用实测值"
+                            % (got, peak_bf16, abs(got - peak_bf16) / peak_bf16 * 100))
+                m = PEAK_CLAIMS["bw"].search(vs)
+                if m and peak_bw is not None:
+                    got = float(m.group(1))
+                    if abs(got - peak_bw) / peak_bw > 0.02:
+                        err("E18", where,
+                            "vs 里写的流式峰值带宽 %g 与 constants.yaml 实测 %g 不符"
+                            "——达成率分母必须引用实测值" % (got, peak_bw))
 
     # ---- E1b INDEX 指向的卡必须存在
     for m in re.findall(r"cards/([a-z0-9-]+)\.yaml", index_txt):

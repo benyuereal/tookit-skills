@@ -54,7 +54,7 @@ last_verdict:
   kb_path: null
   ratio:
     value: 485
-    vs: M=8192 档带宽（GB/s，相对流式峰值 1728 为 0.28）
+    vs: M=8192 档带宽（GB/s，相对流式峰值 1724 为 0.28）
     scope:
       cards: 1
       in_len: M=8192

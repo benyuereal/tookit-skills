@@ -89,7 +89,7 @@ ceiling:
   kind: constants
   ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: compute
-  note: 540 TF 是 fp8 分母；bf16 用 185 TF。混用会把'还有 4x'判成'到顶'
+  note: 540 TF 是 fp8 分母；bf16 用实测 310 TF。混用会把'还有 4x'判成'到顶'
 shapes:
 - decode-m1
 - decode-m32

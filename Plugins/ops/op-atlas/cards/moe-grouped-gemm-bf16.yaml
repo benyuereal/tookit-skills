@@ -58,7 +58,7 @@ last_verdict:
       out_len: N=1536
       warmup: hot
       note: E=32 masked 形态 mode=1000；与 case 002 的 stage1 数据一致（80.4）
-  conclusion: grouped BF16 GEMM 达 80 TFLOPS，与 case 002 一致；达成率为峰值的 0.43
+  conclusion: grouped BF16 GEMM 达 80 TFLOPS，与 case 002 一致；达成率为实测峰值的 0.26
   verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
