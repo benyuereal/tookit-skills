@@ -2,7 +2,7 @@ id: mlp-gelu-geglu
 title: MLP GeGLU / quick-GELU
 family: activation
 math: y = gelu(x*W_up) * (x*W_gate) * W_down
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -51,16 +51,31 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 0.33
+    vs: GNSilu 相对 torch F.silu 的带宽比（153/468）
+    scope:
+      cards: 1
+      in_len: 64x32x64x64 (GNSilu) / 4096x4096 (F.silu)
+      out_len: 同
+      warmup: hot
+      note: 两者形状不同，不是同口径对比；GNSilu 是 GroupNorm+SiLU 不是纯激活
+  conclusion: GNSilu 是 GroupNorm+SiLU 复合算子，不能当纯激活；纯 silu 达 468 GB/s
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: torch 激活换 lightop.GNSilu
   how: lightop.GNSilu()(x) 替代 F.gelu/geglu 的分步实现
   requires: lightop 0.6.0
+hard_preconditions:
+- statement: lightop.GNSilu 是 GroupNorm+SiLU，需要 num_groups 与 num_channels，不是纯激活
+  check: 'lightop.GNSilu() → TypeError: missing 2 required positional arguments: num_groups, num_channels'
+- statement: 需要纯 SiLU 时不要用 GNSilu，用 torch F.silu 或 aiter.silu_and_mul
+  check: python3 -I -c "import aiter; assert hasattr(aiter,'silu_and_mul')"
+soft_preconditions:
+- GNSilu 的数据不能与纯激活的达成率直接比（形状与语义都不同）
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'

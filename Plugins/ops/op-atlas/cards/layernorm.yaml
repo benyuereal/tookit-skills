@@ -2,7 +2,7 @@ id: layernorm
 title: LayerNorm
 family: norm
 math: y = w*(x-mean(x))/sqrt(var(x)+eps) + b
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -50,16 +50,30 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 485
+    vs: M=8192 档带宽（GB/s，相对流式峰值 1728 为 0.28）
+    scope:
+      cards: 1
+      in_len: M=8192
+      out_len: H=4096
+      warmup: hot
+      note: bf16；M=1024 时 213 GB/s，M=8192 时 485 GB/s
+  conclusion: 带宽随 M 上升：M=1024 为 213 GB/s、M=8192 为 485 GB/s（后者达峰值 0.28）
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: torch.nn.LayerNorm 换成 lightop.LayerNorm
   how: lightop.LayerNorm(H, eps) 替代 torch 版本，前者有融合变体
   requires: lightop 0.6.0
+hard_preconditions:
+- statement: lightop.LayerNorm 是 nn.Module，需 .cuda().to(bf16)
+  check: python3 -I -c "import lightop,torch; m=lightop.LayerNorm(512).cuda().to(torch.bfloat16); m(torch.randn(8,512,dtype=torch.bfloat16,device='cuda'))"
+soft_preconditions:
+- 建议 hot 态
+- M 小时固定开销占比高，报达成率须同时给 M
 surfaces:
 - fusion-boundary
 - layout-pack
