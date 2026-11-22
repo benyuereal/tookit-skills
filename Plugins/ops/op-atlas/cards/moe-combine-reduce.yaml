@@ -20,9 +20,9 @@ impls:
   cons:
   - 累加顺序需固定
   source: references/libraries.md
-  import_path: lightop.moe_align_sum
-  signature: moe_align_sum(...) 反 permute 的加权求和
-  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_align_sum")"
+  import_path: lightop.moe_align_sum.moe_sum
+  signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None, factor=1.0, expect_m=-1) -> None
+  smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.moe_align_sum"),"moe_sum")"
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: lightop 的 moe_sum
@@ -37,9 +37,9 @@ impls:
   cons:
   - lightop 有 moe_sum，不必自研
   source: references/libraries.md
-  import_path: lightop.moe_align_sum
-  signature: moe_align_sum(...) 反 permute 的加权求和
-  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_align_sum")"
+  import_path: lightop.moe_align_sum.moe_sum
+  signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None, factor=1.0, expect_m=-1) -> None
+  smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.moe_align_sum"),"moe_sum")"
 ceiling:
   kind: missing
   ref: null

@@ -21,9 +21,9 @@ impls:
   cons:
   - 缩放变体支持面需核对
   source: references/libraries.md
-  import_path: lightop.fuse_rmsnorm_rope
-  signature: fuse_rmsnorm_rope(x, weight, cos, sin, eps)
-  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"fuse_rmsnorm_rope")"
+  import_path: lightop.fuse_rmsnorm_rope.rms_rotary_embedding_fuse
+  signature: rms_rotary_embedding_fuse(positions, query, key, head_size, cos_sin_cache, is_neox, weight_q, weight_k, ...)
+  smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.fuse_rmsnorm_rope"),"rms_rotary_embedding_fuse")"
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter.RoPE / RoPETHD / fused_qk_rmsnorm_rope

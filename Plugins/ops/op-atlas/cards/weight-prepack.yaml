@@ -39,9 +39,9 @@ impls:
   cons:
   - 三种 layout（HIPC / W6 / marlin）不可混用，选错不是慢而是静默算错
   source: references/libraries.md
-  import_path: deepgemm.group_gemm_weight_pack
-  signature: group_gemm_weight_pack(...) 权重预打包
-  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"group_gemm_weight_pack")"
+  import_path: deepgemm.group_gemm_weight_pack.marlin_bf16_masked_weight
+  signature: marlin_bf16_masked_weight(weight, *, arch=None) -> Tensor
+  smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("deepgemm.group_gemm_weight_pack"),"marlin_bf16_masked_weight")"
 ceiling:
   kind: missing
   ref: null

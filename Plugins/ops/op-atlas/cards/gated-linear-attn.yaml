@@ -22,9 +22,9 @@ impls:
   cons:
   - 版本很新（0.0.1）
   source: references/libraries.md
-  import_path: flash_kda.cp
-  signature: cp 模块（KDA 的 chunk-parallel 布局）
-  smoke_test: python3 -I -c "import flash_kda; assert hasattr(flash_kda,"cp")"
+  import_path: flash_kda.cp.build_cp_layout_cpu
+  signature: build_cp_layout_cpu(raw_cu_seqlens, max_local_chunks) -> CpuCpLayout
+  smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("flash_kda.cp"),"build_cp_layout_cpu")"
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 的 GLA 递推
