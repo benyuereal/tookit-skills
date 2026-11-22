@@ -1,0 +1,48 @@
+{
+  "case": "002-moe-pipeline",
+  "stage": 3,
+  "purpose": "重叠验证：区分真重叠 / 伪重叠 / 无重叠",
+  "method": "重叠度 = (串行和 - 并行) / (串行和 - max)；只测墙钟不算重叠，必须三量对照",
+  "caliber": {
+    "what": "two independent ops",
+    "alloc": true,
+    "state": "hot",
+    "timer": "cuda_event",
+    "rounds": 9
+  },
+  "results": [
+    {
+      "case": "copy(DMA) + GEMM(compute)",
+      "engines": "different",
+      "size_ratio": 0.939,
+      "t_a_ms": 3.4734370708465576,
+      "t_b_ms": 3.6979169845581055,
+      "seq_ms": 7.100793838500977,
+      "par_ms": 6.687994003295898,
+      "overlap_pct": 11.9,
+      "verdict": "无/伪重叠"
+    },
+    {
+      "case": "GEMM + GEMM",
+      "engines": "same",
+      "t_a_ms": 3.6156771183013916,
+      "t_b_ms": 3.6156771183013916,
+      "seq_ms": 7.315512180328369,
+      "par_ms": 7.104794025421143,
+      "overlap_pct": 5.8,
+      "verdict": "无重叠（同引擎争用）"
+    },
+    {
+      "case": "D2H(pinned DMA) + GEMM",
+      "engines": "different(real DMA)",
+      "size_ratio": 0.203,
+      "t_a_ms": 18.1967830657959,
+      "t_b_ms": 3.6979169845581055,
+      "seq_ms": 21.759180068969727,
+      "par_ms": 18.042383193969727,
+      "overlap_pct": 100.0,
+      "verdict": "真重叠"
+    }
+  ],
+  "conclusion_for_moe": "MoE 的两段 GEMM 同属算力引擎，分流无法重叠（实测 B 情形）。能重叠的只有 compute 与 DMA 之间（A 情形）。"
+}
