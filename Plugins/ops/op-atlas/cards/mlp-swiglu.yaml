@@ -76,6 +76,7 @@ hard_preconditions:
 soft_preconditions:
 - 建议 hot 态测量（冷启动被首调虚高污染）
 - 达成率分母按访存比选：读 2 写 1，用 copy 峰值而非只读峰值
+- 纯 silu 对照：aiter.silu_and_mul 在 M=1024 为 335 GB/s、M=8192 为 434 GB/s（低于 lightop 融合版的 531）
 surfaces:
 - fusion-boundary
 - precision-drop

@@ -2,7 +2,7 @@ id: qk-norm
 title: QK per-head 归一化
 family: norm
 math: q = rmsnorm(q,-1)*w_q；k = rmsnorm(k,-1)*w_k
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -51,16 +51,32 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 741
+    vs: 融合后带宽 GB/s（相对流式峰值 1728 为 0.43）
+    scope:
+      cards: 1
+      in_len: B=8 S=2048
+      out_len: H=32 D=128
+      warmup: hot
+      note: qk-norm 与 rope 融合；同形状 rope 单独为 338 GB/s
+  conclusion: qk-norm+rope 融合达 741 GB/s，是 rope 单独（338）的 2.19 倍
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: QK-norm 与 RoPE 合并成一次调用
   how: 用 aiter.fused_qk_rmsnorm_rope 替代「先 norm 再 rope」两次调用
   requires: aiter 0.1.6；head_dim 与 rope 的 rot_dim 需匹配
+hard_preconditions:
+- statement: fused_qk_rmsnorm_rope 的 freqs 必须 2D [seq_len, head_dim]，与 rope_fwd 要 4D 不同
+  check: '传 [S, D/2] → RuntimeError: freqs must have shape [at least seq_len, head_dim]'
+- statement: freqs 宽度要 head_dim（不是 head_dim/2）
+  check: 见上；同库两个入口的形状约定不一致，易踩
+soft_preconditions:
+- 建议 hot 态
+- 融合收益来自省一次 q/k 往返
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'
