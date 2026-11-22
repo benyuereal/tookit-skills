@@ -1,0 +1,26 @@
+{
+  "case": "mqa-fp8-persistent",
+  "library": {
+    "canonical_id": "lightop",
+    "version": "0.6.0+dtk2604.torch2110",
+    "source": "/workspace/lightop/lzh_glm_new（本地已解包，未重拉）"
+  },
+  "change": "gfx938 的 _persistent_supported 从「int8 或 fp8」收窄为「仅 int8」",
+  "reason": "FP8 + persistent 实测变慢；小 page 分组上 persistent 直接 RuntimeError",
+  "verification": {
+    "patch_applies_cleanly": true,
+    "logic_regression": {
+      "before": {
+        "int8": true,
+        "fp8": true
+      },
+      "after": {
+        "int8": true,
+        "fp8": false
+      }
+    },
+    "gate": "PASS"
+  },
+  "not_measured": "端到端性能未测——需要一张空闲卡跑 A/B；本案例只验证逻辑正确性与 patch 可套用",
+  "method_ref": "pipeline.md Q5（跨 iteration 驻留）与 Q6（重叠判据）"
+}

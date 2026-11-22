@@ -1,0 +1,6 @@
+patch 前 gfx938 persistent 允许: {'int8': True, 'fp8': True}
+patch 后 gfx938 persistent 允许: {'int8': True, 'fp8': False}
+PASS: fp8 已从 persistent 白名单移除；int8 保留
+RESULT: PASS
+checking file lightop/attention/mqa.py
+PASS: patch 干净套用（无 fuzz）
