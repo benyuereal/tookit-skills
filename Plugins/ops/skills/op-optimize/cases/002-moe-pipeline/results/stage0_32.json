@@ -1,0 +1,49 @@
+{
+  "case": "002-moe-pipeline",
+  "stage": 0,
+  "purpose": "五段占比基线，用于决定后续优化方向",
+  "shape": {
+    "M": 32,
+    "H": 2048,
+    "I": 1408,
+    "E": 32,
+    "K": 4
+  },
+  "caliber": {
+    "what": "per-stage kernel time",
+    "alloc": false,
+    "state": "hot",
+    "timer": "cuda_event",
+    "rounds": 9,
+    "note": "每段之间 synchronize，不含前后段"
+  },
+  "stages": [
+    {
+      "stage": "dispatch",
+      "median_ms": 0.1716800034046173,
+      "mad_ms": 0.0009600073099136353
+    },
+    {
+      "stage": "gate_up_gemm",
+      "median_ms": 5.4931159019470215,
+      "mad_ms": 0.011839866638183594
+    },
+    {
+      "stage": "swiglu",
+      "median_ms": 0.07840000092983246,
+      "mad_ms": 0.002558000385761261
+    },
+    {
+      "stage": "down_gemm",
+      "median_ms": 5.486715793609619,
+      "mad_ms": 0.006880283355712891
+    },
+    {
+      "stage": "combine",
+      "median_ms": 0.21872000396251678,
+      "mad_ms": 0.0040000081062316895
+    }
+  ],
+  "total_ms": 11.448631703853607,
+  "not_optimized": "这是未融合基线（逐专家循环），不是性能候选；目的是拿占比，不是拿倍数"
+}
