@@ -1,57 +1,58 @@
 id: qk-norm
-title: "QK per-head 归一化"
+title: QK per-head 归一化
 family: norm
-math: "q = rmsnorm(q,-1)*w_q；k = rmsnorm(k,-1)*w_k"
+math: q = rmsnorm(q,-1)*w_q；k = rmsnorm(k,-1)*w_k
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "qk-norm 融合"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "Qwen3 系模型"
-      - "需要与 rope 融合"
-    not_for:
-      - "hidden 维归一（那是另一个算子）"
-    pros:
-      - "融合省一次 HBM 往返"
-    cons:
-      - "head_dim 契约需核对"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter.fused_qk_rmsnorm_rope"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "head_dim 非标准"
-    not_for:
-      - "常规形状（无特殊布局需求）"
-    pros:
-      - "完全可控，但需自己维护"
-    cons:
-      - "aiter 的 fused_qk_rmsnorm_rope 已把 per-head norm 与 rope 融合"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: qk-norm 融合
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - Qwen3 系模型
+  - 需要与 rope 融合
+  not_for:
+  - hidden 维归一（那是另一个算子）
+  pros:
+  - 融合省一次 HBM 往返
+  cons:
+  - head_dim 契约需核对
+  source: references/libraries.md
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter.fused_qk_rmsnorm_rope
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - head_dim 非标准
+  not_for:
+  - 常规形状（无特殊布局需求）
+  pros:
+  - 完全可控，但需自己维护
+  cons:
+  - aiter 的 fused_qk_rmsnorm_rope 已把 per-head norm 与 rope 融合
+  source: references/libraries.md
+  import_path: aiter.fused_qk_rmsnorm_rope
+  signature: fused_qk_rmsnorm_rope(q, k, cos, sin, ...)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert hasattr(aiter,"fused_qk_rmsnorm_rope")"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "每头在 head_dim 上归一，与 hidden 维归一是两个算子"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 每头在 head_dim 上归一，与 hidden 维归一是两个算子
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [fusion-boundary]
-
-updated: "2026-11-22"
+surfaces:
+- fusion-boundary
+updated: '2026-11-22'

@@ -1,56 +1,58 @@
 id: mlp-swiglu
-title: "MLP SwiGLU 前向"
+title: MLP SwiGLU 前向
 family: activation
-math: "y = (silu(x*W_gate) * (x*W_up)) * W_down"
+math: y = (silu(x*W_gate) * (x*W_up)) * W_down
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "gate/up 融合 + 乘"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "decode 小 batch（权重读取主导）"
-    not_for:
-      - "需要 epilogue 融进 GEMM 时先量分拆版"
-    pros:
-      - "融合省一次写回"
-    cons:
-      - "对 compute-bound 主体融合是净负"
-    source: "references/libraries.md"
-  - repo: deepgemm
-    library_profile_ref: "libraries.md §6"
-    file_hint: "GEMM + swiglu epilogue"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "大 M prefill"
-    not_for:
-      - "M<=8 的 decode"
-    pros:
-      - "算力利用率高"
-    cons:
-      - "epilogue 灵活性有限"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: gate/up 融合 + 乘
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - decode 小 batch（权重读取主导）
+  not_for:
+  - 需要 epilogue 融进 GEMM 时先量分拆版
+  pros:
+  - 融合省一次写回
+  cons:
+  - 对 compute-bound 主体融合是净负
+  source: references/libraries.md
+  import_path: lightop.FuseBiasSwiGLU
+  signature: FuseBiasSwiGLU()(input, bias) -> Tensor; input [M,2H] -> out [M,H]
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"FuseBiasSwiGLU")"
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: GEMM + swiglu epilogue
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 大 M prefill
+  not_for:
+  - M<=8 的 decode
+  pros:
+  - 算力利用率高
+  cons:
+  - epilogue 灵活性有限
+  source: references/libraries.md
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "prefill 档算力主导；decode 档权重读取主导。两档结论不可互换"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: prefill 档算力主导；decode 档权重读取主导。两档结论不可互换
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [fusion-boundary, precision-drop]
-
-updated: "2026-11-22"
+surfaces:
+- fusion-boundary
+- precision-drop
+updated: '2026-11-22'

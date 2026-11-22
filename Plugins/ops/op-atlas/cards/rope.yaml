@@ -1,57 +1,62 @@
 id: rope
-title: "RoPE 旋转位置编码"
+title: RoPE 旋转位置编码
 family: rope
-math: "x_rot = x*cos(theta) + rotate_half(x)*sin(theta)"
+math: x_rot = x*cos(theta) + rotate_half(x)*sin(theta)
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "rope 融合族"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要与 QK-norm 融合"
-      - "decode 档"
-    not_for:
-      - "需要非标准缩放变体时先核实支持面"
-    pros:
-      - "融合省一次往返"
-    cons:
-      - "缩放变体支持面需核对"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter.RoPE / RoPETHD / fused_qk_rmsnorm_rope"
-    tier: structural
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "非标准 rot_dim 组合"
-    not_for:
-      - "常规形状（无特殊布局需求）"
-    pros:
-      - "完全可控，但需自行维护"
-    cons:
-      - "aiter 有完整 RoPE 族（含与 qk-norm 融合的变体），不必自研"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: rope 融合族
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要与 QK-norm 融合
+  - decode 档
+  not_for:
+  - 需要非标准缩放变体时先核实支持面
+  pros:
+  - 融合省一次往返
+  cons:
+  - 缩放变体支持面需核对
+  source: references/libraries.md
+  import_path: lightop.fuse_rmsnorm_rope
+  signature: fuse_rmsnorm_rope(x, weight, cos, sin, eps)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"fuse_rmsnorm_rope")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter.RoPE / RoPETHD / fused_qk_rmsnorm_rope
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 非标准 rot_dim 组合
+  not_for:
+  - 常规形状（无特殊布局需求）
+  pros:
+  - 完全可控，但需自行维护
+  cons:
+  - aiter 有完整 RoPE 族（含与 qk-norm 融合的变体），不必自研
+  source: references/libraries.md
+  import_path: aiter.RoPE
+  signature: RoPE.forward(x, freqs, rotate_style, reuse_freqs_front_part, nope_first, transpose_output=False)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert hasattr(aiter,"RoPE")"
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: "逐元素，字节数确定；half vs interleaved 弄反不报错只偏"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 逐元素，字节数确定；half vs interleaved 弄反不报错只偏
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [layout-pack, fusion-boundary]
-
-updated: "2026-11-22"
+surfaces:
+- layout-pack
+- fusion-boundary
+updated: '2026-11-22'

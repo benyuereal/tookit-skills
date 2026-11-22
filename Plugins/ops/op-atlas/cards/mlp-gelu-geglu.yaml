@@ -1,57 +1,61 @@
 id: mlp-gelu-geglu
-title: "MLP GeGLU / quick-GELU"
+title: MLP GeGLU / quick-GELU
 family: activation
-math: "y = gelu(x*W_up) * (x*W_gate) * W_down"
+math: y = gelu(x*W_up) * (x*W_gate) * W_down
 status: draft
 layer: kernel
 op_card: null
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "gelu 融合族"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "GeGLU 系模型"
-      - "需要 quick-GELU 近似"
-    not_for:
-      - "需要精确 erf（近似式不支持）"
-    pros:
-      - "融合省一次 HBM 往返"
-    cons:
-      - "近似式需与参考核对"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter 的 gelu 族"
-    tier: fallback
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "现成实现"
-    not_for:
-      - "追求极限时不如专用实现"
-    pros:
-      - "无外部依赖，适合做基线对照"
-    cons:
-      - "多一次 HBM 往返"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: gelu 融合族
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - GeGLU 系模型
+  - 需要 quick-GELU 近似
+  not_for:
+  - 需要精确 erf（近似式不支持）
+  pros:
+  - 融合省一次 HBM 往返
+  cons:
+  - 近似式需与参考核对
+  source: references/libraries.md
+  import_path: lightop.GNSilu
+  signature: GNSilu()(input) 元素级激活
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"GNSilu")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter 的 gelu 族
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 现成实现
+  not_for:
+  - 追求极限时不如专用实现
+  pros:
+  - 无外部依赖，适合做基线对照
+  cons:
+  - 多一次 HBM 往返
+  source: references/libraries.md
+  import_path: aiter.silu_and_mul
+  signature: silu_and_mul(out, x)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert hasattr(aiter,"silu_and_mul")"
 ceiling:
   kind: missing
   ref: null
   bound: compute
-  note: "与 SwiGLU 同结构不同激活；近似式选择改变数值"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 与 SwiGLU 同结构不同激活；近似式选择改变数值
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "无实测：索引卡，实现层待按证据推进"
+  conclusion: 无实测：索引卡，实现层待按证据推进
   verified_on: null
-
-surfaces: [fusion-boundary]
-
-updated: "2026-11-22"
+surfaces:
+- fusion-boundary
+updated: '2026-11-22'

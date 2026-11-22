@@ -40,7 +40,9 @@ ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
 REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
                 "ceiling", "last_verdict", "updated"}
 ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
-                "best_for", "not_for", "pros", "cons", "source"}
+                "best_for", "not_for", "pros", "cons", "source",
+                # L1 映射三字段：从「知道在哪个库」到「知道调哪个函数」
+                "import_path", "signature", "smoke_test"}
 REQUIRED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier"}
 ALLOWED_CEIL = {"kind", "ref", "bound", "model_name", "note"}
 REQUIRED_CEIL = {"kind", "ref"}
@@ -53,6 +55,7 @@ BARE_TIME = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*(?:ms|µs|us|ns)\b", re.I)
 BARE_PCT = re.compile(r"(?<![\w.])\d+(?:\.\d+)?\s*%")
 
 errors, warns = [], []
+L1_PENDING = [0]   # L1 回填进度计数（全部填完后改为 err）
 
 
 def err(code, where, msg):
@@ -290,6 +293,12 @@ def validate(atlas, repo):
                     v = impl.get(f)
                     if not v:
                         err("E10", where, "impls[%d] tier=primary 缺 %s" % (i, f))
+                # L1：primary 必须能落到具体函数并验证它存在。
+                # 只写「lightop 有 rope 融合族」只是知道在哪个库，不是映射。
+                for f in ("import_path", "signature", "smoke_test"):
+                    if not impl.get(f):
+                        # L1 回填进行中：先用 warn 计数，全部填完后升为 err
+                        L1_PENDING[0] += 1
             for f in ("best_for", "not_for", "pros", "cons"):
                 v = impl.get(f)
                 if v is not None and not isinstance(v, list):
@@ -380,6 +389,10 @@ def validate(atlas, repo):
         fam = data.get("family")
         if fam in FAMILIES and not (atlas / "families" / ("%s.md" % fam)).is_file():
             err("E8", c.name, "缺家族文件 families/%s.md" % fam)
+
+    if L1_PENDING[0]:
+        print("[L1] 还有 %d 个 primary impl 缺 import_path/signature/smoke_test"
+              % L1_PENDING[0], file=sys.stderr)
 
     # ---- E9 surfaces.yaml 的 law 必须解析到实体（防悬空引用）
     _check_surface_laws(repo, atlas)

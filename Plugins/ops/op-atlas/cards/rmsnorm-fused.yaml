@@ -1,57 +1,62 @@
 id: rmsnorm-fused
 title: 融合 RMSNorm（含残差）
 family: elementwise
-math: "y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))"
+math: y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))
 status: draft
 layer: kernel
 op_card: Plugins/ops/skills/op-rmsnorm-fused
-
 impls:
-  - repo: lightop
-    library_profile_ref: "libraries.md §3"
-    file_hint: "融合 norm 族"
-    tier: primary
-    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
-    best_for:
-      - "需要融合残差（省一次 HBM 往返）"
-      - "绝大多数 decoder（残差 + norm 是逐层必经）"
-    not_for:
-      - "单条无链算子（融合没有可省的往返）"
-    pros:
-      - "融合族成熟"
-    cons:
-      - "原地写残差的变体会污染多变体对比"
-    source: "references/libraries.md"
-  - repo: aiter
-    library_profile_ref: "libraries.md §4"
-    file_hint: "aiter 的 norm 族（对照用）"
-    tier: fallback
-    law_ref: null
-    best_for:
-      - "注意：融合残差应走 lightop.RMSNormAdd；aiter 这条只作非融合对照"
-    not_for:
-      - "追求极限时"
-    pros:
-      - "无外部依赖，适合做基线对照"
-    cons:
-      - "字节数多一次往返"
-    source: "references/libraries.md"
-
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: 融合 norm 族
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要融合残差（省一次 HBM 往返）
+  - 绝大多数 decoder（残差 + norm 是逐层必经）
+  not_for:
+  - 单条无链算子（融合没有可省的往返）
+  pros:
+  - 融合族成熟
+  cons:
+  - 原地写残差的变体会污染多变体对比
+  source: references/libraries.md
+  import_path: lightop.RMSNormAdd
+  signature: RMSNormAdd(normalized_shape:int, eps:float=1e-5, inplace:bool=False); forward(X, residual)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"RMSNormAdd")"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter 的 norm 族（对照用）
+  tier: fallback
+  law_ref: null
+  best_for:
+  - 注意：融合残差应走 lightop.RMSNormAdd；aiter 这条只作非融合对照
+  not_for:
+  - 追求极限时
+  pros:
+  - 无外部依赖，适合做基线对照
+  cons:
+  - 字节数多一次往返
+  source: references/libraries.md
+  import_path: aiter.layer_norm
+  signature: layer_norm(input, weight, bias, eps)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert hasattr(aiter,"layer_norm")"
 ceiling:
   kind: roofline_model
-  ref: "Plugins/ops/skills/op-rmsnorm-fused/contract.yaml"
+  ref: Plugins/ops/skills/op-rmsnorm-fused/contract.yaml
   bound: bandwidth
-  note: "字节数完全确定、无中间态；最适合校准带宽判据的算子"
-
-shapes: [decode-m1, decode-m32, prefill-8k]
-
+  note: 字节数完全确定、无中间态；最适合校准带宽判据的算子
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
 last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: "ref-heavy 通过正确性门；无性能实测；用于校准带宽判据"
+  conclusion: ref-heavy 通过正确性门；无性能实测；用于校准带宽判据
   verified_on: null
-
-surfaces: [layout-pack, fusion-boundary]
-
-updated: "2026-11-22"
+surfaces:
+- layout-pack
+- fusion-boundary
+updated: '2026-11-22'
