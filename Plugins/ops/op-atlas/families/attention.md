@@ -31,3 +31,13 @@ Q/K/V 参与计算。瓶颈通常在 **KV 搬运与片上归约**，不在 GEMM 
 
 dense/paged → `libraries.md §7`（flash-attn 系）
 稀疏 MLA → `libraries.md §8`（TileLang）
+
+## 实现横评
+
+| 实现 | 层级 | 适合什么 | 不适合什么 | 证据 |
+|---|---|---|---|---|
+| `flash-attn 系` | kernel | dense / paged attention，瓶颈在 KV 搬运 | 需要新的 attention 变体语义（改 fork 成本高于重写） | `libraries.md §7` |
+| `FlashMLA` | kernel | MLA 的 prefill/decode，含稀疏 MLA | 非 MLA 变体；`mutates_inputs`（原地规范化 indices） | `libraries.md §7` |
+| `TileLang` | kernel | 稀疏 MLA，形状可表达 | 要逼近手写极限（先付 3-4× 搬运指令税）；bf16 + MLS | `libraries.md §8` |
+| `BoltOPs` | kernel | decode 形状的 attention 成品，自带 autotune | 大 M prefill（Triton 路线固有税） | `libraries.md §10` |
+| `MegaMoE 式引擎并行` | **engine** | 整模型部署的并行策略 | **不属算子层，结论不进卡片** | 方法见 `docs/ENGINE.md` |

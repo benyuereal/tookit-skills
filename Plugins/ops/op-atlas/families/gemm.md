@@ -37,3 +37,13 @@
 | M≤128 | `libraries.md §1`（hbird 形态，一档一 tile + plan 层） |
 | M≥256 | `libraries.md §6`（DeepGEMM）/ hipBLASLt / §8（TileLang） |
 | 非标准布局 / 融合 epilogue | `libraries.md §2`（hytlass） |
+
+## 实现横评
+
+| 实现 | 层级 | 适合什么 | 不适合什么 | 证据 |
+|---|---|---|---|---|
+| `hbird 形态` | kernel | 单 shape、单 dtype，愿意维护 body + plan | 要做**一类** GEMM（先看 hytlass）；团队没有 plan 层纪律 | `libraries.md §1` |
+| `hytlass` | kernel | 一类 GEMM：非标准布局、融合 epilogue、split-K/stream-K | 只要一个现成 GEMM；M≤8 decode | `libraries.md §2` |
+| `DeepGEMM` | kernel | grouped / MoE GEMM，需按 layout 或 arch 精细控制 | 普通稠密大 GEMM（hipBLASLt 够用） | `libraries.md §6` |
+| `hipBLASLt` | kernel | 常规稠密 GEMM | 精细 layout 控制；gfx938 的 FP8 | `libraries.md §6` |
+| `TileLang` | kernel | 形状不定、要 tile 级表达力 | GEMM 主体（布局税） | `libraries.md §8` |

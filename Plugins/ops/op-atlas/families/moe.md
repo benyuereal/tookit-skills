@@ -35,3 +35,19 @@ token 按专家重排后分组计算。**能否快取决于 (量化格式 × gfx
 | 某量化组合没解 | `libraries.md §5`（moe_c，直接改表） |
 | grouped GEMM 精细控制 | `libraries.md §6`（DeepGEMM） |
 | 量化融合链 | `libraries.md §3`（LightOp） |
+
+## 实现横评
+
+> **优劣与场景写在家族层，不重复写进每张卡**——同一个实现会被多张卡引用，
+> 写进卡片就会有 N 份会漂移的真相。卡片只留 `best_for` / `not_for` 的简短版。
+
+| 实现 | 层级 | 是什么 | 适合什么 | 不适合什么 | 证据 |
+|---|---|---|---|---|---|
+| `lightop-4stage` | kernel | align→grouped→act→reduce 四段融合，包内无持久化调度 | decode 小 batch（16-row pooled cache）；shared 与 routed 同容器 | FP8 + persistent 后端（会 RuntimeError）；需要跨 gfx 单一二进制 | `libraries.md §3`；本仓 FP8 消融记录 |
+| `lightop-asm` | kernel | mode≥1000 的汇编路径 | 特定档位 | **混合专家 batch**（串读其他 token/专家的数据，违反 `batch_independence`） | `libraries.md §3`；`op-moe-w8a8/ledger.md` |
+| `aiter-das` | kernel | AITER 移植，`get_aiter_moe_config` 按 (量化×dtype) 选 moe_c/asm/triton/ck | 标准接入兜底；需要统一 Python API | 需要单一路径可预测性能（查表未命中会静默降级） | `libraries.md §4` |
+| `moe_c` | kernel | 按「精度模式 × gfx」组织的调优表矩阵 | AITER 选中 MOE_C 且慢时直接改表 | AITER 根本没选它时（改表无效，先强制 `spec_sol_type` 验证） | `libraries.md §5` |
+| `MegaMoE + CP8/DP8` | **engine** | 8 卡并行策略 + 图捕获 + DSPARK，不是 kernel | 整模型部署的并行策略选型 | **不属算子层**：结论受并行策略、显存水位、预热共同影响，**不许进任何算子卡的 last_verdict** | 方法见 `docs/ENGINE.md`；数字留 kb |
+
+**读这张表的方式**：先按量化格式与 page 布局缩小到 1-2 行，再看「不适合」列排除。
+四者不在同一层——前四个是 kernel，最后一个是 engine，**同表比会得出错误结论**。
