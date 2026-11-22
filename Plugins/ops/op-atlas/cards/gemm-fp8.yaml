@@ -72,6 +72,13 @@ impls:
   - '4) tilelang: 示例可用但 fp8 epilogue 定制受限，无法按形状调 MFMA'
   - 结论：本平台手写 HIP + MFMA 是唯一能按形状逼近极限的路
   source: references/libraries.md
+  source_ref:
+    path: null
+    symbol: null
+    line: null
+    build_cmd: null
+    note: 尚无手写实现——本卡只登记「需要手写 HIP + MFMA」这个结论，源码还没写
+  l1_exempt_reason: 本平台无现成 FP8 稠密 GEMM（hipblaslt 不可导入、deepgemm 包装层有 device bug、aiter 只有 MoE 专用），需要手写 HIP；源码尚未编写
 ceiling:
   kind: constants
   ref: Plugins/ops/skills/op-roofline/constants.yaml

@@ -61,6 +61,13 @@ impls:
   cons:
   - 现成库不支持：tilelang 版的布局转换税（每条 MMA 摊到的搬运指令是手写的 3-4 倍），绕开它只能手写主循环
   source: references/libraries.md
+  source_ref:
+    path: null
+    symbol: null
+    line: null
+    build_cmd: null
+    note: 手写主循环（hip-glm）的源码在 op-sparse-mla/dev/ 下
+  l1_exempt_reason: 手写主循环（hip-glm）是绕开 tilelang 布局税的定制实现，源码在 op-sparse-mla/dev/ 下，不在任何库里
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/models/sparse_mla.py

@@ -37,6 +37,13 @@ impls:
   cons:
   - 现成库不支持：非标准 page 布局（16-row vs 64-row）的写入契约不一致，各库的 block_table 语义不同，只能按目标布局自研
   source: references/libraries.md
+  source_ref:
+    path: null
+    symbol: null
+    line: null
+    build_cmd: null
+    note: 尚无手写实现——目前用 flash_attn 的 block_table 路径替代
+  l1_exempt_reason: 当前用 flash_attn 的 block_table 路径替代，自研实现尚无源码；非标准 page 布局才需要
 ceiling:
   kind: missing
   ref: null

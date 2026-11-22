@@ -1,0 +1,45 @@
+{
+  "case": "001-swiglu-fused-vs-split",
+  "shape": {
+    "M": 32768,
+    "H": 4096,
+    "input_width": 8192,
+    "dtype": "bfloat16"
+  },
+  "scenario": "bandwidth-bound",
+  "library": {
+    "canonical_id": "lightop",
+    "version": "0.6.0+dtk2604.torch2110",
+    "import_path": "lightop.FuseBiasSwiGLU"
+  },
+  "measurements": {
+    "fused": {
+      "median_ms": 1.5174390077590942,
+      "mad_ms": 0.005278944969177246,
+      "bytes": 805322752
+    },
+    "split": {
+      "median_ms": 3.4262359142303467,
+      "mad_ms": 0.0012798309326171875,
+      "bytes": 1879064576
+    }
+  },
+  "significance": {
+    "ratio": 0.4428880689320439,
+    "k_mad": 3,
+    "threshold": 0.01583683490753174,
+    "significant": true
+  },
+  "bandwidth": {
+    "read_only_gbs": 1724.0,
+    "copy_gbs": 1350.0,
+    "buffer_mb": 1024
+  },
+  "verdict": {
+    "fused_over_split": 2.258,
+    "achieved_gbs": 530.7,
+    "pct_of_copy_peak": 39.3,
+    "at_ceiling": false,
+    "next_surface": "layout-pack (拆 [M,2H] 成两个 [M,H])"
+  }
+}

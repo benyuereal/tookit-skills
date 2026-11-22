@@ -89,6 +89,26 @@ class TestScenarios(unittest.TestCase):
                            % s.get("id"))
         self.assertEqual(bad, [], "\n".join(bad))
 
+    def test_each_scenario_has_evaluable_detect_expr(self):
+        """detect_expr 必须能被求值——否则「场景驱动」还是靠模型自述。"""
+        bad = []
+        for s in self.data.get("scenarios") or []:
+            expr = s.get("detect_expr")
+            if not expr:
+                bad.append("%s 缺 detect_expr" % s.get("id"))
+                continue
+            try:
+                # 用一组代表性的假变量试求值，确认语法与名字都对
+                env = dict(params={"M": 32, "ctx": 8192, "tokens_per_expert": 8,
+                                    "tile_height": 128},
+                           dtype="bfloat16", op_kind="moe", ai=64.0,
+                           machine_balance_point=313.0, time_scales_with_M=False)
+                eval(compile(expr, "<detect_expr>", "eval"), {}, env)
+            except Exception as e:
+                bad.append("%s 的 detect_expr 求值失败: %s: %s"
+                           % (s.get("id"), type(e).__name__, e))
+        self.assertEqual(bad, [], "\n".join(bad))
+
     def test_boundaries_document_conflicts(self):
         """场景可能同时匹配；必须有冲突规则，否则攻击面优先序会用反。"""
         bs = self.data.get("boundaries") or []

@@ -1,0 +1,5 @@
+fused          median=1.5174 ms  MAD=0.0053
+split          median=3.4262 ms  MAD=0.0013
+
+read_only_gbs=1724.0  copy_gbs=1350.0  buffer_mb=1024
+{"fused_over_split": 2.258, "achieved_gbs": 530.7, "pct_of_copy_peak": 39.3, "at_ceiling": false, "next_surface": "layout-pack (拆 [M,2H] 成两个 [M,H])"}

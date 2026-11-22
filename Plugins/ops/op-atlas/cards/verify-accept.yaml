@@ -20,6 +20,13 @@ impls:
   cons:
   - 现成库不支持：投机解码的接受判据要绑定具体模型的分布与随机源，没有通用实现；aiter 只有采样不接受判据
   source: references/libraries.md
+  source_ref:
+    path: null
+    symbol: null
+    line: null
+    build_cmd: null
+    note: 尚无手写实现——接受判据随模型分布而定
+  l1_exempt_reason: 接受判据绑定模型的实际 logits 分布与随机源，无通用库实现
 - repo: triton
   library_profile_ref: libraries.md §9
   file_hint: Triton 的接受判据实现

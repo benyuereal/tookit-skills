@@ -20,6 +20,13 @@ impls:
   cons:
   - 现成库不支持：MTP 的 draft head 与主模型共享 KV 语义，没有通用库能表达这个耦合，需随模型结构自研
   source: references/libraries.md
+  source_ref:
+    path: null
+    symbol: null
+    line: null
+    build_cmd: null
+    note: 尚无手写实现——draft head 随具体模型而定，没有通用源码
+  l1_exempt_reason: draft head 随具体模型结构而定，没有通用库函数；源码需随模型自研
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: 小 M GEMM 路径

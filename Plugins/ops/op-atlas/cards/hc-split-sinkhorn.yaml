@@ -20,6 +20,13 @@ impls:
   cons:
   - 迭代次数需调
   source: references/libraries.md
+  source_ref:
+    path: /workspace/mhc_kernels/kernels/mhc_kernels.hip
+    symbol: mhc_pre_weights_kernel
+    line: 354
+    build_cmd: cd /workspace/mhc_kernels && ./build.sh
+    note: sinkhorn 迭代在 pre_weights 内完成
+  l1_exempt_reason: sinkhorn 迭代在 mhc_pre_weights_kernel 内，没独立函数；源码树见 source_ref
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 的迭代实现

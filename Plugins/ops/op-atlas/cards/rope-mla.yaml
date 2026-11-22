@@ -20,9 +20,9 @@ impls:
   cons:
   - 契约强绑定
   source: references/libraries.md
-  import_path: import flash_mla
-  signature: flash_mla.flash_mla_with_kvcache(q, k_cache, block_table, cache_seqlens, head_dim_v, tile_scheduler_metadata, num_splits)
-  smoke_test: python3 -I -c "import importlib,torch; exec(\"import import flash_mla\") ; assert importlib.import_module("flash_mla") is not None"
+  import_path: flash_mla.flash_mla_with_kvcache
+  signature: flash_mla_with_kvcache(q, k_cache, block_table, cache_seqlens, head_dim_v, tile_scheduler_metadata, num_splits) — MLA 的 rope 在其内部完成
+  smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,\"flash_mla_with_kvcache\")"
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: flash_mla 的 MLA rope 路径
@@ -37,9 +37,9 @@ impls:
   cons:
   - MLA 的 rope 在 flash-mla 内已实现
   source: references/libraries.md
-  import_path: import flash_mla
-  signature: flash_mla.flash_mla_with_kvcache(q, k_cache, block_table, cache_seqlens, head_dim_v, tile_scheduler_metadata, num_splits)
-  smoke_test: python3 -I -c "import importlib,torch; exec(\"import import flash_mla\") ; assert importlib.import_module("flash_mla") is not None"
+  import_path: flash_mla.flash_mla_with_kvcache
+  signature: flash_mla_with_kvcache(q, k_cache, block_table, cache_seqlens, head_dim_v, tile_scheduler_metadata, num_splits) — MLA 的 rope 在其内部完成
+  smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,\"flash_mla_with_kvcache\")"
 ceiling:
   kind: missing
   ref: null

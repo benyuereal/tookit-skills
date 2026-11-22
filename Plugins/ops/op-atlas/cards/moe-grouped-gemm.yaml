@@ -68,6 +68,13 @@ impls:
   cons:
   - 这是反模式而非实现：现成库（deepgemm/aiter）的 grouped 路径已覆盖，本条保留只为标 avoid
   source: references/libraries.md
+  source_ref:
+    path: null
+    symbol: null
+    line: null
+    build_cmd: null
+    note: 这是反模式条目（tier=avoid），不对应任何源码
+  l1_exempt_reason: 这是反模式条目（tier=avoid），表达「别用稠密 GEMM 循环调 per-expert」，不对应任何源码
 ceiling:
   kind: missing
   ref: null

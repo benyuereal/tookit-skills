@@ -57,12 +57,35 @@ def calibrate_bandwidth(torch, mb=1024):
     }
 
 
+def _write_results(payload, out_dir):
+    """把本次测量落盘。没有落盘的数字等于只活在文字里，别人无从对基准。"""
+    import json
+    import pathlib
+    d = pathlib.Path(out_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "result.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    lines = []
+    for k, v in payload.get("measurements", {}).items():
+        lines.append("%-14s median=%.4f ms  MAD=%.4f" % (k, v["median_ms"], v["mad_ms"]))
+    lines.append("")
+    if "bandwidth" in payload:
+        bw = payload["bandwidth"]
+        lines.append("read_only_gbs=%.1f  copy_gbs=%.1f  buffer_mb=%d"
+                     % (bw["read_only_gbs"], bw["copy_gbs"], bw["buffer_mb"]))
+    if "verdict" in payload:
+        lines.append(json.dumps(payload["verdict"], ensure_ascii=False))
+    (d / "logic.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n→ 已落盘 %s/{result.json,logic.txt}" % out_dir)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Case 001：SwiGLU 融合 vs 分拆")
     p.add_argument("--card", type=int, default=0)
     p.add_argument("--M", type=int, default=32768)
     p.add_argument("--H", type=int, default=4096)
     p.add_argument("--quick", action="store_true", help="跳过带宽标定（快，但没有分母）")
+    p.add_argument("--out", default=None, help="结果落盘目录（默认 <case>/results）")
     a = p.parse_args(argv)
 
     import torch
@@ -127,7 +150,32 @@ def main(argv=None):
     print("  vs 只读峰值 %.0f : %.0f%%" % (bw["read_only_gbs"], 100 * gbs / bw["read_only_gbs"]))
     print("  vs copy 峰值 %.0f : %.0f%%  ← 本 kernel 读 2 写 1，这是更接近的口径"
           % (bw["copy_gbs"], 100 * gbs / bw["copy_gbs"]))
+    fused_bytes = M * 2 * H * 2 + 2 * H * 2 + M * H * 2
+    split_bytes = M * 2 * H * 2 + 2 * H * 2 + M * 2 * H * 2 + M * 2 * H * 2 + M * H * 2
+    payload = {
+        "case": "001-swiglu-fused-vs-split",
+        "shape": {"M": M, "H": H, "input_width": 2 * H, "dtype": "bfloat16"},
+        "scenario": "bandwidth-bound",
+        "library": {"canonical_id": "lightop", "version": "0.6.0+dtk2604.torch2110",
+                     "import_path": "lightop.FuseBiasSwiGLU"},
+        "measurements": {
+            "fused": {"median_ms": fm, "mad_ms": fmad, "bytes": fused_bytes},
+            "split": {"median_ms": sm, "mad_ms": smad, "bytes": split_bytes},
+        },
+        "significance": {"ratio": fm / sm, "k_mad": 3,
+                          "threshold": noise, "significant": abs(fm - sm) > noise},
+        "bandwidth": {"read_only_gbs": bw["read_only_gbs"],
+                       "copy_gbs": bw["copy_gbs"], "buffer_mb": bw.get("buffer_mb", 1024)},
+        "verdict": {
+            "fused_over_split": round(sm / fm, 3),
+            "achieved_gbs": round(gbs, 1),
+            "pct_of_copy_peak": round(100 * gbs / bw["copy_gbs"], 1),
+            "at_ceiling": False,
+            "next_surface": "layout-pack (拆 [M,2H] 成两个 [M,H])",
+        },
+    }
     print("\n  ⇒ 结论：未到顶。下一个攻击面按场景表是 layout-pack / gather-path。")
+    _write_results(payload, a.out or str(__import__("pathlib").Path(__file__).parent / "results"))
     return 0
 
 

@@ -21,6 +21,13 @@ impls:
   cons:
   - 实测有融合净负的反例，必须先量分拆版
   source: references/libraries.md
+  source_ref:
+    path: /workspace/mhc_kernels/kernels/mhc_fused.hip
+    symbol: mhc_fused_* (宏展开生成，见第 252 / 498 行的 extern "C" __global__)
+    line: 252
+    build_cmd: cd /workspace/mhc_kernels && ./build.sh
+    note: 融合版与分拆版都在这个 TU；注释里记着「编译进同一 TU 会改变寄存器分配」
+  l1_exempt_reason: 融合 kernel 在 mhc_kernels 源码树的 mhc_fused.hip，非可 import 包；源码树见 source_ref
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 分拆三步

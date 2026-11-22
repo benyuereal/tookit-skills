@@ -16,10 +16,22 @@
 
 version: 1
 
+# detect_expr 的可用变量（loop.py 求值时注入）：
+#   params    : dict，形状参数（M / H / K / ctx / tokens_per_expert / tile_height …）
+#   dtype     : str，主 dtype
+#   op_kind   : str，取自卡片的 family（"moe" / "attention" / …）
+#   ai        : float，算术强度 FLOP/Byte（算不出时为 None）
+#   machine_balance_point : float，机器平衡点（constants.yaml 的 peak_tf/peak_bw）
+#   time_scales_with_M    : bool，M 变化时 kernel 时间是否显著变化（需实测填入）
+#
+# 为什么需要它：detect 是自然语言，只能靠模型自述归场景；
+# detect_expr 可以被 loop.py 求值，让「场景驱动」变成可机检的。
+
 scenarios:
   - id: decode-small-batch
     statement: "M 很小（通常 ≤64），权重读取主导"
     detect: "M <= 64 且 kernel 时间随 M 变化不明显（读权重是固定成本）"
+    detect_expr: "params.get(\"M\", 0) <= 64 and not time_scales_with_M"
     bound: bandwidth
     surfaces:            # 优先序：先试 cost=S 且命中率高的
       - id: occupancy
@@ -42,6 +54,7 @@ scenarios:
   - id: prefill-long-ctx
     statement: "M 大（≥1024）或序列很长，算力/带宽都吃紧"
     detect: "M >= 1024，或 ctx >= 32k 且 attention 类"
+    detect_expr: "params.get(\"M\", 0) >= 1024 or params.get(\"ctx\", 0) >= 32768"
     bound: compute
     surfaces:
       - id: occupancy
@@ -63,6 +76,7 @@ scenarios:
   - id: moe-low-active
     statement: "MoE 的每专家 token 数很少（激活专家稀疏）"
     detect: "MoE 类算子且 tokens/expert 远小于 tile 高度"
+    detect_expr: "op_kind == \"moe\" and (params.get(\"tokens_per_expert\", 1e9) < params.get(\"tile_height\", 128))"
     bound: bandwidth
     surfaces:
       - id: table-miss
@@ -82,6 +96,7 @@ scenarios:
   - id: fp8-quantized
     statement: "走 FP8 路径（权重或激活是 fp8）"
     detect: "dtype 含 float8_e4m3fn / e5m2"
+    detect_expr: "dtype in (\"float8_e4m3fn\", \"float8_e5m2\", \"float8_e4m3fnuz\")"
     bound: mixed
     surfaces:
       - id: precision-drop
@@ -101,6 +116,7 @@ scenarios:
   - id: bandwidth-bound
     statement: "瓶颈在 HBM 读写，算力有大量余量"
     detect: "AI < 机器平衡点；或 PMC 显示 GRBM 高而 VALU 低"
+    detect_expr: "ai < machine_balance_point"
     bound: bandwidth
     surfaces:
       - id: fusion-boundary
@@ -120,6 +136,7 @@ scenarios:
   - id: compute-bound
     statement: "瓶颈在算力，数据供给充足"
     detect: "AI > 机器平衡点；或 PMC 显示 VALU 满而 GRBM 有余量"
+    detect_expr: "ai >= machine_balance_point"
     bound: compute
     surfaces:
       - id: cross-lane-fold

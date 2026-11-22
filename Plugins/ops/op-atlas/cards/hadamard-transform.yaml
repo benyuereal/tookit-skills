@@ -21,6 +21,13 @@ impls:
   cons:
   - 源码树非包，需自行编译
   source: references/libraries.md
+  source_ref:
+    path: /workspace/mhc_kernels/kernels/mhc_kernels.hip
+    symbol: （蝶形变换在 mhc_pre_mix_kernel 内联，非独立 symbol）
+    line: 397
+    build_cmd: cd /workspace/mhc_kernels && ./build.sh
+    note: 没有独立的 hadamard kernel——它内联在 pre_mix 里。要单独优化需先抽出来
+  l1_exempt_reason: MHC 的蝶形变换内联在 mhc_pre_mix_kernel 里，没有独立函数；源码树见 source_ref
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 的蝶形表达

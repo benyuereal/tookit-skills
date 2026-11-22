@@ -41,6 +41,13 @@ impls:
   cons:
   - 不可当组织资产引用
   source: references/libraries.md
+  source_ref:
+    path: /workspace/hbird-gemm/dsa_mqa_logits/patches/0001-gemmopt-persistent-dispatch.patch
+    symbol: persistent dispatch（patch 形式，不是 kernel 源码）
+    line: 1
+    build_cmd: cd /workspace/hbird-gemm && ./dsa_mqa_logits/reproduce.sh all
+    note: hbird 是个人仓库的源码树；这里引的是它已落地的 patch
+  l1_exempt_reason: shipped ungrouped 基线来自 hbird 的 patch，非可 import 包；见 source_ref
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/models/mqa_logits.py

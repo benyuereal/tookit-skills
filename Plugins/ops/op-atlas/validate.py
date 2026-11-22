@@ -44,7 +44,9 @@ REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
 ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
                 "best_for", "not_for", "pros", "cons", "source",
                 # L1 映射三字段：从「知道在哪个库」到「知道调哪个函数」
-                "import_path", "signature", "smoke_test"}
+                "import_path", "signature", "smoke_test",
+                # 源码树/自研的锚点：库名不够，要指到文件与符号
+                "source_ref", "l1_exempt_reason"}
 REQUIRED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier"}
 ALLOWED_CEIL = {"kind", "ref", "bound", "model_name", "note"}
 REQUIRED_CEIL = {"kind", "ref"}
@@ -264,6 +266,8 @@ def validate(atlas, repo):
             err("E6", where, "impls 必须是非空数组")
             impls = []
         for i, impl in enumerate(impls):
+            _no_import_pre = impl.get("repo") in ("in-house",) or \
+                impl.get("repo") in _NON_INSTALLABLE
             if not isinstance(impl, dict):
                 err("E6", where, "impls[%d] 不是 mapping" % i)
                 continue
@@ -332,16 +336,36 @@ def validate(atlas, repo):
                         err("E10", where, "impls[%d] tier=primary 缺 %s" % (i, f))
                 # L1：primary 必须能落到具体函数并验证它存在。
                 # 只写「lightop 有 rope 融合族」只是知道在哪个库，不是映射。
+                # 源码树/自研必须有 source_ref——只写库名等于「不知道自己长什么样」。
+                # 允许 path 为 null（写明「尚无实现」），但不允许整块缺失。
+                sr = impl.get("source_ref")
+                if _no_import_pre:
+                    if not isinstance(sr, dict):
+                        err("E15", where,
+                            "impls[%d] repo=%r 必须带 source_ref（path/symbol/line/build_cmd）"
+                            % (i, impl.get("repo")))
+                    else:
+                        miss_k = {"path","symbol","line","build_cmd","note"} - set(sr)
+                        if miss_k:
+                            err("E15", where, "impls[%d] source_ref 缺 %s"
+                                % (i, sorted(miss_k)))
                 # in-house 与源码树类库（installed: false）没有可导入的函数，
                 # L1 对它不适用——它们的「映射」是源码路径而非 库.函数。
-                _no_import = impl.get("repo") in ("in-house",) or \
-                    impl.get("repo") in _NON_INSTALLABLE
+                _no_import = _no_import_pre
                 for f in ("import_path", "signature", "smoke_test"):
                     if not impl.get(f):
                         if _no_import:
-                            L1_EXEMPT[0] += 1
+                            # 源码树/in-house 必须写明为什么 L1 不适用
+                            if not impl.get("l1_exempt_reason"):
+                                err("E13", where,
+                                    "impls[%d] 是源码树/自研，缺 l1_exempt_reason"
+                                    "（为什么没有 库.函数）" % i)
+                            else:
+                                L1_EXEMPT[0] += 1
                         else:
-                            L1_PENDING[0] += 1
+                            err("E13", where,
+                                "impls[%d] tier=primary 缺 %s（L1：要能落到 库.函数）"
+                                % (i, f))
             for f in ("best_for", "not_for", "pros", "cons"):
                 v = impl.get(f)
                 if v is not None and not isinstance(v, list):
@@ -433,10 +457,9 @@ def validate(atlas, repo):
         if fam in FAMILIES and not (atlas / "families" / ("%s.md" % fam)).is_file():
             err("E8", c.name, "缺家族文件 families/%s.md" % fam)
 
-    if L1_PENDING[0]:
-        print("[L1] 还有 %d 个 primary impl 缺 import_path/signature/smoke_test"
-              "（%d 个不适用：in-house/源码树）"
-              % (L1_PENDING[0], L1_EXEMPT[0]), file=sys.stderr)
+    if L1_EXEMPT[0]:
+        print("[L1] %d 个 impl 因源码树/自研豁免（均带 l1_exempt_reason）"
+              % L1_EXEMPT[0], file=sys.stderr)
 
     # ---- E9 surfaces.yaml 的 law 必须解析到实体（防悬空引用）
     _check_surface_laws(repo, atlas)
