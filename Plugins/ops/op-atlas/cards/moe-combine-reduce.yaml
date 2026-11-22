@@ -2,7 +2,7 @@ id: moe-combine-reduce
 title: MoE combine：反 permute + 加权求和
 family: moe
 math: y_i = sum_k w_ik*permuted[slot_ik]；按 gate 权重加权
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -50,16 +50,30 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  ratio:
+    value: 780
+    vs: moe_sum 带宽 GB/s（相对流式峰值 1728 为 0.45）
+    scope:
+      cards: 1
+      in_len: M=8192 K=4
+      out_len: H=4096
+      warmup: hot
+      note: bf16；加权求和（combine 的 reduce 段）
+  conclusion: moe_sum 达 780 GB/s（峰值 0.45），是 combine 段的实测基线
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 反 permute 的加权求和换融合
   how: lightop.moe_align_sum(...) 替代「gather 回原位再按 gate 加权」两步
   requires: topk_weights 与 permuted 布局对齐
+hard_preconditions:
+- statement: lightop.moe_align_sum 是模块，真实函数是 .moe_sum(input, output, ...)
+  check: 'lightop.moe_align_sum() → TypeError: module is not callable；应 from lightop.moe_align_sum import moe_sum'
+soft_preconditions:
+- 建议 hot 态
+- input 形状 [M, K, H]，output [M, H]
 surfaces:
 - cross-lane-fold
 - layout-pack

@@ -2,7 +2,7 @@ id: moe-grouped-gemm-bf16
 title: MoE grouped GEMM（BF16 基础档）
 family: moe
 math: y_e = x_e * W_e；按专家分组，每组 token 数不等
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -47,16 +47,34 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/README.md
+  ratio:
+    value: 80.1
+    vs: BF16 算力 TFLOPS（相对 bf16 峰值 185 为 0.43）
+    scope:
+      cards: 1
+      in_len: M/exp=128 K=2048
+      out_len: N=1536
+      warmup: hot
+      note: E=32 masked 形态 mode=1000；与 case 002 的 stage1 数据一致（80.4）
+  conclusion: grouped BF16 GEMM 达 80 TFLOPS，与 case 002 一致；达成率为峰值的 0.43
+  verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 换 grouped 路径入口
   how: 按 token 组织方式在 m_grouped_bf16_gemm_nt_masked 与 _contiguous 之间选
   requires: deepgemm 2.1.0
+hard_preconditions:
+- statement: masked 形态要求 N 被 256 整除（I=1408 被拒）
+  check: '传 N=1408 → ValueError: N must be divisible by 256'
+- statement: a/b 必须 3D [E,M,K] / [E,N,K]（2D 会 IndexError）
+  check: '传 2D → IndexError: Dimension out of range'
+- statement: mode=2000 系列需先 pack_bf16_masked_weight；mode=1000 只做 contiguous
+  check: '不 pack 用 mode=2000 → ValueError: require pre-packed weights'
+soft_preconditions:
+- 建议 hot 态
+- N 非 256 倍数时该路径不可用，需换实现
 surfaces:
 - table-miss
 - occupancy
