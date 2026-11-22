@@ -1,0 +1,149 @@
+# 场景 → 攻击面映射（S1）
+#
+# 为什么需要这个文件：surfaces.yaml 的 11 条攻击面是**平铺**的——
+# 它回答了「有哪些方向」，没回答「我这个场景该先试哪几条」。
+# 实际优化时第一个问题永远是后者。没有这层映射，agent 会把 11 条全试一遍，
+# 大部分是浪费；或者凭直觉挑一条，而那条往往不是这个场景的杠杆。
+#
+# 用法：
+#   1. 先按形状/dtype/瓶颈把自己归到某个场景（下面的 detect 给判据）
+#   2. 按 surfaces 的**优先序**试，不要跳序
+#   3. 读 dead_ends 先排掉这个场景下已知不成立的路
+#
+# 纪律：场景是**互斥优先**的——一个算子可能同时像两个场景（比如 fp8 的
+# decode），此时按 order 先归到先匹配的那个，并在记录里写清按哪个场景走的。
+# 因为不同场景的攻击面优先序是矛盾的，混用会得出错误结论。
+
+version: 1
+
+scenarios:
+  - id: decode-small-batch
+    statement: "M 很小（通常 ≤64），权重读取主导"
+    detect: "M <= 64 且 kernel 时间随 M 变化不明显（读权重是固定成本）"
+    bound: bandwidth
+    surfaces:            # 优先序：先试 cost=S 且命中率高的
+      - id: occupancy
+        why: "小 M 时 grid 常常填不满 CU，occupancy 是第一杠杆"
+        check: "pmc: GRBM 活跃周期占比；对比 grid 与 CU 数"
+      - id: table-miss
+        why: "小 M 往往落在库的 thin-M 桶外面，查表未命中是最大收益"
+        check: "确认用的变体是否是库里为 M<=8/16 单独调过的那一档"
+      - id: gather-path
+        why: "权重读取的访存模式决定实际带宽；随机 gather 到不了流式峰值"
+        check: "pmc: 对比达成率与流式峰值（用 probe_stream.py 实测的分母）"
+      - id: layout-pack
+        why: "小 M 时一次布局转换的固定开销占比被放大"
+        check: "看变体输入与生产输出的 layout 是否一致"
+    dead_ends:
+      - "调 tile 尺寸：小 M 下 tile 再大也是浪费（padding 占比高）"
+      - "split-K：M 已经很小，再切只会增加 combine 开销"
+      - "提高 MMA 利用率：这段根本没在等算力"
+
+  - id: prefill-long-ctx
+    statement: "M 大（≥1024）或序列很长，算力/带宽都吃紧"
+    detect: "M >= 1024，或 ctx >= 32k 且 attention 类"
+    bound: compute
+    surfaces:
+      - id: occupancy
+        why: "大 M 时 occupancy 由 LDS/VGPR 预算决定，不是 grid 填不满"
+        check: "pmc: 每 CU 驻留 CTA 数；hipcc --resource-usage 看 LDS/VGPR"
+      - id: barrier-width
+        why: "大 M 下每 barrier 的工作量是主杠杆，barrier 过密会打断 MMAC 发射"
+        check: "pmc: SQ_INSTS_BARRIER / SQ_INSTS_VALU 之比"
+      - id: split-k
+        why: "K 很长的 GEMM 里 split-K 能提升并行度，但要付 combine"
+        check: "扫 s=1,2,4,8；看 combine 开销是否吃掉收益"
+      - id: prefetch-depth
+        why: "只有在 load-only 还没到峰值时才有意义"
+        check: "先跑 load-only 消融确认；2-stage 双缓冲可能把 occupancy 减半"
+    dead_ends:
+      - "盲加预取深度：大 M 时 occupancy 已经被压到很低，加 buffer 更糟"
+      - "换更小的 tile 求高 occupancy：大 M 上会牺牲复用"
+
+  - id: moe-low-active
+    statement: "MoE 的每专家 token 数很少（激活专家稀疏）"
+    detect: "MoE 类算子且 tokens/expert 远小于 tile 高度"
+    bound: bandwidth
+    surfaces:
+      - id: table-miss
+        why: "MoE 的性能几乎完全由 (量化格式 × gfx) 查表命中决定；未命中先别改 kernel"
+        check: "打印 get_aiter_moe_config 的 solution_type；看是否命中"
+      - id: layout-pack
+        why: "权重布局（HIPC / W6 / marlin）选错不是慢，是静默错"
+        check: "确认 prepack 的 layout 与 kernel 期望的一致"
+      - id: occupancy
+        why: "每专家行数少 → grouped GEMM 的每 CTA 工作量小 → 驻留不够"
+        check: "pmc: 每 CTA 有效行数 vs tile 高度"
+    dead_ends:
+      - "在 AITER 上层反复调参：后端没选中时参数根本不生效"
+      - "用稠密 GEMM 循环调 per-expert：实测是 graph 化路径的 2.9x"
+      - "漏 prepack shuffle：静默算错，而且会以为是性能问题"
+
+  - id: fp8-quantized
+    statement: "走 FP8 路径（权重或激活是 fp8）"
+    detect: "dtype 含 float8_e4m3fn / e5m2"
+    bound: mixed
+    surfaces:
+      - id: precision-drop
+        why: "已经是 fp8 时，下一个精度档可能是 fp4；但要先确认容差"
+        check: "opcheck correctness 的 rel_median 是否还有余量"
+      - id: layout-pack
+        why: "FP8 的 scale 广播会打破很多驻留假设（Q5 的三条反例都在这）"
+        check: "确认 scale 粒度（per-tensor/per-token/per-block）与下游一致"
+      - id: cross-lane-fold
+        why: "fp8 路径的 epilogue 往往更重（反量化 + 归约）"
+        check: "pmc: SQ_INSTS_VALU 中非 MMAC 的占比"
+    dead_ends:
+      - "对 FP8 开 persistent：实测变慢；小 page 分组上直接 RuntimeError"
+      - "照搬 NVIDIA 的 e4m3 量化代码：ROCm 上是 fnuz 语义"
+      - "跨标度粒度比较达成率：分母不同，结论无效"
+
+  - id: bandwidth-bound
+    statement: "瓶颈在 HBM 读写，算力有大量余量"
+    detect: "AI < 机器平衡点；或 PMC 显示 GRBM 高而 VALU 低"
+    bound: bandwidth
+    surfaces:
+      - id: fusion-boundary
+        why: "这一档唯一的真收益是省 HBM 往返；融合是主要手段"
+        check: "先量分拆版的和，再决定融不融"
+      - id: layout-pack
+        why: "每多一次布局转换就多一趟读写"
+        check: "数清楚端到端读写了几遍"
+      - id: gather-path
+        why: "非合并访问到不了流式峰值；分母要用该 pattern 的 ceiling"
+        check: "probe_pattern.py 拿该访问模式自己的上限"
+    dead_ends:
+      - "优化计算部分：这段没在等算力"
+      - "用标称带宽做分母：会把已有空间算成已到顶（1724 vs 1100）"
+      - "对已是 memory-bound 的链继续做 compute 优化"
+
+  - id: compute-bound
+    statement: "瓶颈在算力，数据供给充足"
+    detect: "AI > 机器平衡点；或 PMC 显示 VALU 满而 GRBM 有余量"
+    bound: compute
+    surfaces:
+      - id: cross-lane-fold
+        why: "compute-bound 时 epilogue 的指令数直接决定墙钟"
+        check: "pmc: SQ_INSTS_VALU 里非 MMAC 占比（实测见过 85%）"
+      - id: barrier-width
+        why: "MMAC 发射率被同步打断是这一档的典型损失"
+        check: "pmc: SQ_INSTS_BARRIER 占比"
+      - id: occupancy
+        why: "算力打不满常常是驻留不够，独立依赖链太少"
+        check: "pmc: 每 CU 驻留 wave 数"
+      - id: split-k
+        why: "K 维并行能提升 MMA 发射密度"
+        check: "扫 s=1,2,4,8"
+    dead_ends:
+      - "减字节：数据供给已经不是瓶颈"
+      - "加预取：同理，没在等数据"
+      - "只调 tile 尺寸而不看指令数：指令数的天花板先到"
+
+# ---- 场景间的边界规则（防止归属错误导致攻击面优先序用反）----
+boundaries:
+  - rule: "同时像 decode-small-batch 与 fp8-quantized 时，先按 fp8-quantized 走"
+    why: "FP8 的 scale 广播约束比 M 大小更早成为限制；按 M 走会撞 RuntimeError"
+  - rule: "同时像 bandwidth-bound 与 compute-bound 时，先算 AI 与平衡点"
+    why: "AI 是唯一客观判据；凭 PMC 直觉容易把分派开销误读成算力瓶颈"
+  - rule: "MoE 类一律先归 moe-low-active，再看是否 prefill"
+    why: "MoE 的第一杠杆是查表命中，不是形状档位"

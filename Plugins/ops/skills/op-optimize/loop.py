@@ -347,6 +347,7 @@ def _significant(base, cand, k=3.0):
 # ---------------------------------------------------------------- 子命令
 
 SURFACES_PATH = Path(__file__).resolve().parent / "references" / "surfaces.yaml"
+SCENARIOS_PATH = Path(__file__).resolve().parent / "references" / "scenarios.yaml"
 
 
 def load_surfaces():
@@ -358,6 +359,15 @@ def load_surfaces():
     return [s for s in d if isinstance(s, dict) and s.get("id")]
 
 
+def load_scenarios():
+    """读场景映射。缺文件返回空列表（老环境兼容）。"""
+    if not SCENARIOS_PATH.exists():
+        return []
+    import yaml
+    d = yaml.safe_load(SCENARIOS_PATH.read_text(encoding="utf-8")) or {}
+    return [s for s in (d.get("scenarios") or []) if isinstance(s, dict) and s.get("id")]
+
+
 def cmd_enumerate(a):
     """列出可用攻击面，并标出「已被方向预算封掉」的那些。
 
@@ -365,7 +375,21 @@ def cmd_enumerate(a):
     不再允许凭空发明。已封的方向直接标出来，避免白跑。
 
     --new 只打印可以填进 candidates.yaml 的 YAML 片段。
+    --scenario <id> 按场景给**优先序**（这是「该先试哪几条」的答案）。
+    --list-scenarios 列出所有场景。
     """
+    if getattr(a, "list_scenarios", False):
+        scs = load_scenarios()
+        if not scs:
+            print("没有 scenarios.yaml")
+            return 2
+        for s in scs:
+            print("%-22s %s" % (s["id"], s.get("statement", "")))
+        return 0
+
+    if getattr(a, "scenario", None):
+        return _enumerate_by_scenario(a)
+
     surfaces = load_surfaces()
     if not surfaces:
         print(_c("找不到 %s" % SURFACES_PATH, WARN), file=sys.stderr)
@@ -530,6 +554,37 @@ def cmd_resume(a):
 
     print("\n合计：pending %(pending)d / 可跑 %(next)d / 阻塞 %(blocked)d / 待补 %(held)d"
           " / 已判死 %(refuted)d" % counts)
+    return 0
+
+
+def _enumerate_by_scenario(a):
+    """按场景列出攻击面优先序——回答「这个场景该先试哪几条」。"""
+    scs = {s["id"]: s for s in load_scenarios()}
+    s = scs.get(a.scenario)
+    if s is None:
+        print(_c("未知场景 %r；可用：%s" % (a.scenario, sorted(scs)), WARN))
+        return 2
+
+    cands = load_candidates(a.card)
+    table = direction_table(cands)
+
+    print("场景 %s —— %s" % (s["id"], s.get("statement", "")))
+    print("判据   %s" % s.get("detect", ""))
+    print("瓶颈   %s\n" % s.get("bound", ""))
+    print("%-4s %-18s %-6s %s" % ("序", "surface", "状态", "为什么在这个场景优先"))
+    for i, item in enumerate(s.get("surfaces") or [], 1):
+        sid = item.get("id")
+        info = table.get(sid)
+        state = "SEALED" if (info and info["exhausted"]) else "OPEN"
+        line = "%-4d %-18s %-6s %s" % (i, sid, state, item.get("why", ""))
+        print(_c(line, WARN) if state == "SEALED" else line)
+        if state == "SEALED":
+            print("     └ 已封（证伪 %d 次）——本场景跳过它" % info["refutes"])
+    if s.get("dead_ends"):
+        print("\n本场景的已知死路（先排掉，别试）：")
+        for d in s["dead_ends"]:
+            print("  ✗ %s" % d)
+    print("\n下一步：把选中的 surface id 填进 candidates.yaml 的 direction")
     return 0
 
 
@@ -1217,6 +1272,8 @@ def main():
 
     e = sub.add_parser("enumerate", help="列出攻击面（direction 只能从这挑），标出已封的")
     e.add_argument("--new", action="store_true", help="只打印可用的 candidates.yaml 片段")
+    e.add_argument("--scenario", default=None, help="按场景给攻击面优先序")
+    e.add_argument("--list-scenarios", action="store_true", help="列出所有场景")
 
     rs = sub.add_parser("resume", help="上下文丢了以后：下一个该跑谁")
     rs.add_argument("--json", action="store_true", help="机器可读输出")
