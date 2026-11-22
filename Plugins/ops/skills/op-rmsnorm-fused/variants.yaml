@@ -1,0 +1,26 @@
+# op-rmsnorm-fused 变体矩阵。
+
+variants:
+  - name: ref-heavy
+    source: "本卡 _common.py 的纯 torch fp32 参考"
+    status: reference
+    applies_to: [tiny, decode-m1, decode-m32, prefill-8k]
+    constraints:
+      - "只用于正确性对照，不是性能候选"
+    mutates_inputs: false
+
+  - name: lightop-fused
+    source: "lightop 的融合 norm 族"
+    status: primary
+    applies_to: [decode-m1, decode-m32, prefill-8k]
+    constraints:
+      - "融合残差版本会原地改写输入，多变体对比须各喂副本"
+    mutates_inputs: true
+
+  - name: torch-native
+    source: "torch 原生 rms_norm（若能用到）"
+    status: fallback
+    applies_to: [decode-m1, decode-m32, prefill-8k]
+    constraints:
+      - "不融合残差，字节数比融合版多一次往返"
+    mutates_inputs: false

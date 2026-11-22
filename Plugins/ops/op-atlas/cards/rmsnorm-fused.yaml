@@ -1,0 +1,37 @@
+id: rmsnorm-fused
+title: 融合 RMSNorm（含残差）
+family: elementwise
+math: "y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))"
+status: draft
+op_card: Plugins/ops/skills/op-rmsnorm-fused
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "融合 norm 族"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+  - repo: in-house
+    library_profile_ref: null
+    file_hint: "torch native rms_norm（不融合残差）"
+    tier: fallback
+    law_ref: null
+
+ceiling:
+  kind: roofline_model
+  ref: "Plugins/ops/skills/op-rmsnorm-fused/contract.yaml"
+  bound: bandwidth
+  note: "字节数完全确定、无中间态；最适合校准带宽判据的算子"
+
+shapes: [decode-m1, decode-m32, prefill-8k]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "ref-heavy 通过正确性门；无性能实测；用于校准带宽判据"
+  verified_on: null
+
+surfaces: [layout-pack, fusion-boundary]
+
+updated: "2026-11-22"

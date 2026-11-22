@@ -1,0 +1,71 @@
+# op-moe-topk-gating 契约
+# 状态 draft：门已定义且 adapter 就绪；缺的是本机的 MoE 后端。
+
+op: moe-topk-gating
+version: 1
+math: "w, idx = normalize(topk(softmax(x @ W_gate^T), K))；idx 是离散量，必须逐位一致"
+
+shapes:
+  x: [M, H]
+  W_gate: [E, H]
+  topk_idx: [M, K]
+  topk_w: [M, K]
+
+dtypes:
+  x: bfloat16
+  W_gate: bfloat16
+  acc: float32
+  out: float32
+
+layout_constraints:
+  - "E（专家数）不一定是 2 的幂，某些 kernel 的 padding 假设 E 是 2 的幂，用 E=100 这类形状会暴露"
+  - "topk_idx 是离散量：任何数值容差都不适用，必须逐位一致"
+  - "归一化时机（softmax 前 vs 后）改变下游 GEMM 的 scale，不能跨实现比较权重绝对值"
+
+tolerance:
+  vs_fp32_ref:
+    max_abs: 1.0e-3
+    cosine: 0.99999
+    note: "只用于 topk_w；topk_idx 用逐位比较（见 invariants）"
+  variant_vs_variant:
+    mode: bit_exact
+    note: "同配置重复调用必须逐位一致"
+
+invariants:
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+    note: "同输入同 seed 连跑 5 次，topk_idx 与 topk_w 都必须逐位一致"
+  - name: index_matches_reference
+    mode: bit_exact
+    note: "topk_idx 与 fp32 参考完全一致——离散量不能用容差糊"
+  - name: weight_sums_to_one
+    mode: tolerance
+    param: 1.0e-6
+    note: "sum(topk_w) 与 1 的偏差 ≤ 1e-6"
+  - name: tie_break_is_stable
+    mode: bit_exact
+    note: "构造等分输入（两个专家分数完全相同），选出的索引必须可复现"
+
+gates:
+  - name: correctness
+    template: correctness
+    required: true
+  - name: invariants
+    template: invariants
+    required: true
+  - name: perf
+    script: bench/bench.py
+    required: false
+    require: "median_ms <= baseline_ms * 1.02"
+    repeats: 3
+    skip_reason: "待按 M 分档建 bench；本段通常不是瓶颈"
+
+floor:
+  metric: hbm_bandwidth
+  peak: 1724
+  unit: GB/s
+  basis: "读 W_gate（E*H*2B）主导；M 小时权重读取是全部成本。峰值用本机流式只读实测（不是型号标称 1100）"
+  source: "op-roofline/constants.yaml:conflicts:peak-bw-definition"
+  status: measured
+  at_floor_threshold: 0.85

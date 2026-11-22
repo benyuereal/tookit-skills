@@ -1,0 +1,64 @@
+# op-rmsnorm-fused 契约
+# 状态 draft：门已定义且 adapter 就绪；缺的是本机融合实现。
+
+op: rmsnorm-fused
+version: 1
+math: "y = w * (x / sqrt(mean(x^2, -1) + eps))；融合残差时把 x 换成 (x + r)"
+
+shapes:
+  x: [M, H]
+  weight: [H]
+  r: [M, H]
+  y: [M, H]
+
+dtypes:
+  x: bfloat16
+  weight: bfloat16
+  acc: float32
+  out: bfloat16
+
+layout_constraints:
+  - "RMSNorm 固定沿最后一维（hidden）归一；换维度就是另一个算子"
+  - "融合残差时若是原地写，输入会被改——多变体对比必须各喂独立副本"
+
+tolerance:
+  vs_fp32_ref:
+    max_abs: 2.0e-3
+    cosine: 0.99999
+    note: "bf16 输入 + fp32 累加；eps 位置不同会带来可见差异"
+  variant_vs_variant:
+    mode: tolerance
+
+invariants:
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+  - name: residual_semantics
+    mode: tolerance
+    note: "融合残差时输出必须等于 rmsnorm(x + r)，不是 rmsnorm(x) + r"
+  - name: eps_position
+    mode: tolerance
+    note: "eps 在 sqrt 内（sqrt(mean+eps)）——与参考实现一致"
+
+gates:
+  - name: correctness
+    template: correctness
+    required: true
+  - name: invariants
+    template: invariants
+    required: true
+  - name: perf
+    script: bench/bench.py
+    required: false
+    require: "median_ms <= baseline_ms * 1.02"
+    repeats: 3
+    skip_reason: "待建 bench；本卡的性能判据是带宽达成率不是相对基线"
+
+floor:
+  metric: hbm_bandwidth
+  peak: 1724
+  unit: GB/s
+  basis: "读 x(+r) + 读 w + 写 y = 2*M*H*2B（不融合残差）或 3*M*H*2B（融合）。字节数完全确定"
+  source: "op-roofline/constants.yaml:conflicts:peak-bw-definition；一律用实测 1724，不用标称 1100"
+  status: measured
+  at_floor_threshold: 0.85

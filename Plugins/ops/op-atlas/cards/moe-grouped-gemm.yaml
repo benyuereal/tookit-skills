@@ -25,7 +25,7 @@ impls:
     library_profile_ref: null
     file_hint: "稠密 GEMM 循环调 per-expert"
     tier: avoid
-    law_ref: "L1"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
 
 ceiling:
   kind: missing

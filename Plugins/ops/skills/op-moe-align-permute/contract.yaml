@@ -1,0 +1,69 @@
+# op-moe-align-permute 契约
+# 状态 draft：门已定义且 adapter 就绪；缺的是本机 MoE 后端。
+
+op: moe-align-permute
+version: 1
+math: "dst = permute(src, slot_map)；slot_map 由 counts/offsets 按 align 倍数推出，空槽填哨兵"
+
+shapes:
+  x: [M, H]
+  topk_idx: [M, K]
+  permuted: [M*K, H]
+  slot_map: [M*K]
+
+dtypes:
+  x: bfloat16
+  topk_idx: int32
+  slot_map: int32
+  acc: float32
+
+layout_constraints:
+  - "padding 哨兵只能垫在队尾：valid_NI 按块首计数截断循环，前置哨兵会让输出恒为 0（实测）"
+  - "对齐倍数是 kernel 契约的一部分，与下游 grouped GEMM 的 tile 高度绑定"
+  - "counts/offsets 用 int32 在 M*K 很大时可能溢出，需显式检查"
+
+tolerance:
+  vs_fp32_ref:
+    max_abs: 0.0
+    cosine: 1.0
+    note: "纯数据搬运，必须逐位一致——任何数值差都说明搬错了；cosine 写 1.0 是形式要求"
+  variant_vs_variant:
+    mode: bit_exact
+
+invariants:
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+  - name: permutation_is_invertible
+    mode: bit_exact
+    note: "unpermute(permute(x)) 必须与输入逐位一致"
+  - name: counts_match_topk
+    mode: bit_exact
+    note: "每个专家的 counts[e] 与 topk_idx 的统计一致"
+  - name: offsets_are_aligned
+    mode: bit_exact
+    note: "每个专家块起始偏移必须是 align 倍数的整数倍"
+  - name: sentinel_only_at_tail
+    mode: bit_exact
+    note: "padding 哨兵只能出现在队尾；前置哨兵直接判不通过"
+
+gates:
+  - name: correctness
+    template: correctness
+    required: true
+  - name: invariants
+    template: invariants
+    required: true
+  - name: padding
+    template: padding
+    required: true
+    note: "本段正是 padding 语义的所在，这条门必跑"
+
+floor:
+  metric: hbm_bandwidth
+  peak: 1724
+  unit: GB/s
+  basis: "纯读写搬运：读 M*H + 写 M*K*H，字节数固定"
+  source: "op-roofline/constants.yaml:conflicts:peak-bw-definition"
+  status: measured
+  at_floor_threshold: 0.85

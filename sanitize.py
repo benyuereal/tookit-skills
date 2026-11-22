@@ -129,6 +129,26 @@ for _a in _ALIASES:
     RULES.append((re.compile(r"(?<![@\w])" + re.escape(_a) + r"(?!\w)"), "<internal-user>", "内网用户名"))
 RULES.append((re.compile(r"(?<![\w./-])" + re.escape(_SSH_ALIAS) + r"(?!\w)"), "<ssh-alias>", "内部主机别名"))
 
+# ---- v6：内部分测数字形态 ----------------------------------------------
+# 为什么单独一类：这类泄露**没有任何主机名/IP/人名的特征**，grep 常规规则抓不到。
+# 一个「显存水位 0.80，0.90 第一笔就 OOM」的句子，看起来像普通技术描述，
+# 但它精确到小数点后两位时就是内部实测快照。
+_MEM_WATERLINE = re.compile(r"(?:显存|内存)水位\s*[:：=]?\s*0\.\d{2}(?!\d)")
+# 权重 GB 值单独出现是公开常识（模型多大是公开的）；只有和「水位 / draft」
+# 同时出现在同一句里才是内部快照。上面那条已经覆盖水位句式，
+# 这条只抓「权重 … GB … draft … GB」这种成对出现的部署现场描述。
+_MEM_GB = re.compile(
+    r"权重\s*\d{1,3}\.\d{1,2}\s*GB[^\n]{0,40}draft\s*\d{1,3}\.\d{1,2}\s*GB",
+    re.I)
+# 内部 bench / 分测目录名（出现在正文即视为内部产物引用）
+_INTERNAL_BENCH_DIRS = re.compile(
+    r"\b(?:lightop_bench|deepgemm_moe_bench|mqa_opt|indexer_opt2?|fp8_mla|mla_pipeline|"
+    r"mhc_overlap|moe_opt|megamoe_glm|elemwise_opt|kda_opt|hbird_gemm_bench)\b")
+INTERNAL_SNIPPETS = _INTERNAL_BENCH_DIRS
+RULES.append((_MEM_WATERLINE, "<internal-waterline>", "内部显存水位"))
+RULES.append((_MEM_GB, "<internal-memory-figure>", "内部显存GB值"))
+RULES.append((_INTERNAL_BENCH_DIRS, "<internal-bench-dir>", "内部bench目录"))
+
 
 # kdocs 指纹：28~45 位混合大小写+数字；仅当行内出现文档来源词才判定（v1 只认 32 位，漏了 34/40 位）
 FID_CONTEXT = re.compile(r"file_id|fileId|docId|documentId|internal-file-id|内部文档|子文档|溯源|《[^》]{4,}》|kdocs|金山\s*文档", re.I)
@@ -383,6 +403,9 @@ def selftest():
         ("HOMEPAGE=\"https://gitlab." + _HYGON_DOMAIN + "/group/repo\"", "内部GitLab主机"),
         ("MAINTAINER=\"" + _HYGON_PERSON + " <x@y>\"", "内部作者署名"),
         ("plain domain " + _HYGON_DOMAIN + " appears", "内部域"),
+        ("显存水位 0.80，0.90 第一笔就 OOM", "内部显存水位"),
+        ("权重 49.29 GB + draft 2.94 GB", "内部显存GB值"),
+        ("见 lightop_bench/FP8_REPORT.md", "内部bench目录"),
         ("cd ~/x then " + _HERMES_DIR + "/state.db", "内部agent路径"),
         ("lspci output 0000:03:00.0 ok", "裸BDF"),
         ("lspci 03:00.0 and 03:00.1 listed", "裸BDF短形"),

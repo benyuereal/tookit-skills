@@ -1,0 +1,26 @@
+# op-moe-topk-gating 变体矩阵。
+
+variants:
+  - name: ref-heavy
+    source: "本卡 _common.py 的纯 torch 参考（逐行按数学定义算）"
+    status: reference
+    applies_to: [tiny, decode-m1, decode-m32, prefill-8k, e-not-pow2]
+    constraints:
+      - "只用于正确性对照，不是性能候选"
+    mutates_inputs: false
+
+  - name: fused-gate-topk
+    source: "lightop 的 gate+topk 融合 kernel"
+    status: primary
+    applies_to: [decode-m1, decode-m32]
+    constraints:
+      - "tie-break 语义需与参考实现核对，否则 idx 不一致"
+    mutates_inputs: false
+
+  - name: aiter-topk
+    source: "aiter-das 的 topk softmax 支撑算子"
+    status: fallback
+    applies_to: [decode-m1, decode-m32, prefill-8k]
+    constraints:
+      - "查表命中才可用"
+    mutates_inputs: false

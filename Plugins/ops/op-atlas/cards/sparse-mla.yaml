@@ -10,17 +10,17 @@ impls:
     library_profile_ref: "libraries.md §8"
     file_hint: "tilelang / tilelang-prefetch（ctx>=128k 长上下文）"
     tier: primary
-    law_ref: "L5"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
   - repo: flash-mla
     library_profile_ref: "libraries.md §7"
     file_hint: "flash_mla（ctx~8k 且 S>=128；GLM5.3 prefill 快 2x）"
     tier: primary
-    law_ref: "L5"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
   - repo: in-house
     library_profile_ref: null
     file_hint: "hip-glm（手写主循环，绕开 tilelang 布局转换）"
     tier: structural
-    law_ref: "L1"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
 
 ceiling:
   kind: roofline_model

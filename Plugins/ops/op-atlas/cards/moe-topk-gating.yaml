@@ -1,0 +1,37 @@
+id: moe-topk-gating
+title: MoE top-k gating（第 2 段：gate → topk → 归一）
+family: moe
+math: "w, idx = normalize(topk(softmax(x @ W_gate^T), K))；idx 是离散量"
+status: draft
+op_card: Plugins/ops/skills/op-moe-topk-gating
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "gate+topk 融合 kernel"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+  - repo: aiter-das
+    library_profile_ref: "libraries.md §4"
+    file_hint: "topk softmax 支撑算子"
+    tier: fallback
+    law_ref: null
+
+ceiling:
+  kind: roofline_model
+  ref: "Plugins/ops/skills/op-moe-topk-gating/contract.yaml"
+  bound: bandwidth
+  note: "M=1 时读 W_gate 主导；这一段通常不是瓶颈"
+
+shapes: [decode-m1, decode-m32, prefill-8k, e-not-pow2]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "ref-heavy 通过正确性门；无性能实测；本段通常非瓶颈"
+  verified_on: null
+
+surfaces: [table-miss, layout-pack]
+
+updated: "2026-11-22"

@@ -89,11 +89,11 @@ MQA logits 里为了让 Q 常驻花了 32 KB shared，直接把 occupancy 从 2 
 
 **三条实证反例（都来自 FP8 / paged-MQA 路径，比说理更硬）**：
 
-| 反例 | 现象 | 机制 | 出处 |
+| 反例 | 现象 | 机制 | 说明 |
 |---|---|---|---|
-| FP8 + persistent | 慢 **1.28–1.51×** | persistent 的跨 iteration 驻留假设了 BF16/int8 的寄存器与 LDS 布局；FP8 路径的 scale 广播把它打破 | `lightop_bench/FP8_REPORT.md` |
-| 16-row pooled cache + persistent | 直接 **RuntimeError** | 该形状下 persistent 的 page 分组前提不成立 | 同上 |
-| 常驻 Q 占 32 KB shared | 慢 **1.9×** | occupancy 2→1 CTA/CU（见上方 Q4 推论） | 本仓库 2026-11-13 实测 |
+| FP8 + persistent | 显著变慢 | persistent 的跨 iteration 驻留假设了 BF16/int8 的寄存器与 LDS 布局；FP8 路径的 scale 广播把它打破 | 本平台实测；绝对倍数见 kb 台账 |
+| 小 page 分组 + persistent | 直接 RuntimeError | 该形状下 persistent 的 page 分组前提不成立 | 同上 |
+| 常驻 Q 占 32 KB shared | 慢约 2× | occupancy 2→1 CTA/CU（见上方 Q4 推论） | 2026-11-13 实测 |
 
 **结论**：`LIGHTOP_PAGED_MQA_LOGITS_BACKEND=1`（persistent 开关）**对 FP8 必须保持关闭**；
 int8 上 persistent/hbird 派发仍然有效。**这是按精度分岔的结论，不能跨 dtype 复用。**

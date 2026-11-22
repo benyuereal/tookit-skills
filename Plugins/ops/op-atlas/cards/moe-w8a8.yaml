@@ -10,7 +10,7 @@ impls:
     library_profile_ref: "libraries.md §3"
     file_hint: "lightop-4stage（mode 500-525，推荐）"
     tier: primary
-    law_ref: "L2"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q3"
   - repo: aiter-das
     library_profile_ref: "libraries.md §4"
     file_hint: "get_aiter_moe_config → moe_c / asm / triton / ck"
@@ -20,7 +20,7 @@ impls:
     library_profile_ref: "libraries.md §3"
     file_hint: "lightop-asm（mode>=1000）"
     tier: avoid
-    law_ref: "L7"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
 
 ceiling:
   kind: missing

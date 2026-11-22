@@ -1,0 +1,41 @@
+# op-moe-topk-gating 形状档位。E 特意取非 2 的幂来暴露 padding 假设。
+
+tiny:
+  params:
+    M: 4
+    H: 256
+    E: 32
+    K: 2
+  note: "只做正确性门的自检；绝不用于 bench"
+
+decode-m1:
+  params:
+    M: 1
+    H: 4096
+    E: 128
+    K: 8
+  note: "单 token decode：读 W_gate 完全主导"
+
+decode-m32:
+  params:
+    M: 32
+    H: 4096
+    E: 128
+    K: 8
+  note: "小 batch decode，仍是权重主导"
+
+prefill-8k:
+  params:
+    M: 8192
+    H: 4096
+    E: 128
+    K: 8
+  note: "prefill：M×E 的 GEMM 开始有算力占比，但通常仍不是瓶颈段"
+
+e-not-pow2:
+  params:
+    M: 32
+    H: 4096
+    E: 100
+    K: 8
+  note: "E=100 非 2 的幂，暴露 kernel 的 padding 假设"

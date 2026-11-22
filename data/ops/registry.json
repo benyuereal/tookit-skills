@@ -104,6 +104,79 @@
         "example_tilelang_gemm_amd_fp8_preshuffle.py 在 gfx938 上的编译/精度/达成率",
         "k_pack=2 与 BLOCK_N 的最优组合"
       ]
+    },
+    {
+      "name": "moe-topk-gating",
+      "path": "Plugins/ops/skills/op-moe-topk-gating",
+      "status": "draft",
+      "shapes": [
+        "decode-m1",
+        "decode-m32",
+        "prefill-8k",
+        "e-not-pow2",
+        "tiny"
+      ],
+      "variants": [
+        "ref-heavy",
+        "fused-gate-topk",
+        "aiter-topk"
+      ],
+      "best_variant": null,
+      "floor_status": "bandwidth_bound（未实测）",
+      "last_verified": null,
+      "evidence": "SKILL.md 判据 + _common.py 参考实现；ref-heavy 已过 correctness 门",
+      "open_questions": [
+        "融合 gate+topk 的 tie-break 是否与参考一致",
+        "本段在真实 trace 里的占比"
+      ]
+    },
+    {
+      "name": "moe-align-permute",
+      "path": "Plugins/ops/skills/op-moe-align-permute",
+      "status": "draft",
+      "shapes": [
+        "decode-m32",
+        "prefill-8k",
+        "align-64",
+        "tiny"
+      ],
+      "variants": [
+        "ref-heavy",
+        "lightop-align",
+        "aiter-permute"
+      ],
+      "best_variant": null,
+      "floor_status": "bandwidth_bound（未实测）",
+      "last_verified": null,
+      "evidence": "SKILL.md 判据 + _common.py 参考实现；ref-heavy 已过 correctness 门",
+      "open_questions": [
+        "lightop-align 的 padding 是否真的只垫队尾",
+        "align=64 与 128 的行为差异"
+      ]
+    },
+    {
+      "name": "rmsnorm-fused",
+      "path": "Plugins/ops/skills/op-rmsnorm-fused",
+      "status": "draft",
+      "shapes": [
+        "decode-m1",
+        "decode-m32",
+        "prefill-8k",
+        "tiny"
+      ],
+      "variants": [
+        "ref-heavy",
+        "lightop-fused",
+        "torch-native"
+      ],
+      "best_variant": null,
+      "floor_status": "bandwidth_bound（未实测）",
+      "last_verified": null,
+      "evidence": "SKILL.md 判据 + _common.py 参考实现；ref-heavy 已过 correctness 门",
+      "open_questions": [
+        "lightop-fused 的残差融合版实际达成率",
+        "hidden 非 2 的幂时的向量化损失"
+      ]
     }
   ]
 }

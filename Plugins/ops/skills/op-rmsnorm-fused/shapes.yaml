@@ -1,0 +1,25 @@
+# op-rmsnorm-fused 形状档位。
+
+tiny:
+  params:
+    M: 8
+    H: 512
+  note: "只做正确性门的自检；绝不用于 bench"
+
+decode-m1:
+  params:
+    M: 1
+    H: 4096
+  note: "单 token decode：M 极小，norm 的固定开销占比高"
+
+decode-m32:
+  params:
+    M: 32
+    H: 4096
+  note: "小 batch decode"
+
+prefill-8k:
+  params:
+    M: 8192
+    H: 4096
+  note: "prefill：字节数主导，最接近纯带宽地板"

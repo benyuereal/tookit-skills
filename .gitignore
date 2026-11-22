@@ -25,3 +25,9 @@ __pycache__/
 *.so.*.bak
 # ops 门禁 hook 的本地接线（用户态，install.sh 不装 .claude/）
 .claude/
+
+# 内部工作产物：方案/分测笔记不进公开仓库（含内部分测数字与内部路径）
+MOE-MHC-HBIRD-覆盖方案.md
+*-覆盖方案.md
+HANDOFF-TO-39.md
+*-HANDOFF*.md

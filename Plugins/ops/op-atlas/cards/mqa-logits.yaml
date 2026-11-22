@@ -10,17 +10,17 @@ impls:
     library_profile_ref: "libraries.md §3"
     file_hint: "csrc/mqa_logits/paged/paged_mqa_logits_grouped.cu"
     tier: primary
-    law_ref: "L1"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
   - repo: hbird-gemm
     library_profile_ref: "libraries.md §1"
     file_hint: "grouped G=3 + ds_bpermute epilogue（0.691 ms @192x32K）"
     tier: structural
-    law_ref: "L1"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
   - repo: in-house
     library_profile_ref: null
     file_hint: "shipped ungrouped（ee7b710，1.385 ms）"
     tier: fallback
-    law_ref: "L9"
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q1"
 
 ceiling:
   kind: roofline_model

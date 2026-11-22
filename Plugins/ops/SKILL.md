@@ -155,6 +155,9 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-sparse-mla` | `tuned` | 稀疏 MLA 前向（DSA）：q/kv/indices 契约、tilelang / flash_mla / 生产三变体、-1 哨兵语义 |
 | `op-moe-w8a8` | `draft` | FP8 MoE（routed GEMM1/GEMM2 + silu-mul + moe_sum）：M 分档、融合收益判据 |
 | `op-gemm-fp8` | `draft` | FP8 GEMM（batched / 分组）：tilelang / hipBLASLt 两条路、gfx938 FP8/BF8 限制 |
+| `op-moe-topk-gating` | `draft` | **MoE 第 2 段**：gate→topk→归一化。索引是离散量必须逐位一致；tie-break 需固定 |
+| `op-moe-align-permute` | `draft` | **MoE 第 3 段**：align_block_size + permute。`-1` 只能垫队尾，前置会让输出恒为 0 |
+| `op-rmsnorm-fused` | `draft` | 融合 RMSNorm：最典型的 bandwidth-bound，**最适合用来校准带宽判据** |
 
 ## 六、数据分层（红线，必须遵守）
 

@@ -73,11 +73,11 @@ def _load_yaml(path):
 
 def _truth_sources(repo):
     lib_p = repo / "Plugins/ops/skills/op-stack-design/references/libraries.md"
-    laws_p = repo / "Plugins/ops/skills/op-stack-design/references/pipeline-laws.md"
+    laws_p = repo / "Plugins/ops/skills/op-roofline/references/pipeline.md"
     lib = lib_p.read_text(encoding="utf-8") if lib_p.is_file() else ""
     laws = laws_p.read_text(encoding="utf-8") if laws_p.is_file() else ""
     lib_sections = {int(m) for m in re.findall(r"(?m)^###\s+(\d+)\.\s", lib)}
-    law_ids = {m for m in re.findall(r"(?m)^##\s+L(10|[0-9])\b", laws)}
+    law_ids = {m for m in re.findall(r"(?m)^#{1,4}\s+([A-Za-z]\d+)\b", laws)}
     return lib_sections, law_ids
 
 
@@ -223,11 +223,20 @@ def validate(atlas, repo):
 
             law = impl.get("law_ref")
             if law is not None:
-                if not re.fullmatch(r"L(10|[0-9])", str(law)):
-                    err("E3", where, "impls[%d] law_ref 格式非法 %r" % (i, law))
-                elif str(law)[1:] not in law_ids:
-                    err("E3", where, "impls[%d] %s 不是 pipeline-laws.md 的定律（现有 L%s）"
-                        % (i, law, sorted(law_ids, key=int)))
+                txt = str(law)
+                if "#" in txt:
+                    f, _, anchor = txt.partition("#")
+                    target = repo / f
+                    if not target.is_file():
+                        err("E3", where, "impls[%d] law_ref 文件不存在 %r" % (i, f))
+                    elif anchor not in {
+                            m for m in re.findall(r"(?m)^#{1,4}\s+([A-Za-z]\d+)\b",
+                                                  target.read_text(encoding="utf-8",
+                                                                  errors="ignore"))}:
+                        err("E3", where, "impls[%d] 锚点 %s 在 %s 中不存在" % (i, anchor, f))
+                elif txt not in law_ids:
+                    err("E3", where, "impls[%d] law_ref=%r 无法解析（用 <file>#<anchor> 或 Q5 这类锚点；现有 %s）"
+                        % (i, txt, sorted(law_ids)))
             if impl.get("tier") == "avoid" and not law:
                 warn("W1", where, "impls[%d] avoid 条目无 law_ref，机制会丢失" % i)
 

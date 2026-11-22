@@ -1,0 +1,37 @@
+# op-moe-align-permute 形状档位。
+
+tiny:
+  params:
+    M: 4
+    H: 64
+    E: 8
+    K: 2
+    align: 128
+  note: "只做正确性门的自检；绝不用于 bench"
+
+decode-m32:
+  params:
+    M: 32
+    H: 4096
+    E: 128
+    K: 8
+    align: 128
+  note: "小 batch decode"
+
+prefill-8k:
+  params:
+    M: 8192
+    H: 4096
+    E: 128
+    K: 8
+    align: 128
+  note: "prefill：M*K=65536 行，搬运量主导"
+
+align-64:
+  params:
+    M: 512
+    H: 4096
+    E: 128
+    K: 8
+    align: 64
+  note: "对齐倍数 64：与不同 tile 高度的 kernel 配套，验证 offsets 计算"

@@ -1,0 +1,37 @@
+id: moe-align-permute
+title: MoE align_block_size + permute（第 3 段）
+family: moe
+math: "dst = permute(src, slot_map)；slot_map 由 counts/offsets 按 align 倍数推出"
+status: draft
+op_card: Plugins/ops/skills/op-moe-align-permute
+
+impls:
+  - repo: lightop
+    library_profile_ref: "libraries.md §3"
+    file_hint: "align_block_size + permute"
+    tier: primary
+    law_ref: "Plugins/ops/skills/op-roofline/references/pipeline.md#Q4"
+  - repo: aiter-das
+    library_profile_ref: "libraries.md §4"
+    file_hint: "token permute 支撑算子"
+    tier: fallback
+    law_ref: null
+
+ceiling:
+  kind: roofline_model
+  ref: "Plugins/ops/skills/op-moe-align-permute/contract.yaml"
+  bound: bandwidth
+  note: "纯读写搬运，字节数完全确定；达成率低于地板说明访存模式有问题"
+
+shapes: [decode-m32, prefill-8k, align-64]
+
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: "ref-heavy 通过正确性门；容差为零（纯搬运）；无性能实测"
+  verified_on: null
+
+surfaces: [layout-pack, gather-path]
+
+updated: "2026-11-22"
