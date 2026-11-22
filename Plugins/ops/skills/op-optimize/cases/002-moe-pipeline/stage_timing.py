@@ -146,7 +146,7 @@ def main(argv=None):
         "not_optimized": "这是未融合基线（逐专家循环），不是性能候选；"
                           "目的是拿占比，不是拿倍数",
     }
-    out = a.out or str(pathlib.Path(__file__).parent / "results" / ("stage0_%d.json" % a.M))
+    out = a.out or str(pathlib.Path(__file__).parent / "results" / ("stage0-%d.json" % a.M))
     pathlib.Path(out).parent.mkdir(parents=True, exist_ok=True)
     pathlib.Path(out).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
                                   encoding="utf-8")

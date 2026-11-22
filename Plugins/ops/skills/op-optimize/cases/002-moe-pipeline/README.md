@@ -89,14 +89,14 @@ python3 stage_timing.py --M 4096   # 约 40s
 python3 stage_timing.py --M 32
 ```
 
-结果落盘到 `results/stage0_<M>.json`，含完整口径字段（what/alloc/state/timer/rounds）。
+结果落盘到 `results/stage0-<M>.json`，含完整口径字段（what/alloc/state/timer/rounds）。
 
 ---
 
 ## 阶段 1：段级选型（两个 GEMM 的地板与达成率）
 
 ```bash
-python3 stage1_gemm.py    # 见 results/stage1_gemm.json
+python3 stage1_gemm.py    # 见 results/stage1-gemm.json
 ```
 
 ### grouped vs 逐专家循环
@@ -155,7 +155,7 @@ bytes = 230.7 MB，grouped 带宽 720 GB/s
 ## 阶段 2：融合 vs 拆分的交叉点 M* —— **未测定，但试过三个入口**
 
 ```bash
-python3 stage2_crossover.py    # 见 results/stage2_crossover.json
+python3 stage2_crossover.py    # 见 results/stage2-crossover.json
 ```
 
 ### 分段路径：7 个 M 点全部可测

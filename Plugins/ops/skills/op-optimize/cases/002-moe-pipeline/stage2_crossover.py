@@ -103,7 +103,7 @@ def main(argv=None):
             "融合侧未测定 ⇒ M* 未测定，不插值",
         ],
     }
-    out = a.out or str(pathlib.Path(__file__).parent / "results" / "stage2_crossover.json")
+    out = a.out or str(pathlib.Path(__file__).parent / "results" / "stage2-crossover.json")
     pathlib.Path(out).parent.mkdir(parents=True, exist_ok=True)
     pathlib.Path(out).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
                                   encoding="utf-8")

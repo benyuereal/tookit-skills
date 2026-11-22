@@ -163,7 +163,7 @@ def main(argv=None):
                                "分流无法重叠（实测 B 情形）。"
                                "能重叠的只有 compute 与 DMA 之间（A 情形）。",
     }
-    out = a.out or str(pathlib.Path(__file__).parent / "results" / "stage3_overlap.json")
+    out = a.out or str(pathlib.Path(__file__).parent / "results" / "stage3-overlap.json")
     pathlib.Path(out).parent.mkdir(parents=True, exist_ok=True)
     pathlib.Path(out).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
                                   encoding="utf-8")

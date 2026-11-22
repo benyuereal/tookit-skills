@@ -3,7 +3,7 @@
 """阶段 1：两个 GEMM 的地板与达成率（grouped vs 逐专家循环）。
 
 用法: python3 stage1_gemm.py
-输出: results/stage1_gemm.json（已在仓库里，脚本用于复跑核对）
+输出: results/stage1-gemm.json（已在仓库里，脚本用于复跑核对）
 """
 import json
 import pathlib
