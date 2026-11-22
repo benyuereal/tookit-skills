@@ -8,6 +8,9 @@
 **/devices.json
 data/credentials.json
 data/devices.json
+# 结构 lint 的报告是生成物（skill_lint.py 的默认输出）；只有基线入库
+lint-report.json
+
 # Python 缓存
 __pycache__/
 *.pyc
