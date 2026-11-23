@@ -281,6 +281,58 @@ def _check_baseline_ref(cards_dir, repo):
                 "确实没有基准时用 no_baseline_reason 显式声明")
 
 
+def _check_regimes_required(cards_dir, repo):
+    """E38：已下结论的 attention / gemm / moe 卡必须分 prefill 与 decode 两档。
+
+    为什么必须分：
+    「达成率 0.89」在 prefill（算力主导）和 decode（带宽主导）下是完全不同的东西。
+    2026-11-23 实测：M=1 时 torch.mm bf16 67 µs（u=0.27）vs aiter fp8 843 µs（u=0.01），
+    而方阵 8192³ 时 fp8 达 498.5 TF（u=0.89）。两个结论方向相反，
+    混在一张卡里等于没报。
+
+    分档（与 E37 一致，draft 不强制）：
+      status ∈ {measured, tuned}  -> 必须有两档
+      其余族（norm / elementwise / rope / activation）-> 单档即可
+      draft  -> 不强制（没有实测值，填了就是编）
+    """
+    TWO_REGIME = {"attention", "gemm", "moe"}
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        fam = d.get("family")
+        if fam not in TWO_REGIME:
+            continue
+        st = str(d.get("status") or "")
+        lv = d.get("last_verdict") or {}
+        if st not in ("measured", "tuned"):
+            continue
+        reg = lv.get("regimes")
+        if not isinstance(reg, dict):
+            err("E38", p.name,
+                "%s 族的 measured 卡缺 regimes —— 必须分 prefill（算力主导，TFLOPS）"
+                "与 decode（带宽主导，GB/s）两档" % fam)
+            continue
+        has_pre = any("prefill" in str(k) for k in reg)
+        has_dec = any("decode" in str(k) for k in reg)
+        if not has_pre or not has_dec:
+            err("E38", p.name,
+                "regimes 缺 prefill 或 decode 档（当前 %s）—— "
+                "两档的达成率是完全不同的东西" % sorted(reg))
+            continue
+        for k, v in reg.items():
+            if not isinstance(v, dict):
+                continue
+            if "decode" in str(k) and v.get("kind") != "bandwidth":
+                err("E38", p.name,
+                    "regimes.%s.kind=%r —— decode 是读权重，kind 必须是 bandwidth"
+                    % (k, v.get("kind")))
+            if v.get("value") is not None and not v.get("denominator"):
+                err("E38", p.name,
+                    "regimes.%s 有 value 但没 denominator —— 分母来源必须可追"
+                    % k)
+
+
 def _check_gemm_regime(cards_dir, repo):
     """E28d：gemm / attention 类卡必须分 prefill 与 decode 两个 regime。
 
@@ -1445,6 +1497,7 @@ def validate(atlas, repo):
     _check_semantics(cards_dir, repo)
     _check_impl_to_ceiling(cards_dir, repo)
     _check_pros_cons_substance(cards_dir, repo)
+    _check_regimes_required(cards_dir, repo)
     _check_gemm_regime(cards_dir, repo)
     _check_baseline_ref(cards_dir, repo)
     _check_depth_rules(cards_dir, repo)
