@@ -65,6 +65,10 @@ last_verdict:
       note: bf16；fused 1.5174ms vs split 3.4262ms，3×MAD=0.0158 显著
   conclusion: 融合快 2.26x；带宽达成率为 copy 峰值的 0.39-0.46，空间在布局而非参数
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/001-swiglu-fused-vs-split/results/result.json
+    sha256: f2606cf36568b68d98ad238e3d112d8c123f3b75a99ce692f7a784ac8a28f6ac
+    verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 三步 torch 换成 lightop 融合

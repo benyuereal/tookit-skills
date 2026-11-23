@@ -1,0 +1,34 @@
+{
+  "streak": {
+    "flash-attention-fwd": 1,
+    "fused-add-rmsnorm": 1,
+    "gemm-int8": 1,
+    "layernorm": 1,
+    "mlp-gelu-geglu": 1,
+    "moe-combine-reduce": 1,
+    "moe-swiglu-fused": 1,
+    "moe-w8a8": 1,
+    "mqa-logits": 1,
+    "qk-norm": 1,
+    "rmsnorm-fused": 1,
+    "rope-mla": 1,
+    "rope": 1,
+    "sparse-mla": 1
+  },
+  "missing": [
+    "flash-attention-fwd",
+    "fused-add-rmsnorm",
+    "gemm-int8",
+    "layernorm",
+    "mlp-gelu-geglu",
+    "moe-combine-reduce",
+    "moe-swiglu-fused",
+    "moe-w8a8",
+    "mqa-logits",
+    "qk-norm",
+    "rmsnorm-fused",
+    "rope-mla",
+    "rope",
+    "sparse-mla"
+  ]
+}

@@ -66,6 +66,10 @@ last_verdict:
       note: 达成率随形状变：KV=2048 为 0.12、B=1/KV=8192 只有 0.07；同字节 copy 能到 1227 GB/s，差 3.02×
   conclusion: MLA decode 达峰值 0.35（KV=32768/B=8）；短 KV 与小 batch 只有 0.07~0.12
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/006-mla-decode-absorb/results/mla-decode.json
+    sha256: 9cf66b57406c99d995d0e69059de12a035800c97cd78915507a9d5cfe104b67a
+    verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: dense decode 的 num_splits 不可覆盖

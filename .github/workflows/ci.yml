@@ -55,6 +55,9 @@ jobs:
             --contract Plugins/ops/skills/op-fused-add-rmsnorm/contract.yaml \
             --variants ref-heavy --shape decode-m1 --selftest-flaw --require-catch
 
+      - name: gaps.md 与卡片同步
+        run: python3 -I scripts/gen_gaps.py --check
+
       - name: op-atlas INDEX 与卡片同步
         # INDEX 是生成物。手改了卡片没跑 sync_index.py，这里红。
         run: python3 -I Plugins/ops/op-atlas/sync_index.py --check

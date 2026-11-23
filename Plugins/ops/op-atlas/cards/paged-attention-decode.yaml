@@ -85,6 +85,10 @@ last_verdict:
       note: paged 比连续 KV 再慢 1.60×；SQ 从 1 到 32 耗时恒为 3.16 ms（0.5% 波动）；同机 MLA 吸收式达 0.35，差一个数量级
   conclusion: flash_attn decode 只达峰值 0.03；同机 MLA 吸收式 0.35，差一个数量级
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/008-paged-decode-ceiling/results/paged-decode.json
+    sha256: 29eb455432e6d998cb163b5940b1a2fbcaa1f711bb9b748ab38d88bb532c64ad
+    verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 换掉 flash_attn 的 decode 路径

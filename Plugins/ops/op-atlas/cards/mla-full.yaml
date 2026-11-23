@@ -66,6 +66,10 @@ last_verdict:
       note: 等 FLOPs 下 flash_attn 快 4.54×（181.3 vs 39.9 TF，均为 309 G FLOPs）；q_len>=64 后不随规模改善
   conclusion: MLA 非吸收稳定在峰值的 0.13；等 FLOPs 下 flash_attn 快 4.54×
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/007-mla-full-vs-absorb/results/mla-full-vs-absorb.json
+    sha256: c1bb37d77aee116c34fd17b0a8300ba5311f1868e57cf4d105aac38019aba754
+    verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 调 MLA 的 tile 调度元数据

@@ -39,6 +39,7 @@ VERDICT_STATUSES = {"none", "predicted", "measured", "refuted", "at_floor"}
 #   throughput   绝对吞吐（GB/s / TFLOPS），不是倍数
 #   ratio_other  非收益比值（如「M=128 与 M=1024 的耗时比」），不许当加速比
 RATIO_KINDS = {"speedup", "utilization", "throughput", "ratio_other"}
+RATIO_OTHER_LIMIT = 5     # E24b：ratio_other 超过这个数就提醒复核分类
 LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
@@ -59,7 +60,8 @@ ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
 REQUIRED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier"}
 ALLOWED_CEIL = {"kind", "ref", "bound", "model_name", "note"}
 REQUIRED_CEIL = {"kind", "ref"}
-ALLOWED_VERDICT = {"status", "kb_path", "ratio", "geomean", "conclusion", "verified_on"}
+ALLOWED_VERDICT = {"status", "kb_path", "ratio", "geomean", "evidence",
+                   "next_probe", "conclusion", "verified_on"}
 REQUIRED_VERDICT = {"status", "kb_path", "conclusion", "verified_on"}
 
 # E7：裸绝对耗时（0.887 ms / 1.29s / 83 us）——必须带分母或干脆不写
@@ -144,6 +146,64 @@ def _check_index_matches_cards(cards_dir, index_txt):
         if idx_bound and card_bound and idx_bound != card_bound:
             err("E19", "INDEX.md", "%s 上限口径不一致：INDEX=%r 卡片=%r"
                 % (cid, idx_bound, card_bound))
+
+
+def _check_evidence(cards_dir, repo):
+    """E25 实现。见上方注释里的分档规则。"""
+    import hashlib
+    streak = {}
+    state_p = repo / "Plugins/ops/op-atlas/.gaps-state.json"
+    if state_p.is_file():
+        try:
+            streak = json.loads(state_p.read_text(encoding="utf-8")).get("streak", {})
+        except ValueError:
+            streak = {}
+    missing = []
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        cid = d.get("id") or p.stem
+        ev = lv.get("evidence")
+        if not ev:
+            n = int(streak.get(cid, 0))
+            missing.append(cid)
+            warns.append("[E25] %s: 有结论但没挂 evidence（missing_evidence，"
+                         "不进聚合）%s" % (p.stem,
+                                          "；连续 %d 批 → 应降级 draft" % n if n >= 2 else ""))
+            continue
+        if not isinstance(ev, list):
+            err("E25", p.name, "evidence 必须是列表")
+            continue
+        for i, e in enumerate(ev):
+            if not isinstance(e, dict):
+                err("E25", p.name, "evidence[%d] 必须是 mapping" % i)
+                continue
+            extra = set(e) - {"path", "sha256", "verified_on"}
+            if extra:
+                err("E25", p.name, "evidence[%d] 未知字段 %s" % (i, sorted(extra)))
+            path = repo / str(e.get("path") or "")
+            want = str(e.get("sha256") or "")
+            if not path.is_file():
+                err("E25", p.name, "evidence 指向不存在的文件 %s（path 相对仓库根）"
+                    % e.get("path"))
+                continue
+            if not want:
+                err("E25", p.name, "evidence 缺 sha256（没有指纹就无法发现数字漂移）")
+                continue
+            got = hashlib.sha256(path.read_bytes()).hexdigest()
+            if got != want:
+                err("E25", p.name,
+                    "evidence 哈希不符：%s 记录 %s… 实际 %s…（results 被改过而卡片没更新）"
+                    % (path.name, want[:10], got[:10]))
+            if not e.get("verified_on"):
+                err("E25", p.name, "evidence 缺 verified_on")
+    if missing:
+        print("[E25] %d 张卡缺 evidence（warning，不进聚合）：%s"
+              % (len(missing), ", ".join(sorted(missing))), file=sys.stderr)
 
 
 def _peak_constants(repo):
@@ -638,6 +698,17 @@ def validate(atlas, repo):
         if not (cards_dir / ("%s.yaml" % m)).is_file():
             err("E1", "INDEX.md", "指向不存在的卡 %s" % m)
 
+    # ---- E25 证据指纹：measured/tuned 卡的数字必须能追到可复跑的文件
+    # 这是「分母漂移」的同族问题：数字写在卡片与 results 两处，只有一处对。
+    # 已经栽过两次（540 无来源、49.8 当峰值）。这里用 sha256 把两处钉在一起。
+    #
+    # 分档（业主 2026-11-23 裁决）：
+    #   hash_mismatch  → error（真漂移，必须修，不许降级）
+    #   missing        → warning + 不进聚合；连续 ≥2 批则应由 GAPS 判降级
+    # 不立刻对 missing 报 error 的理由：14 张卡本来就没有可挂的证据文件，
+    # 强制 error 只会逼人回去造一个假 results 骗门禁 —— 与「不为凑数造假」冲突。
+    _check_evidence(cards_dir, repo)
+
     # ---- E21 顶层 status 与 last_verdict.status 不许互相矛盾
     # 两者语义不同（顶层是「这个算子推到哪一步」，last_verdict 是「上次结论的性质」），
     # 但下面两种组合是明确矛盾：
@@ -688,6 +759,24 @@ def validate(atlas, repo):
             err("E23", c.name,
                 "ratio.vs 引用了「峰值」但没标口径（nominal/achievable/impl_measured）"
                 "——三种口径的达成率不可互比，读者也无从判断该不该信")
+
+    # ---- E24b ratio_other 是逃生口，不是常驻地
+    # 若它涨上去，说明 kind 分类没收敛（有东西本该判成 speedup/utilization/throughput
+    # 却被塞进「其它」）。超过 5 条就提醒复核分类，而不是继续往兜底里丢。
+    n_other = 0
+    for c in cards:
+        data, problem = _load_yaml(c)
+        if problem or not isinstance(data, dict):
+            continue
+        lv = data.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        if (lv.get("ratio") or {}).get("kind") == "ratio_other":
+            n_other += 1
+    if n_other > RATIO_OTHER_LIMIT:
+        warns.append("[E24] ratio_other 已 %d 条（上限 %d）：它是逃生口不是常驻地，"
+                     "涨上去说明 kind 分类没收敛，请复核这几条是否本该判成 "
+                     "speedup/utilization/throughput" % (n_other, RATIO_OTHER_LIMIT))
 
     # ---- E19 INDEX 表里的状态/家族/上限必须与卡片一致
     # 由来：13 张卡已 promoted 到 measured，INDEX 里还写着 draft。

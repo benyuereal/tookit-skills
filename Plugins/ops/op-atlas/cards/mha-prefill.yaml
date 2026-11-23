@@ -66,6 +66,10 @@ last_verdict:
       note: S=1024/2048/4096 分别为 0.31/0.47/0.57；GQA 把 KV 读砍 4× 只快 3.6%，瓶颈在算力侧非访存侧
   conclusion: flash_attn causal prefill 达实测峰值的 0.62（S=8192）；瓶颈在算力侧，不在 KV 读
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/004-mha-prefill-ceiling/results/mha-prefill.json
+    sha256: d5b9715b4ed57eef649486e8b980df3663f3a3bbaa6f476e2cd1a27d44f0fd5e
+    verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 调 split-KV 的切分数

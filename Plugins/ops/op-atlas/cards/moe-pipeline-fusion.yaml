@@ -67,6 +67,10 @@ last_verdict:
       note: engine 级：含 permute+quant 的整链，非单 kernel
   conclusion: M/exp<32 用部分融合，>64 用全拆分；全融合不可用
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage0-32.json
+    sha256: fb5e1a1e3e5b4cfce33e0196f3c6879510a6b45287ea59221e355582e57776e6
+    verified_on: '2026-11-23'
 surfaces:
 - fusion-boundary
 - layout-pack

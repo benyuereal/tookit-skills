@@ -91,6 +91,10 @@ last_verdict:
     - M=4096
     coverage: 3/3
     gate: true
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/results/gemm-crossover.json
+    sha256: 5dbd0de69978f49ee4487a54f50c2e59f7f293de3c4d2de4d28d16e9084ad3ca
+    verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择

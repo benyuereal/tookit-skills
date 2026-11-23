@@ -62,6 +62,10 @@ last_verdict:
       note: E=32 masked 形态 mode=1000；与 case 002 的 stage1 数据一致（80.4）
   conclusion: grouped BF16 GEMM 达 80 TFLOPS，与 case 002 一致；达成率为实测峰值的 0.26
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage0-32.json
+    sha256: fb5e1a1e3e5b4cfce33e0196f3c6879510a6b45287ea59221e355582e57776e6
+    verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 换 grouped 路径入口

@@ -37,13 +37,21 @@ REPO = Path(__file__).resolve().parents[1]
 CARDS = REPO / "Plugins/ops/op-atlas/cards"
 
 
-def _load_cards(cards_dir=CARDS):
+def _load_cards(cards_dir=CARDS, include_missing_evidence=False):
+    """读卡。**缺 evidence 的卡默认不进聚合**（业主 2026-11-23 裁决）。
+
+    理由：聚合的产出是「哪张卡优化得最好」这种结论性排序。
+    一张追不到证据的数字混进来，排序就是不可信的。
+    要用全部数据看趋势时显式传 include_missing_evidence=True。
+    """
     import yaml
     out = []
     for p in sorted(Path(cards_dir).glob("*.yaml")):
         d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
         lv = d.get("last_verdict") or {}
         if lv.get("status") not in ("measured", "tuned"):
+            continue
+        if not include_missing_evidence and not lv.get("evidence"):
             continue
         r = lv.get("ratio") or {}
         out.append({
@@ -211,13 +219,17 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--cards", default=str(CARDS))
+    ap.add_argument("--include-missing-evidence", action="store_true",
+                    dest="include_missing",
+                    help="把缺 evidence 的卡也算进来（默认排除，见 _load_cards 注释）")
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
     global _ALL
-    _ALL = _load_cards(a.cards)
+    _ALL = _load_cards(a.cards, include_missing_evidence=a.include_missing)
     if not _ALL:
-        print("没有 measured/tuned 的卡", file=sys.stderr)
+        print("没有可聚合的卡（缺 evidence 的已排除；"
+              "用 --include-missing-evidence 看全量）", file=sys.stderr)
         return 2
     agg = aggregate(_ALL)
     if a.json:

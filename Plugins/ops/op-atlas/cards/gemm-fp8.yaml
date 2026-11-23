@@ -130,6 +130,10 @@ last_verdict:
       note: 六个形状 47.8~49.7 TF 收敛；同库 fp8/bf16=1.98× 确认 2:1 双速率；aiter bf16 也只有 24.1 TF（nominal 的 8.6%），说明是这一族实现整体低效
   conclusion: aiter fp8 达 49.8 TF，仅为 nominal 560 TF 的 0.089；约 11 倍空间
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/results/fp8-gemm.json
+    sha256: 586615d5d837affac9aa6f9a7c4be29fbacf9afdceb1cb3a00a9fe6183e17f0f
+    verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
   what: 换掉 aiter opus 这一族实现

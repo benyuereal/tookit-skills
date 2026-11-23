@@ -66,6 +66,10 @@ last_verdict:
       note: 0.77~1.06× 覆盖 B=1..32 L=8192..32768；<1 是两次测量的 launch 路径差异，方向明确
   conclusion: 耗时约等于空 kernel（0.79×），已无优化空间；比 torch.topk 快 3~5×
   verified_on: '2026-11-23'
+  evidence:
+  - path: Plugins/ops/skills/op-optimize/cases/009-topk-block-index/results/topk-block-index.json
+    sha256: c59dcdcdceaf50317f2bfbebf2aa32ec27aa268766cd48a174d96c849f637735
+    verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 切 fused topk 变换变体
