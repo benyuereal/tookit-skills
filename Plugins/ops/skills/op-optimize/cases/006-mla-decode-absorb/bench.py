@@ -155,6 +155,34 @@ def main(argv=None):
         torch.cuda.empty_cache()
     rec["sweep_batch"] = rows2
 
+    # ---- 轮2b：固定总 KV，拆成不同 batch —— 判「摊销下降」是真降本还是假象
+    # 上一轮我只看「每序列摊销 87.5→16.6」就写下「固定开销靠 batch 摊」，
+    # 但那是把「摊销值下降」当成了「总代价下降」。总量对照一测就露馅。
+    print("== 轮2b 固定总 KV=8192，拆不同 batch ==")
+    TOT = 8192
+    PB = 64
+    rows2b = []
+    for B2 in (1, 2, 4, 8, 16):
+        KV2 = TOT // B2
+        if KV2 % PB:            # page 边界不齐会改变读放大，跳过不测
+            continue
+        kc, bt, sl, nb = make_kv(torch, B2, KV2, DQK)
+        q = torch.randn(B2, 1, H, DQK, dtype=torch.bfloat16, device="cuda")
+        meta = flash_mla.get_mla_metadata()[0]
+        ms, _ = bench(lambda: flash_mla.flash_mla_with_kvcache(q, kc, bt, sl, DV, meta))
+        rows2b.append({"B": B2, "KV": KV2, "total_tokens": TOT, "ms": round(ms, 4),
+                       "per_seq_us": round(ms * 1000 / B2, 1)})
+        print("  B=%3d KV=%5d: %8.4f ms  每序列 %6.1f µs" % (B2, KV2, ms, ms * 1000 / B2))
+        del kc, q, bt, sl
+        torch.cuda.empty_cache()
+    if len(rows2b) >= 2:
+        lo = min(r["ms"] for r in rows2b)
+        hi = max(r["ms"] for r in rows2b)
+        print("  ⇒ 总耗时 %.4f~%.4f ms（%.0f%% 波动）——work 总量相同，总代价没降"
+              % (lo, hi, (hi / lo - 1) * 100))
+        print("     每序列摊销变小 ≠ 固定开销被摊薄；真实量纲是 total_kv_tokens")
+    rec["fixed_total_sweep"] = rows2b
+
     # ---- 轮3：同字节纯 copy 对照
     # ⚠️ 显式写死 B=8：轮2 的循环变量 B 结束时是 32，直接复用会让
     #    「字节数按 B=32 算、耗时却用 B=8 的」——分子分母口径不一致，

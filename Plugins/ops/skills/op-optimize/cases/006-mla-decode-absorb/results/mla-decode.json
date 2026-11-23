@@ -1,67 +1,104 @@
 {
   "device": "BW1100",
-  "bw_stream_gbs": 1584,
+  "bw_stream_gbs": 1626,
   "method": "CUDA event median of 9, warmup 4",
   "sweep_kv": [
     {
       "KV": 2048,
       "B": 8,
-      "ms": 0.0963,
-      "mad_ms": 0.0005,
-      "kv_gbs": 196,
-      "of_bw_peak": 0.124
+      "ms": 0.0909,
+      "mad_ms": 0.0006,
+      "kv_gbs": 208,
+      "of_bw_peak": 0.128
     },
     {
       "KV": 8192,
       "B": 8,
-      "ms": 0.1856,
-      "mad_ms": 0.0005,
-      "kv_gbs": 407,
-      "of_bw_peak": 0.257
+      "ms": 0.1792,
+      "mad_ms": 0.0008,
+      "kv_gbs": 421,
+      "of_bw_peak": 0.259
     },
     {
       "KV": 16384,
       "B": 8,
-      "ms": 0.3059,
-      "mad_ms": 0.001,
-      "kv_gbs": 494,
+      "ms": 0.2981,
+      "mad_ms": 0.0003,
+      "kv_gbs": 507,
       "of_bw_peak": 0.312
     },
     {
       "KV": 32768,
       "B": 8,
-      "ms": 0.543,
-      "mad_ms": 0.0011,
-      "kv_gbs": 556,
-      "of_bw_peak": 0.351
+      "ms": 0.539,
+      "mad_ms": 0.0029,
+      "kv_gbs": 560,
+      "of_bw_peak": 0.345
     }
   ],
   "sweep_batch": [
     {
       "B": 1,
-      "ms": 0.0875,
-      "kv_gbs": 108,
-      "of_bw_peak": 0.068,
-      "per_seq_us": 87.5
+      "ms": 0.08,
+      "kv_gbs": 118,
+      "of_bw_peak": 0.073,
+      "per_seq_us": 80.0
     },
     {
       "B": 8,
-      "ms": 0.1856,
-      "kv_gbs": 407,
-      "of_bw_peak": 0.257,
-      "per_seq_us": 23.2
+      "ms": 0.1792,
+      "kv_gbs": 421,
+      "of_bw_peak": 0.259,
+      "per_seq_us": 22.4
     },
     {
       "B": 32,
-      "ms": 0.5326,
-      "kv_gbs": 567,
-      "of_bw_peak": 0.358,
-      "per_seq_us": 16.6
+      "ms": 0.5258,
+      "kv_gbs": 574,
+      "of_bw_peak": 0.353,
+      "per_seq_us": 16.4
+    }
+  ],
+  "fixed_total_sweep": [
+    {
+      "B": 1,
+      "KV": 8192,
+      "total_tokens": 8192,
+      "ms": 0.0805,
+      "per_seq_us": 80.5
+    },
+    {
+      "B": 2,
+      "KV": 4096,
+      "total_tokens": 8192,
+      "ms": 0.0765,
+      "per_seq_us": 38.2
+    },
+    {
+      "B": 4,
+      "KV": 2048,
+      "total_tokens": 8192,
+      "ms": 0.075,
+      "per_seq_us": 18.8
+    },
+    {
+      "B": 8,
+      "KV": 1024,
+      "total_tokens": 8192,
+      "ms": 0.0766,
+      "per_seq_us": 9.6
+    },
+    {
+      "B": 16,
+      "KV": 512,
+      "total_tokens": 8192,
+      "ms": 0.0798,
+      "per_seq_us": 5.0
     }
   ],
   "copy_control": {
-    "ms": 0.123,
-    "gbs_rw": 1227,
-    "mla_ms": 0.1856
+    "ms": 0.1222,
+    "gbs_rw": 1235,
+    "mla_ms": 0.1792
   }
 }

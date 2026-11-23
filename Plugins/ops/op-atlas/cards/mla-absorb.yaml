@@ -66,9 +66,9 @@ last_verdict:
   verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
-  what: 调 num_splits 切分序列维
-  how: flash_mla_with_kvcache(..., num_splits=tensor) 显式设值，B=1 时扫 1/2/4
-  requires: flash_mla 版本支持 num_splits（当前签名已支持，仅 BF16 sparse decode 生效）
+  what: dense decode 的 num_splits 不可覆盖
+  how: flash_mla 只为 BF16 sparse decode 支持 num_splits 覆盖；dense 路径传 num_splits 会报 "only supported by BF16 sparse decode"。dense 想调并行度只能改 sched_meta 内部策略或换实现
+  requires: 若走稀疏 decode（indices 非空）才可用 num_splits=1/2/4
 surfaces:
 - layout-pack
 - occupancy
