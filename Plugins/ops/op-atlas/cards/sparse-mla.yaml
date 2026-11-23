@@ -86,7 +86,7 @@ last_verdict:
   kb_path: ~/.config/dcu-toolkit/kb/op-opt/sparse-mla-20261027.md
   ratio:
     value: 0.94
-    vs: 流式峰值（mem-only 变体达成率）
+    vs: achievable 流式峰值（mem-only 变体达成率）
     scope:
       cards: 1
       in_len: ctx 32k-320k

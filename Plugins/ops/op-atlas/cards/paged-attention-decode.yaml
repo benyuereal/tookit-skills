@@ -74,7 +74,7 @@ last_verdict:
   kb_path: Plugins/ops/skills/op-optimize/cases/008-paged-decode-ceiling/README.md
   ratio:
     value: 0.03
-    vs: 流式只读峰值带宽的达成率（B=32 KV=8192 D=128，连续 KV）
+    vs: achievable 流式只读峰值带宽的达成率（B=32 KV=8192 D=128，连续 KV）
     scope:
       cards: 1
       in_len: KV=8192

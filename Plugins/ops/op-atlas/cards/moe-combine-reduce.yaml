@@ -54,7 +54,7 @@ last_verdict:
   kb_path: null
   ratio:
     value: 780
-    vs: moe_sum 带宽 GB/s（相对流式峰值 1724 为 0.45）
+    vs: moe_sum 带宽 GB/s（相对 achievable 流式峰值 1724 为 0.45）
     scope:
       cards: 1
       in_len: M=8192 K=4

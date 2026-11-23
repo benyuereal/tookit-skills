@@ -68,7 +68,7 @@ last_verdict:
   kb_path: null
   ratio:
     value: 0.888
-    vs: 峰值带宽（仅 Marlin GEMM 分量）
+    vs: achievable 峰值带宽（仅 Marlin GEMM 分量）
     scope:
       cards: 1
       in_len: decode-m32

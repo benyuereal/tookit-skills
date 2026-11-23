@@ -617,6 +617,31 @@ def validate(atlas, repo):
             err("E21", c.name,
                 "顶层 status=%r 但 last_verdict.status=none（没有结论的卡不能标 measured）" % top)
 
+    # ---- E23 引用「峰值」做分母必须标明口径（nominal/achievable/impl_measured）
+    # 由来：2026-11-23 一天之内两处分母错（185 反推、540 无来源、310 单轮采样、
+    # peak/steady 混用）。口径不写清，读者无法判断「达成率」该不该信，
+    # 也分不清「离硬件上限多远」与「这条实现多快」。
+    for c in cards:
+        data, problem = _load_yaml(c)
+        if problem or not isinstance(data, dict):
+            continue
+        lv = data.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        ratio = lv.get("ratio") or {}
+        vs = str(ratio.get("vs") or "")
+        if not re.search(r"峰值|peak", vs, re.I):
+            continue
+        note = ""
+        sc = ratio.get("scope")
+        if isinstance(sc, dict):
+            note = str(sc.get("note") or "")
+        blob = vs + " " + note
+        if not re.search(r"nominal|achievable|impl_measured|实测|标称", blob):
+            err("E23", c.name,
+                "ratio.vs 引用了「峰值」但没标口径（nominal/achievable/impl_measured）"
+                "——三种口径的达成率不可互比，读者也无从判断该不该信")
+
     # ---- E19 INDEX 表里的状态/家族/上限必须与卡片一致
     # 由来：13 张卡已 promoted 到 measured，INDEX 里还写着 draft。
     # 「一个事实在多处登记、只有一处对」正是分母用错那类错误的温床。
