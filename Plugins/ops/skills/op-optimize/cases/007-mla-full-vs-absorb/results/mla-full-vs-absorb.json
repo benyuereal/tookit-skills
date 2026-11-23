@@ -1,0 +1,58 @@
+{
+  "device": "BW1100",
+  "peak_bf16_tf": 310.4,
+  "method": "CUDA event median of 7, warmup 4",
+  "mla_full_sweep": [
+    {
+      "SQ": 1,
+      "ms": 0.0872,
+      "mad_ms": 0.0003,
+      "tflops": 6.9,
+      "of_peak": 0.022
+    },
+    {
+      "SQ": 64,
+      "ms": 1.0133,
+      "mad_ms": 0.001,
+      "tflops": 38.1,
+      "of_peak": 0.123
+    },
+    {
+      "SQ": 256,
+      "ms": 3.9003,
+      "mad_ms": 0.0014,
+      "tflops": 39.6,
+      "of_peak": 0.128
+    },
+    {
+      "SQ": 512,
+      "ms": 7.7498,
+      "mad_ms": 0.0016,
+      "tflops": 39.9,
+      "of_peak": 0.129
+    },
+    {
+      "SQ": 1024,
+      "ms": 15.4625,
+      "mad_ms": 0.0053,
+      "tflops": 40.0,
+      "of_peak": 0.129
+    }
+  ],
+  "equal_flops": {
+    "mla_ms": 7.7498,
+    "mla_tflops": 39.9,
+    "attn_ms": 1.7058,
+    "attn_tflops": 181.3,
+    "speedup_attn_over_mla": 4.54,
+    "sq_mla": 512,
+    "sq_attn": 2304,
+    "d_mla": 576,
+    "d_attn": 128
+  },
+  "absorb_equivalent": {
+    "per_call_ms": 0.0862,
+    "calls": 512,
+    "total_ms": 44.15
+  }
+}

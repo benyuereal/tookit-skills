@@ -2,7 +2,7 @@ id: mla-full
 title: MLA 非吸收（完整 K/V）
 family: attention
 math: out = softmax(q*W_uk*c_kv^T)*W_uv*c_kv；不预先吸收
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -12,14 +12,14 @@ impls:
   tier: primary
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
-  - 长上下文 prefill
-  - 需要完整注意力权重
+  - 需要完整注意力权重的场景
   not_for:
-  - decode 小 M（吸收式更省）
+  - 追求吞吐的 prefill（等 FLOPs 下比 flash_attn 慢 4.54×）
   pros:
   - 精度无损
   cons:
-  - 显存占用高
+  - q_len>=64 后稳定在 0.13 of peak，不随规模改善
+  - 根因未测定（需 PMC）
   source: references/libraries.md
   import_path: flash_mla.get_mla_metadata
   signature: get_mla_metadata(cache_seqlens,num_heads_per_rank,head_dim)
@@ -42,20 +42,28 @@ impls:
   signature: '@tilelang.jit'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 ceiling:
-  kind: missing
-  ref: null
+  kind: roofline_model
+  ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: compute
-  note: 长上下文口径；与吸收式是两种形态，结论不可互换
+  note: prefill 形态 q_len>1 才受算力约束；q_len=1 时退化为 memory-bound，结论不可互换
 shapes:
 - decode-m1
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/007-mla-full-vs-absorb/README.md
+  ratio:
+    value: 0.13
+    vs: 本机实测 bf16 峰值 310 TF 的达成率（q_len>=64，KV=8192）
+    scope:
+      cards: 1
+      in_len: q_len=512 KV=8192
+      out_len: H=32 d_qk=576 d_v=512
+      warmup: hot
+      note: 等 FLOPs 下 flash_attn 快 4.54×（181.3 vs 39.9 TF，均为 309 G FLOPs）；q_len>=64 后不随规模改善
+  conclusion: MLA 非吸收稳定在峰值的 0.13；等 FLOPs 下 flash_attn 快 4.54×
+  verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 调 MLA 的 tile 调度元数据

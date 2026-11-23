@@ -34,7 +34,7 @@
 | [`mha-prefill`](cards/mha-prefill.yaml) | attention | measured | flash-attn | compute | flash_attn causal prefill 达实测峰值的 0… |
 | [`mhc-fused`](cards/mhc-fused.yaml) | linear-attn | draft | mhc-kernels | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`mla-absorb`](cards/mla-absorb.yaml) | attention | measured | flash-mla | bandwidth | MLA decode 达峰值 0.35（KV=32768/B=8）；… |
-| [`mla-full`](cards/mla-full.yaml) | attention | draft | flash-mla | compute | 无实测：索引卡，实现层待按证据推进 |
+| [`mla-full`](cards/mla-full.yaml) | attention | measured | flash-mla | compute | MLA 非吸收稳定在峰值的 0.13；等 FLOPs 下 flash… |
 | [`mla-kv-cache-layout`](cards/mla-kv-cache-layout.yaml) | kv | draft | flash-mla | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`mla-kv-cache`](cards/mla-kv-cache.yaml) | kv | draft | flash-mla | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`mlp-gelu-geglu`](cards/mlp-gelu-geglu.yaml) | activation | measured | lightop | compute | GNSilu 是 GroupNorm+SiLU 复合算子，不能当纯激… |
