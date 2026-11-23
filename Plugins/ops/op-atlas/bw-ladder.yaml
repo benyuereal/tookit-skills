@@ -1,9 +1,3 @@
-# 带宽阶梯（bw-ladder）—— 由 scripts/bw_calibrate.py 生成，勿手改。
-#
-# 跳层就是这个文件存在的原因：1724 被直接当「本卡地板」断言，造成五次分母错。
-# 判「还能优化多少」必须走 ②→③→④（由 scripts/floor.py 算），不许跳。
-#
-# confidence: high=多 kernel 互证 / low=单样本 / none=未标定
 version: 1
 date: '2026-11-23'
 sclk_mhz_idle: 1350
@@ -81,3 +75,28 @@ layers:
     confidence: none
   4_card_floor:
     note: '**不在这里**——④ 由 scripts/floor.py 用「流量 ÷ ③」现算，不许预先断言一个数。1724 的灾难就是跳层直接断言 ④。'
+  3_row_reduction:
+    reference_gbs: 1360
+    confidence: medium
+    samples:
+    - impl: lightop
+      gbs: 1374
+      ratio_vs_copy: 0.81
+    - impl: tilelang
+      gbs: 1345
+      ratio_vs_copy: 0.79
+    - impl: triton
+      gbs: 1271
+      ratio_vs_copy: 0.75
+    - impl: triton-softmax
+      gbs: 1039
+      ratio_vs_copy: 0.61
+    method:
+      script: scripts/bw_calibrate.py
+      cmd: python3 -I scripts/bw_calibrate.py
+      read: 取 row_reduction 行，达到 reference 的 85% 以上才算贴地板
+    penalty_ratio: 0.79
+    penalty_note: 归约惩罚 = 同形状归约算子 / 纯 copy 的带宽比。实测（2026-11-23，triton 手写，2GB，扫参最优）：rmsnorm 三种实现 0.75~0.81（lightop
+      0.81 / tilelang 0.79 / triton 0.75）；softmax 0.61（含 exp 开销，不可直接与 rmsnorm 比）。**取 0.79 作 rmsnorm 类的地板折扣**；floor.py
+      对归约类应乘此系数，否则会算出 +51% 这种成熟实现不可能达到的假空间。
+    caveat: 0.79 是三种实现的**观测区间中位**，不是物理定律。样本只有 rmsnorm 一族（3 个实现）+ softmax（1 个），换算子类型（如 cross-row reduction）需重新标定。

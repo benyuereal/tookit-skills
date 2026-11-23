@@ -116,6 +116,23 @@ def gate(remaining):
     return "at_floor", "at_floor，别再折腾"
 
 
+def reduction_penalty(ladder, flag):
+    """归约类算子的带宽折扣。实测 rmsnorm 三实现 0.75~0.81，取 0.79。
+
+    不折扣会算出 +51% 这种成熟实现不可能达到的假空间——
+    2026-11-23 rmsnorm-fused 实测：我们 242.2 / lightop 197.4 / tilelang 204.5，
+    按纯 copy 地板 159.8 us 算分别是 +51.6% / +23.5% / +28.0%。
+    lightop 是厂商实现，不可能离地板 23%，说明纯 copy 档对归约算子取高了。
+    """
+    if not flag:
+        return 1.0, ""
+    node = (ladder.get("layers") or {}).get("3_row_reduction") or {}
+    r = node.get("penalty_ratio")
+    if not r:
+        return 1.0, "（归约惩罚未标定，地板可能偏高）"
+    return float(r), "；归约折扣 %.2f（bw-ladder 3_row_reduction）" % float(r)
+
+
 def memory_floor(bytes_mb, pattern, ladder):
     peak, note = ladder_value(ladder, pattern)
     if not peak:
@@ -136,8 +153,11 @@ def analyze(spec, ladder):
     floors = []          # (时间 µs, 名称, 依据)
     if spec.get("bytes_mb") and spec.get("pattern"):
         f, peak, why = memory_floor(spec["bytes_mb"], spec["pattern"], ladder)
-        if f is None:
+        if f is None:                       # 模式未标定：先返回错误，别再往下算
             return {"error": why}
+        pen, pen_why = reduction_penalty(ladder, spec.get("is_reduction"))
+        f = f / pen                         # 归约类地板按折扣放宽（时间变长 = 上限降低）
+        why += pen_why
         floors.append((f, "memory", why, peak))
     if spec.get("flops"):
         peak_tf = spec.get("peak_tf") or load_peak(spec.get("precision") or "bf16")
@@ -150,10 +170,7 @@ def analyze(spec, ladder):
     t_floor, bind_kind, bind_why, bind_den = bind
     remaining = (t / t_floor - 1.0) if t else None
     g, advice = gate(remaining)
-    if g == "headroom" and bind_kind == "memory" and \
-            spec.get("pattern") in ("rw_1to1", "rw_2to1"):
-        advice += "（注意：若该算子含行内归约，这个 remaining 只是上界——" \
-                  "归约惩罚尚未标定，见 bw-ladder 的 3_reduction_penalty）"
+
     if len(floors) == 2:
         other = min(floors, key=lambda x: x[0])
         note_other = "另一条腿 %s 地板 %.1f us（%.2fx 更松）" % (
@@ -196,7 +213,8 @@ def card_spec(card_id):
     if not isinstance(fi, dict):
         return None, "缺 floor_inputs（要有 bytes_mb/pattern 或 flops，以及 t_actual_us/basis）"
     spec = {k: fi.get(k) for k in
-            ("bytes_mb", "pattern", "flops", "peak_tf", "precision", "t_actual_us")}
+            ("bytes_mb", "pattern", "flops", "peak_tf", "precision",
+             "t_actual_us", "is_reduction")}
     if not fi.get("basis"):
         return None, "floor_inputs 缺 basis —— 只有数字没有依据，拒算"
     if spec["t_actual_us"] is None:

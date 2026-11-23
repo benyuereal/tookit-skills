@@ -150,5 +150,4 @@ floor_inputs:
   pattern: rw_1to1
   t_actual_us: 242.2
   basis: 2读2写=268.4MB（M=8192 H=4096 bf16，实测确认与 lightop 等语义）；t_actual 242.2 µs 是 64 buffer 轮换 40 次中位（2026-11-23）
-  caveat: '**1680 GB/s（1:1 纯 copy）对带行内归约的算子取高了。**按此地板：我们 242.2 µs 有 +51.6% 空间、lightop 197.4 µs 有 +23.5%、tilelang 204.5 µs 有 +28.0%。成熟实现不可能离地板 23%，说明归约本身有结构性代价，纯 copy 的 1:1 档不适用。实际上限更接近 tilelang/lightop
-    的实测区间（197~213 µs），即剩余空间约 5~10%，不是 51%。归约惩罚系数尚未标定（bw-ladder 的 3_row_reduction 仍是 reference 不是 boundary）。'
+  is_reduction: true
