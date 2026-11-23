@@ -315,6 +315,83 @@ def _check_gemm_regime(cards_dir, repo):
                          "必须写清分母是 1848（纯读）还是 1749（1:1）以及为什么" % p.name)
 
 
+def _check_pros_cons_substance(cards_dir, repo):
+    """E30：pros/cons 每条必须有信息量（数字或具体标识）。
+
+    判据来自 2026-11-23 的代码 review：「多一层」「不如专用实现快」这类
+    去掉后不损失任何信息，属于 AI 常见空话。
+
+    允许的写法：
+      - 带数字：实测 49.8 TF / 慢 5.3 倍 / kernelId 0/1/2 差 40 倍
+      - 带具体 API 或字段名：torch._scaled_mm / block-scale / undef
+    不允许：纯形容词短语。
+    """
+    # 纯形容词短语 —— 去掉后不损失任何信息。
+    # 用白名单而非关键词判据：「查表未命中会静默降级」没有数字却是真事实，
+    # 关键词判据会把它误判成空话；白名单只抓真正无信息的那些。
+    VAGUE = {
+        "多一层", "少一层", "少一层封装", "多一层封装", "不如专用实现快",
+        "实现成熟", "源码可读可改", "版本较新", "自带调优", "可读可改",
+        "布局税", "布局转换税", "表达力强", "专用实现", "灵活",
+        "性能更好", "更快", "更稳定", "更通用", "封装好", "易用",
+        "完全可控，但需自行维护",
+    }
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        bad = []
+        for v in d.get("variants") or []:
+            if not isinstance(v, dict):
+                continue
+            for k in ("pros", "cons"):
+                for item in v.get(k) or []:
+                    if str(item).strip() in VAGUE:
+                        bad.append("%s/%s: %r" % (v.get("repo"), k, str(item).strip()))
+        if bad:
+            warns.append("[E30] %s: pros/cons 是空话（去掉不损失信息）：%s"
+                         % (p.name, "; ".join(bad[:3])))
+
+
+def _check_impl_to_ceiling(cards_dir, repo):
+    """E29：impl_measured 的达成率不许被外推成「硬件上限 / 还有 N 倍空间」。
+
+    2026-11-23 事故（本仓库第四次同类）：
+      aiter.gemm_a8w8_opus 49.8 TF 是**一条实现**的数，
+      被写成「本机 fp8 只能到 49.8 ⇒ 11 倍空间」。
+      实际 torch._scaled_mm 498.5 TF（89%），空间只有 1.12 倍。
+      而 constants.yaml 里早就写了「49.8 只代表 opus 实现族」——读了但没遵守。
+
+    判据：卡片 conclusion / ratio.vs 里若出现「本机 X 只能到」/「N 倍空间」
+    且 baseline_count <= 1，判 error 要求先补第二条实现。
+    """
+    import re
+    BOAST = re.compile(r"(本机.{0,8}只能到|还有\s*\d+\s*倍|约?\s*\d+\s*倍空间)")
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        blob = " ".join(str(lv.get(k) or "") for k in ("conclusion",))
+        blob += " " + str((lv.get("ratio") or {}).get("vs") or "")
+        if not BOAST.search(blob):
+            continue
+        n = lv.get("baseline_count")
+        try:
+            n = int(n) if n is not None else None
+        except (TypeError, ValueError):
+            n = None
+        if n is not None and n <= 1:
+            err("E29", p.name,
+                "结论里断言了「只能到 / N 倍空间」，但 baseline_count=%d —— "
+                "单实现的数不许外推为硬件上限；先补第二条独立实现再下结论" % n)
+        elif n is None:
+            warns.append("[E29] %s: 结论里有「只能到 / N 倍空间」但没写 baseline_count —— "
+                         "无法确认是否只测了一个实现" % p.name)
+
+
 def _check_baseline_count(cards_dir, repo):
     """E28c：能实跑且语义对齐的基线有几个。=1 时必须显式标 single_source。
 
@@ -1114,6 +1191,8 @@ def validate(atlas, repo):
     # 不是方法极限。**没有 falsifier 的「到顶」等于把工具限制记成物理规律。**
     _check_impl_roles(cards_dir, repo)
     _check_baseline_count(cards_dir, repo)
+    _check_impl_to_ceiling(cards_dir, repo)
+    _check_pros_cons_substance(cards_dir, repo)
     _check_gemm_regime(cards_dir, repo)
     _check_baseline_ref(cards_dir, repo)
     _check_depth_rules(cards_dir, repo)

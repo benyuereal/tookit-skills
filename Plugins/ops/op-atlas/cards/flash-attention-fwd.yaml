@@ -16,10 +16,10 @@ variants:
   not_for:
   - 需要自定义 mask 语义（改 fork 成本高）
   pros:
-  - 实现成熟，变体覆盖广
-  - 变体覆盖广
+  - 上游维护活跃，覆盖 MHA/GQA/变长/causal
+  - 覆盖 MHA/GQA/变长/causal 多种形态
   cons:
-  - 不同 gfx 路径不同
+  - 不同 gfx 走不同 kernel 路径
   source: references/libraries.md
   import_path: flash_attn.flash_attn_func
   signature: flash_attn_func(q,k,v,dropout_p=0.0,causal=False)
@@ -35,7 +35,7 @@ variants:
   not_for:
   - 要逼近手写极限
   pros:
-  - 源码可读可改，适合实验
+  - DSL 源码可读；改后需重新标定
   cons:
   - 先付布局转换税（3-4x 搬运指令）
   source: references/libraries.md

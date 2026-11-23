@@ -298,7 +298,7 @@ def main(argv=None):
         if rep["reason_hist"]:
             print("不可信原因：" + ", ".join("%s=%d" % kv for kv in rep["reason_hist"].items()))
         if rep["clock_missing"]:
-            print("⚠ %d 条记录缺 clock_mhz —— 缺时钟的测量不可跨次比较" % rep["clock_missing"])
+            print("caveat %d 条记录缺 clock_mhz —— 缺时钟的测量不可跨次比较" % rep["clock_missing"])
     return 0
 
 

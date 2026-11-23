@@ -160,7 +160,7 @@ def print_human(results, checks, consts_path, err=None):
             e = results[size].get(phase)
             if not e:
                 continue
-            flag = "" if e["stable"] else "  ⚠ 抖动 >5%（卡上可能有别的负载）"
+            flag = "" if e["stable"] else "  caveat 抖动 >5%（卡上可能有别的负载）"
             extra = ("（单边 %s GB/s）" % e["side_value"]
                      if phase == "copy" and "side_value" in e else "")
             print("    %-6s %8.1f GB/s  median=%.4f ms  MAD=%.4f ms%s%s"
@@ -170,9 +170,9 @@ def print_human(results, checks, consts_path, err=None):
     print("\n== 与 constants.yaml 对账（阈值 %.0f%%，%s）==" % (TOLERANCE_PCT, consts_path))
     for c in checks:
         if c["status"] == "skip":
-            print("  ⚠ %-18s %s" % (c["key"], c["note"]))
+            print("  caveat %-18s %s" % (c["key"], c["note"]))
             continue
-        mark = "⚠" if c["status"] == "warn" else "✅"
+        mark = "caveat" if c["status"] == "warn" else "passed"
         rel = "≠" if c["status"] == "warn" else "≈"
         print("  %s %-18s 手抄 %s GB/s %s 实测 %s GB/s（@%s MiB，偏差 %+.1f%%）"
               % (mark, c["key"], c["handwritten"], rel, c["probed"],

@@ -98,7 +98,7 @@ def main(argv=None):
         bw = calibrate_bandwidth(torch)
         print("  流式只读 : %6.0f GB/s   (%.4f ms)" % (bw["read_only_gbs"], bw["read_only_ms"]))
         print("  copy R+W : %6.0f GB/s   (%.4f ms)" % (bw["copy_gbs"], bw["copy_ms"]))
-        print("  ⚠ 小 buffer 会命中 L2 测出虚高（实测见过 4571 GB/s），这里用 1GB")
+        print("  caveat 小 buffer 会命中 L2 测出虚高（实测见过 4571 GB/s），这里用 1GB")
     else:
         bw = {"read_only_gbs": 1724.0, "copy_gbs": 1350.0}
 

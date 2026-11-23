@@ -19,7 +19,7 @@ variants:
   pros:
   - 厂商调优实现，boltops 里有 triton autotune 工具链
   cons:
-  - 未在本机实测达成率
+  - 本机未测达成率（仅 import 验证）
   source: references/libraries.md
   import_path: boltops.gemm.gemm_a16w16
   signature: gemm_a16w16(x, w, bias=None, dtype=None)
@@ -37,7 +37,7 @@ variants:
   pros:
   - opus 族，kernelId 可选 0/1/2
   cons:
-  - auto 选参未必最优
+  - kernelId=auto 未必选到最优解（实测 0/1/2 差 40 倍）
   source: references/libraries.md
   import_path: aiter.gemm_a16w16_opus
   signature: gemm_a16w16_opus(A,B,bias=None,dtype=torch.bfloat16,*,kernelId,splitK,out)
@@ -55,7 +55,7 @@ variants:
   pros:
   - persistent kernel，省 launch
   cons:
-  - 形状适配性未知
+  - 形状适配性未测（只验了 4096³ 一种）
   source: references/libraries.md
   import_path: boltops.gemm.matmul_persistent
   signature: matmul_persistent(a, b, bias=None)
@@ -89,7 +89,7 @@ variants:
   not_for:
   - 常规稠密 GEMM（用 torch.mm 更快，实测 8~10%）
   pros:
-  - 少一层封装，直接调库
+  - 直接调 torch.mm，无额外封装层
   cons:
   - gfx938 上 FP8 无方案
   source: references/libraries.md

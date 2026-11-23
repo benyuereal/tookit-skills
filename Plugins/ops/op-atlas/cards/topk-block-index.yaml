@@ -35,9 +35,9 @@ variants:
   not_for:
   - 大 K 时收益明显
   pros:
-  - 自带调优
+  - boltops 的 tools/*_triton_tune 可自动扫参
   cons:
-  - 版本较新
+  - 本机未测稳定性（只做过 import 验证）
   source: references/libraries.md
   import_path: boltops.mqa_logits.fp8_mqa_logits
   signature: fp8_mqa_logits(q,fused_kv_cache,weights,...)

@@ -138,8 +138,8 @@ python3 scripts/skill_eval.py --domain ops --dry-run
 
 | 级 | 测什么 | 判据 | 状态 |
 |---|---|---|---|
-| L0 | 会不会被拉起 | 首个 `Skill` 调用（`--repeat` 采样） | ✅ 已有 |
-| L1 | 拉起来后说得对不对 | `expect` 要点 + `forbid` 错话 | ✅ 已有（`--judge` 为可选加强） |
+| L0 | 会不会被拉起 | 首个 `Skill` 调用（`--repeat` 采样） | passed 已有 |
+| L1 | 拉起来后说得对不对 | `expect` 要点 + `forbid` 错话 | passed 已有（`--judge` 为可选加强） |
 | L2 | 能不能产出合格工件 | 产物过程序判定（`opverify.py` 等） | ⏸ 暂缓 |
 | L3 | 端到端真任务 | 上机跑 `opcheck.py` / bench | 人工，见 `docs/RELEASE-CHECKLIST.md` |
 

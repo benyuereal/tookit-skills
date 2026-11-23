@@ -17,7 +17,7 @@ variants:
   - decode 小 M（memory-bound，结论不可互换）
   - S=1024 以下（只有 0.31）
   pros:
-  - 实现成熟，变体覆盖广
+  - 上游维护活跃，覆盖 MHA/GQA/变长/causal
   cons:
   - tile 调度属库内部，再往上需改源码（未测定）
   source: references/libraries.md
@@ -35,7 +35,7 @@ variants:
   not_for:
   - 逼近极限
   pros:
-  - 源码可读可改，适合实验
+  - DSL 源码可读；改后需重新标定
   cons:
   - 先付布局转换税（3-4x 搬运指令）
   source: references/libraries.md

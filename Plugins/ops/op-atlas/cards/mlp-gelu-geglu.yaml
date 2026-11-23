@@ -35,7 +35,7 @@ variants:
   not_for:
   - 追求极限时不如专用实现
   pros:
-  - 无外部依赖，适合做基线对照
+  - 无外部依赖，适合当 correctness_only 对照
   cons:
   - 多一次 HBM 往返
   source: references/libraries.md

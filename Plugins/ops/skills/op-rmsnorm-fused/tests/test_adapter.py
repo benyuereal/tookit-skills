@@ -10,6 +10,12 @@ sys.path.insert(0, str(CARD))
 
 REQUIRED = ("build_inputs", "reference", "runner_kwargs", "get_runner", "run_isolated")
 
+# 当前确实没有 adapter 的变体。VARIANTS 里新增名字时必须同步这里，
+# 否则 test_all_declared_variants_resolvable 会红。
+# 2026-11-23 现状：ref-heavy / lightop-fused / fused-3pass-triton /
+# fused-3pass-tilelang 都已实现；torch-native 仍是空壳。
+UNIMPLEMENTED = {"torch-native"}
+
 
 class TestAdapterContract(unittest.TestCase):
     @classmethod
@@ -59,11 +65,33 @@ class TestAdapterContract(unittest.TestCase):
             self.assertTrue(bool((ref == got).all()), "ref-heavy 与 reference 不一致")
 
     def test_get_runner_refuses_without_backend(self):
+        """确实没有 adapter 的变体必须明确拒绝，而不是返回假实现。
+
+        2026-11-23 这条测试红了：它断言「除 ref-heavy 外全部抛 RuntimeError」，
+        但 lightop-fused / fused-3pass-tilelang 已经实现，不再抛。
+        改成「只对未实现的变体断言拒绝」——保留测试意图，不删测试。
+        """
         for name in self.c.VARIANTS:
-            if name == "ref-heavy":
+            if name not in UNIMPLEMENTED:
                 continue
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(RuntimeError, msg="%s 应拒绝" % name):
                 self.c.get_runner(name)
+
+    def test_all_declared_variants_resolvable(self):
+        """这才是真正该守的：声明的变体要么能返回 callable，要么在 UNIMPLEMENTED 白名单里。
+
+        白名单外抛 RuntimeError = adapter 与 VARIANTS 脱节（新增了名字但没实现，
+        或者实现坏了被异常吞掉）。两种都该红。
+        """
+        for name in self.c.VARIANTS:
+            try:
+                fn = self.c.get_runner(name)
+            except RuntimeError:
+                self.assertIn(name, UNIMPLEMENTED,
+                              "变体 %s 抛了 RuntimeError 但不在 UNIMPLEMENTED 里——"
+                              "要么补实现，要么加进白名单" % name)
+                continue
+            self.assertTrue(callable(fn), "%s 返回的不是 callable" % name)
 
     def test_get_runner_rejects_unknown_variant(self):
         with self.assertRaises(ValueError):

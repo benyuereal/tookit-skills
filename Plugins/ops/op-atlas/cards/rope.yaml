@@ -35,7 +35,7 @@ variants:
   not_for:
   - 常规形状（无特殊布局需求）
   pros:
-  - 完全可控，但需自行维护
+  - 源码在仓内可改，但需自行维护与重测
   cons:
   - aiter 有完整 RoPE 族（含与 qk-norm 融合的变体），不必自研
   source: references/libraries.md

@@ -16,10 +16,10 @@ variants:
   not_for:
   - 追求手写极限
   pros:
-  - 可读可改
-  - 块并行可表达
+  - DSL（tilelang.jit），需自写 kernel
+  - DSL 支持块并行（T.Kernel/T.Parallel），需自写
   cons:
-  - 布局转换税
+  - DSL 布局转换使每条 MMA 多 3~4 倍搬运指令
   source: references/libraries.md
   import_path: tilelang.jit
   signature: '@tilelang.jit'
@@ -35,9 +35,9 @@ variants:
   not_for:
   - 要逼近极限
   pros:
-  - 表达力强
+  - DSL（triton.jit），需自写 kernel
   cons:
-  - 非 dot 路径性能有限
+  - 非 dot 路径（elementwise/gather）不到 GEMM 的 1/3
   source: references/libraries.md
   import_path: triton.jit
   signature: '@triton.jit 装饰器'

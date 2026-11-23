@@ -35,7 +35,7 @@ variants:
   not_for:
   - 追求极限时
   pros:
-  - 无外部依赖，适合做基线对照
+  - 无外部依赖，适合当 correctness_only 对照
   cons:
   - 字节数多一次往返
   source: references/libraries.md

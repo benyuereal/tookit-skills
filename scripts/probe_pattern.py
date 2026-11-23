@@ -124,7 +124,7 @@ def _report(result):
           % tuple(result[k] for k in ("stride_bytes", "total_mib", "tile_rows", "threads")))
     print("  run_bytes | achieved GB/s | pct_of_linear")
     for r in result["records"]:
-        flag = "" if r.get("stable", True) else "  ⚠ 抖动 >5%"
+        flag = "" if r.get("stable", True) else "  caveat 抖动 >5%"
         print("  %9s | %13.1f | %5.1f%%%s" % (r["run_bytes"], r["achieved_gbs"],
                                               r["pct_of_linear"], flag))
     best = ceiling(result)

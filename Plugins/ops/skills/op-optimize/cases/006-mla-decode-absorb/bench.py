@@ -110,7 +110,7 @@ def main(argv=None):
     print("== 轮0 同进程流式带宽 == %.0f GB/s" % bw)
 
     H, DQK, DV = 32, 576, 512
-    # ⚠️ sched_meta 绑定形状（在首次调用时被填上 config.b），**不能跨形状复用**。
+    # caveat sched_meta 绑定形状（在首次调用时被填上 config.b），**不能跨形状复用**。
     # 复用会要么 assert 挂掉，要么静默走错调度（实测达成率从 0.29 掉到 0.11）。
     # 所以下面每个形状都重新取一次。
 
@@ -184,7 +184,7 @@ def main(argv=None):
     rec["fixed_total_sweep"] = rows2b
 
     # ---- 轮3：同字节纯 copy 对照
-    # ⚠️ 显式写死 B=8：轮2 的循环变量 B 结束时是 32，直接复用会让
+    # caveat 显式写死 B=8：轮2 的循环变量 B 结束时是 32，直接复用会让
     #    「字节数按 B=32 算、耗时却用 B=8 的」——分子分母口径不一致，
     #    算出 1666 GB/s 超过标定峰值 1605。第一次写就踩了。
     print("== 轮3 同字节纯 copy（KV=8192, B=8）==")
@@ -196,7 +196,7 @@ def main(argv=None):
     ms_c, _ = bench(lambda: dst.copy_(src))
     gbs_c = 2 * byts / (ms_c * 1e-3) / 1e9      # copy 是 R+W
     if gbs_c > BW_PEAK * 1.02:
-        print("  ⚠️ copy 的 R+W 口径 %.0f 超过只读峰值 %.0f — 只读峰值不能当 copy 分母"
+        print("  caveat copy 的 R+W 口径 %.0f 超过只读峰值 %.0f — 只读峰值不能当 copy 分母"
               % (gbs_c, BW_PEAK))
     main_ms = [r for r in rows if r["KV"] == KV][0]["ms"]
     print("  copy(R+W) %.4f ms  %.0f GB/s | MLA %.4f ms  %.0f GB/s | 比 %.2fx"

@@ -50,7 +50,7 @@ def _cu_count(device=None):
     except Exception:
         pass
     import sys
-    print("⚠ CU 数无法从设备读取，退回 %s = %d" % (CU_FALLBACK_SOURCE, CU_FALLBACK),
+    print("caveat CU 数无法从设备读取，退回 %s = %d" % (CU_FALLBACK_SOURCE, CU_FALLBACK),
           file=sys.stderr)
     return CU_FALLBACK
 
@@ -122,15 +122,15 @@ def verdict(r, measured_us=None):
     out.append("  %.1f GFLOP / 峰值 %.0f TF ⇒ 算力地板 %.1f µs"
                % (r["flops_tf_equiv"], r["peak_tf"], r["comp_us"]))
     if r["q_per_ktile"] == 1:
-        out.append("  ⚠ q_per_ktile=1 = 现成 decode 内核：只把 heads 并进 GEMM 的 N 维，"
+        out.append("  caveat q_per_ktile=1 = 现成 decode 内核：只把 heads 并进 GEMM 的 N 维，"
                    "query 之间完全不复用 K。")
         out.append("    把 next_n（或跨 query）并进 N 维可令 K 读量降到 1/N —— "
                    "这是**重构数据流**，不是调 tile 参数。")
     if r["out_mb"] > r["k_mb"]:
-        out.append("  ⚠ logits 输出(%.1f MB) **大于** K 读入(%.1f MB) ⇒ 不融合 topk 就是在搬运比输入更大的中间量"
+        out.append("  caveat logits 输出(%.1f MB) **大于** K 读入(%.1f MB) ⇒ 不融合 topk 就是在搬运比输入更大的中间量"
                    % (r["out_mb"], r["k_mb"]))
     if r["D"] <= 256:
-        out.append("  ⚠ 峰值 %.0f TF 是在 **K 很大** 的 dense GEMM 上标定的；本算子 K=D=%d 只有 %d 步，"
+        out.append("  caveat 峰值 %.0f TF 是在 **K 很大** 的 dense GEMM 上标定的；本算子 K=D=%d 只有 %d 步，"
                    "能否达到该峰值**未验证**——这是本模型最大的不确定项。"
                    % (r["peak_tf"], r["D"], -(-r["D"] // 32)))
         out.append("     要先做一个「同形状、只跑 QK、无 ReLU/无输出」的微基准，把该形状的实际 MMA 峰值钉住，"

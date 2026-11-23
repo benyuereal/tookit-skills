@@ -47,7 +47,15 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SKILLS = REPO / "Plugins/ops/skills"
-RESULTS = REPO / "Plugins/ops/skills/op-rmsnorm-fused/results"
+SKILLS = REPO / "Plugins/ops/skills"
+
+
+def default_results_dir(card):
+    """每个卡的结果落自己的 results/，不共用。
+
+    曾经硬编码到 op-rmsnorm-fused/results，跑 --card gemm-fp8 时结果写进了 rmsnorm 目录。
+    """
+    return SKILLS / card / "results"
 
 ROUNDS = 7
 # 池大小不是越大越好：每个 buffer 是 M*H*2 字节（prefill-8k 下 67 MB/个），
@@ -63,7 +71,8 @@ def sclk_mhz():
                              text=True, timeout=15).stdout
         v = [int(x) for x in re.findall(r"sclk clock level:\s*\d+\s*\((\d+)Mhz\)", out)]
         return max(v) if v else None
-    except Exception:                                            # noqa: BLE001
+    except (OSError, subprocess.SubprocessError):
+        # hy-smi 不存在或超时 —— 时钟读不到是缺数据，不是错误，由调用方判 unknown
         return None
 
 
@@ -72,7 +81,8 @@ def gpu_pids():
     try:
         out = subprocess.run(["hy-smi", "--showpids"], capture_output=True,
                              text=True, timeout=15).stdout
-    except Exception:                                            # noqa: BLE001
+    except (OSError, subprocess.SubprocessError):
+        # 同上：showpids 读不到由调用方决定是「空闲未知」还是「占用」
         return None
     if "No KFD PIDs" in out or "not running" in out:
         return []
@@ -195,11 +205,26 @@ def run_card(card, shape_name, bandwidth_bytes):
     # 取份数最多的那一组（通常是 2 份输出的等语义组）
     group = max(outs.values(), key=len) if outs else list(sem)
     runners = {}
+    skipped = {}
     for tag in group:
         try:
             runners[tag] = mod.get_runner(tag, **kw)
-        except Exception as e:                                   # noqa: BLE001
-            print("跳过 %s：%s" % (tag, str(e)[:70]), file=sys.stderr)
+        except (KeyError, ValueError) as e:
+            # 变体名没在 adapter 里注册 —— 预期内，记录后跳过。
+            # 本仓库所有 _common.py 的 get_runner 都用 ValueError 报「未知变体」，
+            # 不是 KeyError（曾只捕 LookupError，于是未注册被误判成 adapter bug）。
+            skipped[tag] = "未注册: %s" % str(e)[:90]
+        except SystemExit as e:
+            # op-sparse-mla 的 get_runner 用 SystemExit 表示「未知变体 / 无 runner」，
+            # 与 opcheck padding 的 no_runner 口径一致；同样是预期内，不得打断整轮。
+            skipped[tag] = "无 runner: %s" % str(e)[:90]
+        except Exception as e:
+            # 其他异常说明 adapter 本身有问题（导入失败/签名不符/构造报错）。
+            # 静默跳过会让「最快的那个实现刚好挂了」被当成「不存在」，排名表看不出缺口。
+            # 因此这里**不吞**：原样抛出并附上变体名，保留异常链。
+            raise RuntimeError(
+                "变体 %s 加载失败（不是未注册，是 adapter 或依赖的问题）: %s: %s"
+                % (tag, type(e).__name__, str(e)[:160])) from e
 
     t0 = time.time()
     res = rank(runners, inputs, __import__("torch"))
@@ -209,10 +234,12 @@ def run_card(card, shape_name, bandwidth_bytes):
         import torch as _t
         free_b, total_b = _t.cuda.mem_get_info()
         mem = {"free_gb": round(free_b / 2**30, 1), "total_gb": round(total_b / 2**30, 1)}
-    except Exception:                                            # noqa: BLE001
+    except (RuntimeError, OSError):
+        # 显存查询失败不影响排序结论，只影响记录
         mem = None
     payload = {
         "card": card, "shape": shape_name, "gpu_mem": mem,
+        "skipped": skipped,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "sclk_mhz": sclk_mhz(),
         "caliber": {"rounds": ROUNDS, "clones": CLONES,
@@ -259,20 +286,23 @@ def selftest():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="跨实现排序的唯一口径")
-    ap.add_argument("--card", default="op-rmsnorm-fused")
+    ap.add_argument("--card",
+                    help="卡目录名（Plugins/ops/skills/<card>；结果落该卡的 results/）")
     ap.add_argument("--shape", default="prefill-8k")
     ap.add_argument("--out", default=None)
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
+    if not a.card:
+        ap.error("--card 必填（结果落该卡的 results/；--selftest 除外）")
 
     pids = gpu_pids()
     if pids is None:
-        print("⚠ 读不到 hy-smi --showpids，无法确认卡是否空闲（继续，但请自行确认）",
+        print("caveat 读不到 hy-smi --showpids，无法确认卡是否空闲（继续，但请自行确认）",
               file=sys.stderr)
     elif pids:
-        print("⛔ 卡被占用（PID: %s），排序不做。等空了再跑。" % ", ".join(pids),
+        print("blocked 卡被占用（PID: %s），排序不做。等空了再跑。" % ", ".join(pids),
               file=sys.stderr)
         return 2
     else:
@@ -285,7 +315,7 @@ def main(argv=None):
     nbytes = 4 * p.get("M", 0) * p.get("H", 0) * 2
 
     payload = run_card(a.card, a.shape, nbytes)
-    out = Path(a.out) if a.out else (RESULTS / "impl-ranking.json")
+    out = Path(a.out) if a.out else (default_results_dir(a.card) / "impl-ranking.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 

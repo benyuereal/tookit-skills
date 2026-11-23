@@ -97,10 +97,10 @@ def main(argv=None):
                                 "significant": sig, "why": why,
                                 "maxdiff": None, "rel": None})
         print("# %s: %.4fms (%.4fx) %s" % (tag, med, ratio or 0, why))
-        print("# ⚠ 口径=背靠背无 per-iter sync，偏乐观约 23%；"
+        print("# caveat 口径=背靠背无 per-iter sync，偏乐观约 23%；"
               "卡片口径用端到端（183.0 µs / util 0.63）")
 
-    # ⚠️ 测量口径必须写进 JSON，否则读的人会把「背靠背无 sync」的数当成绩。
+    # caveat 测量口径必须写进 JSON，否则读的人会把「背靠背无 sync」的数当成绩。
     # 2026-11-23 三方对账（业主亲自跑，同机 prefill-8k）：
     #   ab.py 背靠背无 per-iter sync   140 µs  偏乐观 23%（kernel 间重叠）
     #   events 隔离 + 预分配 y         172.5 µs 纯 kernel

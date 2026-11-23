@@ -220,7 +220,7 @@ def main():
 
     if info["degraded"]:
         flat = sum(d["vgpr"] for d in rows)
-        print("\n⚠ 花括号不配对，作用域解析失败 —— 退回平铺求和（仅可作相对比较）")
+        print("\ncaveat 花括号不配对，作用域解析失败 —— 退回平铺求和（仅可作相对比较）")
         print("平铺声明量合计 %6.1f VGPR/线程" % flat)
         print("单线程硬上限   %6.0f       每 CU 按 %d 线程折算上限 %.0f"
               % (cap_thread, a.threads, cap_cta))

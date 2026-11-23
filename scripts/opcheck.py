@@ -45,6 +45,12 @@ class AdapterError(RuntimeError):
     pass
 
 
+# 「参考实现不支持这个形状 / 造不出输入」时 adapter 通常会抛这些。
+# 只吞这一组：真正的代码 bug（TypeError/AttributeError/NameError…）应当炸出来，
+# 而不是被记成 SKIP 掩盖掉 —— 那正是门禁静默通过的老路。
+ADAPTER_INPUT_ERRORS = (RuntimeError, ValueError, KeyError, OSError, ImportError)
+
+
 # ------------------------------------------------------------------ 卡片与 adapter
 
 def load_card(contract_path, adapter_name=None):
@@ -60,7 +66,10 @@ def load_card(contract_path, adapter_name=None):
     try:
         mod = importlib.import_module(name)
     except Exception as e:  # noqa: BLE001
-        raise AdapterError("导入 adapter %s 失败: %s: %s" % (name, type(e).__name__, e))
+        # 必须是宽捕获：adapter 是第三方代码，模块顶层任意语句都可能失败
+        # （ImportError / RuntimeError / 依赖初始化错误…）。这里不吞，统一
+        # 转成 AdapterError（退出码 2）并保留异常链，调用方看不出细节就是 bug。
+        raise AdapterError("导入 adapter %s 失败: %s: %s" % (name, type(e).__name__, e)) from e
     missing = [s for s in REQUIRED if not callable(getattr(mod, s, None))]
     if missing:
         raise AdapterError("adapter %s 缺必需符号: %s（契约见本文件 docstring）" % (name, ", ".join(missing)))
@@ -176,7 +185,12 @@ def cmd_correctness(a):
         try:
             run = mod.get_runner(v, tilelang_root=a.tilelang_root, **mod.runner_kwargs(params))
             got, mutated = mod.run_isolated(run, *inputs[:-1])
-        except Exception as e:  # noqa: BLE001
+        except (Exception, SystemExit) as e:  # noqa: BLE001
+            # **故意宽捕获**：runner 是第三方 GPU kernel（torch / triton / ctypes），
+            # 失败类型不可枚举（RuntimeError、AssertionError、HIP 运行时、SystemExit…）。
+            # 但**不吞**：记进 out["variants"] 并置 all_pass=False，最后返回非 0，
+            # 报告里能看到是哪个变体崩的。若这里改窄，未预料的崩溃会逃出报告，
+            # 反而让一次「一个变体都没跑成」看起来像 checker 自己坏了。
             print("FAIL %-12s 无法运行: %s: %s" % (v, type(e).__name__, e))
             out["variants"][v] = {"status": "error", "reason": str(e)}
             all_pass = False
@@ -252,7 +266,10 @@ def _first_runnable(mod, variants, a, params):
         try:
             return mod.get_runner(v, tilelang_root=a.tilelang_root,
                                  **mod.runner_kwargs(params))
-        except Exception:  # noqa: BLE001
+        except (SystemExit,) + ADAPTER_INPUT_ERRORS:
+            # 探测「哪个变体能构造」：未接入 / 缺后端的变体由 adapter 用
+            # ValueError / RuntimeError / SystemExit 报出。只吞这一组，
+            # 其他异常（TypeError 等）继续冒泡 —— 那多半是 checker 的 bug。
             continue
     raise RuntimeError("没有可用的底座变体，无法注入缺陷")
 
@@ -309,7 +326,10 @@ def _known_params(card, mod, shape_arg):
     try:
         shape = resolve_shape(card, mod, shape_arg)
         return dict(shape.get("params") or {})
-    except Exception:  # noqa: BLE001
+    except (SystemExit, OSError, ValueError):
+        # 取不到「键名原型」只是一条启发式失败，调用方会跳过 A 类检查。
+        # resolve_shape 的已知失败面：文件不存在(OSError)、YAML 解析(ValueError)、
+        # adapter 的 load_shape 用 SystemExit 报「找不到形状文件」。
         return {}
 
 
@@ -357,7 +377,8 @@ def cmd_robustness(a):
     known = set()
     try:
         known = set((parse_yaml((card / "shapes.yaml").read_text(encoding="utf-8")) or {}).keys())
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
+        # known 只用于打印「卡片声明 N 个形状」；读不到/解析不了不该中断检查。
         pass
 
     out = {"op": contract.get("op"), "kind": "robustness",
@@ -384,8 +405,10 @@ def cmd_robustness(a):
         try:
             inputs = mod.build_inputs(params, seed=a.seed, device=a.device)
             ref = mod.reference(*inputs[:-1], params=params, chunk=4)
-        except Exception as e:  # noqa: BLE001
-            # 参考实现都造不出来 ⇒ 这个 shape 对本卡无意义，跳过（不算抓到）
+        except (SystemExit,) + ADAPTER_INPUT_ERRORS as e:
+            # 参考实现都造不出来 ⇒ 这个 shape 对本卡无意义，跳过（不算抓到）。
+            # 只吞 adapter 报「不支持」的那组；TypeError/AttributeError 等
+            # checker 侧写错要继续冒泡，否则检查会静默少测一类。
             print("  SKIP %-28s 参考实现不支持：%s" % (key, str(e)[:60]))
             out["unseen_shape"][key] = {"status": "skip", "reason": str(e)[:120]}
             continue
@@ -406,10 +429,13 @@ def cmd_robustness(a):
                                             "variant": v, "max_abs": m["max_abs"]}
                 print("  %s   %-28s %-12s max_abs=%.3e（限 %.1e）"
                       % ("PASS" if ok else "FAIL", key, v, m["max_abs"], max_abs))
-            except Exception as e:  # noqa: BLE001
+            except (Exception, SystemExit) as e:  # noqa: BLE001
+                # **故意宽捕获**：被测变体是第三方 GPU kernel，失败类型不可枚举
+                # （RuntimeError、AssertionError、HIP 运行时、SystemExit…）。
                 # 「跑不起来」不等于「鲁棒性有问题」。
                 # 变体未接入 / 缺后端时**不算抓到**——否则任何缺失都会被记成
                 # 「检查有效」，把真信号淹掉（本卡第一版就是这样抓到 12 例假的）。
+                # 但仍逐条记进报告，不静默。
                 out["unseen_shape"][key] = {"status": "error", "variant": v,
                                             "reason": "%s: %s" % (type(e).__name__, e)}
                 print("  ERROR  %-28s %-12s 跑不起来（不计入抓到）：%s"
@@ -423,7 +449,8 @@ def cmd_robustness(a):
     for pattern in STRESS_PATTERNS:
         try:
             inputs = mod.build_inputs(base_params, seed=a.seed, device=a.device)
-        except Exception as e:  # noqa: BLE001
+        except (SystemExit,) + ADAPTER_INPUT_ERRORS as e:
+            # 同 A 类：adapter 报「造不出」预期内；checker 侧 bug 应冒泡。
             print("  SKIP %-12s 造不出输入：%s" % (pattern, str(e)[:60]))
             continue
         filled, desc = [], []
@@ -440,7 +467,9 @@ def cmd_robustness(a):
         try:
             ref = mod.reference(*filled, params=base_params, chunk=4)
             ref_finite = _all_finite(torch, ref)
-        except Exception as e:  # noqa: BLE001
+        except (SystemExit,) + ADAPTER_INPUT_ERRORS as e:
+            # 参考实现对极端值崩掉 ⇒ 该 stress 对本卡无意义。只吞 adapter 的
+            # 「不支持」组；若 TypeError 之类冒泡，说明 checker 调用写错了。
             print("  SKIP %-12s 参考实现自己就崩：%s" % (pattern, str(e)[:50]))
             continue
         if ref_finite is None:
@@ -477,7 +506,9 @@ def cmd_robustness(a):
                 out["stress"]["%s/%s" % (pattern, v)] = {
                     "status": "pass" if ok else "fail", "max_abs": m["max_abs"]}
                 print("  %s   %-12s %-12s max_abs=%.3e" % ("PASS" if ok else "FAIL", pattern, v, m["max_abs"]))
-            except Exception as e:  # noqa: BLE001
+            except (Exception, SystemExit) as e:  # noqa: BLE001
+                # **故意宽捕获**：同 A 类内层。第三方 kernel 的失败类型不可枚举，
+                # 记进报告且不计入抓到；不静默丢弃。
                 out["stress"]["%s/%s" % (pattern, v)] = {
                     "status": "error", "reason": "%s: %s" % (type(e).__name__, e)}
                 print("  ERROR  %-12s %-12s 跑不起来（不计入抓到）：%s"
@@ -486,7 +517,7 @@ def cmd_robustness(a):
     print()
     print("抓到 %d 例不通过。" % out["caught"])
     if a.require_catch and out["caught"] == 0:
-        print("⚠ --require-catch：一例都没抓到 —— 说明**检查没生效**，不是代码没问题。",
+        print("caveat --require-catch：一例都没抓到 —— 说明**检查没生效**，不是代码没问题。",
               file=sys.stderr)
         out["verdict"] = "check_ineffective"
         _write_json(a.json, out)
@@ -549,7 +580,9 @@ def cmd_invariants(a):
                 ok, desc = _judge(mod, modes["split_invariance"], o1, o2, max_abs, cosine)
                 res["split_invariance"] = bool(ok)
                 detail["split_invariance"] = "num_split 1 vs 2：" + desc
-            except Exception as e:  # noqa: BLE001
+            except (Exception, SystemExit) as e:  # noqa: BLE001
+                # **故意宽捕获**：float kernel 在 num_split 边界上的失败类型不可枚举。
+                # 结果记为 None（verdict=incomplete），报告里有原因，不判通过。
                 res["split_invariance"] = None
                 detail["split_invariance"] = "未测（%s: %s）" % (type(e).__name__, e)
         else:
@@ -623,7 +656,9 @@ def cmd_padding(a):
             result[v] = {"declared": sup, "status": "no_runner", "reason": str(e)}
             print("SKIP  %-16s 无 runner: %s" % (v, e))
             continue
-        except Exception as e:  # noqa: BLE001
+        except (Exception, SystemExit) as e:  # noqa: BLE001
+            # **故意宽捕获**：同 correctness 内层 —— 第三方 kernel 失败类型不可枚举。
+            # 记进报告并置 all_ok=False（最后返回非 0），不静默。
             result[v] = {"declared": sup, "status": "error", "reason": "%s: %s" % (type(e).__name__, e)}
             print("ERROR %-16s 无法运行: %s: %s" % (v, type(e).__name__, e))
             all_ok = False

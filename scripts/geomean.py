@@ -110,7 +110,7 @@ def summarize_shapes(r):
         return "几何平均加速比：无可用数据（%s）" % "；".join(r["reasons"])
     s = "几何平均 %.2fx（覆盖 %s）" % (r["geomean"], r["coverage"])
     if not r["gate"]:
-        s += " ⚠ 不可作主结论：" + "；".join(r["reasons"])
+        s += " caveat 不可作主结论：" + "；".join(r["reasons"])
     return s
 
 

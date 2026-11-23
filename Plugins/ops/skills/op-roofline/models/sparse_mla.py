@@ -34,7 +34,7 @@ def _cu_count(device=None):
     except Exception:
         pass
     import sys
-    print("⚠ CU 数无法从设备读取，退回 %s = %d" % (CU_FALLBACK_SOURCE, CU_FALLBACK),
+    print("caveat CU 数无法从设备读取，退回 %s = %d" % (CU_FALLBACK_SOURCE, CU_FALLBACK),
           file=sys.stderr)
     return CU_FALLBACK
 
@@ -157,7 +157,7 @@ def verdict(r, measured_us=None):
     out = []
 
     if not r["lds_ok"]:
-        out.append("⛔ **LDS 预算 %.0f KB = %.0f%% of 64 KB（R6）⇒ 本次数值预测作废。**"
+        out.append("blocked **LDS 预算 %.0f KB = %.0f%% of 64 KB（R6）⇒ 本次数值预测作废。**"
                    % (r["lds_kb"], r["lds_ratio"] * 100))
         if r["lds_ratio"] > 1.0:
             out.append("   直接超限，编译期就该否掉，不需要上卡。")

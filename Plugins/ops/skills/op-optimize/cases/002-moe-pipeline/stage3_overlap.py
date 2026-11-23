@@ -64,7 +64,7 @@ def assert_window(ta, tb, waiver_reason=None, noise_argument=None, cross_check=N
     if WINDOW_RATIO_MIN <= r <= WINDOW_RATIO_MAX:
         return r
     if waiver_reason and noise_argument and cross_check:
-        print("⚠ WAIVER 生效（窗口比 %.3f 越界）: %s" % (r, waiver_reason),
+        print("caveat WAIVER 生效（窗口比 %.3f 越界）: %s" % (r, waiver_reason),
               file=_sys.stderr)
         return r
     print("拒绝出结论：窗口比 %.3f 越界 [%.1f, %.1f]" % (r, WINDOW_RATIO_MIN, WINDOW_RATIO_MAX),

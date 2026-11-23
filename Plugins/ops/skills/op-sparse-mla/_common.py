@@ -111,7 +111,7 @@ def build_inputs(params, seed=0, device=None):
     `pool=window`（默认，对齐厂商自带测试 tilelang_sparse_fwd 的
     test_sparse_mla_fwd / benchmark_glm51）：
       - 第 t 行只从 `[0, t+q_start)` 里选，取 randperm 的前 topk 个（**乱序**，不排序）；
-      - ⚠️ **这不是生产口径**：S=32 时 working set 只有 ~4.8 MB、S=4096 也只有 ~9.4 MB，
+      - caveat **这不是生产口径**：S=32 时 working set 只有 ~4.8 MB、S=4096 也只有 ~9.4 MB，
         全在 L2 里；而生产 decode（ctx=320k）是从整个 377 MB 池随机取。
         只把池从 377 MB 缩到 2.4 MB，flash_mla 快 1.83×、tilelang 只快 1.03×
         ⇒ 用这个口径测出的跨实现比值**系统性低估 tilelang**（fm 是内存受限的一方）。

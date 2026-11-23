@@ -59,7 +59,7 @@ if rc == 0:
     ms = r["variants"][0]["ms"]
     print("# 冷L2 参考值：186.2 us / 1081 GB/s（util 0.63/1724）")
     print("# 本次： %.1f us / %.0f GB/s" % (ms * 1000, byts / (ms * 1e-3) / 1e9))
-    print("# ⚠ ab.py 的 bench_fn 是连续调用（热 L2），会报 ~119 us；"
+    print("# caveat ab.py 的 bench_fn 是连续调用（热 L2），会报 ~119 us；"
           "冷 L2 需每次换输入，见 case README")
 sys.exit(rc)
 PYEOF

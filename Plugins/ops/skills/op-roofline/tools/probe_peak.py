@@ -516,20 +516,20 @@ def print_human(sources, vals, checks, consts_path):
         hs = ("[手抄 %s]" % c["handwritten_status"]) if c.get("handwritten_status") else ""
         if c["status"] == "warn":
             n_warn += 1
-            print("  ⚠ %-18s 手抄 %s %s %s ≠ 探测 %s %s（偏差 %+.1f%%）"
+            print("  caveat %-18s 手抄 %s %s %s ≠ 探测 %s %s（偏差 %+.1f%%）"
                   % (c["key"], c["handwritten"], c["unit"], hs,
                      _fmt_probed(c["probed"]), c["unit"], c["deviation_pct"]))
             print("      推导: %s" % c["basis"])
         elif c["status"] == "ok":
             n_ok += 1
-            print("  ✅ %-18s 手抄 %s %s %s ≈ 探测 %s %s（偏差 %+.1f%%）"
+            print("  passed %-18s 手抄 %s %s %s ≈ 探测 %s %s（偏差 %+.1f%%）"
                   % (c["key"], c["handwritten"], c["unit"], hs,
                      _fmt_probed(c["probed"]), c["unit"], c["deviation_pct"]))
             if c.get("note"):
                 print("      口径: %s" % c["note"])
         else:
             n_skip += 1
-            print("  ⚠ %-18s %s" % (c["key"], c["note"]))
+            print("  caveat %-18s %s" % (c["key"], c["note"]))
 
     print("\n结论：%d 项一致，%d 项偏差 >%.0f%%%s。"
           % (n_ok, n_warn, TOLERANCE_PCT,

@@ -44,8 +44,8 @@ cd /tmp && /opt/dtk/llvm/bin/dccobjdump --inputs=<file.hsaco> --recompile --targ
 
 | dtype | MMA 指令 | 宽度 (M×N×K) | LDS 读原语 | `k_pack` | 可用 MLS | 验证方式 | 状态 |
 |---|---|---|---|---|---|---|---|
-| bf16 | `__builtin_hcu_mmac_f32_16x16x16_bf16_lit_lts` | 16×16×16 | `ds_read_format_tensor_a/b` | **2** | ❌ | 本项目 kernel 在用；micro GEMM 逐位对 fp32 参考 | verified |
-| fp8 (e4m3fn) | `__builtin_hcu_mmac_f32_16x16x32_fp8_fp8` | 16×16×**32** | `ds_read_m32x32_b8` | **1** | ✅ | 8192³ 达 432 TF（`gemm_fp8_channelwise`）；本项目 fp8 kernel 精度 PASS | verified |
+| bf16 | `__builtin_hcu_mmac_f32_16x16x16_bf16_lit_lts` | 16×16×16 | `ds_read_format_tensor_a/b` | **2** | failed | 本项目 kernel 在用；micro GEMM 逐位对 fp32 参考 | verified |
+| fp8 (e4m3fn) | `__builtin_hcu_mmac_f32_16x16x32_fp8_fp8` | 16×16×**32** | `ds_read_m32x32_b8` | **1** | passed | 8192³ 达 432 TF（`gemm_fp8_channelwise`）；本项目 fp8 kernel 精度 PASS | verified |
 
 ### 厂商实测（来自 `/opt/dtk/lib/hipblaslt/library_gfx938` 的反汇编，2026-11-13）
 

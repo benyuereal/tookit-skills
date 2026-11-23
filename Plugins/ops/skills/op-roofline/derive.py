@@ -232,7 +232,7 @@ def main():
     print("  每 CU 驻 %.1f 个 CTA ⇒ 跑 %d 轮；每 CTA 串行 %d 步"
           % (r["cta_per_cu"], r["rounds"], r["serial_chain"]))
     print("  LDS %.0f KB / 64 KB = %.0f%%  %s"
-          % (r["lds_kb"], r["lds_ratio"] * 100, "" if r["lds_ok"] else "⛔ 超 85% 阈值（R6）"))
+          % (r["lds_kb"], r["lds_ratio"] * 100, "" if r["lds_ok"] else "blocked 超 85% 阈值（R6）"))
     print()
     print("  内存地板 %8.1f µs  ( %.1f MB / 峰值 %.0f GB/s )" % (r["mem_us"], r["kv_mb"], bw))
     print("  算力地板 %8.1f µs  ( %.2f M 条 / %.1f MFMA/cyc @ %.2f GHz )"
@@ -242,7 +242,7 @@ def main():
     if probed and abs(probed - clock) / clock > 0.10:
         mma_at_probed = r["mma_us"] * clock / probed
         flip = (r["mem_us"] < mma_at_probed) != (r["mem_us"] < r["mma_us"])
-        print("  ⚠️ 时钟口径不一致：本表按 %.3f GHz 算，当场探测卡0 是 %.3f GHz。"
+        print("  caveat 时钟口径不一致：本表按 %.3f GHz 算，当场探测卡0 是 %.3f GHz。"
               % (clock, probed))
         print("     若实测时也是 %.3f GHz，算力地板 = %.1f µs（本表 %.1f µs）。%s"
               % (probed, mma_at_probed, r["mma_us"],

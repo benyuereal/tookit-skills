@@ -19,7 +19,7 @@ variants:
   pros:
   - 官方实现，覆盖 decode 与 prefill
   cons:
-  - 核大小受 tile 高度限制
+  - 核大小受 tile 高度限制（超过需回退到 slow path）
   source: references/libraries.md
   import_path: causal_conv1d.causal_conv1d_fn
   signature: causal_conv1d_fn(x,weight,bias,seq_idx=None,activation=None)
@@ -35,7 +35,7 @@ variants:
   not_for:
   - 常规形状（用 causal_conv1d 包即可）
   pros:
-  - 可与 MHC 三件套同栈
+  - 与 MHC 三件套同栈，省一次布局转换
   cons:
   - 无对应实现：mhc_kernels 里没有 conv1d kernel（已核实）；需要 conv1d 请用 causal_conv1d 包
   source: references/libraries.md
@@ -57,9 +57,9 @@ variants:
   not_for:
   - 大核场景（boltops 的 autotune 产物与 device 绑定，换核要重调）
   pros:
-  - 自带调优
+  - boltops 的 tools/*_triton_tune 可自动扫参
   cons:
-  - 版本较新
+  - 本机未测稳定性（只做过 import 验证）
   source: references/libraries.md
   import_path: boltops.generic.fused_mamba_state_scatter_with_mask
   signature: fused_mamba_state_scatter_with_mask(...)

@@ -148,7 +148,7 @@ def extract_anchor(readme: str) -> dict:
     return out
 
 
-STATUS_SYMBOLS = {"✅", "🚧", "-"}
+STATUS_SYMBOLS = {"passed", "wip", "-"}
 
 
 def _strip_tags(s: str) -> str:
@@ -165,7 +165,7 @@ def parse_cookbook_matrix(readme: str) -> dict:
 
     README 表格为 HTML（<td rowspan=N> 厂商/模型 + 框架 + 3 个状态列）。
     返回 {"<model>|<framework>": {"K100_AI": "ok|wip|...", ...}, ...}
-    行判定：含 <img> 的格=厂商列（剔除）；状态格=✅/🚧/-；其余非统计格中，
+    行判定：含 <img> 的格=厂商列（剔除）；状态格=passed/wip/-；其余非统计格中，
     命中 FRAMEWORK_TOKENS 的为框架，否则为模型名（跨行沿用，rowspan 由 tds 连续给出）。
     """
     matrix, cur_model, cur_fw = {}, None, None
@@ -207,9 +207,9 @@ def parse_cookbook_matrix(readme: str) -> dict:
 
 
 def _status(s: str) -> str:
-    if "✅" in s:
+    if "passed" in s:
         return "ok"
-    if "🚧" in s:
+    if "wip" in s:
         return "wip"
     return "-"
 

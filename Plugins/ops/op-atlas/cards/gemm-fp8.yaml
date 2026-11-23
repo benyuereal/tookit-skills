@@ -37,7 +37,7 @@ variants:
   not_for:
   - 本轮唯一可跑通的是 aiter（tilelang fp8 未跑通）
   pros:
-  - 源码可读可改，适合实验
+  - DSL 源码可读；改后需重新标定
   - 可融 epilogue
   cons:
   - DSL 布局税（每条 MMA 摊到的搬运指令高 3-4 倍）
@@ -56,7 +56,7 @@ variants:
   not_for:
   - gfx938 上的 FP8（torch._scaled_mm 报 could not find valid hipblaslt solution）
   pros:
-  - 少一层封装，直接调库
+  - 直接调 torch.mm，无额外封装层
   cons:
   - gfx938 上无 FP8 方案
   source: references/libraries.md
@@ -94,7 +94,7 @@ variants:
   not_for:
   - 常规稠密 GEMM（无特殊布局需求）
   pros:
-  - 完全可控，但需自行维护
+  - 源码在仓内可改，但需自行维护与重测
   cons:
   - 现成库不支持（2026-11-22 逐个实测）：
   - '1) hipblaslt: import 直接 ModuleNotFoundError（不是本机可调库）'

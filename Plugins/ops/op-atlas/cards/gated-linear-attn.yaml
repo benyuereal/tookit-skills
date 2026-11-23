@@ -17,8 +17,8 @@ variants:
   not_for:
   - 非 KDA 的门控变体
   pros:
-  - 专用实现
-  - 与 KDA 契约配套
+  - 针对该算子的专用 kernel（非通用 GEMM 拼接）
+  - 与 KDA 的输入契约（layout/哨兵）配套
   cons:
   - 版本很新（0.0.1）
   source: references/libraries.md
@@ -36,9 +36,9 @@ variants:
   not_for:
   - 追求极限
   pros:
-  - 可读可改
+  - DSL（tilelang.jit），需自写 kernel
   cons:
-  - 布局税
+  - DSL 布局转换税（详见 ledger）
   source: references/libraries.md
   import_path: tilelang.jit
   signature: '@tilelang.jit 写 GLA 递推（块并行可表达）'

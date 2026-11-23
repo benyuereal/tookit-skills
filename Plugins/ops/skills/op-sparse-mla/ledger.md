@@ -51,7 +51,7 @@
 
 **读法**：比值 = 其它变体耗时 / tilelang 耗时（同卡同进程）。<1 表示比 tilelang 快。
 
-> ⚠️ **口径红线（比值可不可信的唯一判据）**：`build_inputs` 的默认索引窗口只从 `[0, t+q_start)`
+> caveat **口径红线（比值可不可信的唯一判据）**：`build_inputs` 的默认索引窗口只从 `[0, t+q_start)`
 > 取索引 ⇒ 小 S 时工作集只有几 MB、**全在 L2**，等于给内存受限的 flash_mla 免了内存费，
 > **系统性低估 tilelang**。判据是**池大小不是参数名**：`build_inputs` 输出 `pool_extent`/`pool_mb`，
 > 池 < 64 MB 打 `warning`。跨实现比站位一律真随机池（`pool="full"` 或 `q_start_s_index >= SKV`，

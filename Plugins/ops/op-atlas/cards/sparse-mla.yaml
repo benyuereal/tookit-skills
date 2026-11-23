@@ -59,7 +59,7 @@ variants:
   not_for:
   - 常规形状（不如现成实现）
   pros:
-  - 完全可控，但需自行维护
+  - 源码在仓内可改，但需自行维护与重测
   cons:
   - 现成库不支持：tilelang 版的布局转换税（每条 MMA 摊到的搬运指令是手写的 3-4 倍），绕开它只能手写主循环
   source: references/libraries.md

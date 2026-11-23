@@ -346,7 +346,7 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
     b = {"median_ms": base["median_ms"], "mad_ms": base.get("mad_ms", 0.0)}
     c = {"median_ms": cand["ms"], "mad_ms": cand.get("mad", 0.0)}
     sig, ratio, why = _significant(b, c)
-    tail = ("；⚠ " + "；".join(warns) + " ⇒ 压力档有退化，端到端必须验") if warns else ""
+    tail = ("；caveat " + "；".join(warns) + " ⇒ 压力档有退化，端到端必须验") if warns else ""
     if not sig:
         if ratio is not None and ratio < 1.0:
             return "INCONCLUSIVE", why + "（方向对但没过噪声门，别当收益写）"
@@ -643,9 +643,9 @@ def cmd_status(a):
                             "（已封）" if v["exhausted"] else "")
             for k, v in sorted(table.items())))
     for prob in budget_problems(cands):
-        print(_c("⚠ " + prob, WARN))
+        print(_c("caveat " + prob, WARN))
     for prob in stalled_parent_problems(cands):
-        print(_c("⚠ " + prob, WARN))
+        print(_c("caveat " + prob, WARN))
     if recs:
         last = recs[-1]
         print("最近一次  %s %s → %s" % (last.get("ts"), last.get("tag"), last.get("decision")))
@@ -706,12 +706,12 @@ def cmd_queue(a):
     if dw:
         print()
         for prob in dw:
-            print(_c("⚠ " + prob, WARN))
+            print(_c("caveat " + prob, WARN))
     probs = budget_problems(d)
     if probs:
         print()
         for prob in probs:
-            print(_c("⚠ " + prob, WARN))
+            print(_c("caveat " + prob, WARN))
         return 2
     return 0
 
@@ -781,7 +781,7 @@ def cmd_run(a):
         print(_c("拒绝跑：" + prob, WARN))
         return 2
     if forced:
-        print(_c("⚠ --force 重跑已判死项：%s（这次不一样的理由必须写进记录）"
+        print(_c("caveat --force 重跑已判死项：%s（这次不一样的理由必须写进记录）"
                  % ", ".join(sorted(forced)), WARN))
 
     # 天花板约束：卡里有 roofline 判定时，候选的动作类必须落在允许集合内。
@@ -811,7 +811,7 @@ def cmd_run(a):
         undeclared = [t for t in a.tags
                       if not (declared.get(t) or {}).get("action_class")]
         if undeclared:
-            print(_c("⚠ %s 未声明 action_class，天花板约束对它们不生效"
+            print(_c("caveat %s 未声明 action_class，天花板约束对它们不生效"
                      "（建议补上：%s）" % (", ".join(undeclared), sorted(allowed)), WARN))
 
     d = cands["defaults"]
@@ -1357,7 +1357,7 @@ def cmd_verify(a):
                  "完成判定没通过，不许写 adopted。"
                  % (rc, a.tag, cand.get("status") or "pending"), WARN))
         if str(cand.get("status") or "") == "adopted":
-            print(_c("⚠ 它现在是 adopted 但自己的 done_when 不过 —— 这条 adopted 不成立，"
+            print(_c("caveat 它现在是 adopted 但自己的 done_when 不过 —— 这条 adopted 不成立，"
                      "该降级并查为什么之前判过了。", WARN))
         append_record(card, {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "card": card.name, "tag": a.tag,

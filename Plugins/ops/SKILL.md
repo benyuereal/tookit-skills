@@ -38,9 +38,9 @@ license: MIT
 Plugins/ops/skills/op-<算子名>/
 ├── SKILL.md          ≤240 行：是什么 / 变体矩阵 / 档位表 / 判据 / 坑（带 source+verified_on）
 │                     上限由 test_doc_links.py 卡（现状最长 op-contract 235 行）；超了先删，删不动再拆 references/
-├── contract.yaml     ★ 机器可读契约：形状、dtype、布局约束、容差、不变量、门槛、地板
-├── variants.yaml     ★ 实现变体矩阵：来源 → 适用档位 → 状态 → 约束
-├── shapes.yaml       ★ 形状档位表，一档一个顶层键（decode-m1 / decode-m32 / prefill-8k / prefill-320k）
+├── contract.yaml     * 机器可读契约：形状、dtype、布局约束、容差、不变量、门槛、地板
+├── variants.yaml     * 实现变体矩阵：来源 → 适用档位 → 状态 → 约束
+├── shapes.yaml       * 形状档位表，一档一个顶层键（decode-m1 / decode-m32 / prefill-8k / prefill-320k）
 └── _common.py        adapter：本算子的输入构造 / fp32 参考 / 变体注册表 / 输入隔离
 ```
 
@@ -82,7 +82,7 @@ draft ──► measured ──► tuned ──► at_floor ──► deprecated
 | `tuned` | 有改动且通过 A/B 显著性 | `opverify.py --run` 返回 PASS 且加速比过噪声门 |
 | `at_floor` | 已贴物理地板，**不许重开** | 达成率 ≥ 85% 峰值（带宽/算力），且地板依据写进 `contract.yaml` |
 
-> ⚠️ **「贴地板」有两个阈值，别混**：本表的 **85%** 是**卡的生命周期状态**（机器值 `contract.yaml:at_floor_threshold`，判定状态机走到哪一档）；`op-gate` 的 `OP-GATE-001` 二级门 **实测/地板 ≤ 1.5×（≈67%）** 是**「物理到顶」收工声明**的必要条件之一，还要叠加一级门（无合法减量）才成立。两者用途不同、**不得互相替代**：85% 到了不等于可以发「物理到顶」，≤1.5× 也不等于卡可以标 `at_floor`。
+> caveat **「贴地板」有两个阈值，别混**：本表的 **85%** 是**卡的生命周期状态**（机器值 `contract.yaml:at_floor_threshold`，判定状态机走到哪一档）；`op-gate` 的 `OP-GATE-001` 二级门 **实测/地板 ≤ 1.5×（≈67%）** 是**「物理到顶」收工声明**的必要条件之一，还要叠加一级门（无合法减量）才成立。两者用途不同、**不得互相替代**：85% 到了不等于可以发「物理到顶」，≤1.5× 也不等于卡可以标 `at_floor`。
 | `deprecated` | 实现被替代 | 写 `superseded_by` |
 
 **硬规则**：`at_floor` 必须带 `floor.basis` + `evidence`（可回溯路径），且必须在 `ledger.md` 留一行。没有依据的 `at_floor` 视为无效——这正是我们反复重开同一个优化（Marlin GEMM 被误诊三次）的原因。

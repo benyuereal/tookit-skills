@@ -100,9 +100,9 @@ def main(argv=None):
             return 2
     ok, diffs = compare(x, sem[x], y, sem[y])
     if ok:
-        print("✅ %s 与 %s 的访存契约一致，可以比" % (x, y))
+        print("passed %s 与 %s 的访存契约一致，可以比" % (x, y))
         return 0
-    print("❌ %s 与 %s 不可比：" % (x, y))
+    print("failed %s 与 %s 不可比：" % (x, y))
     for d in diffs:
         print("   - " + d)
     print("\n**不对齐就是在比两件不同的活。** 先改实现或改基线，别急着出 ratio。")

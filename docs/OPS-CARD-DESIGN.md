@@ -34,7 +34,7 @@ Plugins/
 ├── dcu-operators     算子开发（HIP/Triton、CUDA→HIP）
 ├── dcu-troubleshooting
 ├── dcu-engineering
-└── ops               ★ 算子卡域（以算子为对象）
+└── ops               * 算子卡域（以算子为对象）
 ```
 
 前 7 个按**能力**组织，ops 按**对象**组织。三者正交：
@@ -52,13 +52,13 @@ Plugins/
 ```
 Plugins/ops/skills/op-sparse-mla/
 ├── SKILL.md            怎么用（给人/agent 读）
-├── contract.yaml   ★   机器可读契约（opverify 唯一事实来源）
-├── variants.yaml   ★   实现变体矩阵
+├── contract.yaml   *   机器可读契约（opverify 唯一事实来源）
+├── variants.yaml   *   实现变体矩阵
 ├── candidates.yaml     可证伪候选清单
 ├── shapes/             形状档位
 ├── bench/              微基准 + PMC 数据
 ├── tests/              正确性 / 不变量测试
-├── ledger.md       ★   结论台账
+├── ledger.md       *   结论台账
 └── references/
 ```
 

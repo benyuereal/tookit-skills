@@ -16,10 +16,10 @@ variants:
   not_for:
   - 需要与后续 norm 融合时
   pros:
-  - 无外部依赖，适合做基线对照
-  - 足够用，但没有融合
+  - 无外部依赖，适合当 correctness_only 对照
+  - 可用；无融合路径，比融合实现多一趟 HBM
   cons:
-  - 无融合，另起一趟
+  - 不融合残差，多一趟 HBM 往返
   source: references/libraries.md
   import_path: triton.jit
   signature: '@triton.jit'
@@ -35,9 +35,9 @@ variants:
   not_for:
   - 大词表且要求极限
   pros:
-  - 自带调优
+  - boltops 的 tools/*_triton_tune 可自动扫参
   cons:
-  - 版本较新
+  - 本机未测稳定性（只做过 import 验证）
   source: references/libraries.md
   import_path: boltops.gemm.gemm_a16w16
   signature: gemm_a16w16(...) 可作为 gather 对照

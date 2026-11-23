@@ -84,7 +84,7 @@ decode-m1:
 
 decode-m32:
   regime: decode
-  desc: "常规 batch 解码：32 个 query token，超长上下文（⚠ H=16 是 tilelang 示例测试形状；生产模型 H=64，见 decode-glm53 / V4.1=H64+d576+topk512）"
+  desc: "常规 batch 解码：32 个 query token，超长上下文（caveat H=16 是 tilelang 示例测试形状；生产模型 H=64，见 decode-glm53 / V4.1=H64+d576+topk512）"
   params:
     S: 32
     H: 16
@@ -126,7 +126,7 @@ decode-s128:
   notes:
     - "q_start=4096 >= topk，故 indices 全有效，effective_topk == 名义 topk"
     - "与 SKV 无关：SKV 8k 与 64k 输入逐位相同时耗时差 <=0.2%"
-    - "⚠️ pool: window 是历史口径：池只有 ~4.8 MB 全在 L2，flash_mla 免付内存费，跨实现比值系统性低估 tilelang（缩池 377MB→2.4MB，fm 快 1.83×、tl 只快 1.03×，见 ledger §二 18）。本档只用于「同实现内部比改动」，跨实现比站位用 bench/bench_long.py（写死 pool=full）。"
+    - "caveat pool: window 是历史口径：池只有 ~4.8 MB 全在 L2，flash_mla 免付内存费，跨实现比值系统性低估 tilelang（缩池 377MB→2.4MB，fm 快 1.83×、tl 只快 1.03×，见 ledger §二 18）。本档只用于「同实现内部比改动」，跨实现比站位用 bench/bench_long.py（写死 pool=full）。"
 
 prefill-320k:
   regime: prefill

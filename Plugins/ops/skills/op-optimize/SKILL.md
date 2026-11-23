@@ -134,7 +134,7 @@ python3 loop.py -C <卡> run <tag> [--skv ...] [--force]
 ## 十一、一条命令看懂现状
 
 ```bash
-python3 loop.py -C <卡> resume                 # ★ 先跑这条：下一个该跑谁（上下文丢了也能接着干）
+python3 loop.py -C <卡> resume                 # * 先跑这条：下一个该跑谁（上下文丢了也能接着干）
 python3 loop.py -C <卡> enumerate              # 方向菜单（OPEN/SEALED），direction 只能从这挑
 python3 loop.py -C <卡> status|queue|report    # 现状 / 方向预算 + 待做 + 已判死附机制（违规 rc=2） / 交付表
 python3 loop.py -C <卡> impl-broken <tag> --why "..."       # 实现写坏了

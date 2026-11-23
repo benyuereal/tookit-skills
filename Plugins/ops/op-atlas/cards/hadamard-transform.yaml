@@ -39,9 +39,9 @@ variants:
   not_for:
   - 追求极限
   pros:
-  - 可读可改
+  - DSL（tilelang.jit），需自写 kernel
   cons:
-  - 布局税
+  - DSL 布局转换税（详见 ledger）
   source: references/libraries.md
   import_path: tilelang.jit
   signature: '@tilelang.jit 写蝶形变换（radix 可调）'

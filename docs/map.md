@@ -183,7 +183,7 @@ flowchart TD
 
 | 步 | 命令 / 文件 | 产物 |
 |---|---|---|
-| 1 | 读 `Plugins/ops/op-atlas/cards/<id>.yaml` | 该卡的 impls / ceiling / 上次结论 |
+| 1 | 读 `Plugins/ops/op-atlas/cards/<id>.yaml` | 该卡的 variants / ceiling / 上次结论 |
 | 2 | 按 `Plugins/ops/skills/op-contract/SKILL.md` 写 `contract.yaml` | 判据与容差 |
 | 3 | `python3 -I scripts/opbench.py` | median / MAD / clock_mhz / ts |
 | 4 | `python3 -I scripts/opverify.py` | 四道门（身份/正确性/不变量/A-B） |

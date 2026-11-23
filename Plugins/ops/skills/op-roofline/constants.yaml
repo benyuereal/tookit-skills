@@ -16,7 +16,7 @@ compute:
     status: measured
     verified_on: 2026-11-13
     source: "torch.cuda.get_device_properties(0).multi_processor_count = 64；hbird-gemm README 亦写 64 CU；pmc 从 dmesg SE 位图数出 64。三方一致。
-    ⚠️ 2026-11-13 更正：原值 69 来源写作「rocminfo / hy-smi」，但本机 rocminfo 只枚举到 CPU agent、hy-smi 的逐卡读数 69/70/71 与三方不符 —— 该 69 使所有按 CU 归一的量（per-CU 摊销、rounds、MFMA/CU）偏 ~8%。
+    caveat 2026-11-13 更正：原值 69 来源写作「rocminfo / hy-smi」，但本机 rocminfo 只枚举到 CPU agent、hy-smi 的逐卡读数 69/70/71 与三方不符 —— 该 69 使所有按 CU 归一的量（per-CU 摊销、rounds、MFMA/CU）偏 ~8%。
     gfx938 实测；其他 gfx 的 CU 数不同，换设备必须重测。"
   wave_size:
     value: 64
@@ -49,12 +49,19 @@ compute:
   #   impl_measured: 某一条具体实现的实测值。可复跑。只代表那条实现，不外推到硬件。
   # 判定规则：报「达成率」用 achievable；报「这条实现多快」用 impl_measured；
   #          报「离硬件上限多远」用 nominal，并同时给出前两者。
+  #
+  # 纪律：impl_measured 类的数**不许外推为硬件上限**。
+  # 2026-11-23 事故：aiter opus 49.8 TF（impl_measured）被当成 fp8 上限，
+  # 推出「11 倍空间」；实际 torch._scaled_mm 498.5 TF（89%），空间只有 1.12 倍。
+  # 一条 impl_measured 数据要成为 achievable，必须至少两个不同实现互相印证。
   bf16_gemm_peak_tf:
     value: 279
     caliber: achievable
     unit: TFLOPS
     status: measured
     at_sclk_mhz: 1350
+    saturation: "已打满"
+    saturation_pct: 99.7
     verified_on: 2026-11-23
     source: >
       本机 hipBLASLt 大 GEMM（N=6144）10 轮独立采样的峰值中位数 = 279 TF
@@ -68,7 +75,7 @@ compute:
       稳态（median 耗时）只有 273 TF，持续加热 20 s 后掉到 243 TF——
       报「持续跑能到多少」不要用峰值。
     measurement_lesson: >
-      ⚠️ 2026-11-23 第二次更正（同一天内）：先前写 310 TF 是**单轮 11 次采样的偶然高值**。
+      caveat 2026-11-23 第二次更正（同一天内）：先前写 310 TF 是**单轮 11 次采样的偶然高值**。
       改成 10 轮独立采样取峰值中位数后是 279。差 11% 足以让 bf16 峰值
       「超过」由 fp8 标称推出的理论值 280，制造出一个假矛盾。
       **教训：峰值标定必须多轮独立采样取中位数，单轮 min 会把偶发高值当峰值。**
@@ -87,7 +94,7 @@ compute:
     note: >
       用来判「谁被算力卡住」；单算子占用率 80%+ 才算。本项目稀疏 MLA 只有 11~24%。
     history: >
-      ⚠️ 2026-11-23 更正：旧值 19.7 条/cycle（声称由「2048^3 实测 217 TF ≈ 88% 峰值」反推）
+      caveat 2026-11-23 更正：旧值 19.7 条/cycle（声称由「2048^3 实测 217 TF ≈ 88% 峰值」反推）
       是错的。两个毛病：①2048³ 只有 0.097 ms，固定开销占比大，根本不能代表峰值；
       ②按 19.7 反推的峰值 185 TF **低于同机实测的 310 TF**——实测超过声称的峰值，
       说明常数错而不是测量错。后果是所有 bf16 算力达成率被高估 ~1.7×
@@ -135,7 +142,7 @@ compute:
       同库的 bf16（gemm_a16w16_opus）只有 24.7 TF，比 hipBLASLt 的 310 TF 慢 8.8×
       —— 说明 opus 这一族实现整体慢，49.8 是被这一族拖下来的，不是 fp8 的天花板。
     history: >
-      ⚠️ 2026-11-23 两次更正，值得完整记录：
+      caveat 2026-11-23 两次更正，值得完整记录：
       ① 旧值 540 TF（"实测 479 TF = 89% 达成反推"）来源是 kb 的一条记录，
          **无复跑脚本**，从未被本仓探针验证。这个质疑成立。
       ② 但我第一次的修法把 540 改成 49.8 并声称「这是 fp8 峰值」——**方向相反且更危险**。
@@ -229,10 +236,10 @@ conflicts:
       **一律用 1724（实测）做分母。** 标称值不是机器的能力，只是型号名。
       凡是用 1100 算出来的达成率，都要按 1724 重算一遍再引用。
     action:
-      - "✅ op-sparse-mla/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
-      - "✅ op-moe-w8a8/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
-      - "✅ op-gemm-fp8/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
-      - "✅ kb 里 mqa 的「87% 峰值」已按 1724 重述为 55%（sparse-mla-20261027.md §19.1）"
+      - "passed op-sparse-mla/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
+      - "passed op-moe-w8a8/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
+      - "passed op-gemm-fp8/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
+      - "passed kb 里 mqa 的「87% 峰值」已按 1724 重述为 55%（sparse-mla-20261027.md §19.1）"
 
   - id: random-gather-cap
     severity: medium

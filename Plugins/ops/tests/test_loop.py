@@ -386,7 +386,7 @@ class TestCandidatesFile(unittest.TestCase):
         kv4 = {c["id"]: c for c in d["candidates"]}["kv4"]
         self.assertEqual(len(kv4["fails"]), 1)
         self.assertIn("锚点没落上", kv4["fails"][0])
-        # ★ 核心断言：实现失败不吃方向预算
+        # * 核心断言：实现失败不吃方向预算
         self.assertEqual(loop.direction_table(d)["fuse-kv-splits"]["refutes"], before)
         self.assertNotIn("kv4", [r["id"] for r in d["refuted"]])
         self.assertIn("方向预算没动", out)
@@ -589,7 +589,7 @@ class TestCandidatesFile(unittest.TestCase):
             "\n  - id: kv4_v2\n    direction: fuse-kv-splits\n    status: pending\n"
             "    hypothesis: \"再试\"\n\nrefuted:\n"))
         rc, out = self._quiet(loop.cmd_status, SimpleNamespace(card=self.card))
-        self.assertIn("⚠ 候选 kv4_v2", out)          # 拦住的原因要说出来
+        self.assertIn("caveat 候选 kv4_v2", out)          # 拦住的原因要说出来
         nxt = out.split("下一步：", 1)[1]
         self.assertIn("maxn32", nxt)
         self.assertNotIn("kv4_v2", nxt)              # 别把人指向死路

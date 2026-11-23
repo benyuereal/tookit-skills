@@ -73,9 +73,9 @@ tilelang / flash_mla / 手写 HIP 各有领地，按 (H, S, ctx) 选：
 
 | 档位 | 特征 | 关注点 |
 |---|---|---|
-| `decode-s128` | S=128，64k 上下文，**H=16（测试形状）** | **跨实现对比主档**；⚠️ `pool: window` 会让 flash_mla 免付内存费，比站位要用 `bench_long.py`（`pool=full`） |
+| `decode-s128` | S=128，64k 上下文，**H=16（测试形状）** | **跨实现对比主档**；caveat `pool: window` 会让 flash_mla 免付内存费，比站位要用 `bench_long.py`（`pool=full`） |
 | `decode-m1` | S=1~8，context 极长，**H=16（测试形状）** | 纯访存；gather 随机性最伤 |
-| `decode-m32` | S=32，context 长，**H=16（测试形状）** | 看带宽达成率；⚠ 下游两个生产模型都是 H=64 |
+| `decode-m32` | S=32，context 长，**H=16（测试形状）** | 看带宽达成率；caveat 下游两个生产模型都是 H=64 |
 | `prefill-8k` | S=8192 | 算力档；看 TFLOPS 与 tile 利用率 |
 | `prefill-320k` | S=4096/chunk，SKV 到 320k | 长上下文 prefill；受 KV 抓取限制 |
 | `decode-glm53` | S=32，H=64，SKV=128k，topk=2048，**d=512 无 rope 尾** | GLM5.3 生产 decode；`sm_scale=1/sqrt(512)`，`-1` 只能垫队尾 |

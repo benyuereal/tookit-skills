@@ -6,7 +6,7 @@
 这样 toolkit-skills 就知道从哪里找基准。」
 
 审计发现（2026-11-23，102 个 impl）：
-  - import_path 89 条全部可导入 ✅
+  - import_path 89 条全部可导入 passed
   - 但 role 字段 **0/102** —— 分不清谁是厂商实现、谁是无优化参考
   - gemm-bf16 把 `torch.mm` 标 tier=primary，直接违反自己的 forbidden_impl_patterns
   - 同样这张卡的 fallback 是 `deepgemm.fp8_gemm`——fp8 不是 bf16，算子都不对
