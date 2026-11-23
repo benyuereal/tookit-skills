@@ -570,6 +570,32 @@ def validate(atlas, repo):
         if not (cards_dir / ("%s.yaml" % m)).is_file():
             err("E1", "INDEX.md", "指向不存在的卡 %s" % m)
 
+    # ---- E21 顶层 status 与 last_verdict.status 不许互相矛盾
+    # 两者语义不同（顶层是「这个算子推到哪一步」，last_verdict 是「上次结论的性质」），
+    # 但下面两种组合是明确矛盾：
+    #   顶层 draft/tuned 之外，last_verdict 却写 measured  —— 有实测却不算数
+    #   顶层 measured，last_verdict 却是 none             —— 标了 measured 却没有结论
+    # moe-w8a8 是唯一允许的例外形态：last_verdict 只覆盖某个分量（Marlin），
+    # 整体未判，所以顶层仍是 draft。这种情况必须用 scope 写明「仅某分量」。
+    for c in cards:
+        data, problem = _load_yaml(c)
+        if problem or not isinstance(data, dict):
+            continue
+        top = str(data.get("status") or "")
+        lv = data.get("last_verdict") or {}
+        lvs = str(lv.get("status") or "")
+        if top in ("draft",) and lvs in ("measured", "tuned"):
+            scope = str((lv.get("ratio") or {}).get("scope") or "")
+            note = str(((lv.get("ratio") or {}).get("scope") or {}).get("note") or "") \
+                if isinstance((lv.get("ratio") or {}).get("scope"), dict) else ""
+            if "仅" not in note and "部分" not in note:
+                err("E21", c.name,
+                    "顶层 status=draft 但 last_verdict.status=%r；"
+                    "若只测了某个分量，必须在 ratio.scope.note 写明「仅 XX 分量」" % lvs)
+        if top in ("measured", "tuned") and lvs == "none":
+            err("E21", c.name,
+                "顶层 status=%r 但 last_verdict.status=none（没有结论的卡不能标 measured）" % top)
+
     # ---- E19 INDEX 表里的状态/家族/上限必须与卡片一致
     # 由来：13 张卡已 promoted 到 measured，INDEX 里还写着 draft。
     # 「一个事实在多处登记、只有一处对」正是分母用错那类错误的温床。
