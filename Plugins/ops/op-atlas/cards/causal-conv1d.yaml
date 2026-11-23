@@ -24,6 +24,7 @@ impls:
   import_path: causal_conv1d.causal_conv1d_fn
   signature: causal_conv1d_fn(x,weight,bias,seq_idx=None,activation=None)
   smoke_test: python3 -I -c "import causal_conv1d; assert hasattr(causal_conv1d,"causal_conv1d_fn")"
+  role: competitor
 - repo: mhc-kernels
   library_profile_ref: libraries.md §11
   file_hint: kernels/ 里的手写 conv1d 变体
@@ -45,6 +46,7 @@ impls:
     build_cmd: cd /workspace/mhc_kernels && ./build.sh
     note: 核实结果：mhc_kernels 里没有 conv1d 实现。该目录只有 mhc_pre_weights / mhc_pre_mix / mhc_post / mhc_fused，没有因果卷积。这条 impl 之前是凭印象写的，现更正为「无对应实现」。
   l1_exempt_reason: mhc_kernels 里没有 conv1d 实现（已核实：该目录只有 mhc_pre_weights / mhc_pre_mix / mhc_post / mhc_fused，无因果卷积），因此没有可 import 的函数。conv1d 请用 causal_conv1d 包（primary）。
+  role: best_known
 - repo: boltops
   library_profile_ref: libraries.md §10
   file_hint: causal_conv1d_fn / causal_conv1d_update
@@ -62,6 +64,7 @@ impls:
   import_path: boltops.generic.fused_mamba_state_scatter_with_mask
   signature: fused_mamba_state_scatter_with_mask(...)
   smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.generic").fused_mamba_state_scatter_with_mask is not None"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -85,3 +88,12 @@ modify_path:
 surfaces:
 - pipeline-depth
 updated: '2026-11-22'
+baseline_ref:
+  impl: causal_conv1d.causal_conv1d_fn
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=linear-attn 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

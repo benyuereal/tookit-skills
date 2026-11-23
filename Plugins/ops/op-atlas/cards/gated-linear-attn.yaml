@@ -25,6 +25,7 @@ impls:
   import_path: flash_kda.cp.build_cp_layout_cpu
   signature: build_cp_layout_cpu(raw_cu_seqlens, max_local_chunks) -> CpuCpLayout
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("flash_kda.cp"),"build_cp_layout_cpu")"
+  role: competitor
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 的 GLA 递推
@@ -42,6 +43,7 @@ impls:
   import_path: tilelang.jit
   signature: '@tilelang.jit 写 GLA 递推（块并行可表达）'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+  role: template
 ceiling:
   kind: missing
   ref: null
@@ -65,3 +67,12 @@ modify_path:
 surfaces:
 - pipeline-depth
 updated: '2026-11-22'
+baseline_ref:
+  impl: flash_kda.cp.build_cp_layout_cpu
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=linear-attn 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

@@ -24,6 +24,7 @@ impls:
   import_path: lightop.FuseBiasSwiGLU
   signature: FuseBiasSwiGLU()(input, bias) -> Tensor
   smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"FuseBiasSwiGLU")"
+  role: competitor
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: lightop.FuseBiasSwiGLU
@@ -41,6 +42,7 @@ impls:
   import_path: lightop.FuseBiasSwiGLU
   signature: FuseBiasSwiGLU()(input, bias) -> Tensor
   smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"FuseBiasSwiGLU")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -87,3 +89,12 @@ soft_preconditions:
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.FuseBiasSwiGLU
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

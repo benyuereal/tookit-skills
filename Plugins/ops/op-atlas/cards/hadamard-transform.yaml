@@ -28,6 +28,7 @@ impls:
     build_cmd: cd /workspace/mhc_kernels && ./build.sh
     note: 没有独立的 hadamard kernel——它内联在 pre_mix 里。要单独优化需先抽出来
   l1_exempt_reason: MHC 的蝶形变换内联在 mhc_pre_mix_kernel 里，没有独立函数；源码树见 source_ref
+  role: best_known
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 的蝶形表达
@@ -45,6 +46,7 @@ impls:
   import_path: tilelang.jit
   signature: '@tilelang.jit 写蝶形变换（radix 可调）'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+  role: template
 ceiling:
   kind: missing
   ref: null
@@ -69,3 +71,12 @@ surfaces:
 - cross-lane-fold
 - layout-pack
 updated: '2026-11-22'
+baseline_ref:
+  impl: mhc-kernels/源码树
+  role: best_known
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family 推定（未实测，须校正）
+  note: 本卡无厂商 competitor，基准用本卡自研最优（best_known）

@@ -44,6 +44,7 @@ LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
 ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls", "at_floor",
+               "baseline_ref",
                "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer",
                # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
                "modify_path",
@@ -51,7 +52,7 @@ ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls", "a
                "hard_preconditions", "soft_preconditions"}
 REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
                 "ceiling", "last_verdict", "updated"}
-ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
+ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref", "role",
                 "best_for", "not_for", "pros", "cons", "source",
                 # L1 映射三字段：从「知道在哪个库」到「知道调哪个函数」
                 "import_path", "signature", "smoke_test",
@@ -216,6 +217,92 @@ def _check_next_probe(cards_dir, repo):
 
 
 AT_FLOOR_KINDS = {"hardware_floor", "impl_ceiling"}
+
+
+IMPL_ROLES = {"competitor", "best_known", "correctness_only", "template",
+              "unverified", "wrong_op"}
+# 这些 role 不许当 baseline_ref 的目标
+NON_BASELINE_ROLES = {"correctness_only", "template", "unverified", "wrong_op"}
+
+
+def _check_baseline_ref(cards_dir, repo):
+    """E28b：每张卡必须声明 bench 用哪条 impl 当性能基准。
+
+    业主原话：「算子图谱不能'知道有库'，要能'指出基准在哪'」。
+    baseline_ref.impl 必须指向本卡某条 role=competitor 的 impl；
+    traffic_passes 必填（否则 aggregate 又会把 201MB 和 268MB 混算）。
+    """
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        br = d.get("baseline_ref")
+        impls = [i for i in (d.get("impls") or []) if isinstance(i, dict)]
+        # 允许 competitor 与 best_known（本卡自研最优，见 baseline-policy.yaml）。
+        # 源码树实现没有 import_path，用 "<repo>/源码树" 作标识（与 source_ref 对应）。
+        def _ident(i):
+            ip = i.get("import_path")
+            if ip:
+                return str(ip)
+            sr = i.get("source_ref") or {}
+            return "%s/源码树" % (i.get("repo") or sr.get("path", "?"))
+        base_ips = {_ident(i) for i in impls
+                    if i.get("role") in ("competitor", "best_known")}
+        comp_ips = base_ips
+        has_comp = bool(base_ips)
+        if br is None:
+            if has_comp:
+                err("E28", p.name,
+                    "有 role=competitor 的实现却无 baseline_ref —— "
+                    "图谱必须指出「bench 时拿哪条当基准」")
+            continue
+        if not isinstance(br, dict):
+            err("E28", p.name, "baseline_ref 必须是 mapping")
+            continue
+        if br.get("no_baseline_reason"):
+            continue
+        ip = str(br.get("impl") or "")
+        if not ip:
+            err("E28", p.name, "baseline_ref 缺 impl（无基准时用 no_baseline_reason）")
+        elif ip not in comp_ips:
+            err("E28", p.name,
+                "baseline_ref.impl=%r 不指向本卡任何 role=competitor 的实现"
+                "（可选：%s）" % (ip, sorted(comp_ips) or "无"))
+        # 显式声明「无可用基准」是合法状态（比编一个假基准好）
+        if br.get("no_baseline_reason"):
+            continue
+        tp = br.get("traffic_passes")
+        if not isinstance(tp, dict) or tp.get("passes") is None:
+            err("E28", p.name,
+                "baseline_ref.traffic_passes 必填（reads/writes/passes）—— "
+                "不写就会把 201MB 和 268MB 混一起算；"
+                "确实没有基准时用 no_baseline_reason 显式声明")
+
+
+def _check_impl_roles(cards_dir, repo):
+    """E28a：102 个 impl 必须全部声明 role，且 tier=primary 的不能是禁用的 role。"""
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        for idx, i in enumerate(d.get("impls") or []):
+            if not isinstance(i, dict):
+                continue
+            role = i.get("role")
+            ip = i.get("import_path") or "(无 import_path)"
+            if not role:
+                err("E28", p.name,
+                    "impls[%d] %s 缺 role —— 必须声明它是 competitor / best_known / "
+                    "correctness_only / template / unverified 中的哪一种" % (idx, ip))
+                continue
+            if role not in IMPL_ROLES:
+                err("E28", p.name,
+                    "impls[%d] role=%r 非法（只允许 %s）"
+                    % (idx, role, sorted(IMPL_ROLES)))
+            if i.get("tier") == "primary" and role in NON_BASELINE_ROLES:
+                err("E28", p.name,
+                    "impls[%d] %s 是 tier=primary 但 role=%r —— "
+                    "%s 不能当主实现/基准" % (idx, ip, role, role))
 
 
 def _check_depth_rules(cards_dir, repo):
@@ -962,6 +1049,8 @@ def validate(atlas, repo):
     # 由来：2026-11-23 我在 rmsnorm 上试了 cross-lane-fold 后判死并标 at_floor，
     # 后来发现 tilelang 能做到 0.82（我 0.78）——那是 triton 的 codegen 上限，
     # 不是方法极限。**没有 falsifier 的「到顶」等于把工具限制记成物理规律。**
+    _check_impl_roles(cards_dir, repo)
+    _check_baseline_ref(cards_dir, repo)
     _check_depth_rules(cards_dir, repo)
 
     # ---- E27 基准合法性与语义对齐（读 baseline-policy.yaml）

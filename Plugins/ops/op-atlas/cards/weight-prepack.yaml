@@ -24,6 +24,7 @@ impls:
   import_path: aiter.moe_align_block_size
   signature: AITER 的 MoE 入口族（shuffle 在 moe_c 侧）
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
+  role: competitor
 - repo: deepgemm
   library_profile_ref: libraries.md §6
   file_hint: pack_w8a8_gfx936_weight_to_w6 / pack_w4a8_moe_hipc_weight
@@ -42,6 +43,7 @@ impls:
   import_path: deepgemm.group_gemm_weight_pack.marlin_bf16_masked_weight
   signature: marlin_bf16_masked_weight(weight, *, arch=None) -> Tensor
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("deepgemm.group_gemm_weight_pack"),"marlin_bf16_masked_weight")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -64,3 +66,12 @@ surfaces:
 - layout-pack
 - table-miss
 updated: '2026-11-22'
+baseline_ref:
+  impl: aiter.moe_align_block_size
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=quant 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

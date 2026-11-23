@@ -9,7 +9,7 @@ impls:
 - repo: triton
   library_profile_ref: libraries.md §9
   file_hint: Triton hcu 的 gather 路径（形状随数据变化，表达力优先）
-  tier: primary
+  tier: fallback
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
   - 现成库有更快的 gather 但需要 autotune；torch 版只作对照
@@ -24,10 +24,11 @@ impls:
   import_path: triton.jit
   signature: '@triton.jit'
   smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
+  role: template
 - repo: boltops
   library_profile_ref: libraries.md §10
   file_hint: gather 类成品
-  tier: fallback
+  tier: primary
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
   - 需要低时延
@@ -41,6 +42,7 @@ impls:
   import_path: boltops.gemm.gemm_a16w16
   signature: gemm_a16w16(...) 可作为 gather 对照
   smoke_test: python3 -I -c "import boltops; assert hasattr(importlib.import_module("boltops.gemm"),"gemm_a16w16")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -64,3 +66,12 @@ modify_path:
 surfaces:
 - gather-path
 updated: '2026-11-22'
+baseline_ref:
+  impl: boltops.gemm.gemm_a16w16
+  role: competitor
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 family=memory 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

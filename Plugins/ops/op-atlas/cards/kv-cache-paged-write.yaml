@@ -23,6 +23,7 @@ impls:
   import_path: flash_attn.flash_attn_varlen_func
   signature: flash_attn_varlen_func(..., block_table=...)
   smoke_test: python3 -I -c "import flash_attn; assert hasattr(flash_attn,"flash_attn_varlen_func")"
+  role: competitor
 - repo: in-house
   library_profile_ref: null
   file_hint: 手写 scatter
@@ -44,6 +45,7 @@ impls:
     build_cmd: null
     note: 尚无手写实现——目前用 flash_attn 的 block_table 路径替代
   l1_exempt_reason: 当前用 flash_attn 的 block_table 路径替代，自研实现尚无源码；非标准 page 布局才需要
+  role: best_known
 ceiling:
   kind: missing
   ref: null
@@ -68,3 +70,12 @@ surfaces:
 - layout-pack
 - gather-path
 updated: '2026-11-22'
+baseline_ref:
+  impl: flash_attn.flash_attn_varlen_func
+  role: competitor
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 family=kv 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

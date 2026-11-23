@@ -23,6 +23,7 @@ impls:
   import_path: deepgemm.m_grouped_fp8_gemm_nt_masked
   signature: m_grouped_fp8_gemm_nt_masked(...)
   smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_fp8_gemm_nt_masked")"
+  role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: get_aiter_moe_config
@@ -37,6 +38,7 @@ impls:
   cons:
   - 查表决定
   source: references/libraries.md
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -93,3 +95,12 @@ surfaces:
 - table-miss
 - occupancy
 updated: '2026-11-22'
+baseline_ref:
+  impl: deepgemm.m_grouped_fp8_gemm_nt_masked
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

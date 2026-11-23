@@ -23,6 +23,7 @@ impls:
   import_path: lightop.get_moe_cuda_config
   signature: get_moe_cuda_config(...) MoE 配置查询
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"get_moe_cuda_config")"
+  role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: topk softmax 支撑算子
@@ -40,6 +41,7 @@ impls:
   import_path: aiter.topk_softmax
   signature: topk_softmax(topk_weights,topk_ids,token_expert_ids,expert_mask,logits)
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"topk_softmax")"
+  role: competitor
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-moe-topk-gating/contract.yaml
@@ -71,3 +73,12 @@ surfaces:
 - table-miss
 - layout-pack
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.get_moe_cuda_config
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

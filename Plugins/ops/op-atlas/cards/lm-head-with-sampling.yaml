@@ -24,6 +24,7 @@ impls:
   import_path: lightop.fast_topk_transform_fused
   signature: fast_topk_transform_fused(...) 与 lm_head 配合
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"fast_topk_transform_fused")"
+  role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter 的 fused sampling（若可用）
@@ -41,6 +42,7 @@ impls:
   import_path: aiter.topk_softmax
   signature: topk_softmax(topk_weights, topk_ids, token_expert_ids, expert_mask, logits) —— 采样段
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"topk_softmax")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -65,3 +67,12 @@ surfaces:
 - fusion-boundary
 - precision-drop
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.fast_topk_transform_fused
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=gemm 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

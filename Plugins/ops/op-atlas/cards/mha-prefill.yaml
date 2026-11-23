@@ -24,6 +24,7 @@ impls:
   import_path: flash_attn.flash_attn_func
   signature: flash_attn_func(q,k,v,dropout_p=0.0,causal=True)
   smoke_test: python3 -I -c "import flash_attn; assert hasattr(flash_attn,"flash_attn_func")"
+  role: competitor
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: 可改结构
@@ -41,6 +42,7 @@ impls:
   import_path: tilelang.jit
   signature: '@tilelang.jit'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+  role: template
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
@@ -85,3 +87,12 @@ surfaces:
 - occupancy
 - split-k
 updated: '2026-11-22'
+baseline_ref:
+  impl: flash_attn.flash_attn_func
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

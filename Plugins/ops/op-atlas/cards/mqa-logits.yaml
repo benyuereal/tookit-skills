@@ -27,6 +27,7 @@ impls:
   import_path: lightop.mqa_logits
   signature: mqa_logits(q, k, ...) 按 lightop 绑定
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"mqa_logits")"
+  role: competitor
 - repo: hbird-gemm
   library_profile_ref: libraries.md §1
   file_hint: grouped G=3 + ds_bpermute epilogue
@@ -48,6 +49,7 @@ impls:
     build_cmd: cd /workspace/hbird-gemm && ./dsa_mqa_logits/reproduce.sh all
     note: hbird 是个人仓库的源码树；这里引的是它已落地的 patch
   l1_exempt_reason: shipped ungrouped 基线来自 hbird 的 patch，非可 import 包；见 source_ref
+  role: best_known
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/models/mqa_logits.py
@@ -90,3 +92,12 @@ surfaces:
 - cross-row-kv-reuse
 - fold-nextn
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.mqa_logits
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

@@ -23,6 +23,7 @@ impls:
   import_path: lightop.FuseBiasSwiGLU
   signature: FuseBiasSwiGLU()(input, bias) -> Tensor; input [M,2H] -> out [M,H]
   smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"FuseBiasSwiGLU")"
+  role: competitor
 - repo: deepgemm
   library_profile_ref: libraries.md §6
   file_hint: GEMM + swiglu epilogue
@@ -40,6 +41,7 @@ impls:
   import_path: deepgemm.m_grouped_fp8_gemm_nt_masked
   signature: m_grouped_fp8_gemm_nt_masked(...) —— grouped GEMM，可与 swiglu epilogue 配
   smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_fp8_gemm_nt_masked")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -93,3 +95,12 @@ surfaces:
 - fusion-boundary
 - precision-drop
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.FuseBiasSwiGLU
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=activation 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

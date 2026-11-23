@@ -23,6 +23,7 @@ impls:
   import_path: lightop.fuse_groupgemm_permute_quant
   signature: fuse_groupgemm_permute_quant(tokens, routing_map) -> tuple
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"fuse_groupgemm_permute_quant")"
+  role: competitor
 - repo: deepgemm
   library_profile_ref: libraries.md §6
   file_hint: m_grouped_bf16_gemm_nt_masked（L0 全拆分的主体）
@@ -41,6 +42,7 @@ impls:
   import_path: deepgemm.m_grouped_bf16_gemm_nt_masked
   signature: m_grouped_bf16_gemm_nt_masked(a,b,d,masked_m,expected_m_per_group,config)
   smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_bf16_gemm_nt_masked")"
+  role: competitor
 ceiling:
   kind: measured
   ref: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage2b-ladder.json
@@ -89,3 +91,12 @@ soft_preconditions:
 - 建议 hot 态测量（冷启动会被首调虚高污染）
 - M/exp 在 32-64 之间时建议两端各测一次再定，不要插值
 updated: '2026-11-23'
+baseline_ref:
+  impl: lightop.fuse_groupgemm_permute_quant
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

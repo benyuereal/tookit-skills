@@ -19,11 +19,11 @@
 |---|---|---|---|---|---|
 | [`causal-conv1d`](cards/causal-conv1d.yaml) | linear-attn | draft | causal-conv1d | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`chunked-scan`](cards/chunked-scan.yaml) | linear-attn | draft | tilelang | mixed | 无实测：索引卡，实现层待按证据推进 |
-| [`embedding-lookup`](cards/embedding-lookup.yaml) | memory | draft | triton | bandwidth | 无实测：索引卡，实现层待按证据推进 |
+| [`embedding-lookup`](cards/embedding-lookup.yaml) | memory | draft | boltops | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`flash-attention-fwd`](cards/flash-attention-fwd.yaml) | attention | measured | flash-attn | mixed | causal 相对 non-causal 耗时比为 0.60；两条路… |
 | [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | measured | lightop | bandwidth | 融合比分步快 1.70x(M=1024)/2.39x(M=8192)… |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | flash-kda | mixed | 无实测：索引卡，实现层待按证据推进 |
-| [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | torch | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |
+| [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | boltops | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | aiter | compute | aiter fp8 达 48 TF（nominal 560 的 0.… |
 | [`gemm-int8`](cards/gemm-int8.yaml) | gemm | measured | deepgemm | compute | INT8 grouped 达 343 TFLOPS、1621 GB/… |
 | [`hadamard-transform`](cards/hadamard-transform.yaml) | linear-attn | draft | mhc-kernels | compute | 无实测：索引卡，实现层待按证据推进 |
@@ -59,7 +59,7 @@
 | [`rope-mla`](cards/rope-mla.yaml) | rope | measured | flash-mla | bandwidth | MLA decode 为 360 GB/s，与纯 rope 的 33… |
 | [`rope`](cards/rope.yaml) | rope | measured | lightop | bandwidth | 两种 rotate_style 耗时比为 0.973（差异接近噪声边… |
 | [`sampling-topk-topp`](cards/sampling-topk-topp.yaml) | sampling | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
-| [`sparse-mla`](cards/sparse-mla.yaml) | attention | tuned | tilelang | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REP… |
+| [`sparse-mla`](cards/sparse-mla.yaml) | attention | tuned | flash-mla | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REP… |
 | [`topk-block-index`](cards/topk-block-index.yaml) | attention | measured | lightop | latency | 耗时约等于空 kernel（0.79×），已无优化空间；比 torc… |
 | [`verify-accept`](cards/verify-accept.yaml) | sampling | draft | in-house | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`weight-prepack`](cards/weight-prepack.yaml) | quant | draft | aiter | bandwidth | 无实测：索引卡。核心价值是提醒「漏 prepack 是静默错误」 |

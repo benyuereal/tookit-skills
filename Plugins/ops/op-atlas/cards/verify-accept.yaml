@@ -27,6 +27,7 @@ impls:
     build_cmd: null
     note: 尚无手写实现——接受判据随模型分布而定
   l1_exempt_reason: 接受判据绑定模型的实际 logits 分布与随机源，无通用库实现
+  role: best_known
 - repo: triton
   library_profile_ref: libraries.md §9
   file_hint: Triton 的接受判据实现
@@ -44,6 +45,7 @@ impls:
   import_path: triton.jit
   signature: '@triton.jit'
   smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
+  role: template
 ceiling:
   kind: missing
   ref: null
@@ -67,3 +69,12 @@ modify_path:
 surfaces:
 - precision-drop
 updated: '2026-11-22'
+baseline_ref:
+  impl: in-house/源码树
+  role: best_known
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 family 推定（未实测，须校正）
+  note: 本卡无厂商 competitor，基准用本卡自研最优（best_known）

@@ -24,6 +24,7 @@ impls:
   import_path: lightop.fast_topk_transform_fused
   signature: fast_topk_transform_fused(score,lengths,page_table,cu_seqlens_q,topk)
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"mqa_logits")"
+  role: competitor
 - repo: boltops
   library_profile_ref: libraries.md §10
   file_hint: topk 类成品
@@ -41,6 +42,7 @@ impls:
   import_path: boltops.mqa_logits.fp8_mqa_logits
   signature: fp8_mqa_logits(q,fused_kv_cache,weights,...)
   smoke_test: python3 -I -c "import boltops; assert hasattr(importlib.import_module("boltops.mqa_logits"),"fp8_mqa_logits")"
+  role: competitor
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
@@ -92,3 +94,12 @@ hard_preconditions:
   check: 传 1D 报 "Expected src_page_table.dim() == 2 && src_page_table.stride(1) == 1"
 - statement: lightop.fuse_topk_transform 是模块不是函数（import_path 粒度）
   check: 真实入口是 lightop.fast_topk_transform_fused；直接调模块报 not a callable object
+baseline_ref:
+  impl: lightop.fast_topk_transform_fused
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

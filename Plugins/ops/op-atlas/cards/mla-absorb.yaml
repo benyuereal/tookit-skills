@@ -24,6 +24,7 @@ impls:
   import_path: flash_mla.flash_mla_with_kvcache
   signature: flash_mla_with_kvcache(...) MLA 吸收式路径
   smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"flash_mla_with_kvcache")"
+  role: competitor
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: 可改结构的 MLA
@@ -41,6 +42,7 @@ impls:
   import_path: tilelang.jit
   signature: '@tilelang.jit'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+  role: template
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
@@ -90,3 +92,12 @@ hard_preconditions:
   check: 复用会在 B 不同时 AssertionError；形状相同但序列长不同时会静默走错调度（同一形状实测 173 vs 407 GB/s，差 2.4 倍）
 - statement: get_mla_metadata() 不接参数，返回 (meta, None)；head_dim_v 是第 5 个位置参数
   check: 按旧文档传 (cache_seqlens, num_heads) 得到 "must be of type FlashMLASchedMeta"
+baseline_ref:
+  impl: flash_mla.flash_mla_with_kvcache
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

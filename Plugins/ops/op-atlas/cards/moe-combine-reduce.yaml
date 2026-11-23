@@ -23,6 +23,7 @@ impls:
   import_path: lightop.moe_align_sum.moe_sum
   signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None, factor=1.0, expect_m=-1) -> None
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.moe_align_sum"),"moe_sum")"
+  role: competitor
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: lightop 的 moe_sum
@@ -40,6 +41,7 @@ impls:
   import_path: lightop.moe_align_sum.moe_sum
   signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None, factor=1.0, expect_m=-1) -> None
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.moe_align_sum"),"moe_sum")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -86,3 +88,12 @@ surfaces:
 - cross-lane-fold
 - layout-pack
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.moe_align_sum.moe_sum
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

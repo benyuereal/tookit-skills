@@ -9,7 +9,7 @@ impls:
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang / tilelang-prefetch
-  tier: primary
+  tier: fallback
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   best_for:
   - ctx>=128k 长上下文
@@ -27,6 +27,7 @@ impls:
   import_path: tilelang.jit
   signature: '@tilelang.jit'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+  role: template
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: flash_mla
@@ -47,6 +48,7 @@ impls:
   import_path: boltops.mla.flash_mla_sparse_fwd
   signature: flash_mla_sparse_fwd(...)
   smoke_test: python3 -I -c "import boltops; assert hasattr(importlib.import_module("boltops.mla"),"flash_mla_sparse_fwd")"
+  role: competitor
 - repo: in-house
   library_profile_ref: null
   file_hint: hip-glm（手写主循环，绕开 tilelang 布局转换）
@@ -68,6 +70,7 @@ impls:
     build_cmd: null
     note: 手写主循环（hip-glm）的源码在 op-sparse-mla/dev/ 下
   l1_exempt_reason: 手写主循环（hip-glm）是绕开 tilelang 布局税的定制实现，源码在 op-sparse-mla/dev/ 下，不在任何库里
+  role: best_known
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/models/sparse_mla.py
@@ -115,3 +118,12 @@ surfaces:
 - occupancy
 - layout-pack
 updated: '2026-11-22'
+baseline_ref:
+  impl: boltops.mla.flash_mla_sparse_fwd
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

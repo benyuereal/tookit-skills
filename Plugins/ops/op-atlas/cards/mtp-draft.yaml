@@ -27,6 +27,7 @@ impls:
     build_cmd: null
     note: 尚无手写实现——draft head 随具体模型而定，没有通用源码
   l1_exempt_reason: draft head 随具体模型结构而定，没有通用库函数；源码需随模型自研
+  role: best_known
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: 小 M GEMM 路径
@@ -44,6 +45,7 @@ impls:
   import_path: lightop.moe_gemm_marlin_w16a16
   signature: moe_gemm_marlin_w16a16(...) —— 小 M GEMM 路径
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_gemm_marlin_w16a16")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -67,3 +69,12 @@ modify_path:
 surfaces:
 - occupancy
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.moe_gemm_marlin_w16a16
+  role: competitor
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 family=sampling 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

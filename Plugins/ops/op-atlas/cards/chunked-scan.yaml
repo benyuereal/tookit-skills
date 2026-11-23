@@ -9,7 +9,7 @@ impls:
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 的 scan 表达
-  tier: primary
+  tier: fallback
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
   - 需要自定义递推结构
@@ -24,6 +24,7 @@ impls:
   import_path: tilelang.jit
   signature: '@tilelang.jit'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+  role: template
 - repo: triton
   library_profile_ref: libraries.md §9
   file_hint: Triton 的 scan 实现
@@ -41,6 +42,7 @@ impls:
   import_path: triton.jit
   signature: '@triton.jit 装饰器'
   smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
+  role: template
 ceiling:
   kind: missing
   ref: null
@@ -65,3 +67,8 @@ surfaces:
 - pipeline-depth
 - occupancy
 updated: '2026-11-22'
+baseline_ref:
+  impl: null
+  role: unverified
+  traffic_passes: null
+  no_baseline_reason: 本卡两条 impl 都是 DSL 入口（tilelang.jit / triton.jit），没有厂商实现也没有本卡自研实现 ⇒ **无可用性能基准**。要建 bench 必须先写出至少一个具体 kernel 实现。

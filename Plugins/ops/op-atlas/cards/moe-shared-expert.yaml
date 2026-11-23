@@ -23,6 +23,7 @@ impls:
   import_path: lightop.moe_fuse_gate_per_gourp_topk
   signature: moe_fuse_gate_per_gourp_topk(...) gate+topk 融合
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"moe_fuse_gate_per_gourp_topk")"
+  role: competitor
 - repo: triton
   library_profile_ref: libraries.md §9
   file_hint: Triton 的 shared expert 路径
@@ -40,6 +41,7 @@ impls:
   import_path: triton.jit
   signature: '@triton.jit'
   smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
+  role: template
 ceiling:
   kind: missing
   ref: null
@@ -64,3 +66,12 @@ surfaces:
 - fusion-boundary
 - table-miss
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.moe_fuse_gate_per_gourp_topk
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

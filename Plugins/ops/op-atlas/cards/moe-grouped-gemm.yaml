@@ -24,6 +24,7 @@ impls:
   import_path: deepgemm.m_grouped_fp8_gemm_nt_masked
   signature: m_grouped_fp8_gemm_nt_masked(...)
   smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"m_grouped_fp8_gemm_nt_masked")"
+  role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: get_aiter_moe_config → moe_c / asm / triton / ck
@@ -41,6 +42,7 @@ impls:
   import_path: aiter.moe_align_block_size
   signature: moe_align_block_size(...)
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
+  role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §5
   file_hint: MOE_C 后端（调优表在独立仓库 Moe 的 moe_c_configs/，按 gfx × 量化类型组织）
@@ -58,6 +60,7 @@ impls:
   import_path: aiter.moe_align_block_size
   signature: moe_align_block_size(...)
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"moe_align_block_size")"
+  role: competitor
 - repo: in-house
   library_profile_ref: null
   file_hint: 稠密 GEMM 循环调 per-expert
@@ -75,6 +78,7 @@ impls:
     build_cmd: null
     note: 这是反模式条目（tier=avoid），不对应任何源码
   l1_exempt_reason: 这是反模式条目（tier=avoid），表达「别用稠密 GEMM 循环调 per-expert」，不对应任何源码
+  role: best_known
 ceiling:
   kind: missing
   ref: null
@@ -99,3 +103,12 @@ surfaces:
 - table-miss
 - layout-pack
 updated: '2026-11-22'
+baseline_ref:
+  impl: deepgemm.m_grouped_fp8_gemm_nt_masked
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

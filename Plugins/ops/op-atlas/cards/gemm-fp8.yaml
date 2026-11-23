@@ -25,6 +25,7 @@ impls:
   import_path: aiter.gemm_a8w8_opus
   signature: gemm_a8w8_opus(A,B,x_scale=1.0,w_scale=1.0,bias=None,dtype=torch.bfloat16,kernelId=None)
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,'gemm_a8w8_opus')"
+  role: competitor
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: examples/gemm_fp8
@@ -43,6 +44,7 @@ impls:
   import_path: tilelang.jit
   signature: '@tilelang.jit 写 fp8 GEMM'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
+  role: template
 - repo: triton
   library_profile_ref: libraries.md §6
   file_hint: torch._scaled_mm
@@ -60,6 +62,7 @@ impls:
   import_path: triton.jit
   signature: '@triton.jit 写 fp8 GEMM kernel（形状随数据变化时用）'
   smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
+  role: template
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter GEMM 入口
@@ -77,6 +80,7 @@ impls:
   import_path: aiter.gemm_a8w8_opus
   signature: gemm_a8w8_opus(...) —— AITER 的 INT8/fp8 GEMM 入口族
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"gemm_a8w8_opus")"
+  role: competitor
 - repo: in-house
   library_profile_ref: null
   file_hint: 手写 HIP + MFMA intrinsic
@@ -103,6 +107,25 @@ impls:
     build_cmd: null
     note: 尚无手写实现——本卡只登记「需要手写 HIP + MFMA」这个结论，源码还没写
   l1_exempt_reason: 本平台无现成 FP8 稠密 GEMM（hipblaslt 不可导入、deepgemm 包装层有 device bug、aiter 只有 MoE 专用），需要手写 HIP；源码尚未编写
+  role: best_known
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: fp8_gemm
+  tier: fallback
+  role: competitor
+  law_ref: null
+  best_for:
+  - grouped fp8 GEMM
+  not_for:
+  - 纯稠密（本机未跑通）
+  pros:
+  - 提供 fp8 路径
+  cons:
+  - 本机 deep_gemm 不可导入
+  source: references/libraries.md
+  import_path: deepgemm.fp8_gemm
+  signature: fp8_gemm(a,b,d,c=None,recipe=None)
+  smoke_test: python3 -I -c "import deep_gemm; assert hasattr(deep_gemm,'fp8_gemm')"
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
@@ -162,3 +185,12 @@ surfaces:
 - split-k
 - table-miss
 updated: '2026-11-22'
+baseline_ref:
+  impl: aiter.gemm_a8w8_opus
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=gemm 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

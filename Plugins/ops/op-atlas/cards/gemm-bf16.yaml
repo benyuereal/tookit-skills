@@ -6,15 +6,69 @@ status: measured
 layer: kernel
 op_card: null
 impls:
+- repo: boltops
+  library_profile_ref: libraries.md §10
+  file_hint: gemm_a16w16
+  tier: primary
+  role: competitor
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - bf16 稠密 GEMM 的性能基准
+  not_for:
+  - 需要额外 epilogue 的场景
+  pros:
+  - 厂商调优实现，boltops 里有 triton autotune 工具链
+  cons:
+  - 未在本机实测达成率
+  source: references/libraries.md
+  import_path: boltops.gemm.gemm_a16w16
+  signature: gemm_a16w16(x, w, bias=None, dtype=None)
+  smoke_test: python3 -I -c "from boltops.gemm import gemm_a16w16"
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: gemm_a16w16_opus
+  tier: primary
+  role: competitor
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - gfx938 的 bf16 GEMM 性能基准
+  not_for:
+  - 小 M 的 decode 档（带宽型）
+  pros:
+  - opus 族，kernelId 可选 0/1/2
+  cons:
+  - auto 选参未必最优
+  source: references/libraries.md
+  import_path: aiter.gemm_a16w16_opus
+  signature: gemm_a16w16_opus(A,B,bias=None,dtype=torch.bfloat16,*,kernelId,splitK,out)
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,'gemm_a16w16_opus')"
+- repo: boltops
+  library_profile_ref: libraries.md §10
+  file_hint: matmul_persistent
+  tier: fallback
+  role: competitor
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - persistent 形态的 bf16 matmul
+  not_for:
+  - 需要 batched 的场景
+  pros:
+  - persistent kernel，省 launch
+  cons:
+  - 形状适配性未知
+  source: references/libraries.md
+  import_path: boltops.gemm.matmul_persistent
+  signature: matmul_persistent(a, b, bias=None)
+  smoke_test: python3 -I -c "from boltops.gemm import matmul_persistent"
 - repo: torch
   library_profile_ref: libraries.md §6
   file_hint: torch.mm / a @ b.t()
-  tier: primary
+  tier: reference
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
   - 常规稠密 GEMM（M>=2048 时 0.78~0.87 达成率）
   not_for:
-  - decode 小 M（<128，达 0.00~0.16，受访存限制）
+  - 性能基准（未优化参考，打赢它没有工程意义）
   pros:
   - 比 F.linear 稳定快 8~10%（四个形状 mm/linear=0.900/0.911/0.920/0.956，同 kernel 只是 dispatch 选参差异）
   cons:
@@ -23,6 +77,7 @@ impls:
   import_path: torch.mm
   signature: 'torch.mm(a, b_t)  # b_t 为 [K,N]'
   smoke_test: python3 -I -c "import torch; a=torch.zeros(8,8); assert torch.mm(a,a).shape==(8,8)"
+  role: correctness_only
 - repo: triton
   library_profile_ref: libraries.md §6
   file_hint: torch.mm 后端
@@ -40,23 +95,7 @@ impls:
   import_path: triton.jit
   signature: '@triton.jit 写 GEMM kernel'
   smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
-- repo: deepgemm
-  library_profile_ref: libraries.md §6
-  file_hint: fp8_gemm（走 hipBLASLt）
-  tier: fallback
-  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
-  best_for:
-  - grouped 场景
-  not_for:
-  - 纯稠密
-  pros:
-  - 灵活但不如专用实现快
-  cons:
-  - 多一层
-  source: references/libraries.md
-  import_path: deepgemm.fp8_gemm
-  signature: fp8_gemm(a,b,d,c=None,recipe=None)
-  smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"fp8_gemm")"
+  role: template
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
@@ -112,3 +151,12 @@ surfaces:
 - occupancy
 - split-k
 updated: '2026-11-22'
+baseline_ref:
+  impl: boltops.gemm.gemm_a16w16
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=gemm 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

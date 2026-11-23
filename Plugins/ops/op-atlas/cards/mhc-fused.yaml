@@ -28,6 +28,7 @@ impls:
     build_cmd: cd /workspace/mhc_kernels && ./build.sh
     note: 融合版与分拆版都在这个 TU；注释里记着「编译进同一 TU 会改变寄存器分配」
   l1_exempt_reason: 融合 kernel 在 mhc_kernels 源码树的 mhc_fused.hip，非可 import 包；源码树见 source_ref
+  role: best_known
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 分拆三步
@@ -45,6 +46,7 @@ impls:
   import_path: boltops.mhc.mhc_fused_tilelang
   signature: mhc_fused_tilelang(...)
   smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.mhc").mhc_fused_tilelang is not None"
+  role: template
 ceiling:
   kind: missing
   ref: null
@@ -68,3 +70,12 @@ modify_path:
 surfaces:
 - fusion-boundary
 updated: '2026-11-22'
+baseline_ref:
+  impl: mhc-kernels/源码树
+  role: best_known
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family 推定（未实测，须校正）
+  note: 本卡无厂商 competitor，基准用本卡自研最优（best_known）

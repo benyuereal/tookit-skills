@@ -25,6 +25,7 @@ impls:
   import_path: flash_attn.flash_attn_varlen_func
   signature: flash_attn_varlen_func(q,k,v,max_seqlen_q,max_seqlen_k,cu_seqlens_q,cu_seqlens_k,block_table=...)
   smoke_test: python3 -I -c "import flash_attn; assert hasattr(flash_attn,"flash_attn_varlen_func")"
+  role: competitor
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: MLA 的 decode 路径
@@ -43,6 +44,7 @@ impls:
   import_path: flash_mla.flash_mla_with_kvcache
   signature: flash_mla_with_kvcache(q,k_cache,block_table,cache_seqlens,head_dim_v,tile_scheduler_metadata,num_splits)
   smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"flash_mla_with_kvcache")"
+  role: competitor
 - repo: boltops
   library_profile_ref: libraries.md §10
   file_hint: decode 形状 attention 成品
@@ -60,6 +62,7 @@ impls:
   import_path: boltops.mla.decode_attention_fwd
   signature: decode_attention_fwd(q,kv_cache,...)
   smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.mla").decode_attention_fwd is not None"
+  role: competitor
 ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
@@ -113,3 +116,12 @@ surfaces:
 - gather-path
 - occupancy
 updated: '2026-11-22'
+baseline_ref:
+  impl: flash_mla.flash_mla_with_kvcache
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

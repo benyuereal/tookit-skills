@@ -23,6 +23,7 @@ impls:
   import_path: flash_mla.flash_mla_with_kvcache
   signature: flash_mla_with_kvcache(q, k_cache, block_table, cache_seqlens, head_dim_v, tile_scheduler_metadata, num_splits) — MLA 的 rope 在其内部完成
   smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,\"flash_mla_with_kvcache\")"
+  role: competitor
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: flash_mla 的 MLA rope 路径
@@ -40,6 +41,7 @@ impls:
   import_path: flash_mla.flash_mla_with_kvcache
   signature: flash_mla_with_kvcache(q, k_cache, block_table, cache_seqlens, head_dim_v, tile_scheduler_metadata, num_splits) — MLA 的 rope 在其内部完成
   smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,\"flash_mla_with_kvcache\")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -89,3 +91,12 @@ soft_preconditions:
 surfaces:
 - layout-pack
 updated: '2026-11-22'
+baseline_ref:
+  impl: flash_mla.flash_mla_with_kvcache
+  role: competitor
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 family=rope 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

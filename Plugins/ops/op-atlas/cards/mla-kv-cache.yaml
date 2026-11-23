@@ -23,6 +23,7 @@ impls:
   import_path: flash_mla.get_mla_metadata
   signature: get_mla_metadata(cache_seqlens,num_heads_per_rank,head_dim)
   smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"get_mla_metadata")"
+  role: competitor
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: flash_mla 的 latent cache 布局
@@ -40,6 +41,7 @@ impls:
   import_path: flash_mla.get_mla_metadata
   signature: get_mla_metadata(cache_seqlens,num_heads_per_rank,head_dim)
   smoke_test: python3 -I -c "import flash_mla; assert hasattr(flash_mla,"get_mla_metadata")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -63,3 +65,12 @@ modify_path:
 surfaces:
 - layout-pack
 updated: '2026-11-22'
+baseline_ref:
+  impl: flash_mla.get_mla_metadata
+  role: competitor
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 family=kv 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

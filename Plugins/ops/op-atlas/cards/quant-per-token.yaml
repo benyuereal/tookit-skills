@@ -25,6 +25,7 @@ impls:
   import_path: lightop.fuse_silu_mul_clamp_quant_ep
   signature: fuse_silu_mul_clamp_quant_ep(...) 激活+量化的 per-token 融合
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"fuse_silu_mul_clamp_quant_ep")"
+  role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter 的量化支撑算子
@@ -42,6 +43,7 @@ impls:
   import_path: aiter.dynamic_per_token_scaled_quant
   signature: dynamic_per_token_scaled_quant(out, input, scales, scale_ub=None) —— per-token 动态量化
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"dynamic_per_token_scaled_quant")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -67,3 +69,12 @@ surfaces:
 - precision-drop
 - fusion-boundary
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.fuse_silu_mul_clamp_quant_ep
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 family=quant 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准

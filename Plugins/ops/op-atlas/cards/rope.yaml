@@ -24,6 +24,7 @@ impls:
   import_path: lightop.fuse_rmsnorm_rope.rms_rotary_embedding_fuse
   signature: rms_rotary_embedding_fuse(positions, query, key, head_size, cos_sin_cache, is_neox, weight_q, weight_k, ...)
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.fuse_rmsnorm_rope"),"rms_rotary_embedding_fuse")"
+  role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter.RoPE / RoPETHD / fused_qk_rmsnorm_rope
@@ -41,6 +42,7 @@ impls:
   import_path: aiter.RoPE
   signature: RoPE.forward(x, freqs, rotate_style, reuse_freqs_front_part, nope_first, transpose_output=False)
   smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert hasattr(aiter,"RoPE")"
+  role: competitor
 ceiling:
   kind: missing
   ref: null
@@ -90,3 +92,12 @@ surfaces:
 - layout-pack
 - fusion-boundary
 updated: '2026-11-22'
+baseline_ref:
+  impl: lightop.fuse_rmsnorm_rope.rms_rotary_embedding_fuse
+  role: competitor
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 family=rope 推定（**未实测，须用 --actual 校正**）
+  note: bench 时拿这条当性能基准
