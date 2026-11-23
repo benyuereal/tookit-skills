@@ -74,6 +74,15 @@ last_verdict:
     expected: ≥500 GB/s
     stop_if: 若合并读后仍 <400，说明 freqs 的访问模式本身不连续 ⇒ 改查表布局，属 source-patch
     effort: 4h
+  floor:
+    remaining: 3.8366
+    t_floor_us: 159.8
+    t_actual_us: 772.8
+    binding: memory
+    basis: 1读1写 2×8×2048×32×128×2B=268.4MB；t=0.7728 ms 是 B=8 S=2048 的 median_ms ⇒ memory 地板 159.8 us（rw_1to1 档 1680 GB/s（confidence=high））；binding=memory；实测 772.8 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: 选对 rotate_style 并合入 norm
@@ -114,3 +123,10 @@ semantics:
     passes: 2
     source: 按 math：读 x，写 x_rot（cache 只有 S*D 大小）
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 268.435
+  pattern: rw_1to1
+  t_actual_us: 772.8
+  t_source: results
+  basis: 1读1写 2×8×2048×32×128×2B=268.4MB；t=0.7728 ms 是 B=8 S=2048 的 median_ms
+  evidence: Plugins/ops/skills/op-optimize/cases/003-rope-bandwidth/results/rope-bandwidth.json

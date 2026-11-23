@@ -100,6 +100,16 @@ last_verdict:
       value: null
       unmeasured: true
       note: 未实测：需按 decode 形状单独跑
+  floor:
+    remaining: 0.6996
+    t_floor_us: 118.5
+    t_actual_us: 201.4
+    binding: memory
+    basis: E=32 M/exp=16 档：x 16×2048×2B×32=2.1MB + gate_up 权重 2048×1536×2B×32=201.3MB + y 16×1536×2B×32=1.6MB = 205.0MB；t=0.2014 ms 是 L1 部分融合（整链，含 permute+quant） ⇒ memory 地板 118.5 us（rw_2to1 档 1730 GB/s（confidence=high））；binding=memory；实测
+      201.4 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 surfaces:
 - fusion-boundary
 - layout-pack
@@ -136,3 +146,10 @@ semantics:
     passes: 3
     source: 引擎层，不是单 kernel；读写按整体流水计的粗算，bench 前须按实际段数重核
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 204.997
+  pattern: rw_2to1
+  t_actual_us: 201.4
+  t_source: results
+  basis: E=32 M/exp=16 档：x 16×2048×2B×32=2.1MB + gate_up 权重 2048×1536×2B×32=201.3MB + y 16×1536×2B×32=1.6MB = 205.0MB；t=0.2014 ms 是 L1 部分融合（整链，含 permute+quant）
+  evidence: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage2b-ladder.json

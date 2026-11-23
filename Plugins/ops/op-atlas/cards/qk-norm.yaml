@@ -115,3 +115,11 @@ semantics:
     passes: 4
     source: 按 math：读 q/k，写回 q/k（融合视角下原地）
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 536.871
+  pattern: rw_1to1
+  t_source: derived
+  t_actual_us: null
+  missing_evidence: 2读2写 = 4×8×2048×32×128×2B=536.9MB；卡片记融合后 741 GB/s ⇒ t=536.9/741=724.5µs（反推）
+  basis: 2读2写 = 4×8×2048×32×128×2B=536.9MB；卡片记融合后 741 GB/s ⇒ t=536.9/741=724.5µs（反推）
+  evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）

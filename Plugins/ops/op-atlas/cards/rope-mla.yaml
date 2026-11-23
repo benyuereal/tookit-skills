@@ -75,6 +75,15 @@ last_verdict:
     stop_if: 若摘除后 MLA 变快 >15%，说明 rope 确实是瓶颈之一 ⇒ 本卡结论作废，重测
     effort: 1h
     falsifier: 若 MLA decode 的 KV gather 被替换为合并访问，使 rope 在其中的占比变得可测量，则重新推进。
+  floor:
+    remaining: 3.1063
+    t_floor_us: 43.6
+    t_actual_us: 179.2
+    binding: memory
+    basis: KV 读 8192×8×576×2B=75.5MB（bench 源码 byts 公式）；t=0.1792 ms 是 KV=8192/B=8 的 ms ⇒ memory 地板 43.6 us（rw_2to1 档 1730 GB/s（confidence=high））；binding=memory；实测 179.2 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: MLA 的 rope 走 flash_mla 内置路径
@@ -115,3 +124,10 @@ semantics:
     passes: 3
     source: 按 math：读 q/k_pe，写 q_pe 与 k_pe
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 75.497
+  pattern: rw_2to1
+  t_actual_us: 179.2
+  t_source: results
+  basis: KV 读 8192×8×576×2B=75.5MB（bench 源码 byts 公式）；t=0.1792 ms 是 KV=8192/B=8 的 ms
+  evidence: Plugins/ops/skills/op-optimize/cases/006-mla-decode-absorb/results/mla-decode.json

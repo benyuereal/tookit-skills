@@ -133,3 +133,11 @@ semantics:
     passes: 3
     source: 实测 2026-11-23：lightop.moe_align_sum.moe_sum(input, output) 返回 None，输出写进调用方给的 output buffer。writes 仍按 1 份计（写的是 output）
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 335.544
+  pattern: rw_2to1
+  t_source: derived
+  t_actual_us: null
+  missing_evidence: 读 K=4 份 4×8192×4096×2B=268.4MB + 写 output 8192×4096×2B=67.1MB = 335.5MB；卡片记 moe_sum 780 GB/s ⇒ t=335.5/780=430.2µs（反推）
+  basis: 读 K=4 份 4×8192×4096×2B=268.4MB + 写 output 8192×4096×2B=67.1MB = 335.5MB；卡片记 moe_sum 780 GB/s ⇒ t=335.5/780=430.2µs（反推）
+  evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）

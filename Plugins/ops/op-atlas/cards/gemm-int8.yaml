@@ -141,3 +141,13 @@ semantics:
     passes: 3
     source: 按 math：读 A、B 与标量 scale，写 C
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 121.635
+  pattern: rw_2to1
+  flops: 25769803776
+  precision: bf16
+  t_source: derived
+  t_actual_us: null
+  missing_evidence: A_i8 8.4MB + B_i8 100.7MB + C_bf16 12.6MB = 121.7MB；算力绑定 2×32×128×1536×2048=25.8 GFLOPs，卡片记 343.4 TFLOPS ⇒ t=25.8e9/343.4e12=75.1µs（反推）
+  basis: A_i8 8.4MB + B_i8 100.7MB + C_bf16 12.6MB = 121.7MB；算力绑定 2×32×128×1536×2048=25.8 GFLOPs，卡片记 343.4 TFLOPS ⇒ t=25.8e9/343.4e12=75.1µs（反推）
+  evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）

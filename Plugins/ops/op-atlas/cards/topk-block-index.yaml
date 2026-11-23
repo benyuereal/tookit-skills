@@ -101,6 +101,16 @@ last_verdict:
       value: 0.79
       unmeasured: false
       note: decode 值取自本卡 last_verdict.ratio（若其本身是 decode 口径）
+  floor:
+    remaining: -0.2103
+    t_floor_us: 43.3
+    t_actual_us: 34.2
+    binding: memory
+    basis: scores 32×8192×2B=0.52MB（idx 输出 32×2048×4B=0.26MB 量级相同）；t=0.0342 ms 是 B=32 的 median_ms。字节小到地板由 launch 决定：搬运 0.3µs + launch 43µs ⇒ memory 地板 0.3 us（rw_1to1 档 1680 GB/s（confidence=high））；binding=memory；+
+      launch 43 us；实测 34.2 us
+    verdict: below_floor
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: env-flag
   what: 切 fused topk 变换变体
@@ -137,3 +147,11 @@ semantics:
     passes: 3
     source: 实测确认（2026-11-23）：实测 lightop.fast_topk_transform_fused 返回单个 Tensor（topk 必须=2048）
   mutates_inputs: []
+floor_inputs:
+  pattern: rw_1to1
+  t_actual_us: 34.2
+  t_source: results
+  launch_us: 43
+  basis: scores 32×8192×2B=0.52MB（idx 输出 32×2048×4B=0.26MB 量级相同）；t=0.0342 ms 是 B=32 的 median_ms。字节小到地板由 launch 决定：搬运 0.3µs + launch 43µs
+  evidence: Plugins/ops/skills/op-optimize/cases/009-topk-block-index/results/topk-block-index.json
+  bytes_mb: 0.52

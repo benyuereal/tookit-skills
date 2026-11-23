@@ -138,11 +138,13 @@ def render(cards, missing, mismatched, streak):
     L.append("> 由 `scripts/gen_gaps.py` 生成。改这张表请改脚本或卡片，不要直接编辑本文件。")
     L.append("> 生成时间：%s" % __import__("time").strftime("%Y-%m-%d %H:%M"))
     L.append(">")
-    L.append("> **它防的是「用覆盖数掩盖深度不足」。** 46 张卡容易被当成全覆盖，")
-    L.append("> 实际有 %d 张挂不上可复跑证据、%d 个家族零实测。"
-             % (len(missing), sum(1 for f in fams
-                                  if not any((c.get("last_verdict") or {}).get("status")
-                                             in ("measured", "tuned") for c in fams[f]))))
+    # 卡数与缺登记家族数都必须**现算**。第一版把 46 写死，卡从 46 涨到 53 后
+    # 这句话就在说谎，而没有任何测试会报错——生成物里的常量同样要能被机检。
+    n_zero = sum(1 for f in fams
+                 if not any((c.get("last_verdict") or {}).get("status")
+                            in ("measured", "tuned") for c in fams[f]))
+    L.append("> **它防的是「用覆盖数掩盖深度不足」。** %d 张卡容易被当成全覆盖，" % len(cards))
+    L.append("> 实际有 %d 张挂不上可复跑证据、%d 个家族零实测。" % (len(missing), n_zero))
     L.append("")
 
     # ---- 一、证据缺口（业主裁决要求：机读列出卡片名）

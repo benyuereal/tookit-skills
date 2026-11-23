@@ -63,6 +63,11 @@ WEIGHTS = {
 }
 LOWER_BETTER = {"Q1", "Q2", "Q4", "Q5"}
 MEASURED = ("measured", "tuned")
+# 业主 2026-11-24 裁决②：分母锁死在本轮开始时的 27 张。
+# 原因：把没证据的卡降 draft 会让分母变小、分数自动涨——
+# 那是「分数涨了但东西变少」。所以分子按现况算，分母永远是 MEASURED_BASELINE，
+# 并且报告必须同时给原分母/现分母两套分。
+MEASURED_BASELINE = 27
 
 # PANORAMA §I：8 项融合算子里已经建卡的 4 项
 FUSION_CARDS = ["fusion-add-rmsnorm-quant", "fusion-rmsnorm-rope",
@@ -235,20 +240,20 @@ def collect(with_pytest=True):
     raw["D1"] = round(summ["mean"], 1)
     raw["D2"] = sum(1 for c in measured if per.get(c, {}).get("DS", 0) >= 70)
     cmp_ok = [c for c in measured if _comparison_ok(cards[c][0])]
-    raw["D3"] = round(len(cmp_ok) / max(len(measured), 1), 3)
+    raw["D3"] = round(len(cmp_ok) / max(MEASURED_BASELINE, len(measured)), 3)
     raw["D4"] = measured_count_of_rounds(cards, measured)
     raw["D5"] = sum(1 for c in measured
                     if re.search(r"PMC|pmc|GRBM|SQ_INSTS|attribution|归因",
                                  json.dumps(cards[c][0], ensure_ascii=False)))
 
-    raw["C1"] = round(sum(1 for c in measured if cards[c][0].get("semantics"))
-                      / max(len(measured), 1), 3)
+    denom = max(MEASURED_BASELINE, len(measured))
+    raw["C1"] = round(sum(1 for c in measured if cards[c][0].get("semantics")) / denom, 3)
     fam = {"attention", "gemm", "moe"}
     pool = [c for c, (d, _) in cards.items() if d.get("family") in fam]
     raw["C2"] = round(sum(1 for c in pool if _lv(cards[c][0]).get("regimes"))
                       / max(len(pool), 1), 3)
     floor_ok = [c for c in measured if _floor_ok(cards[c][0])]
-    raw["C3"] = round(len(floor_ok) / max(len(measured), 1), 3)
+    raw["C3"] = round(len(floor_ok) / denom, 3)
     raw["C4"] = sum(1 for c in FUSION_CARDS
                     if c in cards and cards[c][0].get("status") in MEASURED)
     raw["C5"] = sum(1 for c in measured if four_piece(c))
@@ -266,6 +271,14 @@ def collect(with_pytest=True):
 
     detail = {
         "measured_cards": len(measured),
+        "measured_baseline": MEASURED_BASELINE,
+        "denominator": denom,
+        "score_on_current_denominator": {
+            "C1": round(sum(1 for c in measured if cards[c][0].get("semantics"))
+                        / max(len(measured), 1), 3),
+            "C3": round(len(floor_ok) / max(len(measured), 1), 3),
+            "D3": round(len(cmp_ok) / max(len(measured), 1), 3),
+        },
         "comparison_ok": sorted(cmp_ok),
         "floor_ok": sorted(floor_ok),
         "floor_missing": sorted(set(measured) - set(floor_ok)),

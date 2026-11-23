@@ -66,7 +66,10 @@ ALLOWED_VERDICT = {"status", "kb_path", "ratio", "geomean", "evidence",
                    # E27：访存口径。跨实现比较前必须先对齐 (inputs, outputs)
                    "traffic_passes", "inputs", "outputs", "comparison",
                    "baseline_count", "single_source", "all_sources_far_from_peak",
-                   "baseline_count_note", "regimes", "next_probe_decode"}
+                   "baseline_count_note", "regimes", "next_probe_decode",
+                   # E39：离天花板多远。由 scripts/floor.py --write-card 写入，
+                   # 缺 basis / t_floor_us 的一律不算（判据在 floor.py 与 E39）
+                   "floor"}
 REQUIRED_VERDICT = {"status", "kb_path", "conclusion", "verified_on"}
 
 # E7：裸绝对耗时（0.887 ms / 1.29s / 83 us）——必须带分母或干脆不写
@@ -628,6 +631,47 @@ def _check_impl_to_ceiling(cards_dir, repo):
                 "写了「N 倍空间」但没有任何「强 competitor」（实测 >= nominal 50%%）——"
                 "两条基线都慢时 baseline_count>=2 也不构成硬件上限的依据。"
                 "命中字段：%s" % ", ".join(k for k, _ in hits))
+
+
+def _check_floor_block(lv, where, err):
+    """E39：last_verdict.floor 必须自洽，否则它只是一个好看的数字。
+
+    背景（2026-11-24）：`floor.remaining` 是本维度唯一的地基，
+    但它极易被「填一个数」糊弄过去。四条硬判据：
+      ① 必须有 basis（数据量怎么算的、分母哪来的）与 t_floor_us；
+      ② remaining 必须 = t_actual/t_floor - 1，容差 2%（防止改了 t 不重算）；
+      ③ verdict 必须与 remaining 落在同一个区间（不许 remaining=+300% 却写 at_floor）；
+      ④ 只用真实测量的 t：t_source 若为 derived/missing，不许挂在 card 上冒充。
+    """
+    f = lv.get("floor")
+    if f is None:
+        return
+    if not isinstance(f, dict):
+        err("E39", where, "last_verdict.floor 必须是 mapping")
+        return
+    extra = set(f) - {"remaining", "t_floor_us", "t_actual_us", "binding", "basis",
+                      "verdict", "denominator_source", "updated", "t_source"}
+    if extra:
+        err("E39", where, "floor 未知字段 %s" % sorted(extra))
+    if not f.get("basis"):
+        err("E39", where, "floor 缺 basis —— 只有数字没有依据，等于没算")
+    for k in ("remaining", "t_floor_us", "t_actual_us"):
+        if f.get(k) is None:
+            err("E39", where, "floor 缺 %s" % k)
+    if f.get("t_floor_us") and f.get("t_actual_us") is not None:
+        want = f["t_actual_us"] / f["t_floor_us"] - 1.0
+        if f.get("remaining") is not None and abs(want - f["remaining"]) > 0.02 * max(1, abs(want)):
+            err("E39", where, "floor.remaining=%s 与 t_actual/t_floor-1=%.3f 不符（差 >2%%）"
+                "—— 改了耗时没重算" % (f.get("remaining"), want))
+    r = f.get("remaining")
+    v = f.get("verdict")
+    if r is not None and v:
+        want_v = ("below_floor" if r < 0 else
+                  "headroom" if r >= 0.30 else
+                  "structural" if r >= 0.10 else "at_floor")
+        if v != want_v:
+            err("E39", where, "floor.verdict=%r 与 remaining=%+.1f%% 不符（应为 %r）"
+                % (v, r * 100, want_v))
 
 
 def _check_pros_cons_substance(cards_dir, repo):
@@ -1307,6 +1351,9 @@ def validate(atlas, repo):
                 % BARE_PCT.search(conc).group(0))
         if len(conc) > 60:
             err("E7", where, "结论 %d 字，超过 60 字上限（会变成技术描述）" % len(conc))
+
+        # ---- E39 「离天花板多远」必须是算出来的，不是填出来的
+        _check_floor_block(lv, where, err)
 
         ratio = lv.get("ratio")
         if ratio is not None:

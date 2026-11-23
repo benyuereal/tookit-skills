@@ -113,3 +113,9 @@ semantics:
     passes: 3
     source: 按 math：同 swiglu 结构，读 x、写 y
   mutates_inputs: []
+floor_inputs:
+  pattern: rw_2to1
+  t_source: missing
+  missing_evidence: 【缺】卡片只有「GNSilu 153 GB/s vs torch F.silu 468 GB/s」比值，两种形状不同口径；没有单一形状的字节与耗时 —— 标 missing_evidence
+  basis: 【缺】卡片只有「GNSilu 153 GB/s vs torch F.silu 468 GB/s」比值，两种形状不同口径；没有单一形状的字节与耗时 —— 标 missing_evidence
+  evidence: Plugins/ops/op-atlas/cards/mlp-gelu-geglu.yaml

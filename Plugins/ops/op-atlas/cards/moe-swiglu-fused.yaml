@@ -97,6 +97,16 @@ last_verdict:
       value: null
       unmeasured: true
       note: 未实测：需按 decode 形状单独跑
+  floor:
+    remaining: 0.9244
+    t_floor_us: 43.9
+    t_actual_us: 84.5
+    binding: memory
+    basis: M=128 档：读 2×128×2048×2B=1.05MB + 写 128×2048×2B=0.52MB = 1.57MB；t=0.0845 ms 取自卡片 vs（0.0845/0.0814）——字节极小，地板由 launch 决定 ⇒ memory 地板 0.9 us（rw_2to1 档 1730 GB/s（confidence=high））；binding=memory；+
+      launch 43 us；实测 84.5 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: 专家内激活换成融合实现
@@ -134,3 +144,12 @@ semantics:
     passes: 3
     source: 按 math：同 mlp-swiglu，专家内
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 1.573
+  pattern: rw_2to1
+  t_source: results
+  missing_evidence: M=128 档：读 2×128×2048×2B=1.05MB + 写 128×2048×2B=0.52MB = 1.57MB；t=0.0845 ms 取自卡片 vs（0.0845/0.0814）——字节极小，地板由 launch 决定
+  launch_us: 43
+  basis: M=128 档：读 2×128×2048×2B=1.05MB + 写 128×2048×2B=0.52MB = 1.57MB；t=0.0845 ms 取自卡片 vs（0.0845/0.0814）——字节极小，地板由 launch 决定
+  evidence: Plugins/ops/op-atlas/cards/moe-swiglu-fused.yaml
+  t_actual_us: 84.5

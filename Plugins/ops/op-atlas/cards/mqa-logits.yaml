@@ -103,6 +103,16 @@ last_verdict:
         value: 1848
         source: bw-ladder.yaml 2_read_only
         why: decode 只读 KV/权重，纯读路径
+  floor:
+    remaining: 3.0507
+    t_floor_us: 170.6
+    t_actual_us: 691.2
+    binding: memory
+    basis: 读 q 192×32×128×2B=1.6MB + 读 k 32768×32×128×2B=268.4MB + 写 logits 192×32768×4B=25.2MB = 295.2MB；t=0.6912 ms 是 ds_bpermute 落地后的 BF16 192x32K 中位 ⇒ memory 地板 170.6 us（rw_2to1 档 1730 GB/s（confidence=high））；binding=memory；实测
+      691.2 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: env-flag
   what: 切 grouped 分组调度
@@ -136,3 +146,10 @@ semantics:
     passes: 4
     source: 按 math：读 q/k/w，写 logits
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 295.2
+  pattern: rw_2to1
+  t_actual_us: 691.2
+  t_source: results
+  basis: 读 q 192×32×128×2B=1.6MB + 读 k 32768×32×128×2B=268.4MB + 写 logits 192×32768×4B=25.2MB = 295.2MB；t=0.6912 ms 是 ds_bpermute 落地后的 BF16 192x32K 中位
+  evidence: /workspace/op_engine_design/MQA.md

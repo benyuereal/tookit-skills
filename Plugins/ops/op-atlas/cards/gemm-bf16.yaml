@@ -167,6 +167,16 @@ last_verdict:
       measured: 'M=1: torch.mm bf16 67.0 µs, 权重 33.6MB ⇒ 501 GB/s ⇒ u=0.27；M=32: 77.6 µs u=0.23；M=128: 90.9 µs u=0.20'
       baseline: torch.mm（本卡 decode 下最强）
       all_sources_far_from_peak: true
+  floor:
+    remaining: 0.0708
+    t_floor_us: 492.6
+    t_actual_us: 527.5
+    binding: compute
+    basis: (M·K+N·K+M·N)×2B=3×4096²×2B=100.7MB；t=0.5275 ms 是 M=N=K=4096 的 ms ⇒ memory 地板 58.2 us（rw_2to1 档 1730 GB/s（confidence=high））；compute 地板 492.6 us（279.0 TF achievable）；binding=compute；实测 527.5 us；另一条腿
+      memory 地板 58.2 us（8.47x 更松）
+    verdict: at_floor
+    denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择
@@ -198,3 +208,12 @@ semantics:
     passes: 3
     source: 按 math：读 A、B，写 C
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 100.663
+  pattern: rw_2to1
+  flops: 137438953472
+  precision: bf16
+  t_actual_us: 527.5
+  t_source: results
+  basis: (M·K+N·K+M·N)×2B=3×4096²×2B=100.7MB；t=0.5275 ms 是 M=N=K=4096 的 ms
+  evidence: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/results/gemm-crossover.json

@@ -119,3 +119,11 @@ semantics:
     passes: 3
     source: 按 math：读 x、r（w 只有 H 大小可忽略），写 y
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 201.327
+  pattern: rw_2to1
+  t_source: derived
+  t_actual_us: null
+  missing_evidence: 读 x+r 写 y = 3×8192×4096×2B=201.3MB；卡片记融合带宽 862 GB/s ⇒ t=201.3/862=233.6µs（反推）
+  basis: 读 x+r 写 y = 3×8192×4096×2B=201.3MB；卡片记融合带宽 862 GB/s ⇒ t=201.3/862=233.6µs（反推）
+  evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）

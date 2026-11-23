@@ -101,6 +101,15 @@ last_verdict:
   traffic_passes: 4
   inputs: 2
   outputs: 2
+  floor:
+    remaining: 0.1975
+    t_floor_us: 202.3
+    t_actual_us: 242.2
+    binding: memory
+    basis: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位 ⇒ memory 地板 202.3 us（rw_1to1 档 1680 GB/s（confidence=high）；归约折扣 0.79（bw-ladder 3_row_reduction））；binding=memory；实测 242.2 us
+    verdict: structural
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop 融合
@@ -146,8 +155,11 @@ semantics:
     source: 按 math + 实测：2 读 2 写（residual_out 与 lightop 等语义）；2026-11-23 实测确认
   mutates_inputs: []
 floor_inputs:
-  bytes_mb: 268.4
+  bytes_mb: 268.435
   pattern: rw_1to1
-  t_actual_us: 242.2
-  basis: 2读2写=268.4MB（M=8192 H=4096 bf16，实测确认与 lightop 等语义）；t_actual 242.2 µs 是 64 buffer 轮换 40 次中位（2026-11-23）
+  t_source: results
+  missing_evidence: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位
   is_reduction: true
+  basis: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位
+  evidence: Plugins/ops/skills/op-rmsnorm-fused/results/impl-ranking.json
+  t_actual_us: 242.2

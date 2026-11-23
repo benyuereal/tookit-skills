@@ -99,6 +99,16 @@ last_verdict:
         value: 1848
         source: bw-ladder.yaml 2_read_only
         why: decode 只读 KV/权重，纯读路径
+  floor:
+    remaining: 0.4532
+    t_floor_us: 7881.8
+    t_actual_us: 11454.1
+    binding: compute
+    basis: q/k/v 各 4×8192×32×128×2B=268.4MB，合计 805.3MB；t=11.4541 ms 是 causal S=8192 的 ms；**causal 的真实工作量约为满阵的一半**，这里按满阵计以与卡片 ratio 同口径（卡片 0.69 也用满阵），故该 ceiling 偏松约 2×；按半阵重算 remaining 会翻倍，口径统一前不许拿它下「还有多少空间」的结论
+      ⇒ memory 地板 465.5 us（rw_2to1 档 1730 GB/s（confidence=high））；compute 地板 7881.8 us（279.0 TF achievable）；binding=compute；实测 11454.1 us；另一条腿 memory 地板 465.5 us（16.93x 更松）
+    verdict: headroom
+    denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: env-flag
   what: 调 split-KV 的切分数
@@ -131,3 +141,12 @@ semantics:
     passes: 4
     source: 实测确认（2026-11-23）：同 flash_attn_func：默认单输出 Tensor
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 805.306
+  pattern: rw_2to1
+  flops: 2199023255552
+  precision: bf16
+  t_actual_us: 11454.1
+  t_source: results
+  basis: q/k/v 各 4×8192×32×128×2B=268.4MB，合计 805.3MB；t=11.4541 ms 是 causal S=8192 的 ms；**causal 的真实工作量约为满阵的一半**，这里按满阵计以与卡片 ratio 同口径（卡片 0.69 也用满阵），故该 ceiling 偏松约 2×；按半阵重算 remaining 会翻倍，口径统一前不许拿它下「还有多少空间」的结论
+  evidence: Plugins/ops/skills/op-optimize/cases/004-mha-prefill-ceiling/results/mha-prefill.json

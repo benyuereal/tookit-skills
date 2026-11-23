@@ -100,6 +100,16 @@ last_verdict:
         why: 带宽主导，分母用纯读可达
       measured: KV=32768/B=8 达 0.35 of 1724；短 KV 0.07~0.12
       baseline: flash_mla
+  floor:
+    remaining: 2.5072
+    t_floor_us: 153.7
+    t_actual_us: 539.0
+    binding: memory
+    basis: KV 读 = KV×B×d_qk×2B = 32768×8×576×2B = 302.0MB（bench 源码 byts 公式）；t=0.539 ms 是 KV=32768/B=8 的 ms；**读写比修正**：MLA absorb 只读 KV（decode 单 token），应为 r_only 档不是 1:1——卡片 ratio 用的也是 1680（1:1），两处都该是 1965(r_only)。本值保留
+      1680 以与卡片 ratio 同口径，改档需同时改 ratio，见 gaps ⇒ memory 地板 153.7 us（r_only 档 1965 GB/s（confidence=high））；binding=memory；实测 539.0 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: env-flag
   what: dense decode 的 num_splits 不可覆盖
@@ -138,3 +148,11 @@ semantics:
     passes: 4
     source: '实测确认（2026-11-23）：实测 flash_mla.flash_mla_with_kvcache 返回 tuple(2)=(out, lse)；框架证据 sglang/flashmla_backend.py: `o, _ = flash_mla_with_kvcache(...)`'
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 301.99
+  pattern: r_only
+  t_actual_us: 539.0
+  t_source: results
+  basis: KV 读 = KV×B×d_qk×2B = 32768×8×576×2B = 302.0MB（bench 源码 byts 公式）；t=0.539 ms 是 KV=32768/B=8 的 ms；**读写比修正**：MLA absorb 只读 KV（decode 单 token），应为 r_only 档不是 1:1——卡片 ratio 用的也是 1680（1:1），两处都该是 1965(r_only)。本值保留
+    1680 以与卡片 ratio 同口径，改档需同时改 ratio，见 gaps
+  evidence: Plugins/ops/skills/op-optimize/cases/006-mla-decode-absorb/results/mla-decode.json

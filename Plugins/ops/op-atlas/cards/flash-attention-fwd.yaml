@@ -97,6 +97,17 @@ last_verdict:
         value: 1848
         source: bw-ladder.yaml 2_read_only
         why: decode 只读 KV/权重，纯读路径
+  floor:
+    remaining: 0.8067
+    t_floor_us: 985.2
+    t_actual_us: 1780.0
+    binding: compute
+    basis: q/k/v 各 8×2048×32×128×2B=134.2MB，合计 402.7MB；t=1.780 ms 取自卡片的 ratio.vs（causal 1.780 / non-causal 2.961）——同 case 004 文件里 S=2048 causal 是 0.947ms（B=4），本卡 B=8 故用卡片记录值；**causal 的真实工作量约为满阵的一半**，这里按满阵计以与卡片
+      ratio 同口径（卡片 0.69 也用满阵），故该 ceiling 偏松约 2×；按半阵重算 remaining 会翻倍，口径统一前不许拿它下「还有多少空间」的结论 ⇒ memory 地板 232.7 us（rw_2to1 档 1730 GB/s（confidence=high））；compute 地板 985.2 us（279.0 TF achievable）；binding=compute；实测
+      1780.0 us；另一条腿 memory 地板 232.7 us（4.23x 更松）
+    verdict: headroom
+    denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: varlen 换固定长度（消除变长调度开销）
@@ -135,3 +146,14 @@ semantics:
     passes: 4
     source: 实测确认（2026-11-23）：实测 flash_attn_func(causal=True) 返回单个 Tensor；仅 return_attn_probs=True 才返回 tuple(3)
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 402.653
+  pattern: rw_2to1
+  flops: 274877906944
+  precision: bf16
+  t_source: results
+  missing_evidence: q/k/v 各 8×2048×32×128×2B=134.2MB，合计 402.7MB；t=1.780 ms 取自卡片的 ratio.vs（causal 1.780 / non-causal 2.961）——同 case 004 文件里 S=2048 causal 是 0.947ms（B=4），本卡 B=8 故用卡片记录值
+  basis: q/k/v 各 8×2048×32×128×2B=134.2MB，合计 402.7MB；t=1.780 ms 取自卡片的 ratio.vs（causal 1.780 / non-causal 2.961）——同 case 004 文件里 S=2048 causal 是 0.947ms（B=4），本卡 B=8 故用卡片记录值；**causal 的真实工作量约为满阵的一半**，这里按满阵计以与卡片
+    ratio 同口径（卡片 0.69 也用满阵），故该 ceiling 偏松约 2×；按半阵重算 remaining 会翻倍，口径统一前不许拿它下「还有多少空间」的结论
+  evidence: Plugins/ops/skills/op-optimize/cases/004-mha-prefill-ceiling/results/mha-prefill.json
+  t_actual_us: 1780.0

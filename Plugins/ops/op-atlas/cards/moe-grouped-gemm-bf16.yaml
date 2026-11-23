@@ -97,6 +97,16 @@ last_verdict:
       value: null
       unmeasured: true
       note: 未实测：需按 decode 形状单独跑
+  floor:
+    remaining: 1.4035
+    t_floor_us: 133.3
+    t_actual_us: 320.5
+    binding: memory
+    basis: x 32×128×2048×2B=16.8MB + W 32×1536×2048×2B=201.3MB + y 32×128×1536×2B=12.6MB = 230.7MB；t=0.3205 ms 是 deepgemm_grouped_mode1000（E=32 M/exp=128） ⇒ memory 地板 133.3 us（rw_2to1 档 1730 GB/s（confidence=high））；compute
+      地板 92.4 us（279.0 TF achievable）；binding=memory；实测 320.5 us；另一条腿 compute 地板 92.4 us（1.44x 更松）
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: 换 grouped 路径入口
@@ -138,3 +148,12 @@ semantics:
     passes: 3
     source: 按 math：读 x、W，写 y
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 230.687
+  pattern: rw_2to1
+  flops: 25769803776
+  precision: bf16
+  t_actual_us: 320.5
+  t_source: results
+  basis: x 32×128×2048×2B=16.8MB + W 32×1536×2048×2B=201.3MB + y 32×128×1536×2B=12.6MB = 230.7MB；t=0.3205 ms 是 deepgemm_grouped_mode1000（E=32 M/exp=128）
+  evidence: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage1-gemm.json

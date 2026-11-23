@@ -121,6 +121,16 @@ last_verdict:
       value: 0.03
       unmeasured: false
       note: decode 值取自本卡 last_verdict.ratio（若其本身是 decode 口径）
+  floor:
+    remaining: 39.7385
+    t_floor_us: 77.6
+    t_actual_us: 3160.6
+    binding: memory
+    basis: KV 读+写 = KV×B×D×2B(K) + 同量(V) = 2×8192×32×128×2B = 134.2MB（bench 源码 byts=KV*B*D*2*2）；t=3.1606 ms 是 sweep_batch B=32 的 ms ⇒ memory 地板 77.6 us（rw_2to1 档 1730 GB/s（confidence=high））；binding=memory；实测
+      3160.6 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: 换掉 flash_attn 的 decode 路径
@@ -162,3 +172,10 @@ semantics:
     passes: 5
     source: 实测确认（2026-11-23）：同上：flash_mla_with_kvcache 返回 (out, lse) 两份
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 134.218
+  pattern: rw_2to1
+  t_actual_us: 3160.6
+  t_source: results
+  basis: KV 读+写 = KV×B×D×2B(K) + 同量(V) = 2×8192×32×128×2B = 134.2MB（bench 源码 byts=KV*B*D*2*2）；t=3.1606 ms 是 sweep_batch B=32 的 ms
+  evidence: Plugins/ops/skills/op-optimize/cases/008-paged-decode-ceiling/results/paged-decode.json

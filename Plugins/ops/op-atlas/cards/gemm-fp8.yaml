@@ -217,6 +217,16 @@ last_verdict:
     expected: <50 µs（先测 hipBLASLt 的 M=1 档）
     stop_if: 若 hipBLASLt 在 M=1 也只有 800+ µs，说明 GEMV 路径整体未被优化 ⇒ 判 decode fp8 不可用，写进 gaps
     effort: 4h
+  floor:
+    remaining: 0.1629
+    t_floor_us: 1896.7
+    t_actual_us: 2205.7
+    binding: compute
+    basis: A/B fp8 各 8192²×1B=67.1MB + C bf16 8192²×2B=134.2MB = 268.4MB；t=2205.7 µs 是 torch._scaled_mm 8192³ 实测（498.5 TF），记录在 constants.yaml ⇒ memory 地板 155.2 us（rw_2to1 档 1730 GB/s（confidence=high））；compute
+      地板 1896.7 us（579.7 TF achievable）；binding=compute；实测 2205.7 us；另一条腿 memory 地板 155.2 us（12.22x 更松）
+    verdict: structural
+    denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: 换掉 aiter opus 这一族实现
@@ -261,3 +271,13 @@ semantics:
     passes: 3
     source: 按 math：读 A、B，写 C（scale 为标量）
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 268.435
+  pattern: rw_2to1
+  flops: 1099511627776
+  precision: fp8
+  t_source: results
+  missing_evidence: A/B fp8 各 8192²×1B=67.1MB + C bf16 8192²×2B=134.2MB = 268.4MB；t=2205.7 µs 是 torch._scaled_mm 8192³ 实测（498.5 TF），记录在 constants.yaml
+  basis: A/B fp8 各 8192²×1B=67.1MB + C bf16 8192²×2B=134.2MB = 268.4MB；t=2205.7 µs 是 torch._scaled_mm 8192³ 实测（498.5 TF），记录在 constants.yaml
+  evidence: Plugins/ops/skills/op-roofline/constants.yaml
+  t_actual_us: 2205.7

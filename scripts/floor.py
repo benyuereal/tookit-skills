@@ -222,12 +222,24 @@ def card_spec(card_id):
         return None, "缺 floor_inputs（要有 bytes_mb/pattern 或 flops，以及 t_actual_us/basis）"
     spec = {k: fi.get(k) for k in
             ("bytes_mb", "pattern", "flops", "peak_tf", "precision",
-             "t_actual_us", "is_reduction", "launch_us", "floor_override")}
+             "t_actual_us", "is_reduction", "launch_us", "floor_override",
+             "t_source", "evidence")}
     if not fi.get("basis"):
         return None, "floor_inputs 缺 basis —— 只有数字没有依据，拒算"
+    # 业主 2026-11-24 裁决③：反推的 t 单列，不进 measured 统计。
+    # derived = t 由「字节 ÷ 卡里记的 GB/s」推出来的，不是直接读到的时间；
+    # missing = 连算都算不出（缺单一形状的字节或耗时）。二者都拒算 remaining。
+    src = fi.get("t_source") or "results"
+    # 只排除两类：derived（由 GB/s × 字节反推的 t）和 missing（连 t 都没有）。
+    # results / card / constants 都是「读过一次真实测量的时间」，照常计入。
+    # 第一版把 card 也挡了，结果 rmsnorm-fused 这种有 40 次轮换中位的卡被误伤。
+    if src in ("derived", "missing"):
+        return None, "t_source=%s —— 单列不进统计：%s" % (
+            src, fi.get("missing_evidence") or "t 不是直接实测的时间")
     if spec["t_actual_us"] is None:
         return None, "floor_inputs 缺 t_actual_us —— 没有实测耗时就没有 remaining"
     spec["basis"] = fi["basis"]
+    spec["t_source"] = src
     spec["card"] = card_id
     return spec, None
 
@@ -394,9 +406,9 @@ def main(argv=None):
             failed.append((cid, r["error"]))
             print("%-26s FAIL  %s" % (cid, r["error"]))
             continue
-        print("%-26s %+7.1f%%  %-10s floor=%.1fus actual=%sus  %s"
+        print("%-26s %+7.1f%%  %-10s floor=%.1fus actual=%sus  %-6s %s"
               % (cid, r["remaining"] * 100, r["gate"], r["t_floor_us"],
-                 r["t_actual_us"], r["binding"]))
+                 r["t_actual_us"], r["binding"], spec.get("t_source", "")))
         if a.write_card:
             wrote, msg = write_card_floor(CARDS / ("%s.yaml" % cid), r, spec)
             if wrote:

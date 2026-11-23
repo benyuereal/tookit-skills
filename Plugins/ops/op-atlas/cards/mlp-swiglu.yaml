@@ -77,6 +77,15 @@ last_verdict:
     expected: 从 0.46 → ≥0.60
     stop_if: 若合并后不涨，说明已经是纯字节数下限（读 2 写 1）⇒ 标 at_floor
     effort: 3h
+  floor:
+    remaining: 2.2597
+    t_floor_us: 465.5
+    t_actual_us: 1517.4
+    binding: memory
+    basis: bytes 取结果文件自报的 805322752（=805.3MB，含 gate/up/down 三段权重流式）；t=1.5174 ms 是 fused 的 median_ms ⇒ memory 地板 465.5 us（rw_2to1 档 1730 GB/s（confidence=high））；binding=memory；实测 1517.4 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: 三步 torch 换成 lightop 融合
@@ -119,3 +128,10 @@ semantics:
     passes: 3
     source: 按 math：读 x 一次（三个权重在 gate/up/down 三段间复用或流式），写 y
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 805.323
+  pattern: rw_2to1
+  t_actual_us: 1517.4
+  t_source: results
+  basis: bytes 取结果文件自报的 805322752（=805.3MB，含 gate/up/down 三段权重流式）；t=1.5174 ms 是 fused 的 median_ms
+  evidence: Plugins/ops/skills/op-optimize/cases/001-swiglu-fused-vs-split/results/result.json

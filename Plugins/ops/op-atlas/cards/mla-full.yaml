@@ -99,6 +99,15 @@ last_verdict:
         value: 1848
         source: bw-ladder.yaml 2_read_only
         why: decode 只读 KV/权重，纯读路径
+  floor:
+    remaining: 5.9974
+    t_floor_us: 1107.5
+    t_actual_us: 7749.8
+    binding: compute
+    basis: 算力绑定：309 GFLOPs（卡片 ratio.note 的等 FLOPs 口径）；t=7.7498 ms 是 SQ=512 的 ms ⇒ compute 地板 1107.5 us（279.0 TF achievable）；binding=compute；实测 7749.8 us
+    verdict: headroom
+    denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: env-flag
   what: 调 MLA 的 tile 调度元数据
@@ -133,3 +142,11 @@ semantics:
     passes: 4
     source: 实测确认（2026-11-23）：同 flash_mla 族；get_mla_metadata 只返回 (meta, None) 供调度，主 kernel 返回 (out, lse)
   mutates_inputs: []
+floor_inputs:
+  pattern: rw_2to1
+  flops: 309000000000
+  precision: bf16
+  t_actual_us: 7749.8
+  t_source: results
+  basis: 算力绑定：309 GFLOPs（卡片 ratio.note 的等 FLOPs 口径）；t=7.7498 ms 是 SQ=512 的 ms
+  evidence: Plugins/ops/skills/op-optimize/cases/007-mla-full-vs-absorb/results/mla-full-vs-absorb.json

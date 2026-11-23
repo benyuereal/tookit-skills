@@ -162,3 +162,10 @@ semantics:
     passes: 4
     source: 按 math：读 q、kv（按 indices 稀疏 gather）、indices，写 out
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 4831.838
+  pattern: r_only
+  t_source: missing
+  missing_evidence: 每 q-head 取 topk 个 token 的 576×2B：S=128 × H=16 × topk=2048 × 576 × 2B = 4832MB；【t 缺】卡片只有 mem-only 变体达成率 0.94，没有绝对耗时 —— 标 missing_evidence
+  basis: 每 q-head 取 topk 个 token 的 576×2B：S=128 × H=16 × topk=2048 × 576 × 2B = 4832MB；【t 缺】卡片只有 mem-only 变体达成率 0.94，没有绝对耗时 —— 标 missing_evidence
+  evidence: Plugins/ops/skills/op-sparse-mla/contract.yaml

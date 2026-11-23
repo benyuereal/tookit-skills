@@ -111,3 +111,11 @@ semantics:
     passes: 2
     source: 按 math：只读 x（w/b 只有 H 大小），写 y
   mutates_inputs: []
+floor_inputs:
+  bytes_mb: 134.218
+  pattern: rw_1to1
+  t_source: derived
+  t_actual_us: null
+  missing_evidence: 读 x 写 y = 2×8192×4096×2B=134.2MB；卡片记 M=8192 档 485 GB/s ⇒ t=134.2/485=276.7µs（反推）
+  basis: 读 x 写 y = 2×8192×4096×2B=134.2MB；卡片记 M=8192 档 485 GB/s ⇒ t=134.2/485=276.7µs（反推）
+  evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）

@@ -6,14 +6,29 @@ status: measured
 layer: kernel
 op_card: null
 semantics:
-  formula: "q_rope, k_rope, v_out = rope(rmsnorm(q,k,v)*w) ; k_buffer[loc//page, :, loc%page, :] = k_rope ; v_buffer[loc//page, :, :, loc%page] = v_out"
-  inputs: [positions, query, key, v, cos_sin_cache, k_buffer, v_buffer, kv_cache_loc]
-  outputs: [q_rope, k_rope, v_out]
+  formula: q_rope, k_rope, v_out = rope(rmsnorm(q,k,v)*w) ; k_buffer[loc//page, :, loc%page, :] = k_rope ; v_buffer[loc//page, :, :, loc%page] = v_out
+  inputs:
+  - positions
+  - query
+  - key
+  - v
+  - cos_sin_cache
+  - k_buffer
+  - v_buffer
+  - kv_cache_loc
+  outputs:
+  - q_rope
+  - k_rope
+  - v_out
   traffic_passes:
     reads: 3
     writes: 3
     source: 读 q/k/v（3）；写 q_rope/k_rope/v_out（3）。另外被原地写入的 k_buffer/v_buffer 未计入——它们与 k_rope/v_out 是同一份数据落两处，实际 HBM 写更多
-  mutates_inputs: [query, key, k_buffer, v_buffer]
+  mutates_inputs:
+  - query
+  - key
+  - k_buffer
+  - v_buffer
 variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
@@ -37,8 +52,12 @@ variants:
   - 硬约束 head_dim 只支持 128 与 256（实测 64 走 Python scatter 报 shape mismatch）
   source: references/libraries.md
   import_path: lightop.rms_rotary_embedding_fuse_with_kv_store
-  signature: "rms_rotary_embedding_fuse_with_kv_store(positions, query, key, v, cos_sin_cache, head_dim, page_size, k_buffer, v_buffer, kv_cache_loc, is_neox, weight_q, weight_k, output_dtype, residual_q, residual_k, k_scale, v_scale, epsilon=1e-05) -> Tuple[Tensor, Tensor, Tensor]"
-  smoke_test: python3 -I -c "import lightop,torch; T,HQ,HK,D=128,8,1,128; q=torch.randn(T,HQ,D,device='cuda',dtype=torch.bfloat16); k=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); v=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); w=torch.ones(D,device='cuda',dtype=torch.bfloat16); cs=torch.randn(128,D,device='cuda',dtype=torch.bfloat16); kb=torch.zeros(2,HK,64,D,device='cuda',dtype=torch.float8_e4m3fn); vb=torch.zeros(2,HK,D,64,device='cuda',dtype=torch.float8_e4m3fn); o=lightop.rms_rotary_embedding_fuse_with_kv_store(torch.arange(T,device='cuda'),q,k,v,cs,D,64,kb,vb,torch.arange(T,device='cuda'),True,w,w,torch.bfloat16,None,None,1.0,1.0,1e-6); assert len(o)==3 and o[0].dtype==torch.float8_e4m3fn"
+  signature: rms_rotary_embedding_fuse_with_kv_store(positions, query, key, v, cos_sin_cache, head_dim, page_size, k_buffer, v_buffer, kv_cache_loc, is_neox, weight_q, weight_k, output_dtype, residual_q,
+    residual_k, k_scale, v_scale, epsilon=1e-05) -> Tuple[Tensor, Tensor, Tensor]
+  smoke_test: python3 -I -c "import lightop,torch; T,HQ,HK,D=128,8,1,128; q=torch.randn(T,HQ,D,device='cuda',dtype=torch.bfloat16); k=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); v=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16);
+    w=torch.ones(D,device='cuda',dtype=torch.bfloat16); cs=torch.randn(128,D,device='cuda',dtype=torch.bfloat16); kb=torch.zeros(2,HK,64,D,device='cuda',dtype=torch.float8_e4m3fn); vb=torch.zeros(2,HK,D,64,device='cuda',dtype=torch.float8_e4m3fn);
+    o=lightop.rms_rotary_embedding_fuse_with_kv_store(torch.arange(T,device='cuda'),q,k,v,cs,D,64,kb,vb,torch.arange(T,device='cuda'),True,w,w,torch.bfloat16,None,None,1.0,1.0,1e-6); assert len(o)==3 and
+    o[0].dtype==torch.float8_e4m3fn"
   role: competitor
 - repo: lightop
   library_profile_ref: libraries.md §3
@@ -55,7 +74,7 @@ variants:
   - 不是独立变体：两个 import 路径对应同一实现，不能当两条基线
   source: references/libraries.md
   import_path: lightop.attention.rms_rotary_embedding_fuse_with_kv_store
-  signature: "与 lightop.rms_rotary_embedding_fuse_with_kv_store 完全相同（同函数，re-export）"
+  signature: 与 lightop.rms_rotary_embedding_fuse_with_kv_store 完全相同（同函数，re-export）
   smoke_test: python3 -I -c "import lightop.attention as la; assert hasattr(la,'rms_rotary_embedding_fuse_with_kv_store')"
   role: competitor
 - repo: lightop
@@ -75,7 +94,7 @@ variants:
   - 与主入口共用同一套 bf16-cache split 分支问题
   source: references/libraries.md
   import_path: lightop.gammarms_rotary_embedding_fuse_with_kv_store
-  signature: "gammarms_rotary_embedding_fuse_with_kv_store(..., epsilon=1e-05, mrope_section_t=0, mrope_section_h=0, mrope_section_w=0, is_interleaved=False) -> Tuple[Tensor, Tensor, Tensor]"
+  signature: gammarms_rotary_embedding_fuse_with_kv_store(..., epsilon=1e-05, mrope_section_t=0, mrope_section_h=0, mrope_section_w=0, is_interleaved=False) -> Tuple[Tensor, Tensor, Tensor]
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,'gammarms_rotary_embedding_fuse_with_kv_store')"
   role: competitor
 - repo: lightop
@@ -93,7 +112,8 @@ variants:
   - 返回 3 个输出但签名是 qkv 单入参，与主入口的 q/k/v 三入参不同语义，不能直接互换
   source: references/libraries.md
   import_path: lightop.split_qkv_rms_rotary_embedding_fuse_with_kv_store_quant
-  signature: "split_qkv_rms_rotary_embedding_fuse_with_kv_store_quant(positions, qkv, q_size, kv_size, cos_sin_cache, head_dim, page_size, k_buffer, v_buffer, kv_cache_loc, is_neox, weight_q, weight_k, output_dtype, kv_cache_dtype, residual_q, residual_k, k_scale, v_scale, epsilon=1e-05) -> Tuple[Tensor, Tensor, Tensor]"
+  signature: split_qkv_rms_rotary_embedding_fuse_with_kv_store_quant(positions, qkv, q_size, kv_size, cos_sin_cache, head_dim, page_size, k_buffer, v_buffer, kv_cache_loc, is_neox, weight_q, weight_k, output_dtype,
+    kv_cache_dtype, residual_q, residual_k, k_scale, v_scale, epsilon=1e-05) -> Tuple[Tensor, Tensor, Tensor]
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,'split_qkv_rms_rotary_embedding_fuse_with_kv_store_quant')"
   role: competitor
 ceiling:
@@ -123,8 +143,19 @@ last_verdict:
   traffic_passes:
     reads: 3
     writes: 3
-  inputs: [positions, query, key, v, cos_sin_cache, k_buffer, v_buffer, kv_cache_loc]
-  outputs: [q_rope, k_rope, v_out]
+  inputs:
+  - positions
+  - query
+  - key
+  - v
+  - cos_sin_cache
+  - k_buffer
+  - v_buffer
+  - kv_cache_loc
+  outputs:
+  - q_rope
+  - k_rope
+  - v_out
   baseline_count: 1
   single_source: true
   next_probe:
@@ -133,18 +164,33 @@ last_verdict:
     expected: bf16 路径相对当前 ≥1.8x
     stop_if: 若 bf16 接进融合 kernel 后仍慢，说明 kernel 本身对 bf16 的写带宽没优化（不是分支问题）⇒ 说明瓶颈在 kernel 而非 wrapper
     effort: 6h
+  floor:
+    remaining: 2.7617
+    t_floor_us: 30.0
+    t_actual_us: 112.7
+    binding: memory
+    basis: 3读3写 = 2×(q 2048×32×128×2B=16.8MB + k 4.2MB + v 4.2MB) = 50.3MB；t=112.7 µs 是 lightop-fused-fp8-cache 的 median_us；被原地写入的 k_buffer/v_buffer 未计入 ⇒ memory 地板 30.0 us（rw_1to1 档 1680 GB/s（confidence=high））；binding=memory；实测
+      112.7 us
+    verdict: headroom
+    denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
+    updated: '2026-11-24'
 modify_path:
   kind: replace-call
   what: rope 后再单独 scatter 写 KV 的两段换成同一个融合入口
-  how: lightop.rms_rotary_embedding_fuse_with_kv_store(positions, q, k, v, cos_sin_cache, head_dim, page_size, k_buffer, v_buffer, loc, is_neox, w_q, w_k, dtype, None, None, 1.0, 1.0)；k_buffer 布局 [blk,H,page,D]，v_buffer 布局 [blk,H,D,page]
+  how: lightop.rms_rotary_embedding_fuse_with_kv_store(positions, q, k, v, cos_sin_cache, head_dim, page_size, k_buffer, v_buffer, loc, is_neox, w_q, w_k, dtype, None, None, 1.0, 1.0)；k_buffer 布局 [blk,H,page,D]，v_buffer
+    布局 [blk,H,D,page]
   requires: kv cache 用 fp8 e4m3/e5m2 才走真融合；bf16 cache 会掉回 wrapper split 分支
 hard_preconditions:
 - statement: 入口可 import，且返回 3 个张量（顶层声明说 2 个，实测是 3 个）
   check: python3 -I -c "import lightop; assert hasattr(lightop,'rms_rotary_embedding_fuse_with_kv_store')"
 - statement: v_buffer 是转置布局 [blocks, heads, dim, page]，与 k_buffer [blocks, heads, page, dim] 不同
-  check: python3 -I -c "import lightop,torch; T,HQ,HK,D=128,8,1,128; P=64; q=torch.randn(T,HQ,D,device='cuda',dtype=torch.bfloat16); k=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); v=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); w=torch.ones(D,device='cuda',dtype=torch.bfloat16); cs=torch.randn(128,D,device='cuda',dtype=torch.bfloat16); kb=torch.zeros(2,HK,P,D,device='cuda',dtype=torch.float8_e4m3fn); vb=torch.zeros(2,HK,D,P,device='cuda',dtype=torch.float8_e4m3fn); o=lightop.rms_rotary_embedding_fuse_with_kv_store(torch.arange(T,device='cuda'),q,k,v,cs,D,P,kb,vb,torch.arange(T,device='cuda'),True,w,w,torch.bfloat16,None,None,1.0,1.0,1e-6); assert len(o)==3"
+  check: python3 -I -c "import lightop,torch; T,HQ,HK,D=128,8,1,128; P=64; q=torch.randn(T,HQ,D,device='cuda',dtype=torch.bfloat16); k=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); v=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16);
+    w=torch.ones(D,device='cuda',dtype=torch.bfloat16); cs=torch.randn(128,D,device='cuda',dtype=torch.bfloat16); kb=torch.zeros(2,HK,P,D,device='cuda',dtype=torch.float8_e4m3fn); vb=torch.zeros(2,HK,D,P,device='cuda',dtype=torch.float8_e4m3fn);
+    o=lightop.rms_rotary_embedding_fuse_with_kv_store(torch.arange(T,device='cuda'),q,k,v,cs,D,P,kb,vb,torch.arange(T,device='cuda'),True,w,w,torch.bfloat16,None,None,1.0,1.0,1e-6); assert len(o)==3"
 - statement: bf16 KV cache 会触发 wrapper 的 split 分支（不是真融合），慢 2.18x
-  check: python3 -I -c "import lightop,torch; T,HQ,HK,D=128,8,1,128; P=64; q=torch.randn(T,HQ,D,device='cuda',dtype=torch.bfloat16); k=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); v=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); w=torch.ones(D,device='cuda',dtype=torch.bfloat16); cs=torch.randn(128,D,device='cuda',dtype=torch.bfloat16); kb=torch.zeros(2,HK,P,D,device='cuda',dtype=torch.bfloat16); vb=torch.zeros(2,HK,D,P,device='cuda',dtype=torch.bfloat16); o=lightop.rms_rotary_embedding_fuse_with_kv_store(torch.arange(T,device='cuda'),q,k,v,cs,D,P,kb,vb,torch.arange(T,device='cuda'),True,w,w,torch.bfloat16,None,None,1.0,1.0,1e-6); print(o[0].dtype)"
+  check: python3 -I -c "import lightop,torch; T,HQ,HK,D=128,8,1,128; P=64; q=torch.randn(T,HQ,D,device='cuda',dtype=torch.bfloat16); k=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16); v=torch.randn(T,HK,D,device='cuda',dtype=torch.bfloat16);
+    w=torch.ones(D,device='cuda',dtype=torch.bfloat16); cs=torch.randn(128,D,device='cuda',dtype=torch.bfloat16); kb=torch.zeros(2,HK,P,D,device='cuda',dtype=torch.bfloat16); vb=torch.zeros(2,HK,D,P,device='cuda',dtype=torch.bfloat16);
+    o=lightop.rms_rotary_embedding_fuse_with_kv_store(torch.arange(T,device='cuda'),q,k,v,cs,D,P,kb,vb,torch.arange(T,device='cuda'),True,w,w,torch.bfloat16,None,None,1.0,1.0,1e-6); print(o[0].dtype)"
 soft_preconditions:
 - hot 态；cuda_event 计时
 - 只测了 T=2048、HQ=32/HK=8、D=128、page=64；其他 page/head_dim 先确认支持面
@@ -160,3 +206,10 @@ baseline_ref:
     writes: 3
     passes: 6
     source: 按 semantics 推定（q/k/v 三读 + 三份输出写），未含 k_buffer/v_buffer 的额外原地写
+floor_inputs:
+  bytes_mb: 50.332
+  pattern: rw_1to1
+  t_actual_us: 112.7
+  t_source: results
+  basis: 3读3写 = 2×(q 2048×32×128×2B=16.8MB + k 4.2MB + v 4.2MB) = 50.3MB；t=112.7 µs 是 lightop-fused-fp8-cache 的 median_us；被原地写入的 k_buffer/v_buffer 未计入
+  evidence: Plugins/ops/op-atlas/perf/fusion-rope-kv-write.json
