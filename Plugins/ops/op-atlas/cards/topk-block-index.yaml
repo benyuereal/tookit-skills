@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/009-topk-block-index/README.md
   ratio:
+    kind: ratio_other
+    unit: x
     value: 0.79
     vs: 耗时相对空 kernel（launch 地板 43 µs）的倍数（B=32 L=8192 K=2048）
     scope:

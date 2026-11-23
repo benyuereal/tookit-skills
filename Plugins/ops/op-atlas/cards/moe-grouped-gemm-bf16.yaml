@@ -50,6 +50,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/README.md
   ratio:
+    kind: throughput
+    unit: TFLOPS
     value: 80.1
     vs: BF16 算力 TFLOPS（相对本机实测峰值 279 为 0.29）
     scope:

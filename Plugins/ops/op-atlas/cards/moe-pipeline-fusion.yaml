@@ -55,6 +55,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/README.md
   ratio:
+    kind: speedup
+    unit: x
     value: 1.69
     vs: L0 全拆分（M/exp=16 档，L1 0.2014 vs L0 0.3427）
     scope:

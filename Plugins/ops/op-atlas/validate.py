@@ -32,6 +32,13 @@ STATUSES = {"draft", "measured", "tuned", "at_floor", "deprecated"}
 TIERS = {"primary", "structural", "reference", "fallback", "avoid", "unavailable"}
 CEIL_KINDS = {"roofline_model", "constants", "measured", "analytic", "missing"}
 VERDICT_STATUSES = {"none", "predicted", "measured", "refuted", "at_floor"}
+
+# E24：ratio.value 的量纲。四种语义完全不同，混在一列会让聚合与排序全错。
+#   speedup      相对基线的加速倍数（>1 = 更快）——只有这类能算几何平均
+#   utilization  占峰值的比例（0~1，偶尔 >1 是分母口径错）
+#   throughput   绝对吞吐（GB/s / TFLOPS），不是倍数
+#   ratio_other  非收益比值（如「M=128 与 M=1024 的耗时比」），不许当加速比
+RATIO_KINDS = {"speedup", "utilization", "throughput", "ratio_other"}
 LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
@@ -555,7 +562,7 @@ def validate(atlas, repo):
                 # scope：跨口径比较是最隐蔽的错误来源。
                 # 内部材料里就有一句自我纠正——「那个 1.67–1.86 倍是 4 卡
                 # rocBLAS 换核的结果，不是 8 卡同口径对比」。
-                rextra = set(ratio) - {"value", "vs", "scope"}
+                rextra = set(ratio) - {"kind", "unit", "value", "vs", "scope"}
                 if rextra:
                     err("E6", where, "ratio 未知字段 %s" % sorted(rextra))
                 # 有 value 就必须有 scope：没有口径的倍数不可比
@@ -565,6 +572,46 @@ def validate(atlas, repo):
                         "——跨口径比较是最隐蔽的错误来源")
                 if "value" not in ratio or "vs" not in ratio:
                     err("E6", where, "ratio 必须带 value 与 vs（分母不许省略）")
+
+                # ---- E24 量纲：value 必须声明它是什么
+                # 由来：24 条实测混着 加速比 7 / 达成率 5 / 绝对吞吐 10 / 其它 2，
+                # 「2.39」（倍）与「887」（GB/s）放在同一字段，任何跨卡聚合都会错，
+                # 也排不出「哪张卡优化得最好」。
+                #   速度类：speedup（相对基线的倍数）| utilization（占峰值）| throughput（绝对吞吐）
+                #   非收益比值（如「M=128 与 M=1024 的耗时比」）不许算速度，用 ratio_other
+                kind = ratio.get("kind")
+                val = ratio.get("value")
+                if kind is None:
+                    err("E24", where,
+                        "ratio 缺 kind（speedup/utilization/throughput/ratio_other）"
+                        "——量纲不明的 value 无法聚合、也无法排序")
+                elif kind not in RATIO_KINDS:
+                    err("E24", where, "ratio.kind=%r 非法（只允许 %s）"
+                        % (kind, sorted(RATIO_KINDS)))
+                else:
+                    if not ratio.get("unit"):
+                        err("E24", where,
+                            "ratio 缺 unit（x / ratio / GB/s / TFLOPS）——跨卡聚合要按 unit 分组")
+                    # utilization 是「占峰值」，不可能超过 150%（超了是分母错）
+                    if kind == "utilization" and val is not None:
+                        try:
+                            if float(val) > 1.5:
+                                err("E24", where,
+                                    "kind=utilization 但 value=%s > 1.5 —— "
+                                    "达成率不会超过 150%%，这多半是分母口径错（见 E23）"
+                                    % val)
+                        except (TypeError, ValueError):
+                            err("E24", where, "ratio.value 不是数字：%r" % (val,))
+                    # 防「887 GB/s 被读成 887 倍」：非 speedup 不该出现 >1.5 的裸倍数
+                    if kind in ("throughput", "ratio_other") and val is not None:
+                        try:
+                            v = float(val)
+                            if v > 1.5 and not ratio.get("unit"):
+                                err("E24", where,
+                                    "kind=%s 且 value=%.3g 但没有 unit —— "
+                                    "容易被读成「%.0f 倍」" % (kind, v, v))
+                        except (TypeError, ValueError):
+                            pass
 
                 # E18：vs 里若引用了机器峰值，必须等于 constants.yaml 的实测值。
                 # 历史：bf16 峰值在 5 处各写各的（185/217/310），带宽写 1728（常数 1724）。

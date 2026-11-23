@@ -53,6 +53,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: throughput
+    unit: GB/s
     value: 360
     vs: MLA decode 的 KV 读取带宽 GB/s（含 rope，非纯 rope）
     scope:

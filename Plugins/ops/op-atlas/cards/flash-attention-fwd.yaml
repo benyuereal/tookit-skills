@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: speedup
+    unit: x
     value: 1.66
     vs: causal 相对 non-causal 的耗时比（1.780/2.961）
     scope:

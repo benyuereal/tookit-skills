@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: throughput
+    unit: GB/s
     value: 887
     vs: M=8192 档带宽（GB/s，相对 achievable 流式峰值 1724 为 0.51）
     scope:

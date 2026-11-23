@@ -53,6 +53,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/001-swiglu-fused-vs-split/README.md
   ratio:
+    kind: speedup
+    unit: x
     value: 2.26
     vs: torch 三步分拆（x+b → silu → 乘）
     scope:

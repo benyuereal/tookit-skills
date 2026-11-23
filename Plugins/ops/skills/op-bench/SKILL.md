@@ -70,6 +70,25 @@ DCU 上同一 kernel 的抖动可达 5%。跑 3 次取中位数，用 `|Δ| > k 
 > - **缺形状不插值、不跳过**，必须报覆盖率（`n/m`）
 > - 卡片 `last_verdict.geomean` 必须带 `shapes` 与 `gate`，`gate=False` 不许进卡（E22）
 
+### 判据 5d：`ratio.value` 必须声明量纲（kind + unit）
+
+`ratio.value` 曾经混着四种量纲：加速比 7 / 达成率 5 / 绝对吞吐 10 / 非收益比值 2。
+`2.39`（倍）与 `887`（GB/s）放在同一列，**任何跨卡聚合都会错**——
+算不出全仓几何平均，也排不出「哪张卡优化得最好」。
+
+| kind | 含义 | 能不能算几何平均 |
+|---|---|---|
+| `speedup` | 相对基线的加速倍数（>1 = 更快） | **只有这类能** |
+| `utilization` | 占峰值的比例（0~1） | 不能（是诊断量） |
+| `throughput` | 绝对吞吐 GB/s / TFLOPS | 不能，且不同 unit 不可合并 |
+| `ratio_other` | 非收益比值（如「M=128 与 M=1024 的耗时比」） | 不能，它回答的不是「快了多少」 |
+
+> **做法**：E24 强制 `kind` + `unit`；`kind=utilization` 的 value 不许 >1.5
+> （达成率超 150% 是分母口径错）。
+> 聚合用 `scripts/aggregate.py`：几何平均只在 `speedup` 上算，
+> 且**按 layer 分开**——engine 与 kernel 不可同表比
+> （moe-pipeline-fusion 的 1.69 是引擎层端到端，混进 kernel 会抬高整个家族）。
+
 ### 判据 5c：每次测量记 clock_mhz 与 timestamp
 
 同形状在 1200 与 1350 MHz 下能差 12.5%——我们的 bf16 峰值在同一小时内

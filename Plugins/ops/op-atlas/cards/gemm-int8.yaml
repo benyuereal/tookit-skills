@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: throughput
+    unit: TFLOPS
     value: 343.4
     vs: INT8 算力（TFLOPS，非倍数）
     scope:

@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: utilization
+    unit: ratio
     value: 0.33
     vs: GNSilu 相对 torch F.silu 的带宽比（153/468）
     scope:

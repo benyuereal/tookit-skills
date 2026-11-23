@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: ratio_other
+    unit: x
     value: 1.0
     vs: M=128 与 M=1024 的耗时比（0.0845/0.0814）
     scope:

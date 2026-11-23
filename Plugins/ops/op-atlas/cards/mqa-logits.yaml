@@ -62,6 +62,8 @@ last_verdict:
   status: measured
   kb_path: /workspace/op_engine_design/MQA.md
   ratio:
+    kind: speedup
+    unit: x
     value: 1.29
     vs: grouped G=3 (0.887 ms)
     scope:

@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: throughput
+    unit: GB/s
     value: 741
     vs: 融合后带宽 GB/s（相对 achievable 流式峰值 1724 为 0.43）
     scope:

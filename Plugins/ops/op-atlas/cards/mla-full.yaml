@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/007-mla-full-vs-absorb/README.md
   ratio:
+    kind: utilization
+    unit: ratio
     value: 0.14
     vs: 本机实测 bf16 峰值 279 TF 的达成率（q_len>=64，KV=8192）
     scope:

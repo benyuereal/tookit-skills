@@ -73,6 +73,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/008-paged-decode-ceiling/README.md
   ratio:
+    kind: utilization
+    unit: ratio
     value: 0.03
     vs: achievable 流式只读峰值带宽的达成率（B=32 KV=8192 D=128，连续 KV）
     scope:

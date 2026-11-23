@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: ratio_other
+    unit: x
     value: 0.973
     vs: rotate_style=1 相对 style=0 的耗时比（0.7251/0.7451）
     scope:

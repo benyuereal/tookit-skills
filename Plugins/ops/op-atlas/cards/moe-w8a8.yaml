@@ -67,6 +67,8 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
+    kind: utilization
+    unit: ratio
     value: 0.888
     vs: achievable 峰值带宽（仅 Marlin GEMM 分量）
     scope:

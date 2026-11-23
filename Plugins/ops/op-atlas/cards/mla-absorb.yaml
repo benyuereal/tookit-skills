@@ -54,6 +54,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/006-mla-decode-absorb/README.md
   ratio:
+    kind: utilization
+    unit: ratio
     value: 0.35
     vs: achievable 流式只读峰值 1724 GB/s 的达成率（KV=32768, B=8）
     scope:

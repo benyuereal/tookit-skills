@@ -41,10 +41,11 @@ jobs:
       - name: op-atlas validate
         run: python3 -I Plugins/ops/op-atlas/validate.py --atlas Plugins/ops/op-atlas
 
-      - name: eval_rate / geomean 自检
+      - name: eval_rate / geomean / aggregate 自检
         run: |
           python3 -I scripts/evalrate.py --selftest
           python3 -I scripts/geomean.py --selftest
+          python3 -I scripts/aggregate.py --selftest
 
       - name: 鲁棒性门自检（注入已知缺陷，必须抓到）
         # 业主验收：一例都没抓到说明检查没生效。
