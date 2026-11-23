@@ -60,7 +60,7 @@
 | [`rope`](cards/rope.yaml) | rope | measured | lightop | bandwidth | 两种 rotate_style 耗时比为 0.973（差异接近噪声边… |
 | [`sampling-topk-topp`](cards/sampling-topk-topp.yaml) | sampling | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`sparse-mla`](cards/sparse-mla.yaml) | attention | tuned | tilelang | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REP… |
-| [`topk-block-index`](cards/topk-block-index.yaml) | attention | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |
+| [`topk-block-index`](cards/topk-block-index.yaml) | attention | measured | lightop | latency | 耗时约等于空 kernel（0.79×），已无优化空间；比 torc… |
 | [`verify-accept`](cards/verify-accept.yaml) | sampling | draft | in-house | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`weight-prepack`](cards/weight-prepack.yaml) | quant | draft | aiter | bandwidth | 无实测：索引卡。核心价值是提醒「漏 prepack 是静默错误」 |
 

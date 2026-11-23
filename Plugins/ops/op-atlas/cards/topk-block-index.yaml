@@ -2,7 +2,7 @@ id: topk-block-index
 title: Top-k block 选择（含 -1 哨兵）
 family: attention
 math: idx = topk(scores, K)；无效槽位填 -1（必须垫队尾）
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -16,12 +16,13 @@ impls:
   not_for:
   - 需要队首 -1（会静默算错）
   pros:
-  - 与 mqa-logits 配套
+  - 比 torch.topk 快 3.05~5.11×（三档全部显著）
+  - 耗时≈launch 地板，已无优化空间
   cons:
   - lightop 的 sparse 路径已含 topk 后处理
   source: references/libraries.md
-  import_path: lightop.mqa_logits
-  signature: mqa_logits 的 topk 后处理
+  import_path: lightop.fast_topk_transform_fused
+  signature: fast_topk_transform_fused(score,lengths,page_table,cu_seqlens_q,topk)
   smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"mqa_logits")"
 - repo: boltops
   library_profile_ref: libraries.md §10
@@ -41,20 +42,28 @@ impls:
   signature: fp8_mqa_logits(q,fused_kv_cache,weights,...)
   smoke_test: python3 -I -c "import boltops; assert hasattr(importlib.import_module("boltops.mqa_logits"),"fp8_mqa_logits")"
 ceiling:
-  kind: missing
-  ref: null
-  bound: bandwidth
-  note: DSA 的稀疏选择；-1 语义与 MoE 的 padding 不同，不可混用
+  kind: roofline_model
+  ref: Plugins/ops/skills/op-roofline/constants.yaml
+  bound: latency
+  note: 数据量（MB 级）远小于 launch 开销，带宽分母不构成约束；判据是「离 launch 地板多远」
 shapes:
 - decode-m1
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/009-topk-block-index/README.md
+  ratio:
+    value: 0.79
+    vs: 耗时相对空 kernel（launch 地板 43 µs）的倍数（B=32 L=8192 K=2048）
+    scope:
+      cards: 1
+      in_len: B=32 L=8192 K=2048
+      out_len: idx (32,2048) int32
+      warmup: hot
+      note: 0.77~1.06× 覆盖 B=1..32 L=8192..32768；<1 是两次测量的 launch 路径差异，方向明确
+  conclusion: 耗时约等于空 kernel（0.79×），已无优化空间；比 torch.topk 快 3~5×
+  verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 切 fused topk 变换变体
@@ -64,3 +73,8 @@ surfaces:
 - gather-path
 - precision-drop
 updated: '2026-11-22'
+hard_preconditions:
+- statement: page_table 必须是 2D 且 stride(1)==1
+  check: 传 1D 报 "Expected src_page_table.dim() == 2 && src_page_table.stride(1) == 1"
+- statement: lightop.fuse_topk_transform 是模块不是函数（import_path 粒度）
+  check: 真实入口是 lightop.fast_topk_transform_fused；直接调模块报 not a callable object

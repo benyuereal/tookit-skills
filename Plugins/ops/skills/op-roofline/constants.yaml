@@ -90,6 +90,23 @@ compute:
       或者反过来把「已经到顶」判成「还有空间」。
       MMA 形状 16x16x16 的常数只对 bf16 成立，fp8 的发射率**尚未直接标定**，此处只用实测整体峰值。
 
+launch:
+  # 单次 kernel launch 的固定代价。任何「融合能省多少」的估算都以它为上限基数：
+  # N 个串行小 kernel 的理论下限就是 N × launch。
+  floor_us:
+    value: 43
+    unit: µs
+    status: measured
+    verified_on: 2026-11-23
+    source: >
+      空 kernel（单元素 add_，CUDA event 计时，13 次中位）实测 43.2 µs。
+      同环境 topk 算子（B=8 L=8192）0.0334 ms = 0.77× 该值，
+      说明它已完全被 launch 开销主导。见 cases/009-topk-block-index。
+    note: >
+      这个数是「小 kernel 的耗时下限」，不是「launch 的税」。
+      判一个小算子值不值得优化，先看它离这个地板多远：
+      ≈1 就没有空间；≫1 才值得看。别拿带宽达成率套在 MB 级的数据上。
+
 memory:
   l2_size:
     value: 8
