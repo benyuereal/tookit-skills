@@ -335,17 +335,23 @@ def validate_document(doc, path="<json>", num_cu=CU_COUNT, require_known=False):
     return probs, summary
 
 
+def _die(msg):
+    """用法/文件层错误统一退出 2（与『校验不通过』的 1 区分开）。"""
+    print("ERROR: " + msg, file=sys.stderr)
+    raise SystemExit(2)
+
+
 def load_document(path):
-    """读 JSON；IO/语法错误抛 SystemExit(2)，不混进校验结论。"""
+    """读 JSON；IO/语法错误 → exit 2，不混进校验结论。"""
     p = Path(path)
     try:
         text = p.read_text(encoding="utf-8")
     except OSError as e:
-        raise SystemExit("ERROR: 读不到 %s：%s" % (p, e))
+        _die("读不到 %s：%s" % (p, e))
     try:
         return json.loads(text)
     except ValueError as e:
-        raise SystemExit("ERROR: %s 不是合法 JSON：%s" % (p, e))
+        _die("%s 不是合法 JSON：%s" % (p, e))
 
 
 # ---------------------------------------------------------------- check CLI
@@ -439,10 +445,15 @@ def pick_kernel(kernels, name=None):
                      % (len(kernels), ", ".join(names)))
 
 
-def _set_unknown(plc, unk, field, reason, force=False):
-    """写 null + 原因；已有非 null 值且没 --force 时不动它。"""
-    if plc.get(field) is not None and not force:
-        return False
+def _set_unknown(plc, unk, field, reason, force=False, only_if_absent=True):
+    """写 null + 原因；已有非 null 值且没 --force 时不动它。
+
+    only_if_absent=True 时，「已有非 null 值就不动」是第二道锁——
+    用于 grid：它无法从 .so 推出，是纯人填量，--force 也不许把它抹成 null。
+    """
+    if plc.get(field) is not None:
+        if only_if_absent or not force:
+            return False
     plc[field] = None
     unk[field] = reason
     return True
@@ -501,11 +512,11 @@ def fill_record(rec, row, threads=None, wave_size=None, num_cu=CU_COUNT,
         probs.append(_err("placement.lds_per_cta",
                           "inspect_so 给出的 lds_used=%r 非法" % (lds_used,)))
 
-    # grid 永远拿不到
+    # grid 永远拿不到；且它是纯人填量——即使 --force 也不许把已填的值抹成 null
     if plc.get("grid") is None or "grid" not in plc:
         _set_unknown(plc, unk, "grid",
                      ".so 里不含 launch grid；必须人填（整数或各维 CTA 数列表）",
-                     force=force)
+                     only_if_absent=True)
 
     if threads is None:
         _set_unknown(
@@ -569,17 +580,17 @@ def cmd_fill(results_path, so_path, kernel=None, threads=None, lds=None,
     try:
         data = read_so(so_path, threads=threads, lds=lds)
     except RuntimeError as e:
-        raise SystemExit("ERROR: %s" % e)
+        _die("%s" % e)
     kernels = data.get("kernels") or []
     if not kernels:
-        raise SystemExit("ERROR: %s 里没解析到 kernel" % so_path)
+        _die("%s 里没解析到 kernel" % so_path)
     try:
         row = pick_kernel(kernels, kernel)
     except ValueError as e:
-        raise SystemExit("ERROR: %s" % e)
+        _die("%s" % e)
 
     if not isinstance(doc, dict) or not isinstance(doc.get("records"), list):
-        raise SystemExit("ERROR: %s 缺少 records 数组" % results_path)
+        _die("%s 缺少 records 数组" % results_path)
 
     probs = []
     all_changes = []
@@ -598,15 +609,24 @@ def cmd_fill(results_path, so_path, kernel=None, threads=None, lds=None,
         doc, results_path, num_cu=num_cu)
     probs.extend(vprobs)
 
+    errs = [p for p in probs if p.severity == "error"]
+    wrote = False
     if not dry_run:
-        tmp = Path(str(results_path) + ".tmp")
-        tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n",
-                       encoding="utf-8")
-        os.replace(str(tmp), str(results_path))
+        if errs:
+            # 有 error 就不落盘：半填入的文件会被下游当成「已经填过」。
+            print("未写入 %s：补全后仍有 %d 个 error，先修复再重跑"
+                  "（--dry-run 可只看会改成什么）" % (results_path, len(errs)))
+        else:
+            tmp = Path(str(results_path) + ".tmp")
+            tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n",
+                           encoding="utf-8")
+            os.replace(str(tmp), str(results_path))
+            wrote = True
 
     if as_json:
         print(json.dumps({
-            "ok": not any(p.severity == "error" for p in probs),
+            "ok": not errs,
+            "written": wrote,
             "dry_run": dry_run,
             "so": str(so_path),
             "kernel": row,
@@ -619,7 +639,7 @@ def cmd_fill(results_path, so_path, kernel=None, threads=None, lds=None,
     else:
         if dry_run:
             print("（--dry-run：不写文件）")
-        else:
+        elif wrote:
             print("已写入 %s" % results_path)
         print(".so kernel=%s VGPR=%s LDS=%s threads=%r CTA/CU=%s"
               % (row.get("name"), row.get("vgpr"), row.get("lds_used"),
@@ -632,10 +652,9 @@ def cmd_fill(results_path, so_path, kernel=None, threads=None, lds=None,
                 print("  %-13s %r -> %r" % (f, o, n))
         for p in probs:
             print(p)
-        errs = [p for p in probs if p.severity == "error"]
         print("结果：%s（%d error）" % ("不通过" if errs else "通过", len(errs)))
 
-    return 1 if any(p.severity == "error" for p in probs) else 0
+    return 1 if errs else 0
 
 
 # ---------------------------------------------------------------- selftest
@@ -766,8 +785,11 @@ def selftest():
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="results json 的 placement 字段校验器（只校验，不解释性能）")
-    ap.add_argument("--check", nargs="+", metavar="FILE",
-                    help="校验一批 results json；缺 placement 字段则非 0 退出")
+    # 文件用位置参数，`--check` 才是开关：这样 `--check --strict a.json`
+    # 与 `--check a.json --strict` 都成立（nargs='+' 会吞掉紧邻的选项名）。
+    ap.add_argument("--check", action="store_true",
+                    help="校验一批 results json（文件跟在后面）；缺 placement 则非 0 退出")
+    ap.add_argument("files", nargs="*", metavar="FILE", help="--check 的输入文件")
     ap.add_argument("--fill-from-so", metavar="RESULTS_JSON",
                     help="用 inspect_so.py 的元数据补全 placement（会写文件，除非 --dry-run）")
     ap.add_argument("--so", metavar="PATH.so", help="--fill-from-so 的编译产物")
@@ -778,7 +800,7 @@ def main(argv=None):
     ap.add_argument("--num-cu", type=int, default=CU_COUNT,
                     help="CU 数（默认 %d，本机 gfx938）" % CU_COUNT)
     ap.add_argument("--force", action="store_true",
-                    help="--fill-from-so 覆盖已有非 null 值")
+                    help="--fill-from-so 覆盖已有非 null 值（grid 除外，它是人填量）")
     ap.add_argument("--dry-run", action="store_true", help="只打印，不写文件")
     ap.add_argument("--strict", action="store_true", help="警告也导致非 0 退出")
     ap.add_argument("--require-known", action="store_true",
@@ -792,12 +814,18 @@ def main(argv=None):
     if a.fill_from_so:
         if not a.so:
             ap.error("--fill-from-so 需要 --so")
+        if a.files:
+            ap.error("不要同时给位置文件；--fill-from-so 只接收 --fill-from-so 指定的那个文件")
         return cmd_fill(a.fill_from_so, a.so, kernel=a.kernel, threads=a.threads,
                         lds=a.lds, wave_size=a.wave_size, num_cu=a.num_cu,
                         force=a.force, dry_run=a.dry_run, as_json=a.json)
     if a.check:
-        return cmd_check(a.check, num_cu=a.num_cu, strict=a.strict,
+        if not a.files:
+            ap.error("--check 需要至少一个文件")
+        return cmd_check(a.files, num_cu=a.num_cu, strict=a.strict,
                          require_known=a.require_known, as_json=a.json)
+    if a.files:
+        ap.error("给了文件但没给 --check（不知道要对它们做什么）")
     ap.print_help()
     return 2
 
