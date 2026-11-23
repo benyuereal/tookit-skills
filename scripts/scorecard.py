@@ -52,7 +52,7 @@ TARGETS = {
     "C5": 8.0,       # 四件套齐全的卡数
     "Q1": 0.0,       # pytest 失败数（越低越好）
     "Q2": 5.0,       # validate 警告数（越低越好）
-    "Q3": 5.0,       # 新门禁反向测试覆盖（5 道）
+    "Q3": 6.0,       # 新门禁反向测试覆盖（E29/E36/E37/E38/E40/loop）
     "Q4": 40.0,      # except Exception 总数（越低越好）
     "Q5": 200.0,     # 最长单函数行数（越低越好）
 }
@@ -80,6 +80,7 @@ GATES = {
     "E36": "semantics 内容一致",
     "E37": "semantics 必填",
     "E38": "regimes 结构",
+    "E40": "算出超 achievable 即报错",
     "loop": "第 3 步 bottleneck 强制绑定",
 }
 
@@ -203,6 +204,9 @@ def gate_reverse_tests():
         "E36": has("test_semantics.py", r"assertRaises|assertEqual|assertNotEqual"),
         "E37": has("test_semantics.py", r"E37|必填|missing"),
         "E38": has("test_atlas_content.py", r"E38|regimes"),
+        # E40 的反向测试在 test_floor_block.py 的 TestCeilingOverrun：
+        # 必须有 assertEqual(...) 且带 ["E40"] 期望，才算「故意写错看它报不报」
+        "E40": has("test_floor_block.py", r'E40'),
         "loop": has("test_bottleneck_gate.py", r"blocks_run|rejected"),
     }
 
