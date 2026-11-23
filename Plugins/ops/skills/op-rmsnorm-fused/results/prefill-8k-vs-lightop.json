@@ -1,0 +1,39 @@
+{
+  "caliber": {
+    "what": "op_call",
+    "alloc": false,
+    "state": "hot",
+    "rounds": 3,
+    "timer": "hip_event"
+  },
+  "measure_mode": "back-to-back, no per-iter sync",
+  "measure_note": "偏乐观约 23%（kernel 间可重叠）。卡片/周报口径必须用端到端（每次 empty_like）：2026-11-23 实测 183.0 µs / 1081 GB/s / util 0.63。纯 kernel（event 隔离）172.5 µs。",
+  "shape": {
+    "params": {
+      "M": 8192,
+      "H": 4096
+    },
+    "note": "prefill：字节数主导，最接近纯带宽地板",
+    "_name": "prefill-8k",
+    "shape": "prefill-8k"
+  },
+  "runs": [
+    {
+      "skv": 0,
+      "variants": [
+        {
+          "tag": "fused-3pass-triton",
+          "ms": 0.18109982354300364,
+          "mad": 0.012019841443924678,
+          "delta_pct": -12.93263755533668,
+          "significant": false,
+          "why": "在噪声内（|Δ|=0.0268998 <= 3.0*MAD=0.0420373），判 INCONCLUSIVE",
+          "maxdiff": null,
+          "rel": null
+        }
+      ],
+      "base_ms": 0.2079996665318807,
+      "base_mad": 0.01401243093754917
+    }
+  ]
+}

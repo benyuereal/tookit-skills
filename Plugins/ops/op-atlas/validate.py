@@ -61,7 +61,9 @@ REQUIRED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier"}
 ALLOWED_CEIL = {"kind", "ref", "bound", "model_name", "note"}
 REQUIRED_CEIL = {"kind", "ref"}
 ALLOWED_VERDICT = {"status", "kb_path", "ratio", "geomean", "evidence",
-                   "next_probe", "conclusion", "verified_on"}
+                   "next_probe", "conclusion", "verified_on",
+                   # E27：访存口径。跨实现比较前必须先对齐 (inputs, outputs)
+                   "traffic_passes", "inputs", "outputs", "comparison"}
 REQUIRED_VERDICT = {"status", "kb_path", "conclusion", "verified_on"}
 
 # E7：裸绝对耗时（0.887 ms / 1.29s / 83 us）——必须带分母或干脆不写
@@ -687,7 +689,8 @@ def validate(atlas, repo):
                 # scope：跨口径比较是最隐蔽的错误来源。
                 # 内部材料里就有一句自我纠正——「那个 1.67–1.86 倍是 4 卡
                 # rocBLAS 换核的结果，不是 8 卡同口径对比」。
-                rextra = set(ratio) - {"kind", "unit", "value", "vs", "scope"}
+                rextra = set(ratio) - {"kind", "unit", "value", "vs", "scope",
+                                       "traffic_passes", "inputs", "outputs"}
                 if rextra:
                     err("E6", where, "ratio 未知字段 %s" % sorted(rextra))
                 # 有 value 就必须有 scope：没有口径的倍数不可比
@@ -851,6 +854,29 @@ def validate(atlas, repo):
         warns.append("[E24] ratio_other 已 %d 条（上限 %d）：它是逃生口不是常驻地，"
                      "涨上去说明 kind 分类没收敛，请复核这几条是否本该判成 "
                      "speedup/utilization/throughput" % (n_other, RATIO_OTHER_LIMIT))
+
+    # ---- E27 跨实现比较必须对齐访存口径
+    # 由来：2026-11-23 我们拿「只写 1 份输出（201 MB）」的 kernel 去比
+    # lightop 的「写 2 份（268 MB）」，得出「快 1.18x」——**少干 1/3 的活然后说自己快**。
+    # 等语义下实际慢 6.7%。这条防线要求：只要写了 comparison，就必须写明对齐口径。
+    for c in cards:
+        data, problem = _load_yaml(c)
+        if problem or not isinstance(data, dict):
+            continue
+        lv = data.get("last_verdict") or {}
+        comp = lv.get("comparison")
+        if not comp:
+            continue
+        ins = lv.get("inputs", (lv.get("ratio") or {}).get("inputs"))
+        outs = lv.get("outputs", (lv.get("ratio") or {}).get("outputs"))
+        align = (comp or {}).get("alignment") if isinstance(comp, dict) else None
+        if ins is None or outs is None:
+            warns.append("[E27] %s: 有 comparison 但没写 inputs/outputs —— "
+                         "跨实现比较前必须先对齐访存口径（不对齐就是在比两件不同的活）"
+                         % c.name)
+        elif not align:
+            warns.append("[E27] %s: 有 comparison 但 comparison.alignment 缺失 —— "
+                         "必须写明双方各自的 (inputs, outputs) 是否一致" % c.name)
 
     # ---- E19 INDEX 表里的状态/家族/上限必须与卡片一致
     # 由来：13 张卡已 promoted 到 measured，INDEX 里还写着 draft。

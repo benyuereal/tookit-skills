@@ -10,11 +10,13 @@ variants:
     mutates_inputs: false
 
   - name: lightop-fused
-    source: "lightop 的融合 norm 族"
-    status: primary
+    source: "lightop 0.6.0 的 fused_add_rms_norm（已实测可用，非此前误报的「未安装」）"
+    status: candidate
+    measured: "等语义 227.0 us / 1182 GB/s / util 0.686（2读2写 268MB；比我们的 242.2 us 快 6.7%）"
     applies_to: [decode-m1, decode-m32, prefill-8k]
     constraints:
-      - "融合残差版本会原地改写输入，多变体对比须各喂副本"
+      - "**原地改写 x 与 residual**：多变体对比必须各喂副本（ab.py 已用 256 池轮换）"
+      - "返回两个张量 (out, residual_out)，residual_out ≈ x+r；只写一份输出的实现不可与它比"
     mutates_inputs: true
 
   - name: torch-native

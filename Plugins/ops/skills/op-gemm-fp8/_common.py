@@ -97,7 +97,7 @@ def get_runner(name, tilelang_root=None, **kwargs):
     if name == "aiter":
         return _aiter_runner
     raise RuntimeError(
-        "变体 %r 在本机不可用：需先安装 TileLang(hcu) / aiter 的 FP8 GEMM 后端"
+        "变体 %r 的 adapter 尚未实现（**注意：aiter 实际已安装**，此前「需先安装」的措辞是错的）。原措辞：需先安装 TileLang(hcu) / aiter 的 FP8 GEMM 后端"
         "（见 variants.yaml 的 source 字段）。adapter 已就绪，缺的是后端——"
         "不要用假实现绕过。" % name)
 

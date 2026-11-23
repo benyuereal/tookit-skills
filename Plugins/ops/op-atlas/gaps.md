@@ -1,10 +1,10 @@
 # GAPS —— 已知未覆盖与证据缺口（生成物，勿手改）
 
 > 由 `scripts/gen_gaps.py` 生成。改这张表请改脚本或卡片，不要直接编辑本文件。
-> 生成时间：2026-11-23 12:52
+> 生成时间：2026-11-23 13:12
 >
 > **它防的是「用覆盖数掩盖深度不足」。** 46 张卡容易被当成全覆盖，
-> 实际有 13 张挂不上可复跑证据、6 个家族零实测。
+> 实际有 13 张挂不上可复跑证据、5 个家族零实测。
 
 ## 一、证据缺口（`missing_evidence`）
 
@@ -30,14 +30,13 @@
 
 | 家族 | 卡数 | 为什么零实测 |
 |---|---|---|
-| `elementwise` | 1 | 原因未记录——需要补 |
 | `kv` | 3 | 3 张卡全 draft；paged 写入的测量被 launch 开销淹没（见 case 009 的同类问题） |
 | `linear-attn` | 6 | 9 条映射已有，但 0 张实测；本机未找到可跑通的 chunked-scan / gated-linear-attn 入口 |
 | `memory` | 1 | embedding-lookup 1 张 draft；属访存类，判据与 rope 同源但未跑 |
 | `quant` | 2 | 4 条映射 0 实测；per-token/per-block 判据未落地 |
 | `sampling` | 3 | 3 张卡全 draft；判据未定（top-k 与 top-p 的截断语义不同） |
 
-有实测的家族 6 / 12：`activation`、`attention`、`gemm`、`moe`、`norm`、`rope`
+有实测的家族 7 / 12：`activation`、`attention`、`elementwise`、`gemm`、`moe`、`norm`、`rope`
 
 ## 二b、分母未标定
 
@@ -64,5 +63,5 @@
 
 ## 四、当前实测覆盖
 
-有数卡 23 / 全部 46 张。其中证据齐全 10 张、缺证据 13 张。
+有数卡 24 / 全部 46 张。其中证据齐全 11 张、缺证据 13 张。
 

@@ -145,3 +145,50 @@ next:      要么改 FuseBiasSwiGLU 的接口接两个张量（需改库源码�
 
 **这两轮的价值**：把一个含糊的「46% 还有空间」变成了具体的
 「空间在数据布局，不在 kernel 参数」。下一轮该改布局，不是调参。
+
+
+## 2026-11-23 二次修正：等语义下我们**慢 6.7%**，此前的「快 1.18x」作废
+
+### 我们少写了一份输出
+
+`lightop.fused_add_rms_norm(x, residual, w, eps)` 返回**两个**张量：
+  `out ≈ rmsnorm(x+r)*w`，`residual_out ≈ x+r`（实测 maxerr 0.0156）
+且 **x 与 residual 都被原地改写**。
+
+我们的 `fused-3pass-triton` 最初只 `store(Y)`，**没有把 x+r 写回**。
+→ 流量 201 MB，比 lightop 的 268 MB 少 25%。**少干 1/3 的活，然后说自己快。**
+
+### 等语义口径（都写 2 份输出 = 2读2写 = 268.4 MB）
+
+M=8192 H=4096 bf16，64 buffer 轮换，40 次中位，event 隔离：
+
+| 实现 | 时间 | MAD | 带宽 | util(1724) |
+|---|---|---|---|---|
+| `fused-3pass-triton`（补 residual_out 后） | 242.2 µs | 1.4 µs | 1108 GB/s | 0.643 |
+| `lightop.fused_add_rms_norm` | 227.0 µs | 5.0 µs | 1182 GB/s | 0.686 |
+
+**等语义下我们慢 6.7%**（业主独立测得 11.9%，同量级，差异来自时钟档位）。
+
+### 但融合本身是值的（换成正确的对比对象）
+
+  add 134 µs + rms_norm 143 µs = 277 µs（分离方案）
+  → 融合 242.2 µs = **1.14x**
+
+**这才是「融合残差 RMSNorm」的价值。此前拿融合版比单算子，是比错了对象。**
+
+### 一条必须记住的口径纪律
+
+**跨实现比较前必须先对齐 (inputs, outputs)。** 不对齐就是在比两件不同的活。
+卡片新增 `inputs` / `outputs` / `traffic_passes` 三个字段，validate 用 E27 守。
+
+### 关于 lightop 的那个假报错
+
+`_common.py` 曾写「变体在本机不可用：需先安装 lightop 的融合 norm 实现」——
+**这是假的**：lightop 0.6.0 早已安装（203 个顶层符号可用）。
+这句谎话让 ledger 里「待验证：lightop-fused 的实际达成率」挂了很多轮没人发现。
+已改为「adapter 尚未实现（注意：lightop 实际已安装）」。
+
+### 未测定
+
+- lightop 为什么能到 1182 GB/s 而我们只有 1108（推测是 warp 级归约，未用 PMC 验证）
+- 补 warp 级归约后能否追平（next_probe 已指向这条，目标 ≥1360）

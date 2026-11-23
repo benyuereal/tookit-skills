@@ -157,7 +157,7 @@
   {
    "name": "rmsnorm-fused",
    "path": "Plugins/ops/skills/op-rmsnorm-fused",
-   "status": "at_floor",
+   "status": "measured",
    "shapes": [
     "decode-m1",
     "decode-m32",
@@ -171,7 +171,7 @@
     "fused-3pass-triton"
    ],
    "best_variant": "triton 融合单 kernel（cold-L2 1081 GB/s, util 0.63/1724）",
-   "floor_status": "cold-L2 端到端 183.0 µs = 1081 GB/s = util 0.63(1724)/0.73(1498)。**cross-lane-fold 已证伪**：分块两趟 186~283 µs 全部更慢；num_warps 4/8/16=172/187/265，4 已最优。归约惩罚 0.72 是结构性上限（elementwise 1498 × 0.72 ≈ 1081），非可优化项。原记 887 GB/s/0.51 为无来源数字，已作废",
+   "floor_status": "等语义(2读2写268MB) 242.2 µs / 1108 GB/s / util 0.643。**比 lightop 227.0 µs 慢 6.7%**（业主独立测 11.9%，同量级）。早前 183µs/0.63 只写 1 份输出，少 25% 的活，已作废。融合相对分离方案 277→242 = 1.14x",
    "last_verified": "2026-11-23",
    "evidence": "Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-triton.json",
    "open_questions": [

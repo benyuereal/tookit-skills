@@ -18,14 +18,36 @@ CARD = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CARD))
 sys.path.insert(0, str(CARD.parents[3] / "scripts"))
 
+import torch  # noqa: E402
 from opbench import bench_fn, significant  # noqa: E402
 import _common as C  # noqa: E402
 
 
 def _measure(fn, inp, rounds, warmup_ms, rep_ms):
+    """每轮喂**副本**——有些实现原地改写输入（lightop.fused_add_rms_norm 就是）。
+
+    2026-11-23 实测：lightop 复用 buffer 196.8 µs / 每轮副本 199.9 µs（差 1.6%），
+    说明它一次性完成读改写，复用与否几乎不影响。但**不隔离的实现在别的卡上会失真**
+    （本项目 op-sparse-mla 就因 flash_mla 改 indices 把两个变体的结果看反过）。
+    所以统一隔离，代价只有 1.6%。
+
+    用 --reps 轮换预克隆的 buffer，避免把 clone 开销算进计时。
+    """
+    # 预克隆一批 buffer 轮换。数量要够 bench_fn 单轮内的 iters（rep_ms/单次耗时），
+    # 否则原地改写实现（lightop.fused_add_rms_norm）会在同一轮内把 pool 反复改掉，
+    # 后续迭代读到已变的输入 → 测出偏小的活（实测差 40%）。
+    REP = 256
+    pools = [[t.clone() if torch.is_tensor(t) else t for t in inp[:-1]] for _ in range(REP)]
+    idx = [0]
+
+    def _call():
+        k = idx[0]
+        idx[0] = (idx[0] + 1) % REP
+        return fn(*pools[k])
+
     meds = []
     for _ in range(rounds):
-        st = bench_fn(lambda: fn(*inp[:-1]), warmup_ms=warmup_ms, rep_ms=rep_ms, repeats=3)
+        st = bench_fn(_call, warmup_ms=warmup_ms, rep_ms=rep_ms, repeats=3)
         meds.append(st["median_ms"])
     meds.sort()
     n = len(meds)
@@ -44,7 +66,7 @@ def main(argv=None):
     p.add_argument("--device", default=None)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--warmup-ms", type=float, default=25.0)
-    p.add_argument("--rep-ms", type=float, default=100.0)
+    p.add_argument("--rep-ms", type=float, default=50.0)
     a = p.parse_args(argv)
 
     shape = C.load_shape(a.shape)

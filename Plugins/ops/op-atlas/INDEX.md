@@ -55,7 +55,7 @@
 | [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | measured | flash-mla | bandwidth | flash_attn decode 只达峰值 0.03；同机 MLA… |
 | [`qk-norm`](cards/qk-norm.yaml) | norm | measured | lightop | bandwidth | qk-norm+rope 融合达 741 GB/s，是 rope 单… |
 | [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | lightop | bandwidth | 无实测：索引卡。所有 FP8 路径的前置判据都挂在这张卡上 |
-| [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | at_floor | lightop | bandwidth | triton 融合单 kernel 冷 L2 达 1081 GB/s… |
+| [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | measured | lightop | bandwidth | triton 融合单 kernel 冷 L2 达 1081 GB/s… |
 | [`rope-mla`](cards/rope-mla.yaml) | rope | measured | flash-mla | bandwidth | MLA decode 为 360 GB/s，与纯 rope 的 33… |
 | [`rope`](cards/rope.yaml) | rope | measured | lightop | bandwidth | 两种 rotate_style 耗时比为 0.973（差异接近噪声边… |
 | [`sampling-topk-topp`](cards/sampling-topk-topp.yaml) | sampling | draft | lightop | bandwidth | 无实测：索引卡，实现层待按证据推进 |

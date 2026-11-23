@@ -92,7 +92,7 @@ def get_runner(name, tilelang_root=None, **kwargs):
             return reference(x, W, params=kwargs)
         return _ref
     raise RuntimeError(
-        "变体 %r 在本机不可用：需先安装 lightop / aiter 的 gate+topk 后端"
+        "变体 %r 的 adapter 尚未实现（**注意：lightop / aiter 实际已安装**，此前「需先安装」的措辞是错的）。原措辞：需先安装 lightop / aiter 的 gate+topk 后端"
         "（见 variants.yaml 的 source 字段）。adapter 已就绪，缺的是后端——"
         "不要用假实现绕过。" % name)
 

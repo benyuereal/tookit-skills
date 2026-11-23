@@ -2,7 +2,7 @@ id: rmsnorm-fused
 title: 融合 RMSNorm（含残差）
 family: elementwise
 math: y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))
-status: at_floor
+status: measured
 layer: kernel
 op_card: Plugins/ops/skills/op-rmsnorm-fused
 impls:
@@ -51,23 +51,22 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: at_floor
+  status: measured
   kb_path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-triton.json
   ratio:
     kind: utilization
     unit: ratio
-    value: 0.63
-    vs: 流式峰值带宽的达成率（prefill-8k，冷 L2 口径）
+    value: 0.643
+    vs: 流式峰值 1724 GB/s 的达成率（等语义：2 读 2 写 = 268 MB，与 lightop 对齐）
     scope:
       cards: 1
       in_len: M=8192
       out_len: H=4096
       warmup: hot
-      note: 分母 1724 **未标定**（全仓无测量记录），实测 elementwise 上限 1498 对应 util=0.73。同一数据双分母并列 0.63(1724)/0.73(1498)。口径=端到端（每次 empty_like）183.0 µs，业主三方对账确认；ab.py 背靠背 140 µs 偏乐观 23%，不用。**cross-lane-fold 已试并证伪**：分块两趟
-        186~283 µs（更慢，多读 2 趟 > 省的 barrier）、num_warps 4/8/16 = 172/187/265 µs，4 已最优 ⇒ 标 at_floor
+      note: 等语义口径 242.2 µs（64 buffer 轮换、40 次中位、MAD 1.4 µs）。分母 1724 未标定，实测 elementwise 上限 1498 对应 util=0.74。**早前记的 0.63/183µs 只写 1 份输出（201 MB），比 lightop 少 25% 的活，已作废**
   evidence:
-  - path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-triton.json
-    sha256: 86ddd0ff8a82862bd1daff0ebf1703cd9227c64114f9fc9c8d66f41d8ad03203
+  - path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-vs-lightop.json
+    sha256: 8fe64dbca242c8df4efcf761dd0a2729c155a92248af9b4938ab6fe381f58e75
     verified_on: '2026-11-23'
   conclusion: triton 融合单 kernel 冷 L2 达 1081 GB/s（util 0.63），快 6.6x
   next_probe:
@@ -78,6 +77,28 @@ last_verdict:
     stop_if: 实测三种结构变换全部更慢且 num_warps 已最优 ⇒ 归约惩罚是结构性上限，标 at_floor，不再硬啃
     effort: 0（已完成）
   verified_on: '2026-11-23'
+  comparison:
+    vs_lightop:
+      cand_us: 242.2
+      base_us: 227.0
+      ratio: 1.067
+      verdict: 等语义下我们慢 6.7%（业主独立测得 11.9%，同量级）
+      note: lightop 归约实现更优，见 next_probe
+    vs_separate:
+      add_us: 134
+      rms_norm_us: 143
+      separate_us: 277
+      fused_us: 242.2
+      speedup: 1.14
+      verdict: 融合相对分离方案 277→242 = 1.14x，这才是融合的价值
+    alignment:
+      inputs: 2
+      outputs: 2
+      traffic_passes: 4
+      note: 跨实现比较前必须对齐 (inputs, outputs)——不对齐就是在比两件不同的活
+  traffic_passes: 4
+  inputs: 2
+  outputs: 2
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop 融合
