@@ -52,7 +52,7 @@ ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref",
 REQUIRED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier"}
 ALLOWED_CEIL = {"kind", "ref", "bound", "model_name", "note"}
 REQUIRED_CEIL = {"kind", "ref"}
-ALLOWED_VERDICT = {"status", "kb_path", "ratio", "conclusion", "verified_on"}
+ALLOWED_VERDICT = {"status", "kb_path", "ratio", "geomean", "conclusion", "verified_on"}
 REQUIRED_VERDICT = {"status", "kb_path", "conclusion", "verified_on"}
 
 # E7：裸绝对耗时（0.887 ms / 1.29s / 83 us）——必须带分母或干脆不写
@@ -515,6 +515,27 @@ def validate(atlas, repo):
             err("E6", where, "last_verdict 缺必填 %s" % sorted(lmiss))
         if lv.get("status") not in VERDICT_STATUSES:
             err("E6", where, "last_verdict.status=%r 非法" % lv.get("status"))
+
+        # ---- geomean：主指标（跨 shape 几何平均加速比）
+        # ratio（达成率）降为诊断量：它会饱和，且依赖「峰值」这个易错的分母。
+        gm = lv.get("geomean")
+        if gm is not None:
+            if not isinstance(gm, dict):
+                err("E6", where, "last_verdict.geomean 必须是 mapping 或 null")
+            else:
+                gext = set(gm) - {"value", "shapes", "coverage", "vs", "gate"}
+                if gext:
+                    err("E6", where, "geomean 未知字段 %s" % sorted(gext))
+                if "value" not in gm:
+                    err("E6", where, "geomean 必须带 value")
+                shapes = gm.get("shapes")
+                # 单形状的几何平均就是那一个比值，防不了「挑好看的形状」，不许当主指标
+                if not shapes or (isinstance(shapes, list) and len(shapes) < 2):
+                    err("E22", where,
+                        "geomean 覆盖少于 2 个 shape —— 单形状的几何平均没有意义"
+                        "（它就是那一个比值），不能当主结论")
+                if gm.get("gate") is False:
+                    err("E22", where, "geomean.gate=False 却写进了卡（未过门的指标不许当结论）")
 
         conc = str(lv.get("conclusion") or "")
         if BARE_TIME.search(conc):

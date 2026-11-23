@@ -138,7 +138,29 @@ def bench_fn(fn, warmup_ms=25.0, rep_ms=100.0, repeats=3, min_iters=3, max_iters
     out["iters_per_round"] = rep_iters
     out["caliber"] = {"what": "callable", "alloc": "depends_on_fn", "state": "hot",
                       "timer": "cuda_event" if _cuda_available() else "wall_clock"}
+    # 时钟与时间戳是**口径的一部分**，不是装饰：
+    # 同形状在 1200 与 1350 MHz 下能差 12.5%（310 vs 279 TF 就是这么来的）。
+    # 不记时钟的两个数放一起比，等于拿时钟差冒充性能差。
+    out["clock_mhz"] = _read_clock_mhz()
+    out["ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     return out
+
+
+def _read_clock_mhz(device=None):
+    """读 sclk。读不到返回 None——**不猜**，由调用方决定是否判不可比。"""
+    try:
+        import subprocess
+        r = subprocess.run(["hy-smi", "--showclocks"], capture_output=True,
+                           text=True, timeout=15).stdout
+    except Exception:
+        return None
+    import re
+    vals = [int(x) for x in re.findall(r"sclk clock level:\s*\d+\s*\((\d+)Mhz\)", r)]
+    if not vals:
+        return None
+    if device is not None and 0 <= device < len(vals):
+        return vals[device]
+    return max(vals)
 
 
 # ---------------------------------------------------------------- 输出

@@ -78,8 +78,17 @@ last_verdict:
       out_len: N=K=4096
       warmup: hot
       note: M=1024/2048/4096 = 0.73/0.83/0.90（peak 口径）；同形状 steady 口径只有 0.58/0.74/0.74。峰值与稳态差 16%，引用必须带口径
-  conclusion: M>=2048 达峰值 0.83~0.90（peak 口径）；小 M 是访存受限、带宽仅 0.30
+  conclusion: M>=2048 达峰值 0.83~0.90；torch.mm 比 F.linear 跨 3 形状几何平均快 1.10x
   verified_on: '2026-11-23'
+  geomean:
+    value: 1.1
+    vs: torch.mm 相对 F.linear 的加速比（同一 bf16 稠密 GEMM，三个 M 档）
+    shapes:
+    - M=1024
+    - M=2048
+    - M=4096
+    coverage: 3/3
+    gate: true
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择
