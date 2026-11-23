@@ -1,0 +1,37 @@
+{
+  "caliber": {
+    "what": "op_call",
+    "alloc": false,
+    "state": "hot",
+    "rounds": 3,
+    "timer": "hip_event"
+  },
+  "shape": {
+    "params": {
+      "M": 8192,
+      "H": 4096
+    },
+    "note": "prefill：字节数主导，最接近纯带宽地板",
+    "_name": "prefill-8k",
+    "shape": "prefill-8k"
+  },
+  "runs": [
+    {
+      "skv": 0,
+      "variants": [
+        {
+          "tag": "fused-3pass-triton",
+          "ms": 0.13998271421564773,
+          "mad": 0.016710615198084172,
+          "delta_pct": -90.23137789060915,
+          "significant": true,
+          "why": "显著：ratio=0.0977，|Δ|=1.293 > 3.0*MAD=0.0524064",
+          "maxdiff": null,
+          "rel": null
+        }
+      ],
+      "base_ms": 1.4329832052882714,
+      "base_mad": 0.017468804548561367
+    }
+  ]
+}

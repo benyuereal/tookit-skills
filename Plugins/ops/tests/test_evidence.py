@@ -75,7 +75,8 @@ class TestEvidence(unittest.TestCase):
         """缺 evidence 只警告，不阻断（业主裁决）。"""
         out = _validate()
         self.assertIn("missing_evidence", out)
-        self.assertIn("14 张卡缺 evidence", out)
+        # 不写死张数：随卡补证据会变（14 → 13 → …）。只要求「报了数且是 warning」
+        self.assertRegex(out, r"\d+ 张卡缺 evidence")
         m = __import__("re").search(r"结果：(\d+) 错误", out)
         self.assertEqual(int(m.group(1)), 0,
                          "缺 evidence 不许报 error——那会逼人造假 results")

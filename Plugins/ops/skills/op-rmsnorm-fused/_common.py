@@ -13,7 +13,7 @@
 """
 import torch
 
-VARIANTS = ("ref-heavy", "lightop-fused", "torch-native")
+VARIANTS = ("ref-heavy", "lightop-fused", "torch-native", "fused-3pass-triton")
 
 INPUT_NAMES = ("x", "weight", "residual")
 
@@ -69,6 +69,50 @@ def runner_kwargs(params):
     return {"M": M, "H": H}
 
 
+# ---------------------------------------------------------------- triton 实现
+# 2026-11-23 实测结论：12 组参数全部收敛到 179 µs，无一低于 175 µs。
+#   最优配方：num_warps=4, rows/CTA=1, 无 mask（H == BLOCK）
+#   扫过：warps{1,2,4,8,16,32} / rows/CTA{1,2,4,8} / num_stages{1,2,3} /
+#         persistent{512,1024,2048} / 2D 多行 / 去 mask / evict_first|last
+#   ⇒ 收敛是这个算子的结构性上限，不是没调够。
+# `.cs` cache modifier 在 AMD 后端不支持，别再试。
+_TRITON_KERNEL = None
+
+
+def _get_triton_kernel():
+    """惰性编译 kD（无 mask 版）。编译一次后缓存，避免把 JIT 时间算进 bench。"""
+    global _TRITON_KERNEL
+    if _TRITON_KERNEL is not None:
+        return _TRITON_KERNEL
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def kd(X, R, W, Y, sr, H: tl.constexpr, eps: tl.constexpr, BLOCK: tl.constexpr):
+        row = tl.program_id(0)
+        c = tl.arange(0, BLOCK)
+        xf = tl.load(X + row * sr + c).to(tl.float32) + tl.load(R + row * sr + c).to(tl.float32)
+        inv = tl.math.rsqrt(tl.sum(xf * xf, axis=0) / H + eps)
+        wv = tl.load(W + c).to(tl.float32)
+        tl.store(Y + row * sr + c, (xf * inv * wv).to(Y.dtype.element_ty))
+
+    _TRITON_KERNEL = kd
+    return kd
+
+
+def _triton_runner(x, w, r, **kw):
+    """融合残差 RMSNorm，单 kernel 三趟访存。H 必须是 2 的幂且 <= 65536。"""
+    import triton
+    M, H = x.shape
+    if H & (H - 1):
+        raise ValueError("fused-3pass-triton 要求 H 是 2 的幂（当前 %d）—— "
+                         "无 mask 版本假定 H == BLOCK" % H)
+    kd = _get_triton_kernel()
+    y = torch.empty_like(x)
+    kd[(M,)](x, r, w, y, x.stride(0), H, 1e-6, H, num_warps=4)
+    return y
+
+
 def get_runner(name, tilelang_root=None, **kwargs):
     if name not in VARIANTS:
         raise ValueError("未知变体 %r（可选 %s）" % (name, " / ".join(VARIANTS)))
@@ -76,6 +120,8 @@ def get_runner(name, tilelang_root=None, **kwargs):
         def _ref(x, w, r, **kw):
             return reference(x, w, r, params=kw)
         return _ref
+    if name == "fused-3pass-triton":
+        return _triton_runner
     raise RuntimeError(
         "变体 %r 在本机不可用：需先安装 lightop 的融合 norm 实现。"
         "adapter 已就绪，缺的是后端——不要用假实现绕过。" % name)

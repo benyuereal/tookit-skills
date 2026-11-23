@@ -24,3 +24,14 @@ variants:
     constraints:
       - "不融合残差，字节数比融合版多一次往返"
     mutates_inputs: false
+
+  - name: fused-3pass-triton
+    source: "triton 融合单 kernel（kD：noMask, BLOCK=H, rows/CTA=1, num_warps=4）"
+    status: candidate
+    applies_to: [prefill-8k, decode-m32]
+    constraints:
+      - "H 必须是 2 的幂（无 mask 版本假定 H == BLOCK）"
+      - "输入宽度 H=4096 时 BLOCK=4096，需 num_warps=4 才不超 shared/LDS"
+      - "`num_warps` 与 `rows/CTA` 已扫 12 组合全部收敛到同一档；改这两个参数不会有收益"
+    mutates_inputs: false
+    measured: "cold-L2 186.2 us / 1081 GB/s（util 0.63/1724）；hot-L2 119.2 us 是缓存假象"

@@ -1,31 +1,30 @@
 # GAPS —— 已知未覆盖与证据缺口（生成物，勿手改）
 
 > 由 `scripts/gen_gaps.py` 生成。改这张表请改脚本或卡片，不要直接编辑本文件。
-> 生成时间：2026-11-23 11:38
+> 生成时间：2026-11-23 12:22
 >
 > **它防的是「用覆盖数掩盖深度不足」。** 46 张卡容易被当成全覆盖，
-> 实际有 14 张挂不上可复跑证据、5 个家族零实测。
+> 实际有 13 张挂不上可复跑证据、5 个家族零实测。
 
 ## 一、证据缺口（`missing_evidence`）
 
-`measured` 的本义是「有数**且可追**」。下列 14 张卡有结论但挂不上可复跑的 results 文件（E25 判 missing）。
+`measured` 的本义是「有数**且可追**」。下列 13 张卡有结论但挂不上可复跑的 results 文件（E25 判 missing）。
 
 | 卡片 | 连续缺证据批数 | 处置 |
 |---|---|---|
-| `flash-attention-fwd` | 1 | 本批 warning，下批仍缺则降级 |
-| `fused-add-rmsnorm` | 1 | 本批 warning，下批仍缺则降级 |
-| `gemm-int8` | 1 | 本批 warning，下批仍缺则降级 |
-| `layernorm` | 1 | 本批 warning，下批仍缺则降级 |
-| `mlp-gelu-geglu` | 1 | 本批 warning，下批仍缺则降级 |
-| `moe-combine-reduce` | 1 | 本批 warning，下批仍缺则降级 |
-| `moe-swiglu-fused` | 1 | 本批 warning，下批仍缺则降级 |
-| `moe-w8a8` | 1 | 本批 warning，下批仍缺则降级 |
-| `mqa-logits` | 1 | 本批 warning，下批仍缺则降级 |
-| `qk-norm` | 1 | 本批 warning，下批仍缺则降级 |
-| `rmsnorm-fused` | 1 | 本批 warning，下批仍缺则降级 |
-| `rope` | 1 | 本批 warning，下批仍缺则降级 |
-| `rope-mla` | 1 | 本批 warning，下批仍缺则降级 |
-| `sparse-mla` | 1 | 本批 warning，下批仍缺则降级 |
+| `flash-attention-fwd` | 2 | **降级 draft**（连续 ≥2 批） |
+| `fused-add-rmsnorm` | 2 | **降级 draft**（连续 ≥2 批） |
+| `gemm-int8` | 2 | **降级 draft**（连续 ≥2 批） |
+| `layernorm` | 2 | **降级 draft**（连续 ≥2 批） |
+| `mlp-gelu-geglu` | 2 | **降级 draft**（连续 ≥2 批） |
+| `moe-combine-reduce` | 2 | **降级 draft**（连续 ≥2 批） |
+| `moe-swiglu-fused` | 2 | **降级 draft**（连续 ≥2 批） |
+| `moe-w8a8` | 2 | **降级 draft**（连续 ≥2 批） |
+| `mqa-logits` | 2 | **降级 draft**（连续 ≥2 批） |
+| `qk-norm` | 2 | **降级 draft**（连续 ≥2 批） |
+| `rope` | 2 | **降级 draft**（连续 ≥2 批） |
+| `rope-mla` | 2 | **降级 draft**（连续 ≥2 批） |
+| `sparse-mla` | 2 | **降级 draft**（连续 ≥2 批） |
 
 ## 二、零实测家族
 
@@ -39,6 +38,19 @@
 
 有实测的家族 7 / 12：`activation`、`attention`、`elementwise`、`gemm`、`moe`、`norm`、`rope`
 
+## 二b、分母未标定
+
+下列常数被当作达成率的分母，但**全仓没有可复跑的测量记录**。
+在补上标定前，凡用它们算出的 utilization 必须与实测峰值并列双报。
+
+| 常数 | 值 | 现状 | 实测参考 | 补的前提 |
+|---|---|---|---|---|
+| `memory.stream_read_peak` | 1724 GB/s | **只有断言，无测量记录** | `scripts/bw_calibrate.py` 实测：copy 1051 / mul 1287 / add 1634 / sum 865 GB/s（2026-11-23，sclk 1350），**无一到 1724** | 跑 `bw_calibrate.py` 并据实改值，或标 unverified |
+
+> 这是「分母错了 10 倍」那类问题的第三次：1100 标称 → 185 反推 → 540 无来源。
+> 前三次都是「分母的来源不是本仓库能跑的测量」。现在补了 `bw_calibrate.py`，
+> 但 1724 这个数本身还没被替换——它需要先跑一次并确认时钟档位。
+
 ## 三、已知未覆盖算子
 
 | 未覆盖 | 为什么没覆盖 | 补的前提 |
@@ -51,5 +63,5 @@
 
 ## 四、当前实测覆盖
 
-有数卡 24 / 全部 46 张。其中证据齐全 10 张、缺证据 14 张。
+有数卡 24 / 全部 46 张。其中证据齐全 11 张、缺证据 13 张。
 

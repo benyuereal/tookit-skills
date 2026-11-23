@@ -1,0 +1,145 @@
+# 瓶颈 → 手法。与 scenarios.yaml（场景 → 手法）正交。
+#
+# 缺这张表时的症状：算得出「离峰值还差 33 倍」，说不出「为什么差」，
+# 于是「下一步」全是猜。本表把 PMC 归因（op-profiling/references/attribution.md）
+# 接到具体手法上。
+#
+# 纪律：
+#   - 每条手法必须写 from_attribution（PMC 指标名），否则它凭什么在这个瓶颈下列出？
+#   - 每类至少 1 条 dead_end。**死路比手法值钱**——它是踩过的坑，手法是猜的。
+#   - dead_end 必须写机制（为什么不成立），不能只写「没用」。
+#
+# surfaces 的 id 引用 op-optimize/references/surfaces.yaml 的 11 条，不重复定义。
+
+version: 1
+updated: '2026-11-23'
+
+bottlenecks:
+
+  - id: hbm
+    statement: DRAM 有效带宽已接近峰值，再优化只能减字节
+    criterion: "TCC_MISS 求和 × 128B / 墙钟 ÷ 峰值带宽 ≥ 0.85"
+    first_try:
+      - id: fusion-boundary
+        why: 把相邻算子融进同一趟，省一次写+读
+        cost: mid
+        from_attribution: "TCC_MISS 偏高但 L2 命中不低 ⇒ 字节数本身是瓶颈"
+      - id: precision-drop
+        why: bf16→fp8 让每次搬运承载更多元素
+        cost: high
+        from_attribution: "TCC_MISS × 128B 折算出的字节数 / 元素数 = 每元素字节数，大于 dtype 宽度"
+      - id: layout-pack
+        why: 消掉读放大（sector 未用满）
+        cost: low
+        from_attribution: "有用字节 / (sector 数 × 32B) < 1.0"
+    dead_ends:
+      - "调 occupancy：已到带宽上限时，加并发只会让更多线程一起等 DRAM"
+    verify: "TCC_MISS 折算带宽应降 ≥20%，否则手法无效"
+
+  - id: l2-miss
+    statement: L2 命中率低，访问模式导致重复读 DRAM
+    criterion: "TCC_HIT/(TCC_HIT+TCC_MISS) < 0.6 且 HBM 未饱和"
+    first_try:
+      - id: table-miss
+        why: LUT 超过 L1 时改分块查表
+        cost: low
+        from_attribution: "TCC_HIT 低 + 请求数远大于有用行数"
+      - id: layout-pack
+        why: 把随机访问改成连续 sector，提高每次 miss 的利用率
+        cost: mid
+        from_attribution: "TCC_MISS 高而 TCC_HIT 低 ⇒ miss 的颗粒度太细"
+      - id: prefetch-depth
+        why: 深 prefetch 掩盖 miss 延迟
+        cost: low
+        from_attribution: "TCP_TCP_TA_DATA_STALL_CYCLES 占 GRBM 比例高"
+    dead_ends:
+      - "调 occupancy：miss 是访问模式问题，加线程只是加并发 miss"
+    verify: "TCC_HIT/(HIT+MISS) 应 >0.7，否则换下一条"
+
+  - id: lds-conflict
+    statement: LDS bank 冲突导致每条 LDS 指令多拍
+    criterion: "SQ_LDS_BANK_CONFLICT / SQ_INSTS_LDS 高于同形状已知高效实现 2× 以上"
+    first_try:
+      - id: cross-lane-fold
+        why: 用 ds_bpermute 代替 shared 中转
+        cost: mid
+        from_attribution: "SQ_LDS_BANK_CONFLICT 高 + SQ_WAIT_INST_LDS 高"
+      - id: layout-pack
+        why: 改 shared 里的排布（padding / swizzle）打散 bank
+        cost: low
+        from_attribution: "冲突集中在固定的 stride 上"
+      - id: barrier-width
+        why: 缩窄同步范围，减少争用窗口
+        cost: mid
+        from_attribution: "SQ_WAIT_INST_LDS 与 GRBM 比值高"
+    dead_ends:
+      - "把 SQ_LDS_BANK_CONFLICT 当唯一目标：厂商调优 matmul 自己有 13% 冲突占用率照样跑到 88% 峰值，本实现只有 10% 还更慢 ⇒ 冲突率本身不是判据，要结合每条 LDS 的有效载荷"
+    verify: "SQ_LDS_BANK_CONFLICT/SQ_INSTS_LDS 应降一半以上"
+
+  - id: vgpr-spill
+    statement: 寄存器压力导致溢出到 scratch，或占用率被 VGPR 卡死
+    criterion: "编译产物 scr > 0，或 arch_vgpr 接近上限且 CTA/CU 只有 1"
+    first_try:
+      - id: occupancy
+        why: 降低每线程 VGPR 需求，抬 CTA/CU
+        cost: mid
+        from_attribution: "geometry.arch_vgpr 接近 256 且 geometry.scr > 0"
+      - id: tile-shape
+        why: 缩小 block_m 让累加器占用下降
+        cost: low
+        from_attribution: "arch_vgpr × threads 超过每 CU 寄存器文件"
+      - id: prefetch-depth
+        why: 把多级预取改成单级，省寄存器
+        cost: low
+        from_attribution: "spill 字节数随预取深度增加"
+    dead_ends:
+      - "spill>0 时调 occupancy：先治寄存器，调 occupancy 无效（spill 本身就是 occupancy 的后果）"
+    verify: "scr 必须降到 0，否则这条方向没走通"
+
+  - id: issue-stall
+    statement: 发射受限——等待 operand 或指令带宽打满，不是带宽也不是算力
+    criterion: "MFMA 占用低，且 (SQ_INSTS_VALU − MFMA)/MFMA 或 SQ_INSTS_LDS/MFMA 偏高"
+    first_try:
+      - id: cross-lane-fold
+        why: 减少每条 MMA 配的搬运指令
+        cost: mid
+        from_attribution: "(SQ_INSTS_VALU − MFMA)/MFMA 高于参照实现 2×"
+      - id: split-k
+        why: 拆开长依赖链，增加独立工作
+        cost: mid
+        from_attribution: "SQ_WAIT_INST_LDS 高但 LDS 不冲突"
+      - id: pipeline-depth
+        why: 加深流水掩盖等待
+        cost: high
+        from_attribution: "stall 集中在等待上一轮结果"
+    dead_ends:
+      - "调 tile 大小：发射受限是「每条 MMA 配多少搬运」的问题，改 tile 只改变问题规模不改变比值"
+    verify: "两条比值应降到参照实现附近（VALU 0.23 / LDS 0.25）"
+
+  - id: reduction-barrier
+    statement: 每行一次 block 级归约引入 barrier，load→reduce→store 无法重叠
+    criterion: >
+      纯 elementwise 能到 ~1498 GB/s，加上行内归约后掉到 ~1081 GB/s（本机实测）；
+      且 SQ_WAIT_INST_LDS 与 SQ_LDS_BANK_CONFLICT 同时偏高，但 HBM 未饱和。
+    first_try:
+      - id: cross-lane-fold
+        why: 用 warp 内 shuffle（ds_bpermute / __shfl）代替跨 wave 的 shared 归约，去掉 block 级 barrier
+        cost: mid
+        from_attribution: "SQ_WAIT_INST_LDS 高 + barrier 后 VMEM 空闲"
+      - id: tile-shape
+        why: 让一行数据落在单个 wave 内（BLOCK ≤ 64×每线程元素），归约退化为 wave 内操作
+        cost: low
+        from_attribution: "GEOMETRY.wgr × wave_size 覆盖不了整行 ⇒ 必须跨 wave 归约"
+      - id: pipeline-depth
+        why: 两行交错（一行归约时另一行在 load），用 ILP 盖住 barrier 停顿
+        cost: mid
+        from_attribution: "归约等待期间 SQ_INSTS_VMEM 归零"
+    dead_ends:
+      - "调 num_warps / rows-per-CTA：本机实测 12 组参数（warps 1–32 × rows 1–8 × stages 1–3）全部收敛到同一档，无一低于 175 µs ⇒ 这些是参数，不是结构"
+    verify: >
+      带宽应从 1081 提到 elementwise 上限 1498 的 85% 以上（≥1270 GB/s）。
+      若提升 <8%，说明 barrier 不是主因 ⇒ 转 hbm 类，接受该形状的天花板。
+    family_note: >
+      **归约类算子（rmsnorm / layernorm / softmax）的天花板 ≈ elementwise 峰值 × 0.75，
+      不是 elementwise 峰值。** 本机 rmsnorm 实测 1081 / 1498 = 0.72，与该比例吻合。
+      这条可迁移到整个 norm 家族，不是单卡结论。

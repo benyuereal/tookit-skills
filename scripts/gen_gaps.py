@@ -182,6 +182,23 @@ def render(cards, missing, mismatched, streak):
                                           "、".join("`%s`" % f for f in covered)))
     L.append("")
 
+    # ---- 二b、分母未标定（业主 2026-11-23 要求）
+    L.append("## 二b、分母未标定")
+    L.append("")
+    L.append("下列常数被当作达成率的分母，但**全仓没有可复跑的测量记录**。")
+    L.append("在补上标定前，凡用它们算出的 utilization 必须与实测峰值并列双报。")
+    L.append("")
+    L.append("| 常数 | 值 | 现状 | 实测参考 | 补的前提 |")
+    L.append("|---|---|---|---|---|")
+    L.append("| `memory.stream_read_peak` | 1724 GB/s | **只有断言，无测量记录** | "
+             "`scripts/bw_calibrate.py` 实测：copy 1051 / mul 1287 / add 1634 / sum 865 GB/s"
+             "（2026-11-23，sclk 1350），**无一到 1724** | 跑 `bw_calibrate.py` 并据实改值，或标 unverified |")
+    L.append("")
+    L.append("> 这是「分母错了 10 倍」那类问题的第三次：1100 标称 → 185 反推 → 540 无来源。")
+    L.append("> 前三次都是「分母的来源不是本仓库能跑的测量」。现在补了 `bw_calibrate.py`，")
+    L.append("> 但 1724 这个数本身还没被替换——它需要先跑一次并确认时钟档位。")
+    L.append("")
+
     # ---- 三、已知未覆盖算子
     L.append("## 三、已知未覆盖算子")
     L.append("")

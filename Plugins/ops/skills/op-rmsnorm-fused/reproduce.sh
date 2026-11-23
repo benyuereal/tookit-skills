@@ -35,6 +35,35 @@ case "$cmd" in
     : "${HIP_VISIBLE_DEVICES:?bench 需要一张空闲卡：export HIP_VISIBLE_DEVICES=<id>}"
     "$PY" "$HERE/bench/ab.py" --json "$HERE/results/ab.json" --rounds 5
     ;;
+  triton)
+    # 一键复现 tuned 结论：fused-3pass-triton vs ref-heavy（prefill-8k）
+    # 注意 --shape 必须显式给：ab.py 默认 decode-m32（M=32），与 prefill-8k 不可比。
+    : "${HIP_VISIBLE_DEVICES:?triton 需要一张空闲卡：export HIP_VISIBLE_DEVICES=<id>}"
+    export HIP_VISIBLE_DEVICES
+    "$PY" - "$HERE" <<'PYEOF'
+import sys, subprocess, json, pathlib
+here = pathlib.Path(sys.argv[1])
+import torch, triton
+print("# torch %s / triton %s" % (torch.__version__, triton.__version__))
+cmd = [sys.executable, "-I", str(here / "bench/ab.py"),
+       "--shape", "prefill-8k",
+       "--variants", "fused-3pass-triton", "--base", "ref-heavy",
+       "--rounds", "3", "--json", str(here / "results/prefill-8k-triton.json")]
+print("# " + " ".join(cmd))
+rc = subprocess.run(cmd).returncode
+if rc == 0:
+    d = json.loads((here / "results/prefill-8k-triton.json").read_text())
+    r = d["runs"][0]
+    M, H = d["shape"]["params"]["M"], d["shape"]["params"]["H"]
+    byts = 3 * M * H * 2
+    ms = r["variants"][0]["ms"]
+    print("# 冷L2 参考值：186.2 us / 1081 GB/s（util 0.63/1724）")
+    print("# 本次： %.1f us / %.0f GB/s" % (ms * 1000, byts / (ms * 1e-3) / 1e9))
+    print("# ⚠ ab.py 的 bench_fn 是连续调用（热 L2），会报 ~119 us；"
+          "冷 L2 需每次换输入，见 case README")
+sys.exit(rc)
+PYEOF
+    ;;
   trace)
     : "${TRACE_DECODE:?trace 需要 TRACE_DECODE=<path/to/trace.json.gz>}"
     "$PY" "$HERE/trace_budget.py" --trace "$TRACE_DECODE"
