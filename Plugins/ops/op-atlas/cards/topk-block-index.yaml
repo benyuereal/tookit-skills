@@ -77,6 +77,7 @@ last_verdict:
     expected: 相对当前提升 <20%
     stop_if: 若测量显示可用融合省掉一次 launch 且收益 >30%，说明还有空间 ⇒ 重开
     effort: 1h
+    falsifier: 若能与 mqa-logits 融进同一 kernel 省掉一次 launch（当前 0.79× launch 地板），则重新推进。
 modify_path:
   kind: env-flag
   what: 切 fused topk 变换变体

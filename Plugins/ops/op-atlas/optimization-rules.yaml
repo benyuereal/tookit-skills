@@ -1,0 +1,102 @@
+# 算子优化的三条硬规则 —— 从 rmsnorm-fused 一天内四次翻车里提炼
+#
+# 2026-11-23 实测现状（23 张有数卡）：
+#   22 张从未与任何合格基线比过（只写了绝对值 / 达成率）
+#   10 张 next_probe = none（直接放弃推进）
+#   剩下 1 张 tuned 也只覆盖单个形状
+#
+# 这不是个案，是**全仓的形态**。所以规则必须是机检的，不是提醒。
+
+version: 1
+updated: '2026-11-23'
+
+rules:
+
+  - id: R1-baseline
+    name: 选对基准
+    statement: >
+      性能结论必须对「也在做同一件优化过的活」的基线上算；
+      不许对 torch 参考实现、fp32 分步拼接、来源不明历史数字算加速比。
+    why: >
+      2026-11-23 我们用「triton 融合 vs torch 三段式」算出 3.65×，
+      这个数在工程上等于零——torch 三段式是未优化的参考实现。
+      24 张卡里 19 张「有数但没优化」，根子就在这里。
+    machine_check:
+      rule: E27
+      where: Plugins/ops/op-atlas/validate.py
+      pass: comparison.baseline_role ∈ {competitor, best_known}
+      fail: error
+    how_to_comply:
+      - 本机有厂商实现（lightop / aiter / flash_mla）→ 用它当 competitor
+      - 没有 → 用本卡上一版最优当 best_known，并写清版本
+      - 两者都没有 → **不许写加速比**，只能写绝对吞吐 + 「无可用基线」
+
+  - id: R2-identity
+    name: 对算子绝对了解（语义、流量、参考实现）
+    statement: >
+      卡片必须声明该算子的访存契约：读几份输入、写几份输出、几趟访存。
+      跨实现比较前必须断言双方契约一致。
+    why: >
+      2026-11-23 我们「快 1.18×」是假的——因为 lightop 写 2 份输出（268MB），
+      我们只写 1 份（201MB），**少干 1/3 的活**。
+      variants.yaml 里早写了「会原地改写」，但只说了改写、没说输出几份；
+      信息在，但不在机器能读的位置。
+    machine_check:
+      rule: check_semantics.py + E27
+      where: scripts/check_semantics.py
+      pass: 比较前 inputs/outputs/traffic_passes 全相等
+      fail: error
+    how_to_comply:
+      - variants.yaml 每个变体写 semantics{inputs, outputs, mutates, traffic_passes}
+      - run_isolated 保留全部输出（不许只取第 [0] 个）
+      - compare() 份数不一致直接抛
+
+  - id: R3-depth
+    name: 优化要有效果、要深
+    statement: >
+      measured 卡必须给出 next_probe，且 surface=none 只允许在「已证伪所有结构变换」时使用，
+      并必须带 falsifier（换哪种实现能推翻这个结论）。
+      只调 tile / occupancy / num_warps 不算深度优化。
+    why: >
+      2026-11-23 我在 rmsnorm 上试了 cross-lane-fold 后判死并标 at_floor，
+      后来发现 tilelang 能做到 0.82（我做到 0.78）——**那是 triton 的 codegen 上限，
+      不是方法极限**。没有 falsifier 的「到顶」结论，等于把工具限制记成物理规律。
+    machine_check:
+      rule: E26 + E28
+      where: Plugins/ops/op-atlas/validate.py
+      pass: |
+        surface=none 的卡必须带 none_reason + falsifier；
+        at_floor 必须带 kind（hardware_floor / impl_ceiling）与 falsifier；
+        结构变换类候选必须声明 transform ∈ 八类
+      fail: error
+    how_to_comply:
+      - 每张 measured 卡至少一条「结构变换级」候选（不是调参）
+      - 写「到顶」必须配「我用什么方法证的、换哪种实现能推翻它」
+      - 说不出来就别写 at_floor，写「未测定」
+
+# ---------------------------------------------------------------- 八类结构变换
+# 「深度优化」的可执行定义：换结构，不是换参数。
+structural_transforms:
+  fusion_boundary:  {what: 调整融合边界，省 HBM 往返, invalid_when: 中间张量 <1MB 或融合后 VGPR 溢出}
+  persistent:       {what: 常驻 kernel，省 launch 并保 L2 热, invalid_when: 单 CTA 时间 < 重入开销 5×}
+  split_k:          {what: 拆 K 维提并行度, invalid_when: K 小于 tile 或归约开销 > 收益}
+  layout_pack:      {what: 改布局消 bank 冲突/合并 sector, invalid_when: 变换本身多一趟 HBM}
+  precision_path:   {what: 换精度路径, invalid_when: 无原生路径（走 dequant 回退）}
+  pipeline_depth:   {what: 加深流水掩盖延迟, invalid_when: 已在带宽上限}
+  tile_shape:       {what: 换 tile 形状族贴合 MFMA 粒度, invalid_when: 尾块浪费 >15%}
+  algo_replace:     {what: 换算法（absorb↔full、GQA 改 stride 索引）, invalid_when: 形状不满足前提}
+
+# 不算深度优化（会通过旧检查但没价值）
+not_depth:
+  - 调 num_warps
+  - 调 block / tile 大小（单点，不改形状族）
+  - 调 occupancy 目标
+  - 调 num_stages（单点）
+
+# ---------------------------------------------------------------- 当前缺口（机检）
+current_gaps:
+  measured_without_comparison: 22
+  measured_with_surface_none: 10
+  note: >
+    这两项是下一阶段的重点。每补一张，都要按 R1/R2/R3 走完——
+    不是补字段，是真的跑一次合格基线的对比。

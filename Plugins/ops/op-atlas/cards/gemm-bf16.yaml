@@ -102,6 +102,7 @@ last_verdict:
     expected: M=1024 从 0.73 → ≥0.80
     stop_if: 若分档后仍 <0.78，说明 M=1024 已在下限（块数不足）⇒ 接受现状
     effort: 2h
+    falsifier: 若本机出现比 hipBLASLt 更快的 bf16 GEMM 实现（当前 M>=2048 已达 0.83~0.90），或小 M 档的访存模式能被改写成合并读，则重新推进。
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择

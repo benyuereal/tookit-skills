@@ -179,7 +179,7 @@ def _check_next_probe(cards_dir, repo):
                 "measured/tuned 卡缺 next_probe —— 没有「下一步改什么」的卡只是基线快照")
             continue
         extra = set(np_) - {"surface", "hypothesis", "expected", "stop_if",
-                            "effort", "none_reason", "tuned_from"}
+                            "effort", "none_reason", "tuned_from", "falsifier"}
         if extra:
             err("E26", p.name, "next_probe 未知字段 %s" % sorted(extra))
 
@@ -213,6 +213,52 @@ def _check_next_probe(cards_dir, repo):
 
         if lv.get("status") == "tuned" and not np_.get("tuned_from"):
             err("E26", p.name, "status=tuned 但 next_probe 里没有 tuned_from（基线值 + 改法）")
+
+
+AT_FLOOR_KINDS = {"hardware_floor", "impl_ceiling"}
+
+
+def _check_depth_rules(cards_dir, repo):
+    """E28：深度优化要求的机检。
+
+    1. top-level at_floor 必须带 kind ∈ {hardware_floor, impl_ceiling} 与 falsifier
+    2. next_probe.surface == "none" 必须带 none_reason 与 falsifier
+    3. at_floor 卡不许再写 next_probe 里有实际攻击面（矛盾）
+    """
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        lv = d.get("last_verdict") or {}
+        af = d.get("at_floor")
+
+        # 1) at_floor 块
+        if d.get("status") == "at_floor" or af:
+            if not isinstance(af, dict):
+                err("E28", p.name,
+                    "status=at_floor 但没有 at_floor 块 —— "
+                    "必须写 kind（hardware_floor/impl_ceiling）与 falsifier")
+            else:
+                kind = str(af.get("kind") or "")
+                if kind not in AT_FLOOR_KINDS:
+                    err("E28", p.name,
+                        "at_floor.kind=%r 非法（只允许 %s）"
+                        % (kind, sorted(AT_FLOOR_KINDS)))
+                if not str(af.get("falsifier") or "").strip():
+                    err("E28", p.name,
+                        "at_floor 缺 falsifier —— 必须写「换哪种实现/哪种方法能推翻这个结论」。"
+                        "写不出来就说明这是工具限制而不是物理极限，不该标 at_floor")
+
+        # 2) surface=none
+        np_ = lv.get("next_probe") or {}
+        if isinstance(np_, dict) and np_.get("surface") == "none":
+            if not str(np_.get("falsifier") or "").strip():
+                # 允许用 none_reason 里的「推翻」/「除非」表达
+                nr = str(np_.get("none_reason") or "")
+                if not any(k in nr for k in ("推翻", "除非", "若", "如果")):
+                    err("E28", p.name,
+                        "next_probe.surface=none 缺 falsifier（或用 none_reason 写清"
+                        "「什么情况下会重新推进」）—— 否则等于无声放弃")
 
 
 def _load_baseline_policy(repo):
@@ -911,6 +957,12 @@ def validate(atlas, repo):
         warns.append("[E24] ratio_other 已 %d 条（上限 %d）：它是逃生口不是常驻地，"
                      "涨上去说明 kind 分类没收敛，请复核这几条是否本该判成 "
                      "speedup/utilization/throughput" % (n_other, RATIO_OTHER_LIMIT))
+
+    # ---- E28 「到顶」必须带 falsifier；surface=none 必须说明为什么不再推进
+    # 由来：2026-11-23 我在 rmsnorm 上试了 cross-lane-fold 后判死并标 at_floor，
+    # 后来发现 tilelang 能做到 0.82（我 0.78）——那是 triton 的 codegen 上限，
+    # 不是方法极限。**没有 falsifier 的「到顶」等于把工具限制记成物理规律。**
+    _check_depth_rules(cards_dir, repo)
 
     # ---- E27 基准合法性与语义对齐（读 baseline-policy.yaml）
     _check_baseline_policy(cards_dir, repo)

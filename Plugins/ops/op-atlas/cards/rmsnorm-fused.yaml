@@ -76,6 +76,7 @@ last_verdict:
     expected: 提升 <8%（已实测为负）
     stop_if: 实测三种结构变换全部更慢且 num_warps 已最优 ⇒ 归约惩罚是结构性上限，标 at_floor，不再硬啃
     effort: 0（已完成）
+    falsifier: 若出现能用 warp-shuffle 归约的实现（tilelang 实测 0.82 而我们 0.78），或下游融合能把流量从 268MB 降到 201MB 以下，则重新推进。
   verified_on: '2026-11-23'
   comparison:
     baseline: lightop-fused

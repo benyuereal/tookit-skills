@@ -73,6 +73,7 @@ last_verdict:
     expected: MAD 从 4.3% 降到 <2%
     stop_if: 若换三种 tiling 后 MAD 仍 >3%，说明该形状本身不稳定 ⇒ 换形状档再测
     effort: 2h
+    falsifier: 若测量稳定性提升（当前 MAD 占中位数 4.3%），使 343 TF 这个数可信，且出现更高吞吐的 INT8 路径，则重新推进。
 modify_path:
   kind: env-flag
   what: 选 W6 packed 的 layout 入口

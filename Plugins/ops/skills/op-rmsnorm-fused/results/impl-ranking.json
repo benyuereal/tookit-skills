@@ -1,0 +1,125 @@
+{
+  "card": "op-rmsnorm-fused",
+  "shape": "prefill-8k",
+  "gpu_mem": {
+    "free_gb": 78.0,
+    "total_gb": 144.0
+  },
+  "ts": "2026-11-23T14:41:41",
+  "sclk_mhz": 1350,
+  "caliber": {
+    "rounds": 7,
+    "clones": 16,
+    "clone_in_timing_region": false,
+    "interleaved": true,
+    "timer": "cuda_event",
+    "note": "同一进程内交替测量；两种输入策略各报一组"
+  },
+  "impls": {
+    "lightop-fused": {
+      "clone": {
+        "median_ms": 0.2074,
+        "mad_ms": 0.0054,
+        "samples": 7,
+        "recheck_ms": 0.2051,
+        "drift_pct": -1.1,
+        "drift_ok": true
+      },
+      "reuse": {
+        "median_ms": 0.2066,
+        "mad_ms": 0.0038,
+        "samples": 7,
+        "recheck_ms": 0.2059,
+        "drift_pct": -0.33,
+        "drift_ok": true
+      },
+      "strategy_delta_pct": -0.39
+    },
+    "fused-3pass-triton": {
+      "clone": {
+        "median_ms": 0.2502,
+        "mad_ms": 0.0043,
+        "samples": 7
+      },
+      "reuse": {
+        "median_ms": 0.2514,
+        "mad_ms": 0.0083,
+        "samples": 7
+      },
+      "strategy_delta_pct": 0.45
+    },
+    "fused-3pass-tilelang": {
+      "clone": {
+        "median_ms": 0.221,
+        "mad_ms": 0.0094,
+        "samples": 7
+      },
+      "reuse": {
+        "median_ms": 0.2128,
+        "mad_ms": 0.0006,
+        "samples": 7
+      },
+      "strategy_delta_pct": -3.69
+    }
+  },
+  "significance_clone": [
+    {
+      "a": "lightop-fused",
+      "b": "fused-3pass-triton",
+      "delta_ms": 0.0428,
+      "threshold_ms": 0.0162,
+      "significant": true,
+      "faster": "lightop-fused"
+    },
+    {
+      "a": "lightop-fused",
+      "b": "fused-3pass-tilelang",
+      "delta_ms": 0.0136,
+      "threshold_ms": 0.0282,
+      "significant": false,
+      "faster": "lightop-fused"
+    },
+    {
+      "a": "fused-3pass-triton",
+      "b": "fused-3pass-tilelang",
+      "delta_ms": 0.0292,
+      "threshold_ms": 0.0282,
+      "significant": true,
+      "faster": "fused-3pass-tilelang"
+    }
+  ],
+  "significance_reuse": [
+    {
+      "a": "lightop-fused",
+      "b": "fused-3pass-triton",
+      "delta_ms": 0.0448,
+      "threshold_ms": 0.0249,
+      "significant": true,
+      "faster": "lightop-fused"
+    },
+    {
+      "a": "lightop-fused",
+      "b": "fused-3pass-tilelang",
+      "delta_ms": 0.0062,
+      "threshold_ms": 0.0114,
+      "significant": false,
+      "faster": "lightop-fused"
+    },
+    {
+      "a": "fused-3pass-triton",
+      "b": "fused-3pass-tilelang",
+      "delta_ms": 0.0386,
+      "threshold_ms": 0.0249,
+      "significant": true,
+      "faster": "fused-3pass-tilelang"
+    }
+  ],
+  "bandwidth_bytes": 268435456,
+  "wall_s": 2.7,
+  "verdict": {
+    "summary": "lightop 207.4 / tilelang 221.0 / triton 250.2 µs（clone 口径）。lightop 与 tilelang 打平（Δ13.6µs < 3MAD 28.2），triton 显著慢。",
+    "strategy_effect": "三种实现的策略差均 <4%（lightop -0.4% / tilelang -3.7% / triton +0.5%），说明本卡「喂副本 vs 复用 buffer」不影响结论。此前测到的 lightop -11.6% 是外部 pytest 抢占造成的假象。",
+    "ranking_dispute_resolved": "业主 211.2(lightop) vs 我 195~198 的分歧，来源是环境噪声不是口径。干净环境下 lightop 稳定在 206~211 µs，与业主一致。",
+    "action": "tilelang 相对 lightop 是打平不是超越 ⇒ **不引 tilelang 路径**（只值 3~10% 且本次为 0）。下一步做 in-place 与下游融合。"
+  }
+}

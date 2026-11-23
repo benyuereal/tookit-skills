@@ -104,6 +104,7 @@ last_verdict:
     expected: 32k 档从 1.7x 差降到 ≤1.2x
     stop_if: 若压寄存器需 spill>0 或额外 LDS，说明 bm64 这条路在本机走不通 ⇒ 保持 tuned，不再追 at_floor
     effort: 8h
+    falsifier: 若非 acc_o 寄存器能从 ~190 压到 ~100 使 bm64 不溢出（当前 bm64/thr256 实测 spill 30、慢 2.12×），则重新推进。
 modify_path:
   kind: env-flag
   what: 切 tilelang 的 persistent 后端与 page 分组

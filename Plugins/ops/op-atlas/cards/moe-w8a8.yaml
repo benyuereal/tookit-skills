@@ -86,6 +86,7 @@ last_verdict:
     expected: 整体 0.4~0.6
     stop_if: 若整体也 >0.85，说明本卡的 pipeline 已集约 ⇒ 标 at_floor（当前不敢这么标）
     effort: 4h
+    falsifier: 若整体 pipeline 的段占比测出来（当前只测了 Marlin GEMM 分量 0.888），且非 Marlin 段有明确空间，则重新推进。
 modify_path:
   kind: env-flag
   what: 切 Marlin MoE GEMM 的 mode 档

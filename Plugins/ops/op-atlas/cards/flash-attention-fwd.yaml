@@ -73,6 +73,7 @@ last_verdict:
     expected: 修复半块浪费后耗时比 → 0.52
     stop_if: 若做不到 0.55 以下，说明 flash_attn 的 causal 分块粒度已定型 ⇒ 接受，不改
     effort: 2h
+    falsifier: 若 flash_attn 支持自定义 causal 分块粒度（当前 0.60 的耗时比来自半块浪费），或出现能利用三角边界的实现，则重新推进。
 modify_path:
   kind: replace-call
   what: varlen 换固定长度（消除变长调度开销）

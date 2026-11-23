@@ -73,6 +73,7 @@ last_verdict:
     expected: 相对当前提升 <10%
     stop_if: 若测量显示耗时 >2× launch 地板仍不随 M 变化，说明是别的固定开销 ⇒ 重查
     effort: 1h
+    falsifier: 若该段耗时不再被 launch 地板（43 µs）主导——例如与上下游融合后字节数变得有意义，则重新推进。
 modify_path:
   kind: replace-call
   what: 专家内激活换成融合实现

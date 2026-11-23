@@ -96,6 +96,7 @@ last_verdict:
     expected: 分母修正后 utilization 落在 0.15~0.35（与同机 MLA 吸收式 0.35 同量级）
     stop_if: 若按 KV 有效字节重算仍 <0.05，说明不是分母问题而是 flash_attn 的 decode kernel 确实每页串行等待 ⇒ 转 not_for，改换实现
     effort: 2h
+    falsifier: 若 denominator 被证伪（当前 0.03 疑似分母错，见 next_probe 的 D0 要求），或出现非 flash_attn 的 paged decode 实现，则重新推进。
 modify_path:
   kind: replace-call
   what: 换掉 flash_attn 的 decode 路径

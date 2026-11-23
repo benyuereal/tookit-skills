@@ -72,6 +72,7 @@ last_verdict:
     expected: 摘除后 MLA decode 耗时变化 <5%
     stop_if: 若摘除后 MLA 变快 >15%，说明 rope 确实是瓶颈之一 ⇒ 本卡结论作废，重测
     effort: 1h
+    falsifier: 若 MLA decode 的 KV gather 被替换为合并访问，使 rope 在其中的占比变得可测量，则重新推进。
 modify_path:
   kind: replace-call
   what: MLA 的 rope 走 flash_mla 内置路径
