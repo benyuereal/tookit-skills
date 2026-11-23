@@ -17,15 +17,18 @@
 
 | 算子 | 家族 | 状态 | 首选实现 | 上限 | 上次结论 |
 |---|---|---|---|---|---|
+| [`batched-gemm`](cards/batched-gemm.yaml) | gemm | draft | — | mixed | 无实测：两条真入口已 import 验证，待 bench |
 | [`causal-conv1d`](cards/causal-conv1d.yaml) | linear-attn | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`chunked-scan`](cards/chunked-scan.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
+| [`dequant-fp8-w4`](cards/dequant-fp8-w4.yaml) | quant | draft | — | bandwidth | 无实测：三条真入口已 import 验证，待 bench |
 | [`embedding-lookup`](cards/embedding-lookup.yaml) | memory | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`flash-attention-fwd`](cards/flash-attention-fwd.yaml) | attention | measured | — | mixed | causal 相对 non-causal 耗时比为 0.60；两条路… |
 | [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | measured | — | bandwidth | 融合比分步快 1.70x(M=1024)/2.39x(M=8192)… |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | — | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |
-| [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | — | compute | aiter fp8 达 48 TF（nominal 560 的 0.… |
+| [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | — | compute | hipBLASLt 默认调用达 498.5 TF（nominal 的… |
 | [`gemm-int8`](cards/gemm-int8.yaml) | gemm | measured | — | compute | INT8 grouped 达 343 TFLOPS、1621 GB/… |
+| [`gemm-swiglu-epilogue`](cards/gemm-swiglu-epilogue.yaml) | gemm | draft | — | mixed | 库里无真入口，需自研 epilogue（现有仅独立 silu_mul… |
 | [`hadamard-transform`](cards/hadamard-transform.yaml) | linear-attn | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`hc-split-sinkhorn`](cards/hc-split-sinkhorn.yaml) | linear-attn | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`kv-cache-paged-write`](cards/kv-cache-paged-write.yaml) | kv | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
@@ -54,7 +57,7 @@
 | [`mtp-draft`](cards/mtp-draft.yaml) | sampling | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | measured | — | bandwidth | flash_attn decode 只达峰值 0.03；同机 MLA… |
 | [`qk-norm`](cards/qk-norm.yaml) | norm | measured | — | bandwidth | qk-norm+rope 融合达 741 GB/s，是 rope 单… |
-| [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | — | bandwidth | 无实测：索引卡。所有 FP8 路径的前置判据都挂在这张卡上 |
+| [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | — | bandwidth | 无实测：两条真入口已 import 验证，待 bench |
 | [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | measured | — | bandwidth | triton 融合单 kernel 冷 L2 达 1081 GB/s… |
 | [`rope-mla`](cards/rope-mla.yaml) | rope | measured | — | bandwidth | MLA decode 为 360 GB/s，与纯 rope 的 33… |
 | [`rope`](cards/rope.yaml) | rope | measured | — | bandwidth | 两种 rotate_style 耗时比为 0.973（差异接近噪声边… |

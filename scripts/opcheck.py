@@ -185,7 +185,7 @@ def cmd_correctness(a):
         try:
             run = mod.get_runner(v, tilelang_root=a.tilelang_root, **mod.runner_kwargs(params))
             got, mutated = mod.run_isolated(run, *inputs[:-1])
-        except (Exception, SystemExit) as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             # **故意宽捕获**：runner 是第三方 GPU kernel（torch / triton / ctypes），
             # 失败类型不可枚举（RuntimeError、AssertionError、HIP 运行时、SystemExit…）。
             # 但**不吞**：记进 out["variants"] 并置 all_pass=False，最后返回非 0，
@@ -429,7 +429,7 @@ def cmd_robustness(a):
                                             "variant": v, "max_abs": m["max_abs"]}
                 print("  %s   %-28s %-12s max_abs=%.3e（限 %.1e）"
                       % ("PASS" if ok else "FAIL", key, v, m["max_abs"], max_abs))
-            except (Exception, SystemExit) as e:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 # **故意宽捕获**：被测变体是第三方 GPU kernel，失败类型不可枚举
                 # （RuntimeError、AssertionError、HIP 运行时、SystemExit…）。
                 # 「跑不起来」不等于「鲁棒性有问题」。
@@ -506,7 +506,7 @@ def cmd_robustness(a):
                 out["stress"]["%s/%s" % (pattern, v)] = {
                     "status": "pass" if ok else "fail", "max_abs": m["max_abs"]}
                 print("  %s   %-12s %-12s max_abs=%.3e" % ("PASS" if ok else "FAIL", pattern, v, m["max_abs"]))
-            except (Exception, SystemExit) as e:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
                 # **故意宽捕获**：同 A 类内层。第三方 kernel 的失败类型不可枚举，
                 # 记进报告且不计入抓到；不静默丢弃。
                 out["stress"]["%s/%s" % (pattern, v)] = {
@@ -580,8 +580,11 @@ def cmd_invariants(a):
                 ok, desc = _judge(mod, modes["split_invariance"], o1, o2, max_abs, cosine)
                 res["split_invariance"] = bool(ok)
                 detail["split_invariance"] = "num_split 1 vs 2：" + desc
-            except (Exception, SystemExit) as e:  # noqa: BLE001
-                # **故意宽捕获**：float kernel 在 num_split 边界上的失败类型不可枚举。
+            except (SystemExit, RuntimeError, ValueError, OSError, ImportError) as e:
+                # float kernel 在 num_split 边界上的已知失败面：缺后端/未编译
+                # (ImportError/OSError)、内核构造/运行报错(RuntimeError)、
+                # 参数不合法(ValueError)、adapter 报「无 runner」(SystemExit)。
+                # 不在此列的异常（TypeError 等）继续冒泡 —— 那是 checker 的 bug。
                 # 结果记为 None（verdict=incomplete），报告里有原因，不判通过。
                 res["split_invariance"] = None
                 detail["split_invariance"] = "未测（%s: %s）" % (type(e).__name__, e)
@@ -656,7 +659,7 @@ def cmd_padding(a):
             result[v] = {"declared": sup, "status": "no_runner", "reason": str(e)}
             print("SKIP  %-16s 无 runner: %s" % (v, e))
             continue
-        except (Exception, SystemExit) as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             # **故意宽捕获**：同 correctness 内层 —— 第三方 kernel 失败类型不可枚举。
             # 记进报告并置 all_ok=False（最后返回非 0），不静默。
             result[v] = {"declared": sup, "status": "error", "reason": "%s: %s" % (type(e).__name__, e)}

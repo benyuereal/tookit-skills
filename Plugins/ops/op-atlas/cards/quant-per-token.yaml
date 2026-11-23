@@ -5,50 +5,64 @@ math: scale[m] = amax(x[m,:])/QMAX；q[m,:] = round(x[m,:]/scale[m])
 status: draft
 layer: kernel
 op_card: null
+semantics:
+  formula: "scale[m] = max(|x[m,:]|) / QMAX；q[m,:] = clamp(round(x[m,:] / scale[m]), -QMAX, QMAX)，每行一个标度（per-token，不是 per-tensor 也不是 per-block）"
+  inputs:
+  - "x (M,K) bf16/fp16"
+  outputs:
+  - "q (M,K) int8 或 fp8"
+  - "scale (M,1) fp32"
+  traffic_passes: {reads: 1, writes: 2}
+  mutates_inputs: []
 variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
-  file_hint: lightop 的量化融合族（per-token / per-block）
+  file_hint: lightop 的量化融合族（per-token / per-block）；纯量化无独立入口，最小可量入口是与上游融合的 per_token_quant
   tier: primary
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
-  - FP8 GEMM 的激活侧预处理（所有 FP8 路径的前置步骤）
-  - 需要与上游算子融合（省一次 HBM 往返）
+  - "FP8/INT8 GEMM 的激活侧预处理（所有量化 GEMM 路径的前置步骤）"
+  - "需要与上游算子融合（silu_mul / rms_norm）时——融合进上游 epilogue 可省一次 x 的 HBM 往返"
   not_for:
-  - 权重静态量化（那是 prepack，一次性的）
-  - 标度粒度与下游 GEMM 契约不一致时（会静默算错）
+  - "权重静态量化（那是 prepack，一次性的，不在每 token 的路径上）"
+  - "标度粒度与下游 GEMM 契约不一致时（per-token / per-block / per-tensor 混用是静默错）"
   pros:
-  - 融合进上游 epilogue 可省一次往返
+  - "融合族最全：fuse_silu_mul_per_token_quant / rms_norm_per_token_quant / fuse_silu_mul_fp8_quant 都把量化接在上游输出上"
+  - "dtype 参数直出 int8 或 float8_e4m3fn，省调用方自己按 dtype 选 kernel"
   cons:
-  - 标度粒度（per-token / per-block / per-tensor）必须与下游 GEMM 一致，混用是静默错
+  - "没有纯 per-token 量化的独立入口：最小可量单位是与上游融合的版本，测纯量化会连上游一起计时（口径含上游）"
+  - "标度是 per-token 单标度（(M,1)），要 per-block(32/128) 粒度须换 fuse_silu_mul_quant_ep 或 per_block 族"
   source: references/libraries.md
-  import_path: lightop.fuse_silu_mul_clamp_quant_ep
-  signature: fuse_silu_mul_clamp_quant_ep(...) 激活+量化的 per-token 融合
-  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,"fuse_silu_mul_clamp_quant_ep")"
+  import_path: lightop.fuse_silu_mul_per_token_quant
+  signature: "fuse_silu_mul_per_token_quant(input, dtype=torch.int8, num_local_tokens_tensor=None, topk=1, expect_m=-1, output=None, scales=None, expert_ids=None, limit=-1.0) -> (q, scale)"
+  smoke_test: python3 -I -c "import lightop; assert callable(lightop.fuse_silu_mul_per_token_quant)"
   role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
-  file_hint: aiter 的量化支撑算子
+  file_hint: aiter.ops.quant：per_token_quant_hip（hip 内核）/ per_token_quant_triton（triton 实现），是**独立 per-token 量化**入口
   tier: fallback
-  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  law_ref: null
   best_for:
-  - 标准接入路径
+  - "纯 per-token 量化（不融合上游）：测「量化本身」时唯一能单独计时的入口"
+  - "需要交叉校验 lightop 融合版里量化那一段的数值（输出 (q, scale) 两份）"
   not_for:
-  - 需要极致融合时（lightop 的融合族更省）
+  - "想省 x 的 HBM 往返时（独立入口必然多读一次 x，比融合版多一趟）"
   pros:
-  - 统一 API
+  - "独立入口，口径干净：只做 x→(q,scale)，可与融合版拆开测「量化段」与「融合收益」"
+  - "有两个实现（hip / triton）可互为对照，避免单实现外推"
   cons:
-  - 不融合，多一次往返
+  - "不融合：上游输出必须落 HBM 再读回，比融合版多一次读"
+  - "签名是普通函数无显式 dtype 契约文档，int8/fp8 的行为需读源码确认"
   source: references/libraries.md
-  import_path: aiter.dynamic_per_token_scaled_quant
-  signature: dynamic_per_token_scaled_quant(out, input, scales, scale_ub=None) —— per-token 动态量化
-  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"dynamic_per_token_scaled_quant")"
+  import_path: aiter.per_token_quant_hip
+  signature: "per_token_quant_hip(x, scale=None, quant_dtype=torch.int8, num_rows=None, num_rows_factor=1) -> (y, scale)；静态 scale 不支持（scale 非 None 直接 raise）"
+  smoke_test: python3 -I -c "import aiter; assert callable(aiter.per_token_quant_hip)"
   role: competitor
 ceiling:
   kind: missing
   ref: null
   bound: bandwidth
-  note: 读 x 一遍 + 写 q 与 scale；若融合进上游则省掉读
+  note: 纯量化是读 x 一遍 + 写 q 与 scale；若融合进上游则省掉读 x（只写）。两个口径的流量不同
 shapes:
 - decode-m1
 - decode-m32
@@ -57,24 +71,43 @@ last_verdict:
   status: none
   kb_path: null
   ratio: null
-  conclusion: 无实测：索引卡。所有 FP8 路径的前置判据都挂在这张卡上
+  conclusion: 无实测：两条真入口已 import 验证，待 bench
   verified_on: null
+  regimes:
+    decode:
+      kind: bandwidth
+      bound: memory
+      note: "M 小、每 token 一行；纯量化是读 x 写 q+scale，融合版省一次读"
+      denominator:
+        value: 1801
+        source: bw-ladder.yaml 2_rw_1to1（读 x 一份、写 q 一份，scale 可忽略）
+        why: "per-token 量化是 1 读 1 写的主导路径，用 1:1 而非纯读"
+    prefill:
+      kind: bandwidth
+      bound: memory
+      note: "大 M，仍是纯访存算子（无算力），瓶颈在字节数与向量化宽度"
+  next_probe:
+    surface: fusion-boundary
+    hypothesis: "独立量化读 x 写 q+scale 是 2 份 [M,K]；融合进上游后只剩写 q 一份，理论 ≥1.5 倍（按 2 份 / 1.33 份估算）；实测若 <1.2 倍说明上游主导了计时"
+    expected: "prefill-8k 融合版相对独立量化提速 ≥1.5 倍（同口径 3×MAD 内不显著即作废）"
+    stop_if: "实测 <1.2 倍 ⇒ 说明上游 silu/rmsnorm 的算力已是计时主体、量化那趟不是瓶颈 → 转查 layout-pack 的 q 连续性"
+    effort: 3h
 modify_path:
   kind: replace-call
-  what: 激活量化与上游融合
-  how: lightop.fuse_silu_mul_clamp_quant_ep 把「激活 + per-token 量化」合成一次
-  requires: 标度粒度必须与下游 GEMM 一致
+  what: 激活量化与上游算子融合
+  how: 把「上游 kernel 输出 x → 再调 per_token_quant」换成 lightop.fuse_silu_mul_per_token_quant 或 rms_norm_per_token_quant，一次出 q 与 scale
+  requires: 标度粒度（per-token 单标度）必须与下游 GEMM 一致
 surfaces:
 - layout-pack
 - precision-drop
 - fusion-boundary
-updated: '2026-11-22'
+updated: '2026-11-23'
 baseline_ref:
-  impl: lightop.fuse_silu_mul_clamp_quant_ep
+  impl: lightop.fuse_silu_mul_per_token_quant
   role: competitor
   traffic_passes:
     reads: 2
-    writes: 1
-    passes: 3
-    source: 按 family=quant 推定（**未实测，须用 --actual 校正**）
-  note: bench 时拿这条当性能基准
+    writes: 2
+    passes: 4
+    source: 融合版（含上游激活）按读 input [M,2H] + 读 weight/参数、写 q 与 scale 计；纯量化段口径见 aiter.per_token_quant_hip
+  note: "bench 时注意两条口径不同：lightop 版含上游 silu_mul（多读一份 input），aiter 版是纯量化（1 读 1 写）；两者不可直接同榜算加速比"

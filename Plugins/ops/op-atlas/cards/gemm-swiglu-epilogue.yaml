@@ -1,0 +1,140 @@
+id: gemm-swiglu-epilogue
+title: GEMM + SwiGLU epilogue（gate/up 双投影后接 silu×mul）
+family: gemm
+math: y = silu(A @ W_gate^T) * (A @ W_up^T)；两个 GEMM 共享 A，epilogue 在寄存器里做完 silu×mul 才写一次
+status: draft
+layer: kernel
+op_card: null
+semantics:
+  formula: G = A @ W_gate^T; U = A @ W_up^T; y = silu(G) * U。目标是把「写 G、写 U、再读回做 silu×mul」三道 HBM 往返压成一次写 y
+  inputs:
+  - "A (M,K)"
+  - "W_gate (N,K)"
+  - "W_up (N,K)"
+  outputs:
+  - "y (M,N)"
+  traffic_passes:
+    reads: 3
+    writes: 1
+  mutates_inputs: []
+variants:
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/fuse_silu_mul_quant.py：fuse_silu_and_mul(input, output, mask_m, expect_m) —— 独立 silu_mul，输入是已算好的 [M,2H]，**不是 GEMM epilogue**
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 作为自研 epilogue 的数值 oracle：先跑两个 GEMM 写出 gate/up，再调它验证 silu×mul 这一段
+  - 现成分拆路径里替代 torch 的 silu(gate)*up 两步（省一次 HBM 往返，但 GEMM 输出仍要落盘）
+  not_for:
+  - 当作 gemm+swiglu epilogue 用——它吃的是已经算完并写进 HBM 的 [M,2H]，GEMM 的部分一行都没省
+  - 想靠它消掉 gate/up 的中间写回（那必须改 GEMM 的 epilogue，不在这个函数里）
+  pros:
+  - 独立 silu_mul 已实测可用；input [M,2H] -> out [M,H]，可直接当 epilogue 的其中一段
+  cons:
+  - 不是 GEMM epilogue：GEMM 输出仍要写 HBM 再读回，本函数只省了 silu 与 mul 之间的那一趟
+  - 无 GEMM 累加器访问路径，无法在 tile 内做 silu×mul；要融合必须自研 epilogue
+  source: references/libraries.md
+  import_path: lightop.fuse_silu_and_mul
+  signature: 'fuse_silu_and_mul(input: Tensor, output: Tensor, mask_m=None, expect_m: int = -1) -> None；input [M,2H] 原地算进 output [M,H]'
+  smoke_test: python3 -I -c "import lightop; assert callable(lightop.fuse_silu_and_mul)"
+  role: template
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter 的 silu_and_mul 族（silu_and_mul / scaled_silu_and_mul / moe_c_silu_and_mul 包装），同样是独立激活，不含 GEMM
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 与 lightop 版互为交叉校验（两个独立实现的 silu×mul 应 bit-exact 或落在 e-3 内）
+  - EP 场景下带 mask 的变体（moe_c_silu_and_mul）可复用同一段 epilogue 逻辑
+  not_for:
+  - 当 GEMM epilogue：包装层是 *args/**kwargs 的 dispatch，不暴露累加器
+  - 要把 silu×mul 融进 GEMM：aiter 没有 exposed 的 epilogue hook
+  pros:
+  - dispatch 到多个后端（hip/triton），可作为自研 epilogue 的第二条对照实现
+  cons:
+  - 签名是 (*args, **kwargs)，inspect 拿不到参数名，接自研 epilogue 前必须读源码确认排布
+  - 同样只做独立激活，GEMM 输出的 HBM 往返一分不省
+  source: references/libraries.md
+  import_path: aiter.silu_and_mul
+  signature: silu_and_mul(*args, **kwargs) —— 多后端 dispatch，读源码确认参数（无 GEMM 部分）
+  smoke_test: python3 -I -c "import aiter; assert callable(aiter.silu_and_mul)"
+  role: template
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: deepgemm 的 grouped GEMM（m_grouped_fp8_gemm_nt_masked 等）只暴露 masked/contiguous 变体，**没有 swiglu epilogue 参数**
+  tier: unavailable
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 只作为 GEMM 主体：若自研 epilogue，可先用它的 grouped GEMM 产出 gate/up 两个输出再手接
+  not_for:
+  - 当融合入口：签名里没有 activation / epilogue 参数（enable_overlap 与 block_wise 都与激活无关）
+  - 想用 config 开关打开 swiglu：config 只有 MODE，不含 epilogue 选择
+  pros:
+  - grouped 大 M 的 GEMM 主体成熟，自研 epilogue 时可复用它的累加结果
+  cons:
+  - 无 epilogue hook：m_grouped_fp8_gemm_nt_masked(a,b,d,masked_m,expected_m_per_group,config) 只写 d，不改写为 silu×mul
+  - 要得到 gemm+swiglu 必须自研 epilogue：现成库里没有把激活接进 GEMM 输出的入口
+  source: references/libraries.md
+  import_path: deepgemm.m_grouped_fp8_gemm_nt_masked
+  signature: m_grouped_fp8_gemm_nt_masked(a, b, d, masked_m, expected_m_per_group, enable_overlap=False, signal=None, config=None, *, block_wise=False, cu=None) -> Tensor —— 无 activation 参数
+  smoke_test: python3 -I -c "import deepgemm; assert callable(deepgemm.m_grouped_fp8_gemm_nt_masked)"
+  role: template
+- repo: in-house
+  library_profile_ref: null
+  file_hint: 自研 epilogue：在 GEMM 主循环的累加器上做 silu(gate_acc)*up_acc，只写一次 y
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - prefill 大 M 的 gate/up 双投影：省掉 G 与 U 两份 [M,N] 的写与回读（bf16 下约 2*M*N*2 字节/层）
+  - decode 档 gate/up 权重读取主导时，同一次权重读可直接产出 silu×mul 后的结果
+  not_for:
+  - 没有可改的 GEMM 源码、只能调库时（此时退化成两次库 GEMM + 独立 fuse_silu_and_mul）
+  - N 很大而寄存器放不下两个累加 tile 时（需先各自写回，融合收益消失）
+  pros:
+  - 唯一能真正消掉 G/U 中间写回的路径：写 y 一次而不是写 G、写 U、读回两份
+  - 可复用 lightop.fuse_silu_and_mul 的数值行为做逐位对照，降低写错风险
+  cons:
+  - 需自研：库里只有独立 silu_mul，没有任何 GEMM 入口暴露 epilogue 累加器
+  - 要同时持 gate/up 两个累加 tile，寄存器压力是单 GEMM 的两倍，occupancy 可能掉一档
+  source: 自研（现成库不支持 gemm+swiglu epilogue）
+  source_ref:
+    path: null
+    symbol: null
+    line: null
+    build_cmd: null
+    note: 尚无实现。入口形态应为：GEMM 主循环累加完 gate/up 两个 tile 后，在寄存器做 silu(g)*u 再写 y；可用 lightop.fuse_silu_and_mul 作为该段数值 oracle
+  l1_exempt_reason: 自研，尚无实现可 import；库侧只有独立 silu_mul（已登记为 role=template），无 gemm+swiglu 入口
+  role: template
+ceiling:
+  kind: missing
+  ref: null
+  bound: mixed
+  note: prefill 档是算力主导、decode 档是权重读取主导；融合的理论收益是省掉 G/U 两份中间写回，不是提高峰值
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: 库里无真入口，需自研 epilogue（现有仅独立 silu_mul）
+  verified_on: null
+  next_probe:
+    surface: fusion-boundary
+    hypothesis: 两次库 GEMM + 独立 fuse_silu_and_mul 三段总字节约 4 份 [M,N]（写G、写U、读G/U、写y），自研 epilogue 后变 1 份；M=8192,N=4096 bf16 下应省 ≥40% 的中间流量
+    expected: 融合版相对三段式中间流量降 ≥40%（同口径 3×MAD 内不显著即作废）
+    stop_if: 融合后不涨 ⇒ 说明瓶颈在 GEMM 算力侧而非中间 HBM 流量 → 转去比 GEMM 后端选择，不再做 epilogue 融合
+    effort: 16h
+modify_path:
+  kind: source-patch
+  what: 把 silu×mul 从独立 kernel 挪进 GEMM epilogue
+  how: 在自研 GEMM 主循环写回前插入 y = silu(gate_acc)*up_acc（可用 lightop.fuse_silu_and_mul 对数值），删掉 gate/up 的中间写回
+  requires: 能改 GEMM 源码（库侧无 epilogue hook）；需同时持两个累加 tile，注意寄存器与 occupancy
+surfaces:
+- fusion-boundary
+- layout-pack
+updated: '2026-11-23'
+baseline_ref:
+  no_baseline_reason: "需自研，无现成基准：库里没有任何 gemm+swiglu epilogue 入口。lightop.fuse_silu_and_mul 与 aiter.silu_and_mul 只是独立 silu_mul（role=template，按 baseline-policy 禁止当性能基准），deepgemm 的 grouped GEMM 无 activation 参数。bench 时只能拿「两次库 GEMM + 独立 silu_mul」的三段式当分拆对照，必须显式写明那不是融合基准"

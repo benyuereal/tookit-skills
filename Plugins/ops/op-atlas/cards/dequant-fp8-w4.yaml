@@ -1,0 +1,126 @@
+id: dequant-fp8-w4
+title: W4A16 GEMM（4bit 权重反量化 + GEMM 融合，AWQ/Marlin）
+family: quant
+math: Y = A @ dequant(W4, scale, zero)^T；权重 4bit 打包，反量化在 GEMM 的 K 循环内做，中间 fp16 权重不落 HBM
+status: draft
+layer: kernel
+op_card: null
+semantics:
+  formula: Y = A @ dequant(W4)^T，dequant(W4)[n,k] = (W4[n,k] - zero[n,k//g]) * scale[n,k//g]，每组 g=32 个 K 共享 scale/zero；反量化在 GEMM 的 K 循环内完成，不写中间 fp16 权重
+  inputs:
+  - "a (M,K) fp16"
+  - "b（打包的 4bit 权重）"
+  - "scales_zeros (N,K/group) 打包的 scale+zero"
+  outputs:
+  - "y (M,N) fp16"
+  traffic_passes:
+    reads: 3
+    writes: 1
+  mutates_inputs: []
+variants:
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/gemmopt.py：gemm_awq_w4a16_marlin(a, b, scales_zeros)，M<=64 走 Marlin kernel，M>64 退化为 dequant 后 F.linear
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - decode 档 M<=64 的 W4A16 投影：Marlin kernel 在 K 循环内反量化，fp16 权重不落 HBM（省 N*K*2 字节/次）
+  - 需要按 M 自动分档的接入：M<=16 单 tile、16<M<=64 按 16 行切块、M>64 走 dequant
+  not_for:
+  - M>64 的大 prefill：源码在 M>64 时先用 gemm_awq_w4a16_dequant 把权重反量化成 fp16 再 F.linear，融合收益消失（回到「读 2 写 1 再 GEMM」）
+  - K 不是 128 或 256 的倍数（源码 assert K%256==0 or K%128==0）
+  pros:
+  - M<=64 时是真融合：反量化在 K 循环内，不写中间 fp16 权重，省 N*K*2 字节的 HBM 往返
+  - M 自动分三档（<=16 / <=64 / >64），调用方不必自己按 M 选 kernel
+  cons:
+  - a 必须是 float16（源码 assert a.dtype == torch.float16），bf16 激活直接崩
+  - M>64 静默退化为 dequant+F.linear（非融合），同一入口两个 regime 的访问量不同，不能同榜比
+  source: references/libraries.md
+  import_path: lightop.gemm_awq_w4a16_marlin
+  signature: gemm_awq_w4a16_marlin(a, b, scales_zeros) -> Tensor；a (M,K) fp16, b 打包 W4, scales_zeros (N,K/group), 返回 (M,N) fp16
+  smoke_test: python3 -I -c "import lightop; assert callable(lightop.gemm_awq_w4a16_marlin)"
+  role: competitor
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: deepgemm/m_group_gemm.py：grouped_gemm_w4a16_nt_masked_entry（[E,M,K] 变长 masked）+ triton_ref 参考实现
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - MoE 场景的 grouped W4A16：E 个专家各自不同 M（actual_tokens 给每专家有效行数），一次 launch 覆盖全部专家
+  - 需要与 deepgemm 的 w4a16_marlin_weight 打包布局对齐时（同一仓的 pack 与 gemm 配套）
+  not_for:
+  - 单 GEMM（非 grouped）：masked 接口要求 [E,M,K] 与 actual_tokens，单矩阵走它等于空转 mask 逻辑
+  - 当性能基准前不确认 config：MODE 未命中会走慢路径且不报错
+  pros:
+  - masked grouped 是 W4A16 MoE 的正确形态：每专家 M 不等时不必 pad 到最大 M
+  - 同仓提供 triton_ref 参考实现（grouped_gemm_w4a16_nt_masked_triton_ref_entry），可作数值 oracle
+  cons:
+  - pack 布局强耦合：权重必须先用 deepgemm.w4a16_marlin_weight 打包，直接用 AWQ 原始 4bit 布局会静默算错
+  - 签名无 config 默认（MODE 走 m_grouped_w4a8 系列），W4A16 entry 无 config 参数，调优空间小于 lightop 的 plan 层
+  source: references/libraries.md
+  import_path: deepgemm.grouped_gemm_w4a16_nt_masked_entry
+  signature: grouped_gemm_w4a16_nt_masked_entry(matrix_a, matrix_b, matrix_b_scale, matrix_c, actual_tokens, max_tokens)；a [E,M,K], b [E,N,K//2] uint8, scale [E,N,K//32]
+  smoke_test: python3 -I -c "import deepgemm; assert callable(deepgemm.grouped_gemm_w4a16_nt_masked_entry)"
+  role: competitor
+- repo: deepgemm
+  library_profile_ref: libraries.md §6
+  file_hint: deepgemm/m_group_gemm.py：moe_w4a16_groupwise_triton —— W4A16 grouped masked 的 Triton golden/reference 路径
+  tier: reference
+  law_ref: null
+  best_for:
+  - 当自研 W4A16 的数值 oracle：group_wise_k=32 的分组反量化语义写死在它的签名里
+  - 小 shape 调试：Triton 实现便于读源码确认 scale/zero 的 K 分组方式
+  not_for:
+  - 当性能候选：它是 golden/reference path，不为速度调优
+  pros:
+  - 显式的 block_size_m/n/k 与 group_wise_k=32 参数，便于对齐分组反量化的契约
+  cons:
+  - reference 路径，性能远离峰值（role=reference，禁止当性能基准）
+  source: references/libraries.md
+  import_path: deepgemm.moe_w4a16_groupwise_triton
+  signature: moe_w4a16_groupwise_triton(matrix_a, matrix_b, matrix_b_scale, actual_tokens, matrix_c=None, *, num_sm=64, block_size_m=64, block_size_n=128, block_size_k=128, group_wise_k=32) -> Tensor
+  smoke_test: python3 -I -c "import deepgemm; assert callable(deepgemm.moe_w4a16_groupwise_triton)"
+  role: correctness_only
+ceiling:
+  kind: missing
+  ref: null
+  bound: bandwidth
+  note: decode 档读 4bit 权重（N*K/2 字节）+ fp16 激活；M<=64 的 Marlin 融合下界由权重读取决定；M>64 退回 fp16 权重路径，下界翻倍
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: 无实测：三条真入口已 import 验证，待 bench
+  verified_on: null
+  next_probe:
+    surface: precision-drop
+    hypothesis: M=1 时权重 4bit 只有 N*K/2 字节；同 shape 下 W4A16 应比 fp16 权重 GEMM 少读一半字节，理论 ≥1.4 倍（扣除反量化开销后）；实测若 <1.1 倍说明反量化在关键路径
+    expected: M=1、N=4096、K=4096 档相对 fp16 gmm 提速 ≥1.4 倍
+    stop_if: 实测 <1.1 倍 ⇒ 说明反解压在 K 循环里串行、权重带宽没成为瓶颈 → 转查 split-k 或换 M>64 的 dequant 路径
+    effort: 3h
+modify_path:
+  kind: replace-call
+  what: 4bit 权重的 F.linear(dequant(W)) 换成融合入口
+  how: 把 weight_dequant 后 F.linear 的两步换成一次 lightop.gemm_awq_w4a16_marlin(a, b, scales_zeros)，省掉 fp16 权重的 HBM 写与读
+  requires: a 必须 fp16；K 是 128/256 倍数；scales_zeros 的 N 与 b 的打包布局要与本库一致（不同库布局不通用）
+surfaces:
+- precision-drop
+- split-k
+- layout-pack
+updated: '2026-11-23'
+baseline_ref:
+  impl: lightop.gemm_awq_w4a16_marlin
+  role: competitor
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按入口签名数张量（a,b,scales_zeros → y）；**未实测字节数，须用 --actual 校正**
+  note: bench 时拿这条当性能基准；注意 M>64 时它内部退化为 dequant+F.linear，与 M<=64 不同口径
+hard_preconditions:
+- statement: lightop.gemm_awq_w4a16_marlin 要求 a.dtype == float16 且 K%256==0 或 K%128==0，否则 assert 失败
+  check: python3 -I -c "import inspect,lightop; s=inspect.getsource(lightop.gemm_awq_w4a16_marlin); assert 'a.dtype == torch.float16' in s and 'K%256 == 0' in s"

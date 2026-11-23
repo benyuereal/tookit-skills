@@ -6,10 +6,29 @@ status: measured
 layer: kernel
 op_card: Plugins/ops/skills/op-gemm-fp8
 variants:
+- repo: torch
+  library_profile_ref: libraries.md §6
+  file_hint: torch._scaled_mm（走 hipBLASLt 后端）
+  tier: primary
+  role: competitor
+  law_ref: null
+  best_for:
+  - fp8 GEMM 大形状（8192³ 实测 498.5 TF = nominal 的 0.89）
+  not_for:
+  - decode 小 M（未测 hipBLASLt 的 M=1 档）
+  pros:
+  - 实测 498.5 TF @8192³、457.6 TF @4096³；rel_l2 vs fp32 dequant 0.0017
+  - 框架默认调用即可，无需手工扫参
+  cons:
+  - B 必须 column-major（[N,K] 连续后 .t()）
+  source: references/libraries.md
+  import_path: torch._scaled_mm
+  signature: torch._scaled_mm(a_fp8, b_fp8.t(), scale_a=, scale_b=, out_dtype=torch.bfloat16)
+  smoke_test: python3 -I -c "import torch; assert hasattr(torch,'_scaled_mm')"
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: gemm_a8w8_opus（gfx938 专用）
-  tier: primary
+  tier: fallback
   law_ref: null
   best_for:
   - gfx938/gfx946 的 fp8 E4M3 GEMM（本轮唯一可跑通的路径）
@@ -17,16 +36,14 @@ variants:
   - 期望比 bf16 快的场景（实测慢 5.3×）
   - decode 档（M<=128）：比 bf16 慢 12.6 倍
   pros:
-  - 实测 49.8 TF，六形状收敛
-  - kernelId=2（64x64x64 Opus 流水）是 auto 的选择
+  - 可用，但仅 49.8 TF
   cons:
-  - 比 bf16 慢 4.5 倍——不是硬件上限，是 fp8 kernel 没发挥硬件
-  - lightop channelwise_kme 比它再慢 30%，别当更优选项
+  - 比 hipBLASLt 慢 10 倍（498.5 TF）；该族 bf16 也只到 nominal 8.6%
   source: references/libraries.md
   import_path: aiter.gemm_a8w8_opus
   signature: gemm_a8w8_opus(A,B,x_scale=1.0,w_scale=1.0,bias=None,dtype=torch.bfloat16,kernelId=None)
   smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,'gemm_a8w8_opus')"
-  role: competitor
+  role: best_known
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: examples/gemm_fp8
@@ -64,26 +81,6 @@ variants:
   signature: '@triton.jit 写 fp8 GEMM kernel（形状随数据变化时用）'
   smoke_test: python3 -I -c "import triton; assert hasattr(triton,"jit")"
   role: template
-- repo: aiter
-  library_profile_ref: libraries.md §4
-  file_hint: aiter GEMM 入口
-  tier: fallback
-  law_ref: null
-  best_for:
-  - 标准接入路径，有统一 API
-  not_for:
-  - 需要单一路径可预测性能
-  - decode 档（M<=128）：比 bf16 慢 12.6 倍
-  pros:
-  - 统一 API + 回退
-  cons:
-  - 比 bf16 慢 4.5 倍——不是硬件上限，是 fp8 kernel 没发挥硬件
-  - lightop channelwise_kme 比它再慢 30%，别当更优选项
-  source: references/libraries.md
-  import_path: aiter.gemm_a8w8_opus
-  signature: gemm_a8w8_opus(...) —— AITER 的 INT8/fp8 GEMM 入口族
-  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,"gemm_a8w8_opus")"
-  role: competitor
 - repo: in-house
   library_profile_ref: null
   file_hint: 手写 HIP + MFMA intrinsic
@@ -133,7 +130,7 @@ ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: compute
-  note: 分母用 fp8 nominal 560 TF（业主确认口径）。aiter 实测 49.8 TF = 8.9% ⇒ 约 11 倍空间
+  note: 分母用 fp8 nominal 560 TF。**本机最好实现**（hipBLASLt torch._scaled_mm 默认调用）实测 498.5 TF = 89%，**空间只有 1.12 倍**。aiter opus 49.8 TF 是实现族问题，不是硬件上限（见 constants.yaml:fp8_peak_layers）
 shapes:
 - decode-m1
 - decode-m32
@@ -146,15 +143,19 @@ last_verdict:
   ratio:
     kind: utilization
     unit: ratio
-    value: 0.086
-    vs: fp8 nominal 560 TF 的达成率（aiter opus，4096³）
+    value: 0.89
+    vs: fp8 nominal 560 TF 的达成率（hipBLASLt torch._scaled_mm 默认调用，8192³）
+    traffic_passes: 3
+    inputs: 2
+    outputs: 1
     scope:
       cards: 1
-      in_len: M=4096 K=4096
-      out_len: N=4096
+      in_len: M=8192 K=8192
+      out_len: N=8192
       warmup: hot
-      note: 47.8~48.2 TF；prefill-8k(M=8192) 档 47.4 TF。同库 fp8/bf16=1.92x ⇒ 原生 fp8，非 dequant 回退
-  conclusion: aiter fp8 达 48 TF（nominal 560 的 0.086）；同库比值 1.92x 证原生路径存在
+      note: 实测 2205.7 µs = 498.5 TF。**分母口径**：nominal 560（规格）；若 benchmark 做过 solution 扫参，分母可用 achievable 579.7，此时 ratio=0.86。aiter opus 49.8 TF 是实现族问题（其 bf16 也只到 nominal 8.6%）。4096³ 档为 457.6 TF = 0.82，说明
+        fp8 强依赖形状
+  conclusion: hipBLASLt 默认调用达 498.5 TF（nominal 的 0.89）；空间仅 1.12 倍
   verified_on: '2026-11-23'
   evidence:
   - path: Plugins/ops/skills/op-gemm-fp8/results/prefill-8k-aiter.json
@@ -162,47 +163,58 @@ last_verdict:
     verified_on: '2026-11-23'
   next_probe:
     surface: precision-drop
-    hypothesis: torch.mm bf16 实测 214~231 TF；fp8 同 FLOPs 本该是 bf16 的 2 倍≈430~460 TF。若本机 fp8 栈成熟，应能见到 ≥150 TF 的实现（当前最好 49）
-    expected: ≥150 TF（当前 49，差 3 倍以上）
-    stop_if: 试遍 aiter / lightop / triton / torch 四条路仍无 ≥150 TF ⇒ 判「本机 fp8 栈未成熟」（库版本/kernel 覆盖/DCU 支持度），写进 gaps.md，不再逐个试
-    effort: 8h
+    hypothesis: aiter opus 49.8 TF vs hipBLASLt 498.5 TF，差 10 倍；若定位到 opus 的 kernel 选择或 tiling 问题，应能提到 ≥200 TF
+    expected: ≥200 TF（当前 opus 49.8）
+    stop_if: 若 PMC 显示 opus 的 MMA 占用率已达 80%+ 仍只有 49.8 TF，说明是其 tiling 结构性限制 ⇒ 直接用 hipBLASLt，不再修 aiter
+    effort: 6h
   baseline_count: 2
   all_sources_far_from_peak: true
   baseline_count_note: 两个独立库都可用（aiter 48.2 TF / lightop channelwise_kme 30.4 TF），**都没有 single_source 问题**；但两者都只到 bf16（214~231 TF）的 1/5~1/7，说明本机 fp8 路线整体不成熟，不是哪家弱
   regimes:
-    prefill:
+    prefill_large:
+      m: 8192
+      kind: utilization
+      value: 0.89
+      bound: compute
+      denominator:
+        value: 560
+        source: nominal
+        why: 规格口径
+      measured: '8192³: 2205.7 µs = 498.5 TF'
+    prefill_mid:
       m: 4096
       kind: utilization
-      value: 0.086
+      value: 0.82
       bound: compute
-      note: 方阵大 M，算力主导
+      denominator:
+        value: 560
+        source: nominal
+        why: 规格口径
+      measured: '4096³: 300.3 µs = 457.6 TF'
     decode:
       m: 1
       kind: bandwidth
       value: 0.01
       bound: memory
-      note: fp8 理论下界 9.1 µs，当前最好 860 µs，**差 94 倍**
       denominator:
         value: 1848
         source: bw-ladder.yaml 2_read_only
         why: decode 只读权重
-      measured: 'M=1: aiter fp8 842.6 µs, 权重 16.8MB ⇒ u=0.01；lightop kme 0.51ms u=0.02；**fp8 权重只有 bf16 的一半，本该快 2 倍，实测慢 12.6 倍**'
-      baseline: 无合格基线（全部远离峰值）
-      all_sources_far_from_peak: true
+      measured: 'M=1: aiter fp8 842.6 µs u=0.01；**未测 hipBLASLt 的 decode 档**'
   next_probe_decode:
-    surface: gemv-kernel-selection
-    hypothesis: fp8 权重 16.8MB / 1848 GB/s = 9.1 µs 是 decode 下界；当前最好 860 µs（u=0.01），**差 94 倍**。换 GEMV 专用 kernel（或 batch 合并）应能到 <50 µs
-    expected: <50 µs（当前 860）
-    stop_if: 试遍 aiter / lightop / torch 的 GEMV 路径仍 ≥300 µs ⇒ 判「本机 decode fp8 栈不可用」，写进 gaps.md
-    effort: 6h
+    surface: precision-drop
+    hypothesis: fp8 权重 16.8MB/1848 = 9.1 µs 是 decode 下界；当前 aiter 860 µs 差 94 倍。但 hipBLASLt 的 decode 档未测
+    expected: <50 µs（先测 hipBLASLt 的 M=1 档）
+    stop_if: 若 hipBLASLt 在 M=1 也只有 800+ µs，说明 GEMV 路径整体未被优化 ⇒ 判 decode fp8 不可用，写进 gaps
+    effort: 4h
 modify_path:
   kind: replace-call
   what: 换掉 aiter opus 这一族实现
-  how: aiter 的 opus 族整体低效（bf16 也只有 nominal 的 8.6%），换更高效率的实现；49.8 TF 距 560 还有 11 倍，是本卡最大的空间
-  requires: 需要一条能打满 MMA 的 fp8 实现（tilelang 路径本轮未跑通）
+  how: 换掉 aiter opus 这一族实现——**hipBLASLt 默认调用就有 498.5 TF（10 倍）**。这才是本卡最大空间：不是"找更强的硬件路径"，是"别用慢实现族"
+  requires: 不需要改硬件路径；torch._scaled_mm 默认调用即可（本机已验）
 hard_preconditions:
-- statement: torch._scaled_mm 在 gfx938 上不可用（hipBLASLt 无 fp8 方案）
-  check: 调用直接报 "could not find valid hipblaslt solution"
+- statement: fp8 GEMM 的 B 必须 column-major（[N,K] 连续后 .t()）
+  check: 布局错时报 "Only multiplication of row-major and column-major matrices"；正确写法 torch._scaled_mm(a_fp8, b_fp8.t(), scale_a=..., scale_b=..., out_dtype=torch.bfloat16)
 - statement: fp8 tensor 不能用 torch.randn 直接造（不支持该 dtype）
   check: torch.randn(...,dtype=torch.float8_e4m3fn) 报 "normal_kernel_cuda not implemented for Float8_e4m3fn"；须先造 bf16 再 .to()
 - statement: kernelId 必须留空让 auto 选；传 0 会掉到 1.2 TF（慢 40×）
@@ -218,11 +230,11 @@ surfaces:
 - table-miss
 updated: '2026-11-22'
 baseline_ref:
-  impl: aiter.gemm_a8w8_opus
+  impl: torch._scaled_mm
   role: competitor
   traffic_passes:
     reads: 2
     writes: 1
     passes: 3
-    source: 按 family=gemm 推定（**未实测，须用 --actual 校正**）
-  note: bench 时拿这条当性能基准
+    source: 'GEMM: 读 A、读 B、写 C'
+  note: 实测 498.5 TF @8192³（本机最强 fp8 路径）

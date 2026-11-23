@@ -1,0 +1,107 @@
+id: batched-gemm
+title: Batched GEMM（逐 batch 的 M×K @ K×N）
+family: gemm
+math: Y[b] = X[b] @ W[b] (+ bias[b])；b ∈ [0, B)，每个 batch 共享同一 M/N/K
+status: draft
+layer: kernel
+op_card: null
+semantics:
+  formula: Y[b,m,n] = sum_k X[b,m,k]*W[b,n,k] + bias[b,n]；B 个独立的 (M,K)@(K,N)
+  inputs:
+  - "x (B,M,K)"
+  - "w (B,N,K)"
+  - "bias (B,1,N)，可选"
+  outputs:
+  - "y (B,M,N)"
+  traffic_passes:
+    reads: 2
+    writes: 1
+  mutates_inputs: []
+variants:
+- repo: boltops
+  library_profile_ref: libraries.md §10
+  file_hint: boltops/gemm/triton/batched_gemm_bf16.py：Triton batched GEMM，权重 TN/TT 由 stride 推断
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - decode 档 B 个小 GEMM（per-batch 投影），一次 launch 覆盖整批，B=32 时少 31 次 launch
+  - 权重按 K 连续或 N 连续两种布局都能直接吃（stride 推断 TN/TT，不必先转置）
+  not_for:
+  - 窄 M 大 K 需要 split-K 的形状（Triton 路径 assert splitK is None）
+  - 各 batch 的 M/N 不同（要求等 shape 的 batch，变长要走 masked/grouped 入口）
+  pros:
+  - 单次 launch 处理 B 个 batch；B=32、M=1 时省掉 31 次 kernel launch 的固定开销
+  - 支持预分配 y 与可选 bias，计时口径可排除 alloc（alloc_in_timing=false）
+  cons:
+  - splitK 未实现（源码 assert splitK is None），M 窄 K 长时没有 split-K 退路
+  - 权重布局靠 stride 推断；传非连续 w 会被 .transpose 后再判，布局错时结果静默错
+  source: references/libraries.md
+  import_path: boltops.gemm.batched_gemm_bf16
+  signature: batched_gemm_bf16(x, w, bias=None, dtype=torch.bfloat16, splitK=None, y=None, config=None) -> Tensor；x[B,M,K], w[B,N,K], y[B,M,N]
+  smoke_test: python3 -I -c "import importlib; m=importlib.import_module('boltops.gemm'); assert hasattr(m,'batched_gemm_bf16')"
+  role: competitor
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/gemmopt.py：fused_bmm 是 batched INT8 GEMM + 激活即时 per-token 量化
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - INT8 权重已 prepack、激活要在 GEMM 内即时 per-token 量化的批 GEMM（省一次量化往返）
+  - 输出直出 fp8_e4m3 给下游 fp8 GEMM 吃（dtype 参数）；B 大且每 batch 权重不同
+  not_for:
+  - 纯 bf16 批 GEMM（本入口强制 8bit 路径，量化误差与 bf16 版不等价）
+  - 标度粒度与下游不一致时（x_scale 是 per-batch 单标度，不是 per-token 向量）
+  pros:
+  - 量化融进 GEMM，省掉独立的 per-token 量化 kernel（省 x 的一次读 + 一次写）
+  - transpose_bm 与 transpose_bm_in 支持 (B,M,K)/(M,B,K) 两种排布，省一次 permute
+  cons:
+  - 语义与 bf16 版不同：读 4 个张量（x,w,x_scale,w_scale）写 1 个，与 boltops 版不可同榜算加速比
+  - 文档只写 x_scale 是 per-batch 标度（B,M,1），与 per-token 粒度不符时会静默算错
+  source: references/libraries.md
+  import_path: lightop.fused_bmm
+  signature: 'fused_bmm(x, w, x_scale, w_scale, bias=None, dtype=torch.float8_e4m3fn, output=None, transpose_bm=False, transpose_bm_in=False, config={''MODE'': 0}) -> Tensor'
+  smoke_test: python3 -I -c "import lightop; assert callable(lightop.fused_bmm)"
+  role: competitor
+ceiling:
+  kind: missing
+  ref: null
+  bound: mixed
+  note: decode 档（B 大 M 小）是权重读取主导，prefill 档（B 小 M 大）回到算力；两档分母不同
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: 无实测：两条真入口已 import 验证，待 bench
+  verified_on: null
+  next_probe:
+    surface: grid-tail
+    hypothesis: B=32、M=1 时 grid 若是 (B, grid_mn) 而非 (grid_mn, 1, B)，尾波至少浪费 31 个只搬 1 个 tile 的 batch；展平后应降 ≥10%
+    expected: M=1、B=32 档耗时降 ≥10%（同口径 3×MAD 内不显著就作废）
+    stop_if: 两种 grid 顺序实测差 <3×MAD ⇒ 说明尾波不是瓶颈，权重读取才是 → 改查 layout-pack 的 w 连续性
+    effort: 2h
+modify_path:
+  kind: replace-call
+  what: for 循环里的逐 batch GEMM 换成一个 batched 入口
+  how: 把 B 次 gemm_a16w16 换成一次 boltops.gemm.batched_gemm_bf16(x[B,M,K], w[B,N,K])，省 B-1 次 launch
+  requires: x/w 都是 rank-3 且 B 相同；布局必须连续（否则先 .contiguous()，计时口径要算上）
+surfaces:
+- grid-tail
+- layout-pack
+- split-k
+updated: '2026-11-23'
+baseline_ref:
+  impl: boltops.gemm.batched_gemm_bf16
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按入口签名数张量（x,w → y；bias 可选不计）；**未实测字节数，须用 --actual 校正**
+  note: bench 时拿这条当性能基准；lightop.fused_bmm 读 4 个张量，不得与它同榜
+hard_preconditions:
+- statement: boltops.gemm.batched_gemm_bf16 要求 x/w 都是 rank-3、batch 维相等，且 splitK 必须为 None
+  check: python3 -I -c "import inspect; from boltops.gemm.triton.batched_gemm_bf16 import batched_gemm_bf16 as f; s=inspect.getsource(f); assert 'splitK is None' in s and 'ndim == 3' in s"

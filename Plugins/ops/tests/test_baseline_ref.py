@@ -62,7 +62,8 @@ class TestBaselineRef(unittest.TestCase):
                 if r not in VALID_ROLES:
                     bad.append("%s: %s role=%r" % (cid, i.get("import_path"), r))
         self.assertEqual(bad, [], "以下 impl 的 role 非法或缺失：\n" + "\n".join(bad[:10]))
-        self.assertEqual(n, 105, "impl 总数应为 105（含 gemm-bf16 新增的 3 条）")
+        # 总数不写死：新增卡片会让它变。用下限防「卡片被误删」而不是精确值。
+        self.assertGreaterEqual(n, 105, "variant 总数不应少于 105（有卡片被误删？）")
 
     def test_primary_is_never_template_or_correctness_only(self):
         bad = []

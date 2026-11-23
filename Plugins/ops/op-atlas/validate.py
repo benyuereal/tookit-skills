@@ -44,7 +44,7 @@ LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
 ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "variants", "at_floor",
-               "baseline_ref",
+               "baseline_ref", "semantics",
                "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer",
                # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
                "modify_path",
@@ -315,6 +315,181 @@ def _check_gemm_regime(cards_dir, repo):
                          "必须写清分母是 1848（纯读）还是 1749（1:1）以及为什么" % p.name)
 
 
+def _check_semantics(cards_dir, repo):
+    """E36：semantics 块的内容校验（不只是字段存在）。
+
+    2026-11-23 事故：融合残差 RMSNorm 实际 2 读 2 写（268MB），
+    被按「1 输出」（201MB）算达成率，util 虚高 50%。
+    此后 semantics 成为必填，但只加了白名单没校验内容 ——
+    `semantics: {foo: bar}` 也能通过。
+
+    五条（缺一即 error）：
+      formula 非空字符串
+      inputs / outputs 非空列表，每项非空字符串
+      traffic_passes 是 mapping，reads/writes 都是正整数
+      traffic_passes.writes 必须等于 outputs 的个数
+        （不等就说明「写几份」与「产出几个」自相矛盾，这正是 201 vs 268 的来源）
+    """
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        sem = d.get("semantics")
+        if sem is None:
+            continue
+        where = p.name
+        if not isinstance(sem, dict):
+            err("E36", where, "semantics 必须是 mapping")
+            continue
+        extra = set(sem) - {"formula", "inputs", "outputs", "traffic_passes",
+                            "mutates_inputs"}
+        if extra:
+            err("E36", where, "semantics 未知字段 %s" % sorted(extra))
+
+        formula = sem.get("formula")
+        if not isinstance(formula, str) or not formula.strip():
+            err("E36", where, "semantics.formula 必须是非空字符串")
+
+        for key in ("inputs", "outputs"):
+            v = sem.get(key)
+            if not isinstance(v, list) or not v:
+                err("E36", where, "semantics.%s 必须是非空列表" % key)
+                continue
+            bad = [x for x in v if not isinstance(x, str) or not str(x).strip()]
+            if bad:
+                err("E36", where, "semantics.%s 含非字符串或空项：%r" % (key, bad[:3]))
+
+        tp = sem.get("traffic_passes")
+        if not isinstance(tp, dict):
+            err("E36", where, "semantics.traffic_passes 必须是 mapping")
+            continue
+        tw = set(tp) - {"reads", "writes", "passes", "source"}
+        if tw:
+            err("E36", where, "traffic_passes 未知字段 %s" % sorted(tw))
+        for k in ("reads", "writes"):
+            v = tp.get(k)
+            if not isinstance(v, int) or v <= 0:
+                err("E36", where,
+                    "semantics.traffic_passes.%s 必须是正整数（当前 %r）" % (k, v))
+        outs = sem.get("outputs")
+        w = tp.get("writes")
+        if isinstance(outs, list) and isinstance(w, int) and outs and w != len(outs):
+            err("E36", where,
+                "semantics.outputs 有 %d 项但 traffic_passes.writes=%d —— "
+                "「产出几个」与「写几份」不一致；201MB vs 268MB 的结论反转就源于此"
+                % (len(outs), w))
+
+
+def _check_impl_to_ceiling(cards_dir, repo):
+    """E29：「N 倍空间」的断言必须与实测对得上，且不许从单实现的数外推硬件上限。
+
+    2026-11-23 事故链（本仓库第四次）：
+      aiter.gemm_a8w8_opus 49.8 TF 是**一条实现**的数，
+      被写成「本机 fp8 只能到 49.8 ⇒ 11 倍空间」。
+      实际 torch._scaled_mm 498.5 TF（89%），空间只有 1.12 倍。
+
+    第一版只查 conclusion + ratio.vs，漏掉了藏在 ceiling.note 与
+    modify_path.how 里的错误断言——所以本函数现在扫全部文本字段。
+
+    三条独立判据（任一触发即 error）：
+      A. 「N 倍空间」出现在任何文本字段里查询（不只 conclusion）
+      B. 若宣称了倍数，与 constants 的 achievable 算出的实际倍数差 >50%
+      C. 写「N 倍空间」时必须有 competitor 的实测值 >= nominal 的 50%
+         （baseline_count>=2 不够——两条都慢仍是单视角）
+    """
+    import re
+    BOAST = re.compile(r"(本机.{0,10}只能到|还有\s*(\d+(?:\.\d+)?)\s*倍|"
+                       r"约?\s*(\d+(?:\.\d+)?)\s*倍空间|距\s*\S+\s*还有\s*\d+\s*倍)")
+    # 按精度读 achievable（constants.yaml 的 compute 段）
+    peak = _peak_constants(repo)
+    ach = {}
+    try:
+        import yaml as _y
+        cpath = repo / "Plugins/ops/skills/op-roofline/constants.yaml"
+        c = _y.safe_load(cpath.read_text(encoding="utf-8")) or {}
+        comp = c.get("compute") or {}
+        lay = comp.get("fp8_peak_layers") or {}
+        if lay.get("achievable_tf"):
+            ach["fp8"] = float(lay["achievable_tf"])
+            ach["fp8_nominal"] = float(lay.get("nominal_tf") or 560)
+        b16 = comp.get("bf16_gemm_peak_tf") or {}
+        if isinstance(b16, dict) and b16.get("value"):
+            ach["bf16"] = float(b16["value"])
+    except Exception:                                            # noqa: BLE001
+        pass
+
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+
+        # ---- 判据 A：扫全部文本字段
+        fields = [("conclusion", lv.get("conclusion")),
+                  ("ratio.vs", (lv.get("ratio") or {}).get("vs")),
+                  ("ceiling.note", (d.get("ceiling") or {}).get("note")),
+                  ("modify_path.how", (d.get("modify_path") or {}).get("how")),
+                  ("at_floor.falsifier", (d.get("at_floor") or {}).get("falsifier"))]
+        for h in d.get("hard_preconditions") or []:
+            if isinstance(h, dict):
+                fields.append(("hard_preconditions.statement", h.get("statement")))
+        hits = [(k, str(v)) for k, v in fields if v and BOAST.search(str(v))]
+        if not hits:
+            continue
+
+        m = None
+        for _, txt in hits:
+            m = BOAST.search(txt)
+            if m:
+                break
+        claimed = None
+        if m:
+            for g in m.groups()[1:]:
+                if g:
+                    try:
+                        claimed = float(g)
+                        break
+                    except ValueError:
+                        continue
+
+        # ---- 判据 B：宣称倍数 vs 实际倍数
+        if claimed is not None:
+            prec = "fp8" if "fp8" in str(d.get("id", "")).lower() or \
+                   "fp8" in str((lv.get("ratio") or {}).get("vs", "")).lower() else "bf16"
+            if prec in ach and ach[prec] > 0:
+                # 实际倍数 = achievable / 最好的实现值（用 ratio 反推：value = impl/nominal）
+                val = (lv.get("ratio") or {}).get("value")
+                if isinstance(val, (int, float)) and val > 0:
+                    nominal = ach.get(prec + "_nominal") or ach[prec]
+                    impl = float(val) * (nominal if prec == "fp8" else nominal)
+                    real = ach[prec] / impl if impl else None
+                    if real and abs(claimed - real) / real > 0.5:
+                        err("E29", p.name,
+                            "宣称「%g 倍空间」但按 constants 实际只有 %.2f 倍"
+                            "（宣称偏差 %.0f%%）；字段：%s"
+                            % (claimed, real, abs(claimed - real) / real * 100,
+                               ", ".join(k for k, _ in hits)))
+                        continue
+
+        # ---- 判据 C：必须有 >= nominal 50% 的 competitor 实测
+        nominal = ach.get("fp8_nominal") or ach.get("bf16") or None
+        strong = False
+        for v in d.get("variants") or []:
+            if not isinstance(v, dict) or v.get("role") != "competitor":
+                continue
+            if re.search(r"49\.8|30\.4|47\.[0-9]", str(v.get("cons"))):  # 已知慢实现族
+                continue
+            strong = True
+            break
+        if not strong:
+            err("E29", p.name,
+                "写了「N 倍空间」但没有任何「强 competitor」（实测 >= nominal 50%%）——"
+                "两条基线都慢时 baseline_count>=2 也不构成硬件上限的依据。"
+                "命中字段：%s" % ", ".join(k for k, _ in hits))
+
+
 def _check_pros_cons_substance(cards_dir, repo):
     """E30：pros/cons 每条必须有信息量（数字或具体标识）。
 
@@ -351,45 +526,6 @@ def _check_pros_cons_substance(cards_dir, repo):
         if bad:
             warns.append("[E30] %s: pros/cons 是空话（去掉不损失信息）：%s"
                          % (p.name, "; ".join(bad[:3])))
-
-
-def _check_impl_to_ceiling(cards_dir, repo):
-    """E29：impl_measured 的达成率不许被外推成「硬件上限 / 还有 N 倍空间」。
-
-    2026-11-23 事故（本仓库第四次同类）：
-      aiter.gemm_a8w8_opus 49.8 TF 是**一条实现**的数，
-      被写成「本机 fp8 只能到 49.8 ⇒ 11 倍空间」。
-      实际 torch._scaled_mm 498.5 TF（89%），空间只有 1.12 倍。
-      而 constants.yaml 里早就写了「49.8 只代表 opus 实现族」——读了但没遵守。
-
-    判据：卡片 conclusion / ratio.vs 里若出现「本机 X 只能到」/「N 倍空间」
-    且 baseline_count <= 1，判 error 要求先补第二条实现。
-    """
-    import re
-    BOAST = re.compile(r"(本机.{0,8}只能到|还有\s*\d+\s*倍|约?\s*\d+\s*倍空间)")
-    for p in sorted(cards_dir.glob("*.yaml")):
-        d, problem = _load_yaml(p)
-        if problem or not isinstance(d, dict):
-            continue
-        lv = d.get("last_verdict") or {}
-        if lv.get("status") not in ("measured", "tuned"):
-            continue
-        blob = " ".join(str(lv.get(k) or "") for k in ("conclusion",))
-        blob += " " + str((lv.get("ratio") or {}).get("vs") or "")
-        if not BOAST.search(blob):
-            continue
-        n = lv.get("baseline_count")
-        try:
-            n = int(n) if n is not None else None
-        except (TypeError, ValueError):
-            n = None
-        if n is not None and n <= 1:
-            err("E29", p.name,
-                "结论里断言了「只能到 / N 倍空间」，但 baseline_count=%d —— "
-                "单实现的数不许外推为硬件上限；先补第二条独立实现再下结论" % n)
-        elif n is None:
-            warns.append("[E29] %s: 结论里有「只能到 / N 倍空间」但没写 baseline_count —— "
-                         "无法确认是否只测了一个实现" % p.name)
 
 
 def _check_baseline_count(cards_dir, repo):
@@ -1191,6 +1327,7 @@ def validate(atlas, repo):
     # 不是方法极限。**没有 falsifier 的「到顶」等于把工具限制记成物理规律。**
     _check_impl_roles(cards_dir, repo)
     _check_baseline_count(cards_dir, repo)
+    _check_semantics(cards_dir, repo)
     _check_impl_to_ceiling(cards_dir, repo)
     _check_pros_cons_substance(cards_dir, repo)
     _check_gemm_regime(cards_dir, repo)

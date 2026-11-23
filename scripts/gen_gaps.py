@@ -39,8 +39,10 @@ STATE = ATLAS / ".gaps-state.json"     # 记录「连续几批 missing」，供 
 UNCOVERED = [
     ("all_reduce / all_gather", "属 RCCL，本仓库改不动其 kernel",
      "只能做重叠编排（归 engine 层，不是算子卡）"),
-    ("dequant_fp8_w4", "无公开入口，本机也没有可调用的 w4a16 反量化算子",
-     "需先有 w4a16 量化卡与可跑通的权重格式"),
+    # 2026-11-23 更正：此前写「无公开入口」是错的，实测三个入口都可导入
+    # （lightop.gemm_awq_w4a16_marlin / deepgemm.grouped_gemm_w4a16_nt_masked_entry /
+    #  deepgemm.moe_w4a16_groupwise_triton），已建 dequant-fp8-w4 卡。
+    # 仍缺的是**实测**：只做了 import 验证，没跑过性能与数值。
     ("sampling_top_p", "映射有、实测无；top-p 的判据（累积概率截断点）与 top-k 不同",
      "需先定 sampling 族的判据，再建 case"),
     ("moe_grouped_fp8_ll", "deepgemm 的 ll 路径要求 6D packed layout，本机造不出",

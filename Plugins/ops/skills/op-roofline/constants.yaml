@@ -127,6 +127,61 @@ compute:
     fp8_nominal_tf: 560
     bf16_nominal_tf: 280
 
+  # ---- fp8 三层峰值表（2026-11-23 修订；对应 PANORAMA §4.1）---------------
+  # 三层口径（与 compute 段开头一致）：
+  #   nominal     = 560 TF   —— 业主确认的规格口径（见上面的 nominal_peak_tf）
+  #   achievable  = 579.7 TF —— hipBLASLt 手工扫参 8192³ = 103.5% 名义
+  #   isa_ceiling = 686.5 TF —— 16×16×32 最宽 fp8 mmac 的理论天花板
+  # **achievable > nominal 不是矛盾，是规格书保守。achievable 才是达成率分母。**
+  #
+  # 为什么另两层不是顶层 TFLOPS 常数：
+  #   test_peak_constant.py 的 reproduce 契约要求「顶层 unit=TFLOPS 且
+  #   caliber∈{achievable,impl_measured}」的常数必须有仓内可跑的复跑脚本。
+  #   579.7 来自外部项目 hbird-gemm（本仓无扫参脚本；hipblaslt-bench 无执行位），
+  #   诚实结论只能是 unverified。作为**对照表条目**登记，可以完整写 caliber +
+  #   confidence + source，同时不伪造复跑脚本、不改 unit 骗过门禁。
+  #   下游引用时按 caliber 筛：达成率分母取 achievable，理论距离取 isa_ceiling。
+  fp8_peak_layers:
+    nominal_tf: 560
+    achievable_tf: 579.7
+    isa_ceiling_tf: 686.5
+    achievable:
+      value: 579.7
+      caliber: achievable
+      unit: TFLOPS
+      status: unverified       # 本仓不可复跑：来源在外部项目；hipblaslt-bench 无执行位
+      confidence: unverified
+      verified_on: 2026-11-23
+      source: >
+        PANORAMA v2（2026-11-23）§4.1，转引 hbird-gemm/docs/perf.md §3：
+        hipBLASLt fp8 8192³ = 579.7 TF（= 560 名义的 103.5%）。
+      verification_note: >
+        本机实测可达（2026-11-23，torch._scaled_mm 走 hipBLASLt 后端）：
+          8192³ = 2205.7 µs = 498.5 TF（89.0% of nominal 560）
+          4096³ =  300.3 µs = 457.6 TF（81.7%）
+        rel_l2 vs fp32 dequant matmul = 0.0017（数值正确）
+        复跑：python3 -I /tmp/verify_fp8_claim.py
+        PANORAMA 记录的 579.7 TF 来自 hbird-gemm/docs/perf.md §3（hipBLASLt 手工扫参），
+        比本机框架默认调用高 16%，差异来自 solution 枚举（见 STANDARDS 的 GEMM 三陷阱）。
+        ⇒ achievable 用 579.7（扫参可达），仅当 benchmark 也做过扫参时才对齐；
+          框架默认调用的下限是 498.5。
+      note: >
+        用 579.7 的前提：被比较的 benchmark **也做过 solution 扫参**；
+        若对方是框架默认调用（torch._scaled_mm 未枚举），分母改用 498.5 才公平。
+    isa_ceiling:
+      value: 686.5
+      caliber: nominal         # ISA 最宽 fp8 mmac 推出的理论天花板，非本机实测
+      unit: TFLOPS
+      status: derived
+      verified_on: 2026-11-23
+      source: >
+        PANORAMA §4.1：16×16×32 最宽 fp8 mmac 的 ISA ceiling = 686.5 TF。
+        与 op-hip-compile/references/isa-census.md 的
+        `v_mmac_f32_16x16x32_fp8_fp8`（fp8 主力，宽度 32 = bf16 的 2 倍）同源。
+      note: >
+        理论天花板，不是可达值：报达成率不要用它当分母（用 achievable 579.7）。
+        它只回答「离硬件理论极限还有多远」。
+
   fp8_impl_measured_tf:
     value: 49.8
     caliber: impl_measured
@@ -204,15 +259,50 @@ memory:
   stream_read_peak:
     value: 1724
     unit: GB/s
-    status: measured
-    source: "torch 大块流式只读 sum，卡 4（600 MHz 档）1712 / 卡 6（1150 MHz 档）1714，取 1724 为多次峰值"
+    status: unverified          # ← 2026-11-23 降级：无测量来源（原标 measured 是错的）
+    source: >
+      历史值 1724，长期被当作本机可达带宽分母。
+      PANORAMA v2（2026-11-23）§4.2 明确标注「**无测量来源，标 unverified**」。
+      本仓 `scripts/bw_calibrate.py` 与 `scripts/probe_stream.py` 均未复现到 1724。
     verified_on: 2026-10-27
-    note: "**与 sclk 锁频无关**。这是本机可达带宽的唯一可信分母。"
+    note: >
+      **仍是达成率分母（沿用 1724，不擅自改值）**，但它目前是 unverified：
+      引用它算出的 utilization 必须与下面的实测带宽并列双报，不许单报。
+      见 memory.measured_bandwidth 与 conflicts:peak-bw-definition。
+    measured_bandwidth:
+      # 两个来源并列记录，**不取平均、不挑好看的那个**。读写比不同不可直接互比。
+      bw_calibrate:
+        source: "scripts/bw_calibrate.py 本机实测（2026-11-23，sclk 1350 MHz）"
+        verified_on: 2026-11-23
+        status: measured
+        at_sclk_mhz: 1350
+        readings_gbs:
+          copy: 1051          # R+W（2× 字节）
+          mul: 1287           # R+W（2×）
+          add: 1634           # 2R+W（3×）
+          sum: 865            # 纯读（1×）
+        note: "**无一到 1724。** 各项读写比不同，不可互相加减；add 的 1634 是最接近 1724 的观测。"
+      panorama_add:
+        source: "PANORAMA v2（2026-11-23）§4.2：多次实测 add（2R+W）"
+        verified_on: 2026-11-23
+        status: measured
+        at_sclk_mhz: null     # PANORAMA 未记录时钟档位
+        readings_gbs: "1498~1605"
+        drift_pct: 7
+        note: >
+          PANORAMA 记 add 1498~1605，与 bw_calibrate 的 add 1634 相差约 2~9%，
+          且 PANORAMA **未注明时钟档位**（bw_calibrate 明记为 sclk 1350）。
+          两者同为 2R+W 口径，可比较；漂移 7% 落在跨次测量的正常波动内。
+          引用时须写明「哪个来源 + 哪个时钟档」。
   stream_copy_peak:
     value: 1350
     unit: GB/s
     status: measured
     source: "copy(R+W)，卡 4 1338 / 卡 6 1350"
+    note: >
+      与 bw_calibrate 的 copy 1051（2026-11-23，sclk 1350）差 ~28%——
+      两者口径同为 R+W 但实现不同（旧值来自 torch 大块拷贝）。
+      引用 copy 峰值时以同一次标定的数为一组，不要混用。
   spec_bandwidth:
     value: 1100
     unit: GB/s
@@ -229,12 +319,20 @@ conflicts:
     claim_b:
       text: "本机流式只读实测 = 1724 GB/s"
       used_by: ["op-sparse-mla/contract.yaml（2026-10-27 起）", "mem-only 变体达成率 94~97%"]
+      status_note: >
+        2026-11-23 复核：1724 本身**无测量来源**（PANORAMA §4.2 亦标 unverified），
+        本仓 bw_calibrate（sclk 1350）实测 add 1634 / copy 1051 / mul 1287 / sum 865，
+        无一到达 1724。但它仍是当前唯一在用的分母（改动会让全仓 utilization 一起跳），
+        故保留 1724 并显式降级为 unverified：引用时须与实测并列双报。
     impact: >
       同一份 955 GB/s 的实测数据：拿 1100 做分母是 87%（接近上限，别做了）；
       拿 1724 做分母是 55%（还有 1.8×）。**分母换了，优化该不该继续的结论就反了。**
     resolution: >
-      **一律用 1724（实测）做分母。** 标称值不是机器的能力，只是型号名。
+      **仍用 1724 做分母（不擅自改值），但它现在是 unverified。** 标称 1100 明确作废。
       凡是用 1100 算出来的达成率，都要按 1724 重算一遍再引用。
+      **新增要求**：1724 未经本仓复跑，凡引用它算出的 utilization，必须与
+      memory.stream_read_peak.measured_bandwidth 的实测值并列双报，不许单报。
+      待 bw_calibrate 在统一时钟档下复现出稳定值后，再据实替换 1724。
     action:
       - "passed op-sparse-mla/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"
       - "passed op-moe-w8a8/contract.yaml:floor.peak 1100 → 1724（status 改 measured）"

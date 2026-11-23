@@ -88,6 +88,70 @@ lightop 这类原地改写实现，必须显式声明「输入是否每轮克隆
 查 `--showpids` 发现 `python3 -m pytest tests/ -q`（PID 492471）在跑，
 不是自己的进程。该轮排序数据已标注作废。
 
+## 【GEMM 对标】必须用 swept hipBLASLt 当对手
+
+> 来源：PANORAMA v2 §3.3 × hbird-gemm `tune/opponent.py` 头注释；
+> 实操清单见 `TESTING.md` 第二节。**这一节不做，所有「我们对标厂商」的结论都会虚高。**
+
+**硬规则**：GEMM 性能对标时，baseline 必须是**做过 solution 扫参的 hipBLASLt**，
+不许拿「默认解 / 框架默认调用」当对手。理由是一条决定性事实：
+
+> `torch._scaled_mm` 拿到的 1.9 ms **不在** hipBLASLt 自己 252 个解里
+> （该 shape 最优 2.0998 ms）。**框架默认调用不是库最优**，对标必须手工扫参。
+
+### 三个陷阱（任踩一个，结论即作废）
+
+| # | 陷阱 | 错误做法 | 后果（实测） | 正确做法 |
+|---|---|---|---|---|
+| 1 | **启发式 ≠ 调优** | `--algo_method heuristic`，把默认解当最优 | 默认 232.0 µs vs 最优 210.9 µs，**差 10%**，把平局报成 **1.38× 领先** | 加 `--requested_solution -1` 枚举全部（如 51200×5120 M=1 有 97 个候选） |
+| 2 | **bare fp8 ≠ rowwise** | 不加 scale 参数 | hipBLASLt 搜的是**不同解空间**，同 shape **249.5 vs 210.9 µs，差 18%** | 必须 `--scaleA 2 --scaleB 2 --api_method c` |
+| 3 | **扫参的数不复测** | 直接用枚举结果当性能 | 枚举用低 iters，不可信 | 胜出 `solution_index` 单独 `--iters 100` 复测，**多次取 min** |
+
+### 推荐调用序列（8192³ fp8，hbird 实测可用）
+
+```bash
+BENCH=/opt/dtk/lib/hipblaslt/benchmark_tool/hipblaslt-bench
+
+# 第一步：枚举全部 solution
+$BENCH -m 8192 -n 8192 -k 8192 \
+  --a_type f8_r --b_type f8_r --c_type bf16_r --d_type bf16_r \
+  --compute_type f32_r --transA T --transB N \
+  --alpha 1 --beta 0 --initialization rand_int \
+  --activation_type None --print_kernel_info \
+  --scaleA 2 --scaleB 2 --api_method c \
+  --algo_method heuristic --requested_solution -1
+
+# 第二步：用胜出的 solution_index 单独复测（--iters 100，多次取 min）
+$BENCH <同上> --algo_method index --solution_index <N> --iters 100
+```
+
+### ⚠️ 本机限制：这条规则目前**无法在本机执行**
+
+`/opt/dtk/lib/hipblaslt/benchmark_tool/hipblaslt-bench` 在本机权限是
+`-rw-r--r--`（**没有可执行位**，`stat` 确认，ELF 可执行文件但不可 exec），
+**跑不起来**。所以：
+
+- 凡引用「已 swept hipBLASLt 对手」的结论，**必须标明数据不是在本机产生的**
+  （来自 PANORAMA / hbird-gemm / 其他环境），不得暗示本机可复跑。
+- 本机目前能做的替代是 `torch._scaled_mm`（走 hipBLASLt 后端）的默认调用——
+  但按上面的决定性事实，**它只代表「框架默认解」，不能代表库最优**，
+  引用时须注明「默认解，未扫参」。
+
+### 反向测试要求（由主线程实现测试代码）
+
+对标闸门必须能**抓住**「拿默认 solution 当基准」这种错误，不能只写在文档里。
+要求新增一条负向测试（与 `Plugins/ops/tests/test_baseline_policy.py` 同风格）：
+
+- **输入**：一个 benchmark 记录，其 baseline 标注为 hipBLASLt 默认 solution
+  （无 `--requested_solution -1` / 无 swept 证据）。
+- **判据**：校验器必须 **报 error**（不是 warning），错误文案要点明
+  「baseline 是默认解，未做 solution 枚举，不能当性能基准」。
+- **对照正向**：同一 shape 补上 swept solution_index 与 `--iters 100` 复测证据后，
+  同一校验器必须放行。
+
+> 这条测试的存在意义：陷阱 1 的 10% 差距恰好落在「看着像平局 / 像是领先」的区间，
+> 人眼审不出来，只能靠机器拦。
+
 ## 版本与文档一致性
 
 - 改动 skill 后：更新该 skill frontmatter `version` + 包根 `CHANGELOG.md`（SemVer）
