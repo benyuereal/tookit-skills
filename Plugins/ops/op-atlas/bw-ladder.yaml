@@ -64,10 +64,31 @@ layers:
     note: 上一版 1753 GB/s（2026-11-23，sclk=[1350, 1350]）→ 本版 1730 GB/s（sclk=[1350, 1350]）。差异来自 DPM 档位波动：同一台机同一张量，三次标定读到
       1988/1946/1946。**达成率引用时必须带本次的 sclk**。
   3_cross_row:
-    achievable: null
-    status: uncalibrated
-    reason: 未标定：需要 softmax over vocab / topk 这类跨行归约的代表 kernel
-    confidence: none
+    reference_gbs: null
+    status: measured_by_dim
+    confidence: medium
+    method:
+      script: （待固化到 scripts/bw_calibrate.py）
+      cmd: triton 手写 rowmax kernel，2GB 张量，纯读口径
+      read: 按归约维 D 查表取惩罚；不要用单一系数
+    by_reduction_dim:
+      '64':
+        gbs: 34
+        ratio_vs_copy: 0.02
+        note: D=64 时每行只有 128 B，一个 wave 都填不满，带宽塌到 copy 的 2%
+      '512':
+        gbs: 275
+        ratio_vs_copy: 0.16
+        note: D=512 时 1 KB/行，仍远未填满
+      '4096':
+        gbs: 1927
+        ratio_vs_copy: 1.11
+        note: D=4096 时 8 KB/行，纯读已能打满（超过 copy 是因为 copy 有写）
+    penalty_note: '**归约惩罚不是单一系数，是归约维 D 的函数。**2026-11-23 实测（triton rowmax，2GB，copy 分母 1735 GB/s）：D=64 →
+      34 GB/s（0.02）；D=512 → 275 GB/s（0.16）；D=4096 → 1927 GB/s（1.11）。原因是每行字节数：D=64 只有 128 B，一个 wave（64
+      lane × 16 B）都填不满，访存完全无法合并；D=4096 有 8 KB/行，能连续读满 wave。⇒ floor.py 对 cross-row 类算子必须按 D 查表，不许用 3_row_reduction
+      的 0.79。'
+    caveat: 只测了 rowmax（纯读）。带写回的 softmax 会更低（额外一次写 + exp）。D<64 的极端情形（如 topk over vocab 的 per-token 打分）未测。
   3_scatter_gather:
     achievable: null
     status: uncalibrated
