@@ -1,6 +1,6 @@
 ---
 name: op-gate
-description: "算子改动的判定门：四道门（执行身份 / 正确性 / 不变量 / 端到端 A-B）+ 四档决策（ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY）+ 回退与留痕。与 scripts/opverify.py 输出对齐，是 dcu-orchestrator 的 op-validate 节点依据。触发场景：改完 kernel 要判「能不能进生产」、A/B 结果有噪声拿不定、微基准快但端到端没收益该算哪种结论、精度对比过了还要不要跑不变量、要把结论写进台账或回退补丁。不适用：候选排序与中断后续跑走 op-optimize；PMC 瓶颈定位走 op-profiling。"
+description: "算子改动的判定门：五道门（执行身份 / 正确性 / 不变量 / 鲁棒性 / 端到端 A-B）+ 四档决策（ACCEPTED / REJECTED / INCONCLUSIVE / DIAGNOSTIC-ONLY）+ 回退与留痕。与 scripts/opverify.py 输出对齐，是 dcu-orchestrator 的 op-validate 节点依据。触发场景：改完 kernel 要判「能不能进生产」、A/B 结果有噪声拿不定、微基准快但端到端没收益该算哪种结论、精度对比过了还要不要跑不变量、要把结论写进台账或回退补丁。不适用：候选排序与中断后续跑走 op-optimize；PMC 瓶颈定位走 op-profiling。"
 version: 1.0.1
 author: DCU Toolkit Contributors
 license: MIT
@@ -58,6 +58,33 @@ gate0/1/2 任一 fail ⇒ REJECTED（后面不用跑；参考对比过了也不�
 ### gate3 端到端 A-B
 - **同进程交替执行**（interleaved），不是「先跑完基线再跑优化版」——后者会把频率/温度漂移算成收益；至少 3 轮，每轮取中位数，用 `opbench.significant(k=3)` 判。
 - 大 shape 的真实收益常常小于微基准：要补一个端到端口径（step 级 / 服务级），否则只能算 DIAGNOSTIC-ONLY；精度不能回退，端到端要带质量门（如固定评测集分数、HumanEval/GPQA 抽样）。
+
+### gate2b 鲁棒性：未见过的 shape + stress 数值
+
+**只在提交的形状上通过 ≠ 可靠。** 这是
+CompoundingKernel（arXiv:2611.19230）的裁决里我们唯一缺的一类：
+它的 L2/079 通过了所有 shape，但 FP16 stress 输入溢出，
+他们宁可从 1.62× 退到 0.48× 也不交。
+
+两类检查（`scripts/opcheck.py robustness`）：
+
+| 类 | 内容 | 为什么 |
+|---|---|---|
+| A 未见过的 shape | 与 `shapes.yaml` 声明**全部不同**的极端形状（非 2 的幂、跨 tile 边界、topk=1 退化） | 只在提交形状上过 = 考试题和练习题一样 |
+| B stress 数值 | 同一 shape 灌 `huge / tiny / mixed_sign / denormal / zeros` | 溢出、下溢、对消误差只在极端值下暴露 |
+
+**判定口径（三条，缺一会让门失效）**：
+- 只有「参考正常、被测异常」才算**抓到**；
+- **参考自己也溢出 → SKIP**，不算抓到（那什么都没证明）；
+- **变体跑不起来 → ERROR**，不算抓到（否则缺后端会被记成「检查有效」——
+  我们第一版就是这样抓到 12 例假阳性，真信号被淹掉）。
+
+> **门本身要被验证**：`--selftest-flaw` 注入一个「平时正确、极端处错」的变体。
+> 如果连它都抓不到，说明门没生效。CI 里跑这一条并要求 `--require-catch`。
+
+真实收获示例：`fused-add-rmsnorm` 的 A 类检查探出
+`lightop.RMSNormAdd` 要求归一化维度 ≥ 64（H=4/3/5 直接 `cols >= 64 INTERNAL ASSERT FAILED`），
+已记进该卡 `hard_preconditions`。
 
 ## 二、四档决策
 

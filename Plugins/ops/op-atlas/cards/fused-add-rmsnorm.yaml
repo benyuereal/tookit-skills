@@ -76,6 +76,8 @@ hard_preconditions:
   check: python3 -I -c "import lightop,torch; m=lightop.RMSNormAdd(512,eps=1e-6).cuda().to(torch.bfloat16); m(torch.randn(8,512,dtype=torch.bfloat16,device='cuda'),torch.randn(8,512,dtype=torch.bfloat16,device='cuda'))"
 - statement: 分步实现必须用 fp32 算 rms，否则 bf16 累加误差大
   check: 对比 fused 与 split 的 max_abs（本卡实测相对误差中位数 1.6e-3）
+- statement: lightop.RMSNormAdd 要求归一化维度 >= 64
+  check: H=4/3/5 等小维度直接报 "cols >= 64 INTERNAL ASSERT FAILED"；由 opcheck robustness 的「未见过的 shape」当类自动探到（2026-11-23）
 soft_preconditions:
 - 建议 hot 态
 - M 越大融合收益越高（1.70x → 2.39x），小 M 时固定开销占比高

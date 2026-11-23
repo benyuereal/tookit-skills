@@ -46,6 +46,14 @@ jobs:
           python3 -I scripts/evalrate.py --selftest
           python3 -I scripts/geomean.py --selftest
 
+      - name: 鲁棒性门自检（注入已知缺陷，必须抓到）
+        # 业主验收：一例都没抓到说明检查没生效。
+        # 用 --selftest-flaw 注入一个「平时正确、极端处错」的变体。
+        run: |
+          python3 -I scripts/opcheck.py robustness \
+            --contract Plugins/ops/skills/op-fused-add-rmsnorm/contract.yaml \
+            --variants ref-heavy --shape decode-m1 --selftest-flaw --require-catch
+
       - name: op-atlas INDEX 与卡片同步
         # INDEX 是生成物。手改了卡片没跑 sync_index.py，这里红。
         run: python3 -I Plugins/ops/op-atlas/sync_index.py --check

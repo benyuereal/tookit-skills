@@ -28,6 +28,7 @@
 
 import argparse
 import importlib
+import re
 import json
 import os
 import sys
@@ -191,6 +192,308 @@ def cmd_correctness(a):
     out["verdict"] = "pass" if all_pass else "fail"
     _write_json(a.json, out)
     return 0 if all_pass else 1
+
+
+# ------------------------------------------------------------------ robustness
+
+# 未见过的 shape：与卡片 shapes.yaml 里声明的**全部形状都不同**。
+# 为什么必须测：只在提交的形状上通过，等于「考试题和练习题一样」。
+# CompoundingKernel 的 L2/079 就是通过了所有 shape，但 FP16 stress 输入溢出，
+# 他们宁可从 1.62× 退到 0.48× 也不交——**检查的意义在于能拦住东西**。
+UNSEEN_SHAPES = [
+    {"S": 1, "H": 4, "D": 64, "topk": 8},        # 极小：边界/取整
+    {"S": 7, "H": 3, "D": 96, "topk": 33},       # 非 2 的幂、奇数
+    {"S": 129, "H": 5, "D": 160, "topk": 65},    # 跨 tile 边界（128+1）
+    {"S": 2, "H": 64, "D": 128, "topk": 1},      # topk=1 退化
+]
+
+# stress 数值：不是「更大」，是**更坏**。溢出/下溢/非有限值。
+STRESS_PATTERNS = ["huge", "tiny", "mixed_sign", "denormal", "zeros"]
+
+
+def _stress_fill(t, torch, pattern, seed):
+    """按 pattern 往张量里灌 stress 数值。返回 (张量, 描述)。"""
+    g = torch.Generator(device=t.device).manual_seed(seed)
+    finfo_max = torch.finfo(t.dtype).max if t.is_floating_point() else 1e4
+    if pattern == "huge":
+        v = finfo_max / 8.0
+        t.fill_(v)
+        return t, "填 %.3e（接近 dtype 上限的 1/8，压 fp16/bf16 的累加）" % v
+    if pattern == "tiny":
+        v = float(torch.finfo(t.dtype).tiny) if t.is_floating_point() else 1e-30
+        t.fill_(v)
+        return t, "填 %.3e（最小正规数，压下溢）" % v
+    if pattern == "denormal":
+        v = float(torch.finfo(t.dtype).tiny) / 2.0 if t.is_floating_point() else 1e-38
+        t.fill_(v)
+        return t, "填 %.3e（次正规数）" % v
+    if pattern == "mixed_sign":
+        # 一半最大正、一半最大负：压对消误差
+        t.zero_()
+        half = t.numel() // 2
+        flat = t.view(-1)
+        flat[:half] = finfo_max / 8.0
+        flat[half:] = -finfo_max / 8.0
+        return t, "一半 +max/8、一半 -max/8（压对消误差）"
+    if pattern == "zeros":
+        t.zero_()
+        return t, "全 0（压除零/归一化）"
+    return t, "未知 pattern"
+
+
+FLAW_VARIANT = "__selftest_flaw__"
+
+
+def _first_runnable(mod, variants, a, params):
+    """取第一个能正常构造的变体，作为注入缺陷的底座。"""
+    for v in variants:
+        if v == FLAW_VARIANT:
+            continue
+        try:
+            return mod.get_runner(v, tilelang_root=a.tilelang_root,
+                                 **mod.runner_kwargs(params))
+        except Exception:  # noqa: BLE001
+            continue
+    raise RuntimeError("没有可用的底座变体，无法注入缺陷")
+
+
+def _flawed_runner(real_run, kind):
+    """构造一个**已知有缺陷**的 runner，用于证明鲁棒性门生效。
+
+    缺陷刻意做成「平时完全正确，只在极端处错」——这正是真实世界里漏检的那类：
+      kind=stress：输出首元素注入 inf（模拟溢出）
+      kind=unseen：输出整体加 1（模拟「边界形状下索引算错」）
+    如果这套检查连它都抓不到，说明检查没生效（业主的验收要求）。
+    """
+    def _poison(out, kind):
+        import torch
+        if isinstance(out, torch.Tensor):
+            t = out.clone()
+            if kind == "stress":
+                if t.is_floating_point() and t.numel():
+                    t.view(-1)[0] = float("inf")
+            else:
+                if t.is_floating_point():
+                    t = t + 1.0
+            return t
+        if isinstance(out, (list, tuple)):
+            return type(out)(_poison(x, kind) for x in out)
+        return out
+
+    def _run(*inp):
+        return _poison(real_run(*inp), kind)
+    return _run
+
+
+def _all_finite(torch, x):
+    """参考/被测输出可能是 tensor / tuple / dict。全部为有限才返回 True；
+    拿不到任何 tensor 返回 None（判不了，调用方应 SKIP 而不是判错）。
+    """
+    items = []
+    if isinstance(x, torch.Tensor):
+        items = [x]
+    elif isinstance(x, (list, tuple)):
+        items = [t for t in x if isinstance(t, torch.Tensor)]
+    elif isinstance(x, dict):
+        items = [t for t in x.values() if isinstance(t, torch.Tensor)]
+    if not items:
+        return None
+    for t in items:
+        if t.is_floating_point() and not bool(torch.isfinite(t).all().item()):
+            return False
+    return True
+
+
+def _known_params(card, mod, shape_arg):
+    """取一个已知形状的 params 作为「键名原型」。"""
+    try:
+        shape = resolve_shape(card, mod, shape_arg)
+        return dict(shape.get("params") or {})
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _derive_unseen(proto, sp):
+    """把通用极端值映射到本卡实际的参数键名上。
+
+    规则：按键名做语义匹配（大小写不敏感），匹配不到就保持原型值不动。
+    匹配不到时返回 None —— 说明这张卡的形状参数与 attention 风格差太远，
+    硬造一个「没见过的形状」没有意义，跳过比瞎造好。
+    """
+    if not proto:
+        return None
+    want = {"s": sp["S"], "seq": sp["S"], "seqlen": sp["S"], "l": sp["S"],
+            "m": sp["S"], "n": sp["S"],
+            "h": sp["H"], "heads": sp["H"], "hidden": sp["H"],
+            "d": sp["D"], "dim": sp["D"], "head_dim": sp["D"],
+            "topk": sp["topk"], "k": sp["topk"]}
+    out = dict(proto)
+    matched = False
+    for k in list(out):
+        low = str(k).lower()
+        if low in want and isinstance(out[k], (int, float)):
+            out[k] = want[low]
+            matched = True
+    return out if matched else None
+
+
+def cmd_robustness(a):
+    """未见过的 shape + stress 数值：检查能不能拦住东西。
+
+    两类检查，任一构造出「参考实现正常但被测变体错/崩」就算抓到。
+    退出码：0 = 两类都过；1 = 至少一例不通过（**这是正常且想要的结果**）；2 = adapter 契约问题。
+
+    注意语义：本命令报 FAIL **不是坏事**——它证明检查有效。
+    真正的坏结果是一例都没抓到（见 --require-catch）。
+    """
+    card, contract, mod = load_card(a.contract, a.adapter)
+    max_abs, cosine = tolerance(contract)
+    try:
+        import torch
+    except ImportError:
+        print("ERROR: robustness 检查需要 torch", file=sys.stderr)
+        return 2
+
+    known = set()
+    try:
+        known = set((parse_yaml((card / "shapes.yaml").read_text(encoding="utf-8")) or {}).keys())
+    except Exception:  # noqa: BLE001
+        pass
+
+    out = {"op": contract.get("op"), "kind": "robustness",
+           "tolerance": {"max_abs": max_abs, "cosine": cosine},
+           "unseen_shape": {}, "stress": {}, "caught": 0}
+    variants = _split_arg(a.variants)
+    # --selftest-flaw：故意插一个**已知有缺陷**的变体，用来证明这套检查有效。
+    # 每张卡都可以跑它：如果连这个构造的缺陷都抓不到，说明检查没生效。
+    if a.selftest_flaw:
+        variants = variants + ["__selftest_flaw__"]
+
+    # ---- 一类：未见过的 shape
+    # 参数键名必须**取自本卡某个已知形状**（不同卡的 params 键不一样：
+    # attention 卡是 S/H/D，moE 卡是 M/H/E/K）。硬塞一套键名只会全 SKIP。
+    print("== A 类：未见过的 shape（卡片声明 %d 个形状，以下均不在其中）==" % len(known))
+    proto = _known_params(card, mod, a.shape)
+    for sp in UNSEEN_SHAPES:
+        params = _derive_unseen(proto, sp)
+        if params is None:
+            continue
+        key = ",".join("%s=%s" % (k, params[k]) for k in sorted(params)
+                       if isinstance(params[k], (int, float)))
+        params["effective_ratio"] = 1.0
+        try:
+            inputs = mod.build_inputs(params, seed=a.seed, device=a.device)
+            ref = mod.reference(*inputs[:-1], params=params, chunk=4)
+        except Exception as e:  # noqa: BLE001
+            # 参考实现都造不出来 ⇒ 这个 shape 对本卡无意义，跳过（不算抓到）
+            print("  SKIP %-28s 参考实现不支持：%s" % (key, str(e)[:60]))
+            out["unseen_shape"][key] = {"status": "skip", "reason": str(e)[:120]}
+            continue
+        for v in variants:
+            try:
+                if v == FLAW_VARIANT:
+                    base = _first_runnable(mod, variants, a, params)
+                    run = _flawed_runner(base, "unseen")
+                else:
+                    run = mod.get_runner(v, tilelang_root=a.tilelang_root,
+                                         **mod.runner_kwargs(params))
+                got, _ = mod.run_isolated(run, *inputs[:-1])
+                m = _cmp(mod, got, ref)
+                ok = m["max_abs"] <= max_abs and m["cosine"] >= cosine
+                if not ok:
+                    out["caught"] += 1
+                out["unseen_shape"][key] = {"status": "pass" if ok else "fail",
+                                            "variant": v, "max_abs": m["max_abs"]}
+                print("  %s   %-28s %-12s max_abs=%.3e（限 %.1e）"
+                      % ("PASS" if ok else "FAIL", key, v, m["max_abs"], max_abs))
+            except Exception as e:  # noqa: BLE001
+                # 「跑不起来」不等于「鲁棒性有问题」。
+                # 变体未接入 / 缺后端时**不算抓到**——否则任何缺失都会被记成
+                # 「检查有效」，把真信号淹掉（本卡第一版就是这样抓到 12 例假的）。
+                out["unseen_shape"][key] = {"status": "error", "variant": v,
+                                            "reason": "%s: %s" % (type(e).__name__, e)}
+                print("  ERROR  %-28s %-12s 跑不起来（不计入抓到）：%s"
+                      % (key, v, str(e)[:60]))
+
+    # ---- 二类：stress 数值（在**已声明**的形状上灌极端值）
+    print("== B 类：stress 数值（同一 shape，灌极端值）==")
+    shape = resolve_shape(card, mod, a.shape)
+    base_params = dict(shape.get("params") or {})
+    base_params["effective_ratio"] = 1.0
+    for pattern in STRESS_PATTERNS:
+        try:
+            inputs = mod.build_inputs(base_params, seed=a.seed, device=a.device)
+        except Exception as e:  # noqa: BLE001
+            print("  SKIP %-12s 造不出输入：%s" % (pattern, str(e)[:60]))
+            continue
+        filled, desc = [], []
+        for t in inputs[:-1]:
+            if isinstance(t, torch.Tensor) and t.is_floating_point():
+                t2, d = _stress_fill(t.clone(), torch, pattern, a.seed)
+                filled.append(t2)
+                desc.append(d)
+            else:
+                filled.append(t)
+        if not desc:
+            print("  SKIP %-12s 该卡没有浮点输入" % pattern)
+            continue
+        try:
+            ref = mod.reference(*filled, params=base_params, chunk=4)
+            ref_finite = _all_finite(torch, ref)
+        except Exception as e:  # noqa: BLE001
+            print("  SKIP %-12s 参考实现自己就崩：%s" % (pattern, str(e)[:50]))
+            continue
+        if ref_finite is None:
+            print("  SKIP %-12s 参考输出不是 tensor，无法判有限性" % pattern)
+            continue
+        if ref_finite is False:
+            # 参考实现自己也溢出 ⇒ 这个 stress 对本卡无意义。
+            # **不能算「抓到」**——否则默认实现会被记成「检查有效」，
+            # 而我们其实什么都没证明（CompoundingKernel 的检查是在
+            # 「参考正常、被测异常」时才算抓到）。
+            print("  SKIP %-12s 参考实现自己也溢出（该 stress 对本卡无意义）" % pattern)
+            continue
+        for v in variants:
+            try:
+                if v == FLAW_VARIANT:
+                    base = _first_runnable(mod, variants, a, base_params)
+                    run = _flawed_runner(base, "stress")
+                else:
+                    run = mod.get_runner(v, tilelang_root=a.tilelang_root,
+                                         **mod.runner_kwargs(base_params))
+                got, _ = mod.run_isolated(run, *filled)
+                got_ok = _all_finite(torch, got)
+                if ref_finite and not got_ok:
+                    # **这是最有价值的一类**：参考正常，被测变体溢出
+                    out["caught"] += 1
+                    out["stress"]["%s/%s" % (pattern, v)] = {
+                        "status": "fail", "reason": "输出含 inf/nan，参考实现却全有限"}
+                    print("  FAIL   %-12s %-12s 输出含 inf/nan（参考全有限）—— 正是这类要抓" % (pattern, v))
+                    continue
+                m = _cmp(mod, got, ref)
+                ok = m["max_abs"] <= max_abs and m["cosine"] >= cosine
+                if not ok:
+                    out["caught"] += 1
+                out["stress"]["%s/%s" % (pattern, v)] = {
+                    "status": "pass" if ok else "fail", "max_abs": m["max_abs"]}
+                print("  %s   %-12s %-12s max_abs=%.3e" % ("PASS" if ok else "FAIL", pattern, v, m["max_abs"]))
+            except Exception as e:  # noqa: BLE001
+                out["stress"]["%s/%s" % (pattern, v)] = {
+                    "status": "error", "reason": "%s: %s" % (type(e).__name__, e)}
+                print("  ERROR  %-12s %-12s 跑不起来（不计入抓到）：%s"
+                      % (pattern, v, str(e)[:60]))
+
+    print()
+    print("抓到 %d 例不通过。" % out["caught"])
+    if a.require_catch and out["caught"] == 0:
+        print("⚠ --require-catch：一例都没抓到 —— 说明**检查没生效**，不是代码没问题。",
+              file=sys.stderr)
+        out["verdict"] = "check_ineffective"
+        _write_json(a.json, out)
+        return 1
+    out["verdict"] = "ok"
+    _write_json(a.json, out)
+    return 0
 
 
 # ------------------------------------------------------------------ invariants
@@ -389,6 +692,15 @@ def build_parser():
                    help="tail=厂商口径；head 只用于探测「只支持队尾」的实现")
     c.add_argument("--ref-chunk", type=int, default=4, help="参考实现按 query 分块")
 
+    rb = sub.add_parser("robustness",
+                        help="未见过的 shape + stress 数值（能拦住才说明检查有效）")
+    common(rb)
+    rb.add_argument("--variants", required=True, help="逗号分隔")
+    rb.add_argument("--require-catch", action="store_true",
+                    help="一例都没抓到就判失败（证明检查有效，CI 用）")
+    rb.add_argument("--selftest-flaw", action="store_true", dest="selftest_flaw",
+                    help="注入一个已知有缺陷的变体，证明检查能抓到东西")
+
     i = sub.add_parser("invariants", help="gate2：参考对比抓不到的结构性错误")
     common(i)
     i.add_argument("--variant", required=True)
@@ -405,7 +717,8 @@ def build_parser():
 
 def main(argv=None):
     a = build_parser().parse_args(argv)
-    fn = {"correctness": cmd_correctness, "invariants": cmd_invariants, "padding": cmd_padding}[a.cmd]
+    fn = {"correctness": cmd_correctness, "invariants": cmd_invariants,
+          "padding": cmd_padding, "robustness": cmd_robustness}[a.cmd]
     try:
         return fn(a)
     except AdapterError as e:
