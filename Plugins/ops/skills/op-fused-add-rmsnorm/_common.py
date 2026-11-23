@@ -133,7 +133,7 @@ def compare(a, b):
 
 
 def achieved_bandwidth(median_ms, meta):
-    """带宽达成率。分母固定用实测峰值 1724 GB/s，不用标称 1100。"""
-    peak_gbs = 1724.0
+    """带宽达成率。分母用实测 1680 GB/s（bw-ladder 1:1 档，本卡 2R2W），不用标称 1100。"""
+    peak_gbs = 1680.0
     gbs = meta["bytes_fused"] / (median_ms * 1e-3) / 1e9
     return {"achieved_gbs": gbs, "peak_gbs": peak_gbs, "ratio": gbs / peak_gbs}

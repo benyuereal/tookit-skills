@@ -100,7 +100,7 @@ def main(argv=None):
         print("  copy R+W : %6.0f GB/s   (%.4f ms)" % (bw["copy_gbs"], bw["copy_ms"]))
         print("  caveat 小 buffer 会命中 L2 测出虚高（实测见过 4571 GB/s），这里用 1GB")
     else:
-        bw = {"read_only_gbs": 1724.0, "copy_gbs": 1350.0}
+        bw = {"read_only_gbs": 1965.0, "copy_gbs": 1680.0}  # bw-ladder 实测
 
     print("\n== 2. 融合 vs 分拆（M=%d H=%d bf16）==" % (M, H))
     try:

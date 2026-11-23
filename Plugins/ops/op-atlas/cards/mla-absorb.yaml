@@ -47,7 +47,7 @@ ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: bandwidth
-  note: decode M=1，每步只读 KV；分母用流式只读峰值 1724（实测口径）
+  note: decode M=1，每步只读 KV；分母用 bw-ladder 1:1 档 1680（实测，本卡 2R2W）
 shapes:
 - decode-m1
 - decode-m32
@@ -58,14 +58,14 @@ last_verdict:
   ratio:
     kind: utilization
     unit: ratio
-    value: 0.35
-    vs: achievable 流式只读峰值 1724 GB/s 的达成率（KV=32768, B=8）
+    value: 0.359
+    vs: achievable 流式只读峰值 1680 GB/s 的达成率（KV=32768, B=8）
     scope:
       cards: 1
       in_len: KV=32768
       out_len: B=8 H=32 d_qk=576 d_v=512
       warmup: hot
-      note: 达成率随形状变：KV=2048 为 0.12、B=1/KV=8192 只有 0.07；同字节 copy 能到 1227 GB/s，差 3.02×
+      note: 达成率随形状变：KV=2048 为 0.12、B=1/KV=8192 只有 0.07；同字节 copy 能到 1227 GB/s，差 3.02× ｜ 2026-11-23 分母 1724→1680（1:1 档实测，见 bw-ladder.yaml）；value 0.35→0.359
   conclusion: MLA decode 达峰值 0.35（KV=32768/B=8）；短 KV 与小 batch 只有 0.07~0.12
   verified_on: '2026-11-23'
   evidence:

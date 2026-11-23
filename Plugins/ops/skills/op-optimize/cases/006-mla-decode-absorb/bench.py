@@ -9,7 +9,7 @@
 判据
 ----
 decode 是 memory-bound（每步只读 KV，M=1）。所以达成率的分母用
-**流式峰值带宽 1724 GB/s**，不是算力。字节数 = 有效 KV 字节
+**流式峰值带宽 1680 GB/s**（bw-ladder 1:1 档），不是算力。字节数 = 有效 KV 字节
 （`KV · B · d_qk · 2B`），不含 block_table 与输出。
 
 轮次
@@ -33,7 +33,7 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 RESULTS = HERE / "results"
-BW_PEAK = 1724.0
+BW_PEAK = 1680.0
 
 
 def check_ceiling(gbs, peak, what):

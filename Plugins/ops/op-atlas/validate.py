@@ -827,6 +827,27 @@ def _check_evidence(cards_dir, repo):
               % (len(missing), ", ".join(sorted(missing))), file=sys.stderr)
 
 
+def _bandwidth_modes(repo):
+    """读 bw-ladder.yaml 的四档 achievable —— E18 允许引用其中任一档。
+
+    单一 stream_read_peak 只代表「纯读」，但 R2W2 的算子该用 1:1 档、
+    R2W1 该用 2:1 档。E18 早期只认单一常数，会把正确的分档引用判成错。
+    """
+    p = repo / "Plugins/ops/op-atlas/bw-ladder.yaml"
+    if not p.is_file():
+        return set()
+    try:
+        import yaml
+        d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:                                            # noqa: BLE001
+        return set()
+    out = set()
+    for k, node in (d.get("layers") or {}).items():
+        if isinstance(node, dict) and node.get("achievable") and k.startswith("2_"):
+            out.add(float(node["achievable"]))
+    return out
+
+
 def _peak_constants(repo):
     """从 constants.yaml 取两个达成率分母：bf16 峰值 TFLOPS、流式峰值带宽 GB/s。
 
@@ -1310,10 +1331,14 @@ def validate(atlas, repo):
                 m = PEAK_CLAIMS["bw"].search(vs)
                 if m and peak_bw is not None:
                     got = float(m.group(1))
-                    if abs(got - peak_bw) / peak_bw > 0.02:
+                    # 允许引用 bw-ladder 的任一档（1:1 / 2:1 / 纯读 / 纯写），
+                    # 因为它们都是同一台机的实测值；只拒绝「不在任何一档里」的数。
+                    allowed = {peak_bw} | _bandwidth_modes(repo)
+                    if not any(abs(got - a) / a <= 0.02 for a in allowed):
                         err("E18", where,
-                            "vs 里写的流式峰值带宽 %g 与 constants.yaml 实测 %g 不符"
-                            "——达成率分母必须引用实测值" % (got, peak_bw))
+                            "vs 里写的流式峰值带宽 %g 不在实测档位里（constants=%g，"
+                            "bw-ladder 各档=%s）——达成分母必须引用实测值"
+                            % (got, peak_bw, sorted(allowed)))
 
     # ---- E1b INDEX 指向的卡必须存在
     for m in re.findall(r"cards/([a-z0-9-]+)\.yaml", index_txt):

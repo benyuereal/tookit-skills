@@ -192,9 +192,10 @@ def render(cards, missing, mismatched, streak):
     L.append("")
     L.append("| 常数 | 值 | 现状 | 实测参考 | 补的前提 |")
     L.append("|---|---|---|---|---|")
-    L.append("| `memory.stream_read_peak` | 1724 GB/s | **只有断言，无测量记录** | "
-             "`scripts/bw_calibrate.py` 实测：copy 1051 / mul 1287 / add 1634 / sum 865 GB/s"
-             "（2026-11-23，sclk 1350），**无一到 1724** | 跑 `bw_calibrate.py` 并据实改值，或标 unverified |")
+    L.append("| ~~`memory.stream_read_peak`~~ | **已修** 1965 GB/s | "
+             "2026-11-23 标定：纯读 1965 / 纯写 1692 / 1:1 1680 / 2:1 1730"
+             "（2GB 张量 + triton 手写 + 16 组扫参，sclk 1350）。"
+             "旧值 1724 已作废，五张卡的 ratio 已按读写比换档重算 | 见 `op-atlas/bw-ladder.yaml` |")
     L.append("")
     L.append("> 这是「分母错了 10 倍」那类问题的第三次：1100 标称 → 185 反推 → 540 无来源。")
     L.append("> 前三次都是「分母的来源不是本仓库能跑的测量」。现在补了 `bw_calibrate.py`，")

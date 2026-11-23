@@ -196,11 +196,32 @@ def cal_uncalibrated(name, why):
             "confidence": "none"}
 
 
+def _sclk_series(seconds=3.0):
+    """测量期间轮询 sclk，返回 (min, max)。
+
+    只读一次是不够的：GEMM/带宽负载会把 DPM 推档，标定开始前 1200、跑起来可能 1350。
+    分母必须记「测量期间的档位」，不能记开始前那一次。
+    """
+    import time as _t
+    vals = []
+    t0 = _t.time()
+    while _t.time() - t0 < seconds:
+        v = _sclk()
+        if v:
+            vals.append(v)
+        _t.sleep(0.5)
+    if not vals:
+        return None, None
+    return min(vals), max(vals)
+
+
 def build(torch):
+    import yaml
     ladder = {
         "version": 1,
         "date": time.strftime("%Y-%m-%d"),
-        "sclk_mhz": _sclk(),
+        "sclk_mhz_idle": _sclk(),
+        "sclk_mhz_load": None,   # 下面 modes 测完后填（那时时钟还在负载档）
         "method": "CUDA event median, warmup 5",
         "layers": {
             "1_nominal": {
@@ -222,10 +243,31 @@ def build(torch):
         },
     }
     modes = calibrate_modes(torch)
+    # 测量刚结束、时钟尚未回落时采样，这才是「负载档」
+    ladder["sclk_mhz_load"] = list(_sclk_series(2.0))
     ladder["layers"]["2_read_only"] = modes.get("read_only")
     ladder["layers"]["2_write_only"] = modes.get("write_only")
     ladder["layers"]["2_rw_1to1"] = modes.get("rw_1to1")
     ladder["layers"]["2_rw_2to1"] = modes.get("rw_2to1")
+    # 与上一版对账：值变了就把旧值写进 note。
+    # 手工补 note 会被下一次生成覆盖——所以必须在生成器里做。
+    if LADDER.is_file():
+        try:
+            prev = yaml.safe_load(LADDER.read_text(encoding="utf-8")) or {}
+            for k, node in (modes or {}).items():
+                lay_key = {"read_only": "2_read_only", "write_only": "2_write_only",
+                           "rw_1to1": "2_rw_1to1", "rw_2to1": "2_rw_2to1"}[k]
+                old = ((prev.get("layers") or {}).get(lay_key) or {}).get("achievable")
+                new = ladder["layers"].get(lay_key, {}).get("achievable")
+                if old and new and old != new:
+                    ladder["layers"][lay_key]["note"] = (
+                        "上一版 %d GB/s（%s，sclk=%s）→ 本版 %d GB/s（sclk=%s）。"
+                        "差异来自 DPM 档位波动：同一台机同一张量，三次标定读到 "
+                        "1988/1946/1946。**达成率引用时必须带本次的 sclk**。"
+                        % (old, prev.get("date"), prev.get("sclk_mhz_load"),
+                           new, ladder.get("sclk_mhz_load")))
+        except Exception:                                        # noqa: BLE001
+            pass
     return ladder
 
 
@@ -249,8 +291,8 @@ def render_yaml(ladder):
 
 def render_md(ladder):
     L = ["# 带宽阶梯（bw-ladder）", "",
-         "> 由 `scripts/bw_calibrate.py` 生成，勿手改。日期 %s，sclk %s MHz。"
-         % (ladder["date"], ladder["sclk_mhz"]),
+         "> 由 `scripts/bw_calibrate.py` 生成，勿手改。日期 %s。"
+         % ladder["date"],
          ">",
          "> **跳层就是这个文件的由来。** 1724 的直接断言造成了五次分母错。",
          "> 判「还能优化多少」必须走 ②→③→④，不许跳。", ""]

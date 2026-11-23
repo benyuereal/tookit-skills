@@ -233,3 +233,42 @@ class TestPeakConstant(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBandwidthModes(unittest.TestCase):
+    """E18 必须接受 bw-ladder 的四档，而不是只认单一常数。
+
+    2026-11-23：1724 被替换成实测四档（纯读 1965 / 纯写 1692 / 1:1 1680 / 2:1 1730）。
+    单一 stream_read_peak 只代表纯读，但 R2W2 的算子该用 1:1 档。
+    E18 早期只认单一常数，会把正确的分档引用判成错——这就是「判据本身没被校验」。
+
+    本测试守两头：
+      A. 四档都能通过
+      B. 档位之外的值（1100 标称 / 1724 作废值）仍被拦
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "_val_bw", str(REPO / "Plugins/ops/op-atlas/validate.py"))
+        cls.v = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(cls.v)
+        except SystemExit:                                   # pragma: no cover
+            raise unittest.SkipTest("validate.py 导入失败")
+
+    def test_four_modes_read_from_ladder(self):
+        modes = self.v._bandwidth_modes(REPO)
+        self.assertEqual(len(modes), 4, "bw-ladder 应有四档，实得 %s" % sorted(modes))
+        for m in modes:
+            self.assertGreater(m, 1500, "档位值异常低：%s" % m)
+
+    def test_stream_read_peak_matches_ladder_read_only(self):
+        import yaml
+        c = yaml.safe_load((REPO / "Plugins/ops/skills/op-roofline/constants.yaml")
+                           .read_text(encoding="utf-8"))
+        peak = c["memory"]["stream_read_peak"]["value"]
+        modes = self.v._bandwidth_modes(REPO)
+        self.assertIn(float(peak), modes,
+                      "constants 的 stream_read_peak=%s 必须是 bw-ladder 的一档" % peak)

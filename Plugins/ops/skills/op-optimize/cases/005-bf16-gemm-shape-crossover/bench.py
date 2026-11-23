@@ -14,7 +14,7 @@
 判据（先定判据再测）
 --------------------
 用「时间 / 两个地板」谁更小：
-  内存地板 = 字节 / 1724 GB/s
+  内存地板 = 字节 / 1730 GB/s（bw-ladder 2:1 档）
   算力地板 = FLOPs / 310 TF
 两者比值的倒数就是各自的理论加速比。哪个地板在实测里先顶到，就是那个约束。
 **不靠肉眼看 TFLOPS 数字跳动定性。**
@@ -34,7 +34,7 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 RESULTS = HERE / "results"
-BW_PEAK = 1724.0          # constants.yaml:memory.stream_read_peak（实测流式只读）
+BW_PEAK = 1730.0          # bw-ladder.yaml 2_rw_2to1（GEMM 是 2 读 1 写）
 
 
 def bench(fn, rounds=11, warmup=5):

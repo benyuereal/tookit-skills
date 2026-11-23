@@ -274,7 +274,7 @@ def compare(a, b):
 
 def achieved_bandwidth(median_ms, meta, fused=True):
     """带宽达成率。分母固定用实测峰值，不用标称。"""
-    peak_gbs = 1724.0
+    peak_gbs = 1680.0   # bw-ladder 1:1 档（等语义 2R2W）
     nbytes = meta["bytes_fused"] if fused else meta["bytes_unfused"]
     gbs = nbytes / (median_ms * 1e-3) / 1e9
     return {"achieved_gbs": gbs, "peak_gbs": peak_gbs, "ratio": gbs / peak_gbs}

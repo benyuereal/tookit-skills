@@ -58,14 +58,15 @@ last_verdict:
   ratio:
     kind: utilization
     unit: ratio
-    value: 0.643
-    vs: 流式峰值 1724 GB/s 的达成率（等语义：2 读 2 写 = 268 MB，与 lightop 对齐）
+    value: 0.66
+    vs: 流式峰值 1680 GB/s 的达成率（等语义：2 读 2 写 = 268 MB，与 lightop 对齐）
     scope:
       cards: 1
       in_len: M=8192
       out_len: H=4096
       warmup: hot
-      note: 等语义口径 242.2 µs（64 buffer 轮换、40 次中位、MAD 1.4 µs）。分母 1724 未标定，实测 elementwise 上限 1498 对应 util=0.74。**早前记的 0.63/183µs 只写 1 份输出（201 MB），比 lightop 少 25% 的活，已作废**
+      note: 等语义口径 242.2 µs（64 buffer 轮换、40 次中位、MAD 1.4 µs）。分母 1724 未标定，实测 elementwise 上限 1498 对应 util=0.74。**早前记的 0.63/183µs 只写 1 份输出（201 MB），比 lightop 少 25% 的活，已作废** ｜ 2026-11-23 分母 1724→1680（1:1 档实测，见
+        bw-ladder.yaml）；value 0.643→0.66
   evidence:
   - path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-vs-lightop.json
     sha256: 8fe64dbca242c8df4efcf761dd0a2729c155a92248af9b4938ab6fe381f58e75

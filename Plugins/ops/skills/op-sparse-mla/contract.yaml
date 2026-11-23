@@ -70,9 +70,9 @@ gates:
 
 floor:
   metric: hbm_bandwidth
-  peak: 1724
+  peak: 1965
   unit: GB/s
-  basis: "每 query-head 需从 DRAM 取 topk 个 token 的 576*2B（无跨 head 复用）；实际读取字节/峰值带宽=理论下限。峰值取**本机流式只读实测值** 1724 GB/s（卡 4 1712 / 卡 6 1714，与 sclk 锁频无关）"
+  basis: "每 query-head 需从 DRAM 取 topk 个 token 的 576*2B（无跨 head 复用）；实际读取字节/峰值带宽=理论下限。峰值取 **bw-ladder.yaml 的纯读实测值** 1965 GB/s（2026-11-23 标定，2GB 张量 + triton 手写 + 16 组扫参，sclk 1350）。历史值 1724 已作废：本仓两个探针从未复现出它"
   source: "torch 大块流式只读实测（kb/op-opt/sparse-mla-20261027.md §9.1）；型号标称 1100 GB/s 不作为分母，见 op-roofline/constants.yaml:conflicts:peak-bw-definition"
   status: measured
   verified_on: 2026-10-27

@@ -58,13 +58,13 @@ last_verdict:
     kind: throughput
     unit: GB/s
     value: 780
-    vs: moe_sum 带宽 GB/s（相对 achievable 流式峰值 1724 为 0.45）
+    vs: moe_sum 带宽 GB/s（相对 achievable 流式峰值 1730 为 0.45）
     scope:
       cards: 1
       in_len: M=8192 K=4
       out_len: H=4096
       warmup: hot
-      note: bf16；加权求和（combine 的 reduce 段）
+      note: bf16；加权求和（combine 的 reduce 段） ｜ 2026-11-23 分母 1724→1730（2:1 档实测，见 bw-ladder.yaml）；value 780→见 vs
   conclusion: moe_sum 达 780 GB/s（峰值 0.45），是 combine 段的实测基线
   verified_on: '2026-11-23'
   next_probe:

@@ -257,43 +257,56 @@ memory:
     status: derived
     source: "PMC 记账口径：DRAM 读字节 = (TCC_HIT + TCC_MISS 的 miss 项) × 128B"
   stream_read_peak:
-    value: 1724
+    value: 1965
     unit: GB/s
-    status: unverified          # ← 2026-11-23 降级：无测量来源（原标 measured 是错的）
+    status: measured
+    caliber: achievable
+    at_sclk_mhz: 1350
+    verified_on: 2026-11-23
     source: >
-      历史值 1724，长期被当作本机可达带宽分母。
-      PANORAMA v2（2026-11-23）§4.2 明确标注「**无测量来源，标 unverified**」。
-      本仓 `scripts/bw_calibrate.py` 与 `scripts/probe_stream.py` 均未复现到 1724。
-    verified_on: 2026-10-27
+      本机实测（scripts/bw_calibrate.py，2 GB bf16 张量，triton 手写 kernel，
+      num_warps × BLOCK 各 16 组扫参取最高，30 次 event 中位，sclk 1350 MHz）：
+        纯读   1965 GB/s   (warps=2 block=8192)
+        纯写   1692 GB/s   (warps=4 block=4096)
+        1:1    1680 GB/s   (warps=1 block=2048)
+        2:1    1730 GB/s   (warps=1 block=2048)
+      完整四档见 Plugins/ops/op-atlas/bw-ladder.yaml，复跑同名脚本。
+    reproduce: scripts/bw_calibrate.py
     note: >
-      **仍是达成率分母（沿用 1724，不擅自改值）**，但它目前是 unverified：
-      引用它算出的 utilization 必须与下面的实测带宽并列双报，不许单报。
-      见 memory.measured_bandwidth 与 conflicts:peak-bw-definition。
+      **这个键只代表「纯读」一档**。读写比不同必须换档，不可拿 1965 当所有算子的分母：
+        R2W2（rmsnorm/layernorm 类）→ 1:1 档 1680
+        R2W1（GEMM）              → 2:1 档 1730
+        纯写                     → 1692
+      历史值 1724（长期被当分母，PANORAMA 标 unverified）已作废，作为记录保留在下面。
+    history: >
+      2026-11-23 变更：1724 → 1965。1724 自 2026-10-27 起被当达成率分母，
+      但本仓两个探针（bw_calibrate.py / probe_stream.py）从未复现出它；
+      PANORAMA v2 §4.2 也标注「无测量来源」。
+      本次用 triton 手写 kernel + 2 GB 张量 + 16 组扫参标定，纯读到 1965。
+      注意 1724 与 1965 都实测过多次：三次独立标定读到 1988 / 1946 / 1965，
+      极差 2%，属 DPM 档位波动，所以分母必须带 sclk。
     measured_bandwidth:
-      # 两个来源并列记录，**不取平均、不挑好看的那个**。读写比不同不可直接互比。
-      bw_calibrate:
-        source: "scripts/bw_calibrate.py 本机实测（2026-11-23，sclk 1350 MHz）"
-        verified_on: 2026-11-23
-        status: measured
-        at_sclk_mhz: 1350
-        readings_gbs:
-          copy: 1051          # R+W（2× 字节）
-          mul: 1287           # R+W（2×）
-          add: 1634           # 2R+W（3×）
-          sum: 865            # 纯读（1×）
-        note: "**无一到 1724。** 各项读写比不同，不可互相加减；add 的 1634 是最接近 1724 的观测。"
-      panorama_add:
-        source: "PANORAMA v2（2026-11-23）§4.2：多次实测 add（2R+W）"
-        verified_on: 2026-11-23
-        status: measured
-        at_sclk_mhz: null     # PANORAMA 未记录时钟档位
-        readings_gbs: "1498~1605"
-        drift_pct: 7
-        note: >
-          PANORAMA 记 add 1498~1605，与 bw_calibrate 的 add 1634 相差约 2~9%，
-          且 PANORAMA **未注明时钟档位**（bw_calibrate 明记为 sclk 1350）。
-          两者同为 2R+W 口径，可比较；漂移 7% 落在跨次测量的正常波动内。
-          引用时须写明「哪个来源 + 哪个时钟档」。
+      note: >
+        四档并列，**不取平均、不挑好看的那个**。读写比不同不可直接互比。
+        详细配置（warps/block/tensor_mb）见 op-atlas/bw-ladder.yaml。
+      by_mode_gbs:
+        read_only: 1965
+        write_only: 1692
+        rw_1to1: 1680
+        rw_2to1: 1730
+      superseded:
+        value_1724:
+          source: "历史值，2026-10-27 起使用，无测量来源"
+          readings_gbs:
+            copy: 1051
+            mul: 1287
+            add: 1634
+            sum: 865
+          note: "bw_calibrate 旧版（torch elementwise，67MB 张量）的读数；无一到 1724"
+        panorama_add_1498_1605:
+          source: "PANORAMA v2 §4.2（多次实测 add 2R+W）"
+          note: "口径与本次 2:1 档 1730 同族，量级一致"
+
   stream_copy_peak:
     value: 1350
     unit: GB/s

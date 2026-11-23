@@ -58,13 +58,13 @@ last_verdict:
     kind: throughput
     unit: GB/s
     value: 485
-    vs: M=8192 档带宽（GB/s，相对 achievable 流式峰值 1724 为 0.28）
+    vs: M=8192 档带宽（GB/s，相对 achievable 流式峰值 1680 为 0.29）
     scope:
       cards: 1
       in_len: M=8192
       out_len: H=4096
       warmup: hot
-      note: bf16；M=1024 时 213 GB/s，M=8192 时 485 GB/s
+      note: bf16；M=1024 时 213 GB/s，M=8192 时 485 GB/s ｜ 2026-11-23 分母 1724→1680（1:1 档实测，见 bw-ladder.yaml）；value 485→见 vs
   conclusion: 带宽随 M 上升：M=1024 为 213 GB/s、M=8192 为 485 GB/s（后者达峰值 0.28）
   verified_on: '2026-11-23'
   next_probe:

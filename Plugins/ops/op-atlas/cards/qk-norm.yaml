@@ -59,13 +59,13 @@ last_verdict:
     kind: throughput
     unit: GB/s
     value: 741
-    vs: 融合后带宽 GB/s（相对 achievable 流式峰值 1724 为 0.43）
+    vs: 融合后带宽 GB/s（相对 achievable 流式峰值 1680 为 0.44）
     scope:
       cards: 1
       in_len: B=8 S=2048
       out_len: H=32 D=128
       warmup: hot
-      note: qk-norm 与 rope 融合；同形状 rope 单独为 338 GB/s
+      note: qk-norm 与 rope 融合；同形状 rope 单独为 338 GB/s ｜ 2026-11-23 分母 1724→1680（1:1 档实测，见 bw-ladder.yaml）；value 741→见 vs
   conclusion: qk-norm+rope 融合达 741 GB/s，是 rope 单独（338）的 2.19 倍
   verified_on: '2026-11-23'
   next_probe:

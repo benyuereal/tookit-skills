@@ -21,7 +21,7 @@
 
 机器平衡点 = peak_tf/bw。fp8 achievable 579.7e12（constants.yaml:fp8_peak_layers）
 除以带宽实测（bw_calibrate：add 1634 GB/s 为观测最高）≈ 355 FLOP/B。
-注意 1724 已被标 unverified（无测量来源），不要用它算平衡点。
+通量分母用 bw-ladder 实测（纯读 1965 / 2:1 档 1730）。历史值 1724 已作废。
 
 推论（可直接指导设计，不必试）：
   1. **decode 是访存受限**，杠杆是「把 next_n / 跨 query 的复用并进 GEMM 的 N 维」= 重构数据流，

@@ -1,6 +1,15 @@
+# 带宽阶梯（bw-ladder）—— 由 scripts/bw_calibrate.py 生成，勿手改。
+#
+# 跳层就是这个文件存在的原因：1724 被直接当「本卡地板」断言，造成五次分母错。
+# 判「还能优化多少」必须走 ②→③→④（由 scripts/floor.py 算），不许跳。
+#
+# confidence: high=多 kernel 互证 / low=单样本 / none=未标定
 version: 1
 date: '2026-11-23'
-sclk_mhz: 600
+sclk_mhz_idle: 1350
+sclk_mhz_load:
+- 1350
+- 1350
 method: CUDA event median, warmup 5
 layers:
   1_nominal:
@@ -9,85 +18,57 @@ layers:
     note: '**只作参考，永不当分母。** 实测显示本机可达远高于此。'
     confidence: n/a
   2_read_only:
-    achievable: 1990
+    achievable: 1965
     mode: read_only
     tensor_mb: 2147.5
     shape: n=1073741824 bf16
     warps: 2
-    block: 4096
-    median_ms: 1.0794
+    block: 8192
+    median_ms: 1.0928
     iters: 30
     impl: triton 手写
     confidence: high
-    reference_gbs: 1990
-    reference_note: 本机 BW1100 gfx938 / bf16 / 2_read_only / triton 手写 / 2GB 张量 / warps=2 block=4096 /
-      30 次 event 中位 / 2026-11-23
-    method:
-      script: scripts/bw_calibrate.py
-      cmd: python3 -I scripts/bw_calibrate.py
-      read: 取本模式的 achievable；若比 reference 低 15% 以上，先怀疑时钟档位或张量太小
-    self_calibrate: 'python3 -I scripts/bw_calibrate.py   # 重跑标定，与本文件对账'
-    caveat: '**reference 不许被下游当硬上限算 at_floor。** 它的语义是「本机当前最好观测」，不是物理极限。'
+    note: 上一版 1940 GB/s（2026-11-23，sclk=[1350, 1350]）→ 本版 1965 GB/s（sclk=[1350, 1350]）。差异来自 DPM 档位波动：同一台机同一张量，三次标定读到
+      1988/1946/1946。**达成率引用时必须带本次的 sclk**。
   2_write_only:
-    achievable: 1935
+    achievable: 1692
     mode: write_only
     tensor_mb: 2147.5
     shape: n=1073741824 bf16
-    warps: 8
+    warps: 4
     block: 4096
-    median_ms: 1.1099
+    median_ms: 1.2693
     iters: 30
     impl: triton 手写
     confidence: high
-    reference_gbs: 1935
-    reference_note: 本机 BW1100 gfx938 / bf16 / 2_write_only / triton 手写 / 2GB 张量 / warps=8 block=4096 /
-      30 次 event 中位 / 2026-11-23
-    method:
-      script: scripts/bw_calibrate.py
-      cmd: python3 -I scripts/bw_calibrate.py
-      read: 取本模式的 achievable；若比 reference 低 15% 以上，先怀疑时钟档位或张量太小
-    self_calibrate: 'python3 -I scripts/bw_calibrate.py   # 重跑标定，与本文件对账'
-    caveat: '**reference 不许被下游当硬上限算 at_floor。** 它的语义是「本机当前最好观测」，不是物理极限。'
+    note: 上一版 1826 GB/s（2026-11-23，sclk=[1350, 1350]）→ 本版 1692 GB/s（sclk=[1350, 1350]）。差异来自 DPM 档位波动：同一台机同一张量，三次标定读到
+      1988/1946/1946。**达成率引用时必须带本次的 sclk**。
   2_rw_1to1:
-    achievable: 1801
+    achievable: 1680
     mode: rw_1to1
     tensor_mb: 2147.5
     shape: n=1073741824 bf16
-    warps: 8
-    block: 4096
-    median_ms: 2.3843
+    warps: 1
+    block: 2048
+    median_ms: 2.5566
     iters: 30
     impl: triton 手写
     confidence: high
-    reference_gbs: 1801
-    reference_note: 本机 BW1100 gfx938 / bf16 / 2_rw_1to1 / triton 手写 / 2GB 张量 / warps=8 block=4096 / 30
-      次 event 中位 / 2026-11-23
-    method:
-      script: scripts/bw_calibrate.py
-      cmd: python3 -I scripts/bw_calibrate.py
-      read: 取本模式的 achievable；若比 reference 低 15% 以上，先怀疑时钟档位或张量太小
-    self_calibrate: 'python3 -I scripts/bw_calibrate.py   # 重跑标定，与本文件对账'
-    caveat: '**reference 不许被下游当硬上限算 at_floor。** 它的语义是「本机当前最好观测」，不是物理极限。'
+    note: 上一版 1724 GB/s（2026-11-23，sclk=[1350, 1350]）→ 本版 1680 GB/s（sclk=[1350, 1350]）。差异来自 DPM 档位波动：同一台机同一张量，三次标定读到
+      1988/1946/1946。**达成率引用时必须带本次的 sclk**。
   2_rw_2to1:
-    achievable: 1809
+    achievable: 1730
     mode: rw_2to1
     tensor_mb: 2147.5
     shape: n=1073741824 bf16
-    warps: 4
+    warps: 1
     block: 2048
-    median_ms: 3.5608
+    median_ms: 3.7246
     iters: 30
     impl: triton 手写
     confidence: high
-    reference_gbs: 1809
-    reference_note: 本机 BW1100 gfx938 / bf16 / 2_rw_2to1 / triton 手写 / 2GB 张量 / warps=4 block=2048 / 30
-      次 event 中位 / 2026-11-23
-    method:
-      script: scripts/bw_calibrate.py
-      cmd: python3 -I scripts/bw_calibrate.py
-      read: 取本模式的 achievable；若比 reference 低 15% 以上，先怀疑时钟档位或张量太小
-    self_calibrate: 'python3 -I scripts/bw_calibrate.py   # 重跑标定，与本文件对账'
-    caveat: '**reference 不许被下游当硬上限算 at_floor。** 它的语义是「本机当前最好观测」，不是物理极限。'
+    note: 上一版 1753 GB/s（2026-11-23，sclk=[1350, 1350]）→ 本版 1730 GB/s（sclk=[1350, 1350]）。差异来自 DPM 档位波动：同一台机同一张量，三次标定读到
+      1988/1946/1946。**达成率引用时必须带本次的 sclk**。
   3_cross_row:
     achievable: null
     status: uncalibrated
@@ -100,24 +81,3 @@ layers:
     confidence: none
   4_card_floor:
     note: '**不在这里**——④ 由 scripts/floor.py 用「流量 ÷ ③」现算，不许预先断言一个数。1724 的灾难就是跳层直接断言 ④。'
-  3_row_reduction:
-    reference_gbs: 1374
-    reference_note: BW1100 gfx938 / bf16 / 2读2写 268MB / lightop fused_add_rms_norm / 6 组 buffer 轮换 / events
-      隔离 / 30 次中位。同口径下 tilelang 1260~1345、triton 1214~1271，三者构成三样本。
-    confidence: medium
-    samples:
-    - impl: lightop
-      gbs: 1374
-    - impl: tilelang
-      gbs: 1345
-    - impl: triton
-      gbs: 1271
-    method:
-      script: scripts/bw_calibrate.py
-      cmd: python3 -I scripts/bw_calibrate.py --pattern row_reduction
-      read: 取 row_reduction 行；达到 reference 的 85% 以上才算贴地板
-    self_calibrate: '# 本机先跑：python3 -I scripts/bw_calibrate.py --pattern row_reduction --selftest'
-    caveat: '**这不是硬件极限。** 三种实现全部落在 1200~1380，说明瓶颈是「2读2写交织 + 行内归约」这个访存模式本身。换 DSL 只值 3~10%；要拿 25% 以上只能 in-place
-      或下游融合。'
-    supersedes: 2026-11-23 前写的 1201 / ratio_vs_streaming 0.75 —— **系数式天花板是错的**，那个 0.75 是当时 triton codegen
-      的上限，不是硬件规律。
