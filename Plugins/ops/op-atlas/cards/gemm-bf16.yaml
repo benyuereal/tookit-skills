@@ -177,6 +177,9 @@ last_verdict:
     verdict: at_floor
     denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
     updated: '2026-11-24'
+    achieved_gbs: 190.8
+    achieved_tf: 260.5
+    precision: bf16
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择

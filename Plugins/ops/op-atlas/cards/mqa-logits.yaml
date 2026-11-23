@@ -113,6 +113,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 427.1
 modify_path:
   kind: env-flag
   what: 切 grouped 分组调度

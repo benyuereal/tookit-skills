@@ -227,6 +227,9 @@ last_verdict:
     verdict: structural
     denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
     updated: '2026-11-24'
+    achieved_gbs: 121.7
+    achieved_tf: 498.5
+    precision: fp8
 modify_path:
   kind: replace-call
   what: 换掉 aiter opus 这一族实现

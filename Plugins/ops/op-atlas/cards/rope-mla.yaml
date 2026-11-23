@@ -84,6 +84,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 421.3
 modify_path:
   kind: replace-call
   what: MLA 的 rope 走 flash_mla 内置路径

@@ -92,5 +92,66 @@ class TestFloorBlock(unittest.TestCase):
         self.assertTrue(self.run_check(bad), "floor 未知字段必须报错")
 
 
+class TestCeilingOverrun(unittest.TestCase):
+    """E40：算出来的带宽/算力不许超过本机 achievable 的 102%。
+
+    这一组是「判据本身要被判据」的产物——第一版写完看起来对，
+    跑反向测试才发现两个真 bug：
+      ① 用 bf16 的 279 去卡 fp8 的 498.5 → fp8 卡被误判成错；
+      ② 改完后又用 fp8 的 579.7 去放行 bf16 的 400 → bf16 超标蒙混过关。
+    所以这里两类精度各测「合法」与「超标」两侧，不许只测一边。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.v = _load_validator()
+
+    def peaks(self):
+        return self.v._achievable_peaks(REPO)
+
+    def run_check(self, floor):
+        errs = []
+        self.v._check_floor_block({"floor": floor}, "t.yaml",
+                                  lambda c, w, m: errs.append((c, m)), self.peaks())
+        return [c for c, _ in errs]
+
+    BASE = {"remaining": 0.05, "t_floor_us": 100.0, "t_actual_us": 105.0,
+            "basis": "x", "verdict": "at_floor", "binding": "memory"}
+
+    def test_nominal_is_not_a_cap(self):
+        """1100 标称绝不能被当成 achievable 上限。"""
+        peaks = self.peaks()
+        self.assertNotIn(1100.0, peaks["bw"],
+                         "bw-ladder 的 1_nominal(1100) 不许进 achievable 集合")
+
+    def test_bandwidth_within_cap_passes(self):
+        self.assertEqual(
+            self.run_check(dict(self.BASE, achieved_gbs=1600.0)), [])
+
+    def test_bandwidth_over_cap_is_error(self):
+        self.assertEqual(
+            self.run_check(dict(self.BASE, achieved_gbs=2100.0)), ["E40"])
+
+    def test_bandwidth_inside_tolerance_passes(self):
+        """1965×1.02=2004，落在容差内不算错（sclk 档位波动是 2%）。"""
+        self.assertEqual(
+            self.run_check(dict(self.BASE, achieved_gbs=2000.0)), [])
+
+    def test_bf16_compute_over_cap_is_error(self):
+        self.assertEqual(
+            self.run_check(dict(self.BASE, achieved_tf=400.0, precision="bf16")),
+            ["E40"], "bf16 400 TF 超过 279 的 102%，必须报错")
+
+    def test_fp8_is_not_judged_by_bf16_cap(self):
+        """498.5 TF 是 fp8 的正常值，不许被 bf16 的 279 卡住。"""
+        self.assertEqual(
+            self.run_check(dict(self.BASE, achieved_tf=498.5, precision="fp8")), [])
+
+    def test_fp8_over_cap_is_error(self):
+        self.assertEqual(
+            self.run_check(dict(self.BASE, achieved_tf=700.0, precision="fp8")),
+            ["E40"], "fp8 700 TF 超过 579.7 的 102%，必须报错")
+
+
 if __name__ == "__main__":
     unittest.main()

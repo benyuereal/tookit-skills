@@ -110,6 +110,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 1017.9
 surfaces:
 - fusion-boundary
 - layout-pack

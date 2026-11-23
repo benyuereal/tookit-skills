@@ -107,6 +107,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 18.6
 modify_path:
   kind: replace-call
   what: 专家内激活换成融合实现

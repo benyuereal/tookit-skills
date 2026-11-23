@@ -633,15 +633,105 @@ def _check_impl_to_ceiling(cards_dir, repo):
                 "命中字段：%s" % ", ".join(k for k, _ in hits))
 
 
-def _check_floor_block(lv, where, err):
+_ACHIEVABLE_PEAKS = {}      # validate() 开头填一次；E40 只读（{bw:[], bf16:, fp8:}）
+
+
+FLOOR_FIELDS = {"remaining", "t_floor_us", "t_actual_us", "binding", "basis",
+                "verdict", "denominator_source", "updated", "t_source",
+                # E40 用来做「超出 achievable」判定的两个数
+                "denominator_gbs", "denominator_tf", "achieved_gbs", "achieved_tf",
+                "precision"}
+
+
+def _achievable_peaks(repo):
+    """读本机的 achievable 上限：带宽按档，算力**按精度分开**。
+
+    只认 achievable。nominal（1100 标称、560 标称）与 impl_measured（49.8）
+    都不进这个集合 —— 用它们当上限会让 E40 把正确结论误判成错。
+
+    算力必须分精度存：fp8 上限 579.7、bf16 上限 279，把它们塞进同一个集合
+    再用 max() 取，bf16 的 400 TF 会被 fp8 的 579.7 放行——
+    第一版就是这样，反向测试里 `bf16 400 -> []` 当场暴露。
+    """
+    import yaml
+    out = {"bw": [], "bf16": None, "fp8": None}
+    ladder = repo / "Plugins/ops/op-atlas/bw-ladder.yaml"
+    if ladder.is_file():
+        lad = yaml.safe_load(ladder.read_text(encoding="utf-8")) or {}
+        for name, node in (lad.get("layers") or {}).items():
+            if not isinstance(node, dict):
+                continue
+            # 1_nominal 是产品名 1100，文件自己写着「只作参考，永不当分母」。
+            # 把它读进上限集合，E40 就会用 1100 当上限——正是它要防的错。
+            if name.startswith("1_") or node.get("confidence") == "n/a":
+                continue
+            v = node.get("achievable")
+            if isinstance(v, (int, float)) and v:
+                out["bw"].append(float(v))
+    const_p = repo / "Plugins/ops/skills/op-roofline/constants.yaml"
+    if const_p.is_file():
+        c = yaml.safe_load(const_p.read_text(encoding="utf-8")) or {}
+        comp = c.get("compute") or {}
+        bf = comp.get("bf16_gemm_peak_tf")
+        if isinstance(bf, dict) and bf.get("value"):
+            out["bf16"] = float(bf["value"])
+        fp8 = (comp.get("fp8_peak_layers") or {}).get("achievable_tf")
+        if fp8:
+            out["fp8"] = float(fp8)
+    return out
+
+
+def _check_ceiling_overrun(lv, where, err, peaks):
+    """E40：算出来的带宽/算力不许超过本机 achievable 的 102%。
+
+    背景（2026-11-24）：本仓最贵的错误全是「分母错了 → 结论方向反」。
+    前五次是人工发现；这一次把它变成机器判据。
+
+    判据只看 floor 块里**自己声明的**实测量：
+      achieved_gbs = 该实现的实测带宽；achieved_tf = 实测算力。
+    若它们超过 achievable 上限 2% 以上，只有两种可能：
+      a) 分母错（用了 nominal 或 impl_measured 当上限）
+      b) 字节/FLOPs 算多了
+    两种都必须停下来查，不许当成「我们突破了上限」。
+
+    **为什么用 102% 而不是 100%**：sclk 有档位波动（三次标定 1988/1946/1965，
+    极差 2%），卡在 100% 会产生假警报。而 2% 以上的超出不存在测量解释。
+    """
+    f = lv.get("floor")
+    if not isinstance(f, dict):
+        return
+    tol = 1.02
+    bw_caps = peaks.get("bw") or []
+    gbs = f.get("achieved_gbs")
+    if isinstance(gbs, (int, float)) and gbs:
+        cap = max(bw_caps) if bw_caps else None
+        if cap and gbs > cap * tol:
+            err("E40", where,
+                "floor.achieved_gbs=%.0f 超过本机 achievable 带宽 %.0f 的 102%% "
+                "—— 先查分母与字节数，这不是突破" % (gbs, cap))
+    tf = f.get("achieved_tf")
+    if isinstance(tf, (int, float)) and tf:
+        # 算力分精度：fp8 上限 579.7、bf16 上限 279，是两回事。
+        # 拿 bf16 的去卡 fp8 会造出假警报（fp8 卡当场被判错）；
+        # 拿 fp8 的去放行 bf16 会漏判（bf16 400 TF 蒙混过关）。两侧都试过才定这个写法。
+        prec = str(f.get("precision") or lv.get("_precision") or "bf16")
+        cap = peaks.get("fp8") if prec == "fp8" else peaks.get("bf16")
+        if cap and tf > cap * tol:
+            err("E40", where,
+                "floor.achieved_tf=%.1f 超过本机 achievable %s 算力 %.1f 的 102%% "
+                "—— 先查分母（nominal/impl_measured 不许当上限）" % (tf, prec, cap))
+
+
+def _check_floor_block(lv, where, err, peaks=None):
     """E39：last_verdict.floor 必须自洽，否则它只是一个好看的数字。
 
     背景（2026-11-24）：`floor.remaining` 是本维度唯一的地基，
-    但它极易被「填一个数」糊弄过去。四条硬判据：
+    但它极易被「填一个数」糊弄过去。五条硬判据：
       ① 必须有 basis（数据量怎么算的、分母哪来的）与 t_floor_us；
       ② remaining 必须 = t_actual/t_floor - 1，容差 2%（防止改了 t 不重算）；
       ③ verdict 必须与 remaining 落在同一个区间（不许 remaining=+300% 却写 at_floor）；
-      ④ 只用真实测量的 t：t_source 若为 derived/missing，不许挂在 card 上冒充。
+      ④ 只用真实测量的 t：t_source 若为 derived/missing，不许挂在 card 上冒充；
+      ⑤ E40：声明出来的 achievable 不许超过本机 achievable 峰值（见 _check_ceiling_overrun）。
     """
     f = lv.get("floor")
     if f is None:
@@ -649,8 +739,7 @@ def _check_floor_block(lv, where, err):
     if not isinstance(f, dict):
         err("E39", where, "last_verdict.floor 必须是 mapping")
         return
-    extra = set(f) - {"remaining", "t_floor_us", "t_actual_us", "binding", "basis",
-                      "verdict", "denominator_source", "updated", "t_source"}
+    extra = set(f) - FLOOR_FIELDS
     if extra:
         err("E39", where, "floor 未知字段 %s" % sorted(extra))
     if not f.get("basis"):
@@ -672,6 +761,8 @@ def _check_floor_block(lv, where, err):
         if v != want_v:
             err("E39", where, "floor.verdict=%r 与 remaining=%+.1f%% 不符（应为 %r）"
                 % (v, r * 100, want_v))
+    if peaks is not None:
+        _check_ceiling_overrun(lv, where, err, peaks)
 
 
 def _check_pros_cons_substance(cards_dir, repo):
@@ -1065,6 +1156,8 @@ def validate(atlas, repo):
     reg_status, reg_path = _registry(repo)
     lib_canon, lib_removed = _library_registry(repo)
     peak_bf16, peak_bw = _peak_constants(repo)
+    _ACHIEVABLE_PEAKS.clear()
+    _ACHIEVABLE_PEAKS.update(_achievable_peaks(repo))   # E40 用，一次性读盘
     _NON_INSTALLABLE.clear()
     _NON_INSTALLABLE.update(_non_installable_libs(repo))
 
@@ -1353,7 +1446,7 @@ def validate(atlas, repo):
             err("E7", where, "结论 %d 字，超过 60 字上限（会变成技术描述）" % len(conc))
 
         # ---- E39 「离天花板多远」必须是算出来的，不是填出来的
-        _check_floor_block(lv, where, err)
+        _check_floor_block(lv, where, err, _ACHIEVABLE_PEAKS)
 
         ratio = lv.get("ratio")
         if ratio is not None:

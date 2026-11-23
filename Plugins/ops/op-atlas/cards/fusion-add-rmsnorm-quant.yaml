@@ -208,6 +208,7 @@ last_verdict:
     verdict: structural
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 1049.0
 modify_path:
   kind: replace-call
   what: torch 分步（x+r → rmsnorm → 动态量化）换成单个 lightop 入口

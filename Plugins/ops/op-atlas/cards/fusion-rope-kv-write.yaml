@@ -174,6 +174,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 446.6
 modify_path:
   kind: replace-call
   what: rope 后再单独 scatter 写 KV 的两段换成同一个融合入口

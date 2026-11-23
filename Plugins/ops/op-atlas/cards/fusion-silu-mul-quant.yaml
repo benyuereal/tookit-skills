@@ -185,6 +185,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 1038.2
 modify_path:
   kind: replace-call
   what: silu_and_mul + per_token_quant 两段换成单个 fuse_silu_mul_fp8_quant

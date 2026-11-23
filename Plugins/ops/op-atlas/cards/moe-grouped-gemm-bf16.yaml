@@ -107,6 +107,9 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 719.8
+    achieved_tf: 80.4
+    precision: bf16
 modify_path:
   kind: replace-call
   what: 换 grouped 路径入口

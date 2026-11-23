@@ -109,6 +109,9 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
     updated: '2026-11-24'
+    achieved_gbs: 70.3
+    achieved_tf: 192.0
+    precision: bf16
 modify_path:
   kind: env-flag
   what: 调 split-KV 的切分数

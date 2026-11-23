@@ -86,6 +86,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 530.7
 modify_path:
   kind: replace-call
   what: 三步 torch 换成 lightop 融合

@@ -110,6 +110,7 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
+    achieved_gbs: 560.3
 modify_path:
   kind: env-flag
   what: dense decode 的 num_splits 不可覆盖

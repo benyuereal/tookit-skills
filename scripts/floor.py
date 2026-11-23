@@ -191,8 +191,14 @@ def analyze(spec, ladder):
         basis += "；实测 %.1f us" % t
     if note_other:
         basis += "；" + note_other
+    # E40 的输入：这个实现实际跑出来的带宽/算力。
+    # 它们物理上不可能超过本机 achievable——超过只可能是分母或字节算错了。
+    achieved_gbs = (spec["bytes_mb"] / t * 1000.0) if (t and spec.get("bytes_mb")) else None
+    achieved_tf = (spec["flops"] / t / 1e6) if (t and spec.get("flops")) else None
     return {
         "pattern": spec.get("pattern"),
+        "achieved_gbs": round(achieved_gbs, 1) if achieved_gbs else None,
+        "achieved_tf": round(achieved_tf, 1) if achieved_tf else None,
         "denominator_gbs": bind_den if bind_kind == "memory" else None,
         "denominator_tf": bind_den if bind_kind == "compute" else None,
         "denominator_source": ("Plugins/ops/op-atlas/bw-ladder.yaml" if bind_kind == "memory"
@@ -343,6 +349,12 @@ def write_card_floor(card_path, result, spec):
         "denominator_source": result["denominator_source"],
         "updated": time.strftime("%Y-%m-%d"),
     }
+    # E40 只看这两个数；没有就不写（缺数据不等于 0）
+    for k in ("achieved_gbs", "achieved_tf"):
+        if result.get(k):
+            lv["floor"][k] = result[k]
+    if result.get("achieved_tf") and spec.get("precision"):
+        lv["floor"]["precision"] = spec["precision"]   # fp8/bf16 上限不同，判定要分档
     card_path.write_text(yaml.dump(d, allow_unicode=True, sort_keys=False, width=200),
                          encoding="utf-8")
     return True, "ok"

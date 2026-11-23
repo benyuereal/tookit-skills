@@ -108,6 +108,9 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
     updated: '2026-11-24'
+    achieved_gbs: 226.2
+    achieved_tf: 154.4
+    precision: bf16
 modify_path:
   kind: replace-call
   what: varlen 换固定长度（消除变长调度开销）

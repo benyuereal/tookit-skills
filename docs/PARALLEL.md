@@ -75,3 +75,22 @@ flock /tmp/opbench-gpu.lock -c "<bench 命令>"
 ## 完成记录
 
 （每完成一个 agent 在这里追加：agent 名 / commit / review 结论）
+
+---
+
+# 第 3 批（2026-11-24，本轮冲刺：E40 / G5 放置字段 / pmc_probe）
+
+计划：`/root/atlas-handoff/SPRINT-PLAN.md`
+
+| agent | 写范围（只能改这些） | 任务 | 状态 |
+|---|---|---|---|
+| **主线程** | `op-atlas/validate.py` · `scripts/scorecard.py` · `docs/` · `tests/test_floor_block.py` · **全部 git** | T1 = E40 | 进行中 |
+| agent-P | `scripts/pmc_probe.py`(新) · `tests/test_pmc_probe.py`(新) · `op-profiling/references/counters.md`(新) | T3 = PMC 三态表 | 进行中 |
+| agent-R | `scripts/results_schema.py`(新) · `tests/test_results_schema.py`(新) | T2 = placement schema | 进行中 |
+| agent-B | `op-atlas/perf/*.json`（4 个已有文件，只加 placement 键） | T2 = 数据回填 | 进行中 |
+
+**第 3 批不许碰**：`cards/*.yaml`（本轮不做卡片内容）· `scripts/floor.py` ·
+`op-optimize/loop.py` · `INDEX.md` · `gaps.md`（生成物）· 任何 `git` 命令。
+
+**GPU**：三张 agent 都不许跑 bench；需要 GPU 的由主线程串行执行
+（`flock /tmp/opbench-gpu.lock`）。

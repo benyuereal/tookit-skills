@@ -108,6 +108,8 @@ last_verdict:
     verdict: headroom
     denominator_source: Plugins/ops/skills/op-roofline/constants.yaml
     updated: '2026-11-24'
+    achieved_tf: 39.9
+    precision: bf16
 modify_path:
   kind: env-flag
   what: 调 MLA 的 tile 调度元数据
