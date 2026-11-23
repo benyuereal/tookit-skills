@@ -1,0 +1,184 @@
+{
+  "device": "BW1100",
+  "peak_bf16_tf": 309.3,
+  "bw_stream_gbs": 1564,
+  "method": "CUDA event median of 11, warmup 5",
+  "sweep_m_4096": [
+    {
+      "M": 1,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.068,
+      "mad_ms": 0.0011,
+      "tflops": 0.5,
+      "of_peak": 0.002,
+      "gbs": 494,
+      "mem_floor_ms": 0.0215,
+      "cmp_floor_ms": 0.0001,
+      "bound": "memory"
+    },
+    {
+      "M": 16,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.0658,
+      "mad_ms": 0.0006,
+      "tflops": 8.2,
+      "of_peak": 0.026,
+      "gbs": 514,
+      "mem_floor_ms": 0.0216,
+      "cmp_floor_ms": 0.0017,
+      "bound": "memory"
+    },
+    {
+      "M": 32,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.0662,
+      "mad_ms": 0.0008,
+      "tflops": 16.2,
+      "of_peak": 0.052,
+      "gbs": 514,
+      "mem_floor_ms": 0.0218,
+      "cmp_floor_ms": 0.0035,
+      "bound": "memory"
+    },
+    {
+      "M": 64,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.0709,
+      "mad_ms": 0.0005,
+      "tflops": 30.3,
+      "of_peak": 0.098,
+      "gbs": 488,
+      "mem_floor_ms": 0.0221,
+      "cmp_floor_ms": 0.0069,
+      "bound": "memory"
+    },
+    {
+      "M": 128,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.0854,
+      "mad_ms": 0.0011,
+      "tflops": 50.3,
+      "of_peak": 0.163,
+      "gbs": 417,
+      "mem_floor_ms": 0.0228,
+      "cmp_floor_ms": 0.0139,
+      "bound": "memory"
+    },
+    {
+      "M": 256,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.0989,
+      "mad_ms": 0.001,
+      "tflops": 86.9,
+      "of_peak": 0.281,
+      "gbs": 382,
+      "mem_floor_ms": 0.0241,
+      "cmp_floor_ms": 0.0278,
+      "bound": "compute"
+    },
+    {
+      "M": 512,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.1531,
+      "mad_ms": 0.0005,
+      "tflops": 112.2,
+      "of_peak": 0.363,
+      "gbs": 274,
+      "mem_floor_ms": 0.0268,
+      "cmp_floor_ms": 0.0555,
+      "bound": "compute"
+    },
+    {
+      "M": 1024,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.1632,
+      "mad_ms": 0.0005,
+      "tflops": 210.5,
+      "of_peak": 0.681,
+      "gbs": 308,
+      "mem_floor_ms": 0.0322,
+      "cmp_floor_ms": 0.1111,
+      "bound": "compute"
+    },
+    {
+      "M": 2048,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.2859,
+      "mad_ms": 0.0003,
+      "tflops": 240.3,
+      "of_peak": 0.777,
+      "gbs": 235,
+      "mem_floor_ms": 0.0429,
+      "cmp_floor_ms": 0.2222,
+      "bound": "compute"
+    },
+    {
+      "M": 4096,
+      "N": 4096,
+      "K": 4096,
+      "ms": 0.5275,
+      "mad_ms": 0.0005,
+      "tflops": 260.5,
+      "of_peak": 0.842,
+      "gbs": 191,
+      "mem_floor_ms": 0.0644,
+      "cmp_floor_ms": 0.4444,
+      "bound": "compute"
+    }
+  ],
+  "sweep_m_14336": [
+    {
+      "M": 32,
+      "N": 14336,
+      "K": 4096,
+      "ms": 0.1336,
+      "tflops": 28.1,
+      "of_peak": 0.091,
+      "gbs": 888,
+      "bound": "memory"
+    },
+    {
+      "M": 128,
+      "N": 14336,
+      "K": 4096,
+      "ms": 0.1608,
+      "tflops": 93.5,
+      "of_peak": 0.302,
+      "gbs": 760,
+      "bound": "memory"
+    },
+    {
+      "M": 512,
+      "N": 14336,
+      "K": 4096,
+      "ms": 0.2834,
+      "tflops": 212.2,
+      "of_peak": 0.686,
+      "gbs": 481,
+      "bound": "compute"
+    },
+    {
+      "M": 2048,
+      "N": 14336,
+      "K": 4096,
+      "ms": 0.8923,
+      "tflops": 269.5,
+      "of_peak": 0.872,
+      "gbs": 216,
+      "bound": "compute"
+    }
+  ],
+  "paths_4096": {
+    "F.linear": 0.521,
+    "torch.mm": 0.4782
+  }
+}

@@ -2,19 +2,36 @@ id: gemm-bf16
 title: BF16 GEMM（基础档）
 family: gemm
 math: out = A*B；A/B bf16，acc fp32
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
-- repo: triton
+- repo: torch
   library_profile_ref: libraries.md §6
-  file_hint: torch.mm 后端
+  file_hint: torch.mm / a @ b.t()
   tier: primary
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
-  - 常规稠密 GEMM
+  - 常规稠密 GEMM（M>=2048 时 0.78~0.87 达成率）
   not_for:
-  - 需要精细 layout 控制
+  - decode 小 M（<128，达 0.00~0.16，受访存限制）
+  pros:
+  - 比 F.linear 稳定快 8~10%（四个形状 mm/linear=0.900/0.911/0.920/0.956，同 kernel 只是 dispatch 选参差异）
+  cons:
+  - 小 M 带宽只到峰值的 0.30
+  source: references/libraries.md
+  import_path: torch.mm
+  signature: 'torch.mm(a, b_t)  # b_t 为 [K,N]'
+  smoke_test: python3 -I -c "import torch; a=torch.zeros(8,8); assert torch.mm(a,a).shape==(8,8)"
+- repo: triton
+  library_profile_ref: libraries.md §6
+  file_hint: torch.mm 后端
+  tier: fallback
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要精细 layout 控制的自定义 GEMM
+  not_for:
+  - 常规稠密 GEMM（用 torch.mm 更快，实测 8~10%）
   pros:
   - 少一层封装，直接调库
   cons:
@@ -41,20 +58,28 @@ impls:
   signature: fp8_gemm(a,b,d,c=None,recipe=None)
   smoke_test: python3 -I -c "import deepgemm; assert hasattr(deepgemm,"fp8_gemm")"
 ceiling:
-  kind: missing
-  ref: null
-  bound: compute
-  note: 量化档的基准；bf16 与 fp8 的达成率分母不同，不可混比
+  kind: roofline_model
+  ref: Plugins/ops/skills/op-roofline/constants.yaml
+  bound: mixed
+  note: 拐点由两条地板交叉决定，随 N 移动：K=N=4096 时 M≈256，N=14336 时 M≈512。不能写固定阈值
 shapes:
 - decode-m1
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/README.md
+  ratio:
+    value: 0.84
+    vs: 本机实测 bf16 峰值 310 TF 的达成率（M=4096 K=N=4096）
+    scope:
+      cards: 1
+      in_len: M=4096
+      out_len: N=K=4096
+      warmup: hot
+      note: M 从 1 到 4096 扫过：小 M 只 0.00~0.16 且带宽 0.30 of 1724；M>=2048 为 0.78~0.87；M=512 有 kernel 切换凹陷
+  conclusion: M>=2048 达峰值的 0.78~0.87（基本到顶）；小 M 是访存受限、带宽仅 0.30
+  verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择
