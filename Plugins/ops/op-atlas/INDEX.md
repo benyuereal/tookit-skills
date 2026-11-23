@@ -33,7 +33,7 @@
 | [`lm-head-with-sampling`](cards/lm-head-with-sampling.yaml) | gemm | draft | lightop | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`mha-prefill`](cards/mha-prefill.yaml) | attention | measured | flash-attn | compute | flash_attn causal prefill 达实测峰值的 0… |
 | [`mhc-fused`](cards/mhc-fused.yaml) | linear-attn | draft | mhc-kernels | mixed | 无实测：索引卡，实现层待按证据推进 |
-| [`mla-absorb`](cards/mla-absorb.yaml) | attention | draft | flash-mla | mixed | 无实测：索引卡，实现层待按证据推进 |
+| [`mla-absorb`](cards/mla-absorb.yaml) | attention | measured | flash-mla | bandwidth | MLA decode 达峰值 0.35（KV=32768/B=8）；… |
 | [`mla-full`](cards/mla-full.yaml) | attention | draft | flash-mla | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`mla-kv-cache-layout`](cards/mla-kv-cache-layout.yaml) | kv | draft | flash-mla | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`mla-kv-cache`](cards/mla-kv-cache.yaml) | kv | draft | flash-mla | bandwidth | 无实测：索引卡，实现层待按证据推进 |

@@ -1,0 +1,109 @@
+# Case 006：MLA 吸收式 decode —— 达成率随 KV 长度走，短 KV 是固定开销主导
+
+> 起点：`mla-absorb` 卡 status=draft。
+> 它和 `rope-mla` 容易被混为一谈，但口径不同：rope-mla 测的是整 kernel 的 KV 读带宽，
+> 本 case 回答的是「这个 kernel 在不同 KV 长度 / batch 下分别到什么水平」。
+>
+> decode 是 memory-bound（每步只读 KV，M=1），所以分母用**流式只读峰值**，
+> 不是算力。字节 = `KV · B · d_qk · 2B`，不含 block_table 与输出。
+
+## 0. 一个必须先说的坑：sched_meta 绑定形状
+
+`flash_mla.get_mla_metadata()` 在新版本里**不接参数**，返回 `(meta, None)`。
+而且 `meta` 会在首次调用时被填上 `config.b`：
+
+```
+AssertionError: sched_meta.config.b must be equal to batch_size.
+```
+
+复用 meta 跑不同 B 会直接 assert。更隐蔽的是：**不 assert 的形状组合下，
+复用 meta 会静默走错调度**——本 case 第一版就是全局取一次 meta，
+KV=8192 得到 0.4368 ms（173 GB/s，0.11 of peak）；
+改成每形状重建后同一形状是 0.1856 ms（407 GB/s，0.26 of peak）。
+**同一份数据差 2.4 倍。** 这已写进卡的 `hard_preconditions`。
+
+## 1. 轮 1：B=8，扫 KV
+
+| KV | median | MAD | KV 读 GB/s | of peak |
+|---|---|---|---|---|
+| 2048 | 0.0963 ms | 0.0005 | 196 | 0.12 |
+| 8192 | 0.1856 ms | 0.0005 | 407 | 0.26 |
+| 16384 | 0.3059 ms | 0.0010 | 494 | 0.31 |
+| 32768 | 0.5430 ms | 0.0011 | 556 | **0.35** |
+
+**达成率随 KV 单调上升并收敛**（0.12 → 0.35）。
+⇒ 短 KV 被固定开销（kernel launch、page 表遍历、warp 起停）主导。
+**KV=2048 时只有 0.12，不能拿它代表这个算子的能力。**
+
+## 2. 轮 2：KV=8192，扫 batch
+
+| B | median | GB/s | of peak | 每序列摊销 |
+|---|---|---|---|---|
+| 1 | 0.0875 ms | 108 | 0.07 | 87.5 µs |
+| 8 | 0.1856 ms | 407 | 0.26 | 23.2 µs |
+| 32 | 0.5326 ms | 567 | 0.36 | 16.6 µs |
+
+**每序列摊销从 87.5 降到 16.6 µs（5.3×）。**
+⇒ 固定开销确实靠 batch 摊。**小 batch decode（B=1）是这个 kernel 最差的档**，
+而且那正是在线服务的常见形态——这条对部署选型有直接影响。
+
+## 3. 轮 3：同字节纯 copy 对照
+
+| | median | GB/s |
+|---|---|---|
+| MLA decode（KV=8192, B=8） | 0.1856 ms | 407 |
+| 同字节 copy（R+W） | 0.1230 ms | 1227 |
+
+**差 3.02×。** 拷贝能到 1227，说明内存系统没问题——
+限制来自 MLA 的访问模式（每序列各自的 page 表 + 不连续 KV 块）。
+
+## 4. 记账错：本 case 第一版算出 1666 GB/s，超过标定峰值 1584
+
+原因：轮 2 的循环变量 `B` 在循环结束后残留成 32，
+轮 3 的字节数按 `B=32` 算（32 倍），耗时却用的是轮 1 的 `B=8`。
+**分子分母口径不一致 ⇒ 算出超过峰值的数。**
+
+改对之后是 407 GB/s（不是 1666），结论方向完全变了。
+
+**这是同类错误的第三次**（case 004 的 varlen 多乘 batch 算出 1.8× 峰值；
+constants.yaml 的 185 是分母错）。所以本 case 加了硬自检 `check_ceiling()`：
+
+```python
+if gbs > peak * 1.02:
+    raise AssertionError("超过标定峰值，先查记账，不要先怀疑机器")
+```
+
+**宁可脚本挂掉，也不让一个不可能的数落进 README。**
+
+## 5. 结论
+
+```
+① 达成率是 KV 长度与 batch 的函数，不是这个算子的常数：
+     KV=2048/B=1 只有 0.07~0.12；KV=32768/B=32 到 0.35~0.36
+② 固定开销主导短 KV 与小 batch：每序列摊销 87.5 → 16.6 µs（5.3×）
+③ 同字节 copy 能到 1227 GB/s，MLA 只到 407 ⇒ 差距在访问模式（page 表 + 不连续块）
+④ 全程最高只到 0.36 of peak ⇒ **访存侧还有 ~2.8× 空间**
+```
+
+### 这与 `rope-mla` 卡的关系
+
+rope-mla 记的是 360 GB/s（0.21 of 1724），结论是「rope 不是 MLA 的瓶颈」。
+本 case 在更好的形状（KV=32768/B=32）下拿到 556 GB/s，**说明 rope-mla 那个数偏低
+是因为形状选得小**（KV=8192、B=8），不是 kernel 能力上限。
+两卡结论不冲突，但引用时必须带形状。
+
+## 6. 未测定项（不插值）
+
+| 项 | 状态 |
+|---|---|
+| 换 tilelang 实现能到多少 | **未测定**（未跑通等价形状） |
+| 访问模式改进（冷却 page 表 / 重排块）能提多少 | 未测定（需改 kernel） |
+| fp8 KV cache 的达成率 | 未测定（分母不同，须单独标定） |
+| B=1 的 0.07 能否靠 split-KV 改善 | 未测定（`num_splits` 参数未扫） |
+
+## 复跑
+
+```bash
+python3 -I Plugins/ops/skills/op-optimize/cases/006-mla-decode-absorb/bench.py
+# 落盘：results/mla-decode.json
+```

@@ -2,7 +2,7 @@ id: mla-absorb
 title: MLA 吸收式（KV 进 latent）
 family: attention
 math: q_eff = q*W_kv；out = softmax(q_eff*c_kv^T)*V；收缩维正交
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -42,26 +42,39 @@ impls:
   signature: '@tilelang.jit'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 ceiling:
-  kind: missing
-  ref: null
-  bound: mixed
-  note: pipeline Q1 的经典例：q_eff 与 c_kv 的收缩维是否同一决定整条流水线
+  kind: roofline_model
+  ref: Plugins/ops/skills/op-roofline/constants.yaml
+  bound: bandwidth
+  note: decode M=1，每步只读 KV；分母用流式只读峰值 1724（实测口径）
 shapes:
 - decode-m1
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/006-mla-decode-absorb/README.md
+  ratio:
+    value: 0.35
+    vs: 流式只读峰值 1724 GB/s 的达成率（KV=32768, B=8）
+    scope:
+      cards: 1
+      in_len: KV=32768
+      out_len: B=8 H=32 d_qk=576 d_v=512
+      warmup: hot
+      note: 达成率随形状变：KV=2048 为 0.12、B=1/KV=8192 只有 0.07；同字节 copy 能到 1227 GB/s，差 3.02×
+  conclusion: MLA decode 达峰值 0.35（KV=32768/B=8）；短 KV 与小 batch 只有 0.07~0.12
+  verified_on: '2026-11-23'
 modify_path:
-  kind: replace-call
-  what: 改走吸收式（KV 压进 latent）
-  how: 不用完整 K/V，改调 get_mla_metadata + flash_mla_with_kvcache 的 absorb 路径
-  requires: 模型权重已按吸收式预变换
+  kind: env-flag
+  what: 调 num_splits 切分序列维
+  how: flash_mla_with_kvcache(..., num_splits=tensor) 显式设值，B=1 时扫 1/2/4
+  requires: flash_mla 版本支持 num_splits（当前签名已支持，仅 BF16 sparse decode 生效）
 surfaces:
 - layout-pack
 - occupancy
 updated: '2026-11-22'
+hard_preconditions:
+- statement: sched_meta 绑定形状：每个 (B, KV) 组合必须重新调用 get_mla_metadata()，不能跨形状复用
+  check: 复用会在 B 不同时 AssertionError；形状相同但序列长不同时会静默走错调度（同一形状实测 173 vs 407 GB/s，差 2.4 倍）
+- statement: get_mla_metadata() 不接参数，返回 (meta, None)；head_dim_v 是第 5 个位置参数
+  check: 按旧文档传 (cache_seqlens, num_heads) 得到 "must be of type FlashMLASchedMeta"
