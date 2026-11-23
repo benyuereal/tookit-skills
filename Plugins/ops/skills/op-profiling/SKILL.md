@@ -33,8 +33,17 @@ kind: tool
 ## 三、采集与解析
 
 ```bash
-HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x -- python3 bench.py
+# 本版 hipprof **不认 `--` 分隔符**（加了报 `Invalid arg: --`，2026-11-24 实测）。
+HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x python3 bench.py
+
+# 采完先核一遍字段可用性（哪些能进判据、哪些本机压根没有）
+python3 -I scripts/pmc_probe.py /tmp/pmcout/x.csv
 ```
+
+**字段能不能用，先查 `references/counters.md`。** 那里是实测三态表：
+`SQ_WAVES` / `SQ_INSTS_BARRIER` 本机 CSV **不提供**，
+`SQ_LDS_BANK_CONFLICT` / `SQ_WAIT_INST_LDS` 在无 LDS 的 kernel 上会是全 0——
+全 0 不等于没问题，那是「没采到」。
 
 解析用**唯一可执行实现** `scripts/pmc.py`（标准库；选行/排噪声/跨实例求和/常数不写死四条硬规则已内置）：
 

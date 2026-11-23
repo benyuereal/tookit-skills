@@ -19,7 +19,7 @@
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: residency
   precondition: "已知 tile 形状，且实测 occupancy < 目标档"
-  check: "pmc: GRBM_COUNT / SQ_WAVES；hipcc --resource-usage 看 LDS 与 VGPR"
+  check: "pmc: GRBM_COUNT + CSV 的 grd/wgr 算 CTA 数；inspect_so.py 看 VGPR/LDS 定驻留档（SQ_WAVES 本机 CSV 不提供，见 op-profiling/references/counters.md）"
   evidence: "同 body LDS 16→32KB 会把 3 CTA/CU 打到 2，墙钟 +27.5%"
   cost: M
 
@@ -46,7 +46,7 @@
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
   class: pipeline
   precondition: "PMC 显示同步类指令占 VALU 发射的显著比例"
-  check: "pmc: SQ_INSTS_BARRIER / SQ_INSTS_VALU"
+  check: "pmc: SQ_WAIT_INST_LDS / SQ_INSTS_VALU（SQ_INSTS_BARRIER 本机 CSV 不提供；且 SWAIT 需先用带 LDS 的 kernel 验证非零，见 op-profiling/references/counters.md）"
   evidence: "barrier 宽度与每 barrier 工作量不匹配时，MMAC 发射率被同步打断"
   cost: M
 
