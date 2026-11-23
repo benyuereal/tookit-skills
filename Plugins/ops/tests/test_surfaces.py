@@ -21,7 +21,10 @@ SURFACES = REPO / "Plugins/ops/skills/op-optimize/references/surfaces.yaml"
 LAWS = REPO / "Plugins/ops/skills/op-stack-design/references/pipeline-laws.md"
 
 REQUIRED = {"id", "statement", "law", "class", "precondition", "check", "evidence", "cost"}
-CLASSES = {"residency", "pipeline", "layout", "tier", "precision", "memory-path"}
+CLASSES = {"residency", "pipeline", "layout", "tier", "precision", "memory-path",
+           # isa-policy：指令/编译器层面的策略（缓存提示、等待深度）。
+           # 与上面六个的区别是「改的是编译选项或 ISA 提示，不是 kernel 结构」。
+           "isa-policy"}
 COSTS = {"S", "M", "L"}
 # check 字段必须含一个可执行锚点：pmc 计数器名 / 具体工具 / 具体命令
 EXECUTABLE = re.compile(
@@ -41,8 +44,15 @@ def _load():
 
 
 def _law_anchor(text):
-    """返回文件里所有可被引用的标题锚点（`## Q5 xxx` → `Q5`）。"""
-    return {m for m in re.findall(r"(?m)^#{1,4}\s+([A-Za-z]\d+)\b", text)}
+    """返回文件里所有可被引用的标题锚点（`## Q5 xxx` → `Q5`；`## 四点五、xx` → `四点五`）。
+
+    中文小节号也要认：isa-census.md 用「四点五 / 四点六」编号，
+    早期只认 [A-Za-z]\d+，导致引用中文小节永远被判「锚点不存在」。
+    与 validate.py 的 E9 保持同一宽窄度——两处判据不一致本身就是隐患。
+    """
+    out = set(re.findall(r"(?m)^#{1,4}\s+([A-Za-z]\d+)\b", text))
+    out |= set(re.findall(r"(?m)^#{1,4}\s+([一二三四五六七八九十]+点[一二三四五六七八九十]+)", text))
+    return out
 
 
 class TestSurfaces(unittest.TestCase):

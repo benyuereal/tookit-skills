@@ -10,6 +10,8 @@
 | 卡在算力、内存还是指令发射 | 跑 `scripts/pmc.py` 解析 PMC CSV（只出机械原值；三级证据按 `op-profiling/SKILL.md §四` 由人判） |
 | 多个变体并排比 | 用 `scripts/pmc.py` 同一口径各算一遍再并排（**不要为它再维护一个解析器**） |
 | 这个算子该往哪优化 | `op-roofline/derive.py`（shape + 设计 → 预测耗时 + 绑定约束；唯一天花板权威） |
+| 编出来的 kernel 实际用了多少 VGPR / SGPR / LDS | `op-hip-compile/inspect_so.py <.so>`（走 `dccobjdump --extract-elf` + `llvm-readelf --notes`）。**不要猜 occupancy，读二进制** |
+| 想反汇编看厂商实际用什么指令 | **本机做不到**：无 `llvm-objdump`；`dccobjdump --architecture` 只支持 gfx906/926/928，不含 gfx938。能拿到原始指令字节（`llvm-readelf -x .text`），但没有字节→助记符这一步 |
 | 这个设计会不会寄存器溢出 | `op-roofline/tools/hipbudget.py`（活集合 vs 每线程 256）。**只作相对比较**：绝对 VGPR 判定实测不准（算 283 / 实际 256），不要拿它一票否决设计 |
 | 只想隔离一个变量（occupancy / launch 配置 / 分配） | 改一个**不改变语义**的量做探针：动态 LDS 申请量（kernel 仍只读前 N 字节，输出必须 bit-identical）、launch 配置、分配策略；先证 bit-identical 再比耗时 |
 | 是计算密集还是带宽密集 | `op-sparse-mla/bench/bench.py --mode workset`（行为级，不替代 PMC） |
@@ -19,6 +21,8 @@
 | 这个候选到底做完没有 | `op-optimize/loop.py verify --tag <id>`：跑候选的 `done_when`，**rc=0 才写 adopted**；`adopt` 是它的旧名（等价，不跑命令就采纳的路已关掉） |
 | 这个数到底合不合理 | `op-gate`（四道门 + 四档决策） |
 | 这些门什么时候自己跑 | `Plugins/ops/hooks/ops_gate.py`（PreToolUse，只挂写源码/跑 bench/`git commit`） |
+| 卡在哪一类瓶颈、该试哪类手法 | `op-roofline/derive.py` 出 `bound` → 查 `bound-to-class.yaml` 得允许的 class → `surfaces.yaml` 挑该 class 的手法。**`loop.py run` 没有 bottleneck 记录会拒跑** |
+| 我们这个仓库优化得有多深 | `scripts/depth.py`（五维 DS 分：基线强度/达成率/跨形状/轮次/归因）。**只读，不阻断** |
 | 上次那条结论/那个坑记在哪 | `dcu-orchestrator/scripts/kbq.py`（`index`/`search`，精确子串，不做语义打分） |
 
 ## 完成判定（`done_when`）的执行口径

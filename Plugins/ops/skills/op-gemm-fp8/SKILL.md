@@ -75,3 +75,19 @@ MLS 还有一条 dtype 前置条件：`kPack=1`。bf16 kernel 因 gather 向量�
 `contract.yaml` 已就位；bench 驱动与 adapter `_common.py` 待写（对应门均已声明 `required: false`，补齐后改 `true`）。首个目标：跑通 `example_tilelang_gemm_amd_fp8_preshuffle.py` 并在 gfx938 上给出「编译 / 精度 / 达成率」三件事，再推进到 `measured`。
 
 - tilelang 源码索引与已知问题：`dcu-operators/dcu-tilelang-source`、`dcu-kernelwiki`；kernel 开发方法学与 FP8 轴：`dcu-operators/dcu-kernel-dev` §15；优化闭环：`dcu-perf/dcu-op-optimization`
+
+## 手工流水线的完整实例（外部参考）
+
+同机同 gfx938 的 `/workspace/hbird-gemm` 有一份「压到硬件极限」的完整记录：
+
+- `docs/DESIGN.md`：Phase 0-10 的阶段表（每步改什么、涨多少），
+  A-read 流水线（3 buffer + 2 步 lead）= 2.1711 → 2.1070 ms，且比双缓冲更省寄存器
+- `docs/w12/records/2026-11-sub160-wall.md`：死路清单
+  - `buffer_load ... slc` 慢 13%（bit-exact），默认 descriptor 最优
+  - 源码级 4-stage prefetch 的 waitcnt 深度由 scheduler 决定，控制不了
+  - `#pragma unroll 1` 用在 epilogue → 128 个累加寄存器全溢出（388 条 buffer_store）
+  - 非转置 A 的 fp8 LDS 读编译不过（MLS dispatcher 只有 `_trans` atom）
+
+ISA 层原语（MMA 宽度 / LDS 读 / MLS / buffer_load / 缓存策略 / 等待深度）
+见 `op-hip-compile/references/isa-census.md`。
+

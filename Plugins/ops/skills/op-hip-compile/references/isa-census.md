@@ -122,7 +122,27 @@ A[M,K] @ B[N,K]^T -> C[M,N]，M=N=64、K=512
 
 ## 四、已知缺口 / 推翻它的观测
 
-- **反汇编这条路没通**（缺 `llvm-objdump`）⇒ 表里「厂商实际用什么指令」一列是空的。
+- **反汇编只通了一半**（2026-11-23 重新核实，此前记「没通」不准确）：
+  - `llvm-readelf` 可用（AOMP-16.0，`/opt/dtk/llvm/bin/llvm-readelf`）
+  - `dccobjdump` 可用，能列/提 fatbin 里的设备 ELF，但它的 `--architecture`
+    只支持 gfx906/gfx926/gfx928，不支持 gfx938 ⇒ 不能直接反汇编本机设备码
+  - 没有 `llvm-objdump`（`ls /opt/dtk/llvm/bin` 确认）
+  - **通的这部分**：`dccobjdump --extract-elf=all` 取出 `*.gfx938.out` →
+    `llvm-readelf --notes` 读 `.vgpr_count` / `.sgpr_count` / `.group_segment_fixed_size`；
+    `llvm-readelf -x .text` 拿原始指令字节
+  - **不通的这部分**：字节 → 助记符。所以「厂商实际用什么指令」一列仍为空，
+    但 **VGPR/SGPR/LDS 三项能读** —— `inspect_so.py` 就是这条路的成品。
+
+  复现命令：
+  ```bash
+  hipcc -shared -fPIC -O3 --offload-arch=gfx938 k.hip -o k.so
+  /opt/dtk/llvm/bin/dccobjdump --list-elf --inputs=k.so
+  /opt/dtk/llvm/bin/dccobjdump --extract-elf=all --inputs=k.so
+  /opt/dtk/llvm/bin/llvm-readelf --notes k.so-hipv4-amdgcn-amd-amdhsa--gfx938.out
+  /opt/dtk/llvm/bin/llvm-readelf -x .text k.so-hipv4-amdgcn-amd-amdhsa--gfx938.out
+  ```
+  实测输出（20 行 elementwise kernel）：`vgpr_count=6 sgpr_count=11
+  group_segment_fixed_size=0`，`.text` 大小 `0x8c = 140 B`。
 - **别的 gfx 未普查**：本表全部是 gfx938。VGRP 预算 196608 只对 768-VGPR 模式成立，
   非 768 模式是 65536，occupancy 会变——换设备**必须重跑 §一 的 ①**。
 - `e4m3fnuz` 的偏差是**本机组合**的观测；换 DTK/驱动版本可能不同，用它之前先跑 §三。

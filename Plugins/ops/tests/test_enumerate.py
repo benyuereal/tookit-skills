@@ -82,7 +82,11 @@ class TestEnumerate(unittest.TestCase):
             card = _card(tmp, "directions: []\ncandidates: []\nrefuted: []\n")
             out = self._run(card)
         self.assertIn("已封 0 条", out)
-        self.assertIn("可挑 11 条", out)
+        # 条数不写死：新增攻击面会让它变。只断言「有东西可挑」且格式对。
+        import re as _re
+        m = _re.search(r"可挑 (\d+) 条 / 共 (\d+) 条", out)
+        self.assertIsNotNone(m, out[-300:])
+        self.assertGreater(int(m.group(1)), 0)
 
     def test_new_mode_emits_pasteable_snippet(self):
         with tempfile.TemporaryDirectory() as tmp:
