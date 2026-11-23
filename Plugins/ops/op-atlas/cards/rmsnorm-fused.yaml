@@ -111,6 +111,33 @@ last_verdict:
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 1108.3
+  bottleneck:
+    bound: memory
+    root_cause: 2读2写交织 + 行内归约：同字节纯 copy 达 1566 GB/s（ledger 轮2），本 kernel 只有 1108 GB/s，差 1.41x；H 的奇偶性不影响带宽（轮1），说明不是向量化宽度而是归约本身的结构性代价
+    evidence:
+    - kind: ablation
+      what: 同字节纯 copy 对照（ledger 轮2）
+      value: copy 1566 GB/s vs 本实现 1108 GB/s = 1.41x
+      reproduce: Plugins/ops/skills/op-rmsnorm-fused/ledger.md#轮 2
+    - kind: ratio
+      what: 归约折扣：三实现实测 0.75~0.81（bw-ladder 3_row_reduction）
+      value: lightop 0.81 / tilelang 0.79 / triton 0.75
+      reproduce: python3 -I scripts/floor.py --card rmsnorm-fused --json
+    caliber: achieved_bw = 268.4MB / 242.2µs = 1108 GB/s；分母 1:1 档 achievable 1680 GB/s
+  resources:
+    vgpr: null
+    lds_per_cta: null
+    ctas_per_cu: null
+    waves_per_cu: null
+    achieved_bw: 1108.0
+    bw_util: 0.66
+    proxies:
+      wait_inst_lds_per_inst_lds: null
+      lds_per_mfma: null
+    source: achieved_bw 由 impl-ranking.json（sclk=1350，64 buffer 轮换 ×7 轮）算出；VGPR/LDS/CTA 未采集——该实现是 lightop 内置 kernel，本地无 .so，也未单独采 PMC
+    status: partial
+  rounds: 3
+  verdict: adopt
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop 融合
@@ -164,3 +191,9 @@ floor_inputs:
   basis: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位
   evidence: Plugins/ops/skills/op-rmsnorm-fused/results/impl-ranking.json
   t_actual_us: 242.2
+progress:
+  stage: S6
+  since: 2026-11-24T02:05
+  blocked_by: null
+  last_verdict: adopt
+  rounds: 3

@@ -49,7 +49,10 @@ ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "variants",
                # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
                "modify_path",
                # 风险分级：不满足会崩 vs 不满足只是不赚
-               "hard_preconditions", "soft_preconditions"}
+               "hard_preconditions", "soft_preconditions",
+               # E41：状态机阶段（S0..S7）。一张卡任何时刻只有一个阶段号，
+               # 进下一阶要有脚本认得的产出——见 _check_progress_block。
+               "progress"}
 REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "variants",
                 "ceiling", "last_verdict", "updated"}
 ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref", "role",
@@ -69,7 +72,9 @@ ALLOWED_VERDICT = {"status", "kb_path", "ratio", "geomean", "evidence",
                    "baseline_count_note", "regimes", "next_probe_decode",
                    # E39：离天花板多远。由 scripts/floor.py --write-card 写入，
                    # 缺 basis / t_floor_us 的一律不算（判据在 floor.py 与 E39）
-                   "floor"}
+                   "floor",
+                   # E41 状态机：S3 归因 / S4 资源画像 / S6 轮次 / S7 结论
+                   "bottleneck", "resources", "rounds", "verdict"}
 REQUIRED_VERDICT = {"status", "kb_path", "conclusion", "verified_on"}
 
 # E7：裸绝对耗时（0.887 ms / 1.29s / 83 us）——必须带分母或干脆不写
@@ -634,6 +639,182 @@ def _check_impl_to_ceiling(cards_dir, repo):
 
 
 _ACHIEVABLE_PEAKS = {}      # validate() 开头填一次；E40 只读（{bw:[], bf16:, fp8:}）
+
+
+STAGES = ("S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7")
+# 每个阶段号的前置产出（顶层字段名）。空 tuple = 只需卡片存在。
+STAGE_NEEDS = {
+    "S0": (),
+    "S1": ("semantics", "floor_inputs"),
+    "S2": ("last_verdict.comparison",),
+    "S3": ("last_verdict.bottleneck",),
+    "S4": ("last_verdict.resources",),
+    "S5": ("last_verdict.next_probe",),
+    "S6": ("last_verdict.rounds",),
+    "S7": ("last_verdict.verdict",),
+}
+BLOCKED_BY = {"semantics", "no_measured_time", "no_baseline",
+              "no_counters", "no_resources", "no_evidence"}
+
+
+def _dotted(card, path):
+    cur = card
+    for part in path.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return None
+        cur = cur[part]
+    return cur
+
+
+def _check_progress_block(card, where, err):
+    """E41：状态机阶段必须与卡上的实际产出对得上。
+
+    起因（2026-11-24）：27 张卡全叫 measured，但有的只测了耗时、
+    有的算了天花板、有的做了归因——**同一个标签下差了三四个阶段**，
+    所以看板没有意义。
+
+    判据：
+      ① stage ∈ S0..S7；
+      ② 声明的 stage 对应的前置产出必须都在（不许跳阶）；
+      ③ blocked_by 只能取枚举值，且**只要非空，stage 就必须停在缺产出的那一阶**；
+      ④ rounds 必须是非负整数（S6 及以后必须 ≥1）。
+    """
+    p = card.get("progress")
+    if p is None:
+        return                      # 没写 progress 是"未接入"，不是错误（覆盖率另算）
+    if not isinstance(p, dict):
+        err("E41", where, "progress 必须是 mapping")
+        return
+    extra = set(p) - {"stage", "since", "blocked_by", "last_verdict", "rounds"}
+    if extra:
+        err("E41", where, "progress 未知字段 %s" % sorted(extra))
+    st = p.get("stage")
+    if st not in STAGES:
+        err("E41", where, "progress.stage=%r 非法（只允许 %s）" % (st, list(STAGES)))
+        return
+    idx = STAGES.index(st)
+    miss = [need for need in STAGE_NEEDS[st] if _dotted(card, need) in (None, {}, [])]
+    if miss:
+        err("E41", where, "progress.stage=%s 但缺前置产出 %s —— 不许跳阶" % (st, miss))
+    bb = p.get("blocked_by")
+    if bb:
+        if bb not in BLOCKED_BY:
+            err("E41", where, "progress.blocked_by=%r 非法（只允许 %s）"
+                % (bb, sorted(BLOCKED_BY)))
+        elif not miss:
+            # 被阻塞却没缺任何东西 —— 要么是陈旧状态，要么是为了不往下走而编的理由
+            err("E41", where, "progress.blocked_by=%r 但该阶产出齐全 —— 阻塞理由不成立"
+                % bb)
+    rd = p.get("rounds")
+    if rd is not None:
+        if not isinstance(rd, int) or isinstance(rd, bool) or rd < 0:
+            err("E41", where, "progress.rounds=%r 必须是非负整数" % (rd,))
+        elif idx >= STAGES.index("S6") and rd < 1:
+            err("E41", where, "progress.stage=%s 但 rounds=0 —— 没做过实验不许标实验阶段" % st)
+    # progress.rounds 与 last_verdict.rounds 若同时存在，必须相等：
+    # 两个地方记轮次是最容易出现"账本说 3 轮、结论说 1 轮"的地方。
+    lvr = (card.get("last_verdict") or {}).get("rounds")
+    if rd is not None and lvr is not None and rd != lvr:
+        err("E41", where, "progress.rounds=%s 与 last_verdict.rounds=%s 不一致"
+            % (rd, lvr))
+
+
+def _check_bottleneck_block(lv, where, err):
+    """E42：S3 归因必须带**可复跑证据**，否则它只是"感觉是带宽"。
+
+    业主裁决（2026-11-24）：归因没证据不许进 S5。
+    判据：
+      ① bound ∈ {memory, compute, latency, mixed}；
+      ② evidence 至少一条，每条必须带 reproduce（命令或"文件#锚点"）；
+      ③ **bound 与证据类型必须对得上**——
+         memory-bound 要有字节侧证据（ratio/ablation/counters），
+         compute-bound 要有算力侧证据；
+      ④ 空字符串/"待定"/"看看" 这类不算证据。
+    """
+    b = lv.get("bottleneck")
+    if b is None:
+        return
+    if not isinstance(b, dict):
+        err("E42", where, "last_verdict.bottleneck 必须是 mapping")
+        return
+    extra = set(b) - {"bound", "root_cause", "evidence", "caliber"}
+    if extra:
+        err("E42", where, "bottleneck 未知字段 %s" % sorted(extra))
+    if b.get("bound") not in ("memory", "compute", "latency", "mixed"):
+        err("E42", where, "bottleneck.bound=%r 非法" % (b.get("bound"),))
+    if not str(b.get("root_cause") or "").strip():
+        err("E42", where, "bottleneck 缺 root_cause")
+    ev = b.get("evidence")
+    if not isinstance(ev, list) or not ev:
+        err("E42", where, "bottleneck.evidence 必须是非空列表 —— 没证据的归因不许进 S5")
+        return
+    VAGUE = {"感觉", "应该是", "看看", "待定", "疑似", ""}
+    for i, e in enumerate(ev):
+        if not isinstance(e, dict):
+            err("E42", where, "bottleneck.evidence[%d] 必须是 mapping" % i)
+            continue
+        if str(e.get("what") or "").strip() in VAGUE:
+            err("E42", where, "bottleneck.evidence[%d].what 是空话" % i)
+        if not str(e.get("reproduce") or "").strip():
+            err("E42", where,
+                "bottleneck.evidence[%d] 缺 reproduce —— 不可复跑的证据不算证据" % i)
+        if e.get("kind") not in ("ratio", "counters", "ablation"):
+            err("E42", where,
+                "bottleneck.evidence[%d].kind=%r（只允许 ratio/counters/ablation）"
+                % (i, e.get("kind")))
+    # ③ bound 与证据的对应关系
+    if b.get("bound") == "memory" and all(
+            e.get("kind") not in ("ratio", "counters", "ablation")
+            for e in ev if isinstance(e, dict)):
+        err("E42", where, "bound=memory 但没有任何字节侧证据")
+    if b.get("bound") == "compute":
+        has_flops = any(isinstance(e, dict) and
+                        re.search(r"flops|tflops|mfma|算力", str(e.get("what") or ""),
+                                  re.I) for e in ev)
+        if not has_flops:
+            err("E42", where,
+                "bound=compute 但证据里没有任何算力侧内容（flops/TFLOPS/MFMA）")
+
+
+def _check_resources_block(lv, where, err):
+    """E43：S4 资源画像。**未知要写 null + 原因，不许填 0**。
+
+    起因：S4 是全仓最大断点（0 张卡把五件套落盘）。
+    而"利用率"只有在知道 VGPR/LDS/CTA 之后才成立——否则
+    「达成率 0.66」根本没说清是在什么占用下跑的。
+
+    裁决变更（2026-11-24）：**去掉 lds_bank_conflict**。实测证明
+    `SQ_LDS_BANK_CONFLICT` 在本机故意构造冲突后仍为 0（见
+    op-profiling/references/counters.md §1.1），它不反映真实冲突。
+    改用两个代理：SQ_WAIT_INST_LDS/SQ_INSTS_LDS、SQ_INSTS_LDS/MFMA。
+    """
+    r = lv.get("resources")
+    if r is None:
+        return
+    if not isinstance(r, dict):
+        err("E43", where, "last_verdict.resources 必须是 mapping")
+        return
+    allowed = {"vgpr", "lds_per_cta", "ctas_per_cu", "waves_per_cu",
+               "achieved_bw", "bw_util", "proxies", "source", "status"}
+    extra = set(r) - allowed
+    if extra:
+        err("E43", where, "resources 未知字段 %s" % sorted(extra))
+    if "lds_bank_conflict" in r:
+        err("E43", where,
+            "resources 不许含 lds_bank_conflict —— 该计数器本机采不到真实值，"
+            "改用 proxies")
+    for k in ("vgpr", "lds_per_cta", "ctas_per_cu"):
+        v = r.get(k)
+        if v == 0:
+            err("E43", where,
+                "resources.%s=0 是错误值不是缺省（会让占用率静默变成无限）" % k)
+    if r.get("status") not in ("complete", "partial"):
+        err("E43", where, "resources.status 必须是 complete 或 partial")
+    if r.get("status") == "partial" and not str(r.get("source") or "").strip():
+        err("E43", where,
+            "resources.status=partial 必须写 source 说明缺什么、为什么缺")
+    if r.get("achieved_bw") is None and r.get("status") == "complete":
+        err("E43", where, "status=complete 但缺 achieved_bw")
 
 
 FLOOR_FIELDS = {"remaining", "t_floor_us", "t_actual_us", "binding", "basis",
@@ -1447,6 +1628,9 @@ def validate(atlas, repo):
 
         # ---- E39 「离天花板多远」必须是算出来的，不是填出来的
         _check_floor_block(lv, where, err, _ACHIEVABLE_PEAKS)
+        _check_progress_block(c, where, err)
+        _check_bottleneck_block(lv, where, err)
+        _check_resources_block(lv, where, err)
 
         ratio = lv.get("ratio")
         if ratio is not None:
