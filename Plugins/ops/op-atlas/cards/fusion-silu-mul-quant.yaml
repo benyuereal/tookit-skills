@@ -1,0 +1,193 @@
+id: fusion-silu-mul-quant
+title: SiLU×mul + per-token 量化 融合（silu_mul_quant）
+family: activation
+math: out, scale = per_token_quant(silu(gate) * up)，输入按 [..., 2d] 的 [gate|up] 切分
+status: measured
+layer: kernel
+op_card: null
+semantics:
+  formula: "out, scale = per_token_quant(silu(x[...,:d]) * x[...,d:])"
+  inputs: [x]
+  outputs: [out, scale]
+  traffic_passes:
+    reads: 1
+    writes: 2
+    source: 读 1 份 [M, 2H] 输入；写 out [M, H] + scale [M, 1] 两份
+  mutates_inputs: []
+variants:
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/fuse_silu_mul_quant.py fuse_silu_mul_fp8_quant（同族 fuse_silu_mul_quant 出 int8）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - MoE/SwiGLU 的 down-proj 入口：silu×mul 后直接出 FP8 喂 GEMM
+  - 需要 DeepSeek V4 式 clamp 时（limit>0 在激活前钳 gate 与 up）
+  not_for:
+  - 出 INT8 且需要 clamp（limit 只在 fp8 入口存在）
+  - 3D 专家布局 [E,T,2H]（实测 ValueError: too many values to unpack，须用 _ep 变体）
+  pros:
+  - 单 kernel 完成 silu×mul+per-token 量化：实测 M=8192/H=14336 bf16 档 0.7970 ms
+  - 相对分步（silu_and_mul + per_token_quant）实测快 2.31x（0.7970 vs 1.8433）
+  - rel_l2 0.0245（fp8 e4m3），scale 与 oracle amax/448 一致到 1e-5
+  cons:
+  - 输入必须 2D [M,2H]；3D 布局直接抛 ValueError，不是自动 reshape
+  - int8 档 fuse_silu_mul_quant 无 limit 参数，DeepSeek 式 clamp 用不了
+  source: references/libraries.md
+  import_path: lightop.fuse_silu_mul_fp8_quant
+  signature: "fuse_silu_mul_fp8_quant(input: Tensor, fp8type: int=0, num_local_tokens_tensor: Optional[Tensor]=None, topk: int=1, expect_m: int=-1, output: Optional[Tensor]=None, scales: Optional[Tensor]=None, expert_ids: Optional[Tensor]=None, limit: Optional[float]=-1.0) -> tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import lightop,torch; o,s=lightop.fuse_silu_mul_fp8_quant(torch.randn(64,1024,device='cuda',dtype=torch.bfloat16),0); assert o.shape==(64,512) and o.dtype==torch.float8_e4m3fn and s.shape==(64,1)"
+  role: competitor
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter/ops/activation.py fuse_silu_mul_fp8_quant（同族 fuse_silu_mul_quant / fuse_silu_mul_per_token_quant）
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 走 AITER 统一 API 的 SwiGLU 链路
+  not_for:
+  - 输入非 2D（同样只吃 [M,2H]）
+  pros:
+  - 实测 M=8192/H=14336 bf16 档 0.6787 ms，比 lightop 的 0.7970 ms 快 1.17x
+  - 与 lightop 同签名、同输出 dtype（fp8 e4m3），可直接 A/B
+  cons:
+  - 无 limit 参数，DeepSeek V4 式 clamp 只能走 lightop 的 fp8 入口
+  - rel_l2 0.0245 与 lightop 同档，差异在噪声内
+  source: references/libraries.md
+  import_path: aiter.fuse_silu_mul_fp8_quant
+  signature: "fuse_silu_mul_fp8_quant(input: Tensor, fp8type: int=0, num_local_tokens_tensor: Optional[Tensor]=None, topk: int=1, expect_m: int=-1, output: Optional[Tensor]=None, scales: Optional[Tensor]=None, expert_ids: Optional[Tensor]=None) -> Tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import aiter,torch; o,s=aiter.fuse_silu_mul_fp8_quant(torch.randn(64,1024,device='cuda',dtype=torch.bfloat16),0); assert o.shape==(64,512)"
+  role: competitor
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter/ops/activation.py fuse_silu_mul_quant（int8）/ fuse_silu_mul_per_token_quant（dtype 可变）
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要 INT8 输出而非 FP8
+  - per_token_quant 版本可按 dtype 参数切换 int8/fp8
+  not_for:
+  - 需要 clamp 时
+  pros:
+  - 实测 int8 档与 lightop.fuse_silu_mul_quant 同档（rel_l2 0.0155），scale 与 amax/127 一致
+  - per_token 版本的 dtype 参数是单一入口覆盖两种量化
+  cons:
+  - 实测 M=8192 int8 档 lightop 0.9257 ms 相对 fp8 档慢 1.16x，量化 dtype 影响不止精度
+  - per_token 版本多一层 dtype 分派
+  source: references/libraries.md
+  import_path: aiter.fuse_silu_mul_quant
+  signature: "fuse_silu_mul_quant(input: Tensor, num_local_tokens_tensor: Optional[Tensor]=None, topk: int=1, expect_m: int=-1, output: Optional[Tensor]=None, scales: Optional[Tensor]=None, expert_ids: Optional[Tensor]=None) -> Tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import aiter,torch; o,s=aiter.fuse_silu_mul_quant(torch.randn(64,1024,device='cuda',dtype=torch.bfloat16)); assert o.dtype==torch.int8"
+  role: competitor
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/fuse_silu_mul_quant.py fuse_silu_mul_clamp_quant（clamp+silu/gelu+mul+int8）
+  tier: reference
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 需要 clamp 且必须出 INT8 的路径（fp8 入口的 limit 之外还有这条）
+  - 需要 GELU 替代 SiLU 时（use_gelu=True）
+  not_for:
+  - 纯 silu×mul+量化（clamp 会改变数值，不是等语义）
+  pros:
+  - 唯一同时支持 limit + INT8 + GELU 的入口，签名明确（非 *args 包装）
+  cons:
+  - 语义是 clamp→silu→mul→quant，带 limit 就不是本卡的等语义；只有 limit 传正数才走 clamp 分支
+  source: references/libraries.md
+  import_path: lightop.fuse_silu_mul_clamp_quant
+  signature: "fuse_silu_mul_clamp_quant(input: Tensor, limit: float, output: Optional[Tensor]=None, scales: Optional[Tensor]=None, mask_m: Optional[Tensor]=None, expect_m: int=-1, use_gelu: bool=False, smooth_scale: Optional[Tensor]=None) -> tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import lightop; assert hasattr(lightop,'fuse_silu_mul_clamp_quant')"
+  role: competitor
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter.moe_c_silu_and_mul（组合形态中的第二段，不是融合入口）
+  tier: avoid
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 仅作为 I7「反量化+SwiGLU+量化」组合链里被拼装的一段
+  not_for:
+  - 当融合入口用：它只做 silu×mul，不带量化
+  pros:
+  - 若上游已是反量化后的 bf16，单段调用可复用
+  cons:
+  - 不是真融合：与 per_token_quant 拼起来是两次 kernel 两次 HBM 往返，实测分步 1.8433 ms vs 融合 0.6787 ms（慢 2.72x）
+  - moe_c_silu_and_mul 只存在于 aiter，lightop 无同名入口
+  source: references/libraries.md
+  source_ref: null
+  import_path: aiter.moe_c_silu_and_mul
+  signature: "(pybind11 组合入口，签名不可读；仅做 silu×mul，不含量化)"
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,'moe_c_silu_and_mul')"
+  role: wrong_op
+ceiling:
+  kind: constants
+  ref: Plugins/ops/skills/op-roofline/constants.yaml#memory.stream_read_peak
+  bound: bandwidth
+  note: 纯 memory-bound，1R2W；分母 stream_read_peak=1724 GB/s（status unverified，须并列实测）
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
+last_verdict:
+  status: measured
+  kb_path: null
+  ratio:
+    kind: speedup
+    unit: x
+    value: 2.31
+    vs: 分步（aiter.silu_and_mul + dynamic_per_token_scaled_quant）的耗时比，M=8192/H=14336 bf16 fp8 档
+    scope:
+      cards: 1
+      in_len: M=1024 与 M=8192
+      out_len: H=14336
+      warmup: hot
+      note: cuda_event；预克隆池 8 组轮换。M=1024 档分步 0.2433 / 融合 0.1083 = 2.25x
+  conclusion: 比 silu_and_mul+quant 分步快 2.25x/2.31x；aiter 档再快 1.17x
+  verified_on: '2026-11-23'
+  traffic_passes:
+    reads: 1
+    writes: 2
+  inputs: [x]
+  outputs: [out, scale]
+  baseline_count: 3
+  comparison:
+    baseline: lightop.fuse_silu_mul_fp8_quant
+    baseline_role: competitor
+    semantics_aligned: true
+    alignment: "双方均为 inputs=[x(2H)]、outputs=[out(H), scale(1)] 的 1R2W；分步参考多一次中间态写读（passes=5），已单独标注不可当基准"
+    cand_us: 678.7
+    base_us: 797.0
+    ratio: 1.174
+    significant: true
+  next_probe:
+    surface: fusion-boundary
+    hypothesis: 实测 1R2W 应只搬 3 份字节，M=8192/H=14336 换算约 1.2 TB/s 档；若把 scale 写进 out 的尾部 padding 省掉一次独立写，应再快 ≥5%
+    expected: 相对当前 ≥1.05x
+    stop_if: 若合并 scale 后不涨，说明 scale 写只占 <1% 字节、瓶颈在 silu 的 exp 而非带宽 ⇒ 说明已到访存地板
+    effort: 3h
+modify_path:
+  kind: replace-call
+  what: silu_and_mul + per_token_quant 两段换成单个 fuse_silu_mul_fp8_quant
+  how: lightop.fuse_silu_mul_fp8_quant(gate_up, 0) 直接返回 (fp8_out, scale)；fp8type=1 走 e5m2，int8 用 fuse_silu_mul_quant
+  requires: 输入须 2D [M, 2H]；3D 专家布局用 _ep 变体
+hard_preconditions:
+- statement: 入口必须可 import；3D 输入会抛 ValueError 而非自动 reshape
+  check: python3 -I -c "import lightop,torch; o,s=lightop.fuse_silu_mul_fp8_quant(torch.randn(8,512,device='cuda',dtype=torch.bfloat16),0); assert o.shape==(8,256)"
+- statement: 切分顺序是 [gate|up]（前半 gate，后半 up），弄反不报错只偏
+  check: python3 -I -c "import torch,lightop; x=torch.randn(8,512,device='cuda',dtype=torch.bfloat16); o,s=lightop.fuse_silu_mul_fp8_quant(x,0); g,u=x[:,:256],x[:,256:]; ref=torch.nn.functional.silu(g.float())*u.float(); print(float((o.float()*s-ref).norm()/ref.norm()))"
+- statement: limit>0 才启用 clamp，且仅在 fp8 入口；传 -1.0 或 None 都关闭
+  check: python3 -I -c "import lightop,torch; x=torch.randn(8,512,device='cuda',dtype=torch.bfloat16)*10; a=lightop.fuse_silu_mul_fp8_quant(x.clone(),0,limit=-1.0)[0]; b=lightop.fuse_silu_mul_fp8_quant(x.clone(),0,limit=2.0)[0]; assert not torch.equal(a.view(torch.uint8),b.view(torch.uint8))"
+soft_preconditions:
+- hot 态；cuda_event 计时
+- 结论只在 M=1024/8192、H=14336、bf16 下测得
+surfaces:
+- fusion-boundary
+- precision-drop
+updated: '2026-11-23'
+baseline_ref:
+  impl: lightop.fuse_silu_mul_fp8_quant
+  role: competitor
+  traffic_passes:
+    reads: 1
+    writes: 2
+    passes: 3
+    source: 按 semantics 推定（1 读 2 写），未逐字节校验

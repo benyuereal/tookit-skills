@@ -88,8 +88,8 @@ last_verdict:
       note: "大 M，仍是纯访存算子（无算力），瓶颈在字节数与向量化宽度"
   next_probe:
     surface: fusion-boundary
-    hypothesis: "独立量化读 x 写 q+scale 是 2 份 [M,K]；融合进上游后只剩写 q 一份，理论 ≥1.5 倍（按 2 份 / 1.33 份估算）；实测若 <1.2 倍说明上游主导了计时"
-    expected: "prefill-8k 融合版相对独立量化提速 ≥1.5 倍（同口径 3×MAD 内不显著即作废）"
+    hypothesis: "独立量化是读 x 一份 + 写 q 一份（scale 可忽略），共 2 趟；融合进上游后上游已持有 x，只剩写 q 一趟，纯量化段理论 ≥2 倍；实测若 <1.2 倍说明上游主导了计时"
+    expected: "prefill-8k 融合版相对独立量化提速 ≥2 倍（同口径 3×MAD 内不显著即作废）"
     stop_if: "实测 <1.2 倍 ⇒ 说明上游 silu/rmsnorm 的算力已是计时主体、量化那趟不是瓶颈 → 转查 layout-pack 的 q 连续性"
     effort: 3h
 modify_path:

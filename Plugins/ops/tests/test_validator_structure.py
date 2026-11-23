@@ -47,5 +47,36 @@ class TestValidatorStructure(unittest.TestCase):
         self.assertEqual(uncalled, [], "这些检查函数只定义没调用：%s" % uncalled)
 
 
+class TestSemanticsListIntegrity(unittest.TestCase):
+    """semantics 的列表项不许被逗号切碎。
+
+    2026-11-23 实测：YAML 里写 `outputs: [y (B,M,N)]` 没加引号，
+    任何 round-trip（yaml.dump / 自动 formatter）都会把它按逗号拆成
+    ['y (B', 'M', 'N)'] —— 直接触发 E36「outputs 数与 writes 不符」，
+    而错误信息会指向「输出份数不对」，与真实原因（YAML 引号）无关。
+
+    判据：列表项不允许以 '(' 结尾或含未配对的括号。
+    """
+    CARDS = REPO / "Plugins/ops/op-atlas/cards"
+
+    def test_list_items_not_split_by_comma(self):
+        import yaml
+        bad = []
+        for p in sorted(self.CARDS.glob("*.yaml")):
+            d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+            sem = d.get("semantics") or {}
+            for key in ("inputs", "outputs"):
+                for item in sem.get(key) or []:
+                    if not isinstance(item, str):
+                        continue
+                    opens, closes = item.count("("), item.count(")")
+                    if opens != closes:
+                        bad.append("%s %s: %r（括号不配对，多半是逗号切碎）"
+                                   % (p.stem, key, item))
+                    elif item.rstrip().endswith(","):
+                        bad.append("%s %s: %r（以逗号结尾）" % (p.stem, key, item))
+        self.assertEqual(bad, [], "\n".join(bad))
+
+
 if __name__ == "__main__":
     unittest.main()

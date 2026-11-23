@@ -50,13 +50,13 @@ variants:
   - 输出直出 fp8_e4m3 给下游 fp8 GEMM 吃（dtype 参数）；B 大且每 batch 权重不同
   not_for:
   - 纯 bf16 批 GEMM（本入口强制 8bit 路径，量化误差与 bf16 版不等价）
-  - 标度粒度与下游不一致时（x_scale 是 per-batch 单标度，不是 per-token 向量）
+  - 标度粒度与下游不一致时（x_scale 是 (B,M,1) per-token/per-batch，w_scale 是 (B,N,1) per-channel；换 per-block 粒度要另找入口）
   pros:
   - 量化融进 GEMM，省掉独立的 per-token 量化 kernel（省 x 的一次读 + 一次写）
   - transpose_bm 与 transpose_bm_in 支持 (B,M,K)/(M,B,K) 两种排布，省一次 permute
   cons:
   - 语义与 bf16 版不同：读 4 个张量（x,w,x_scale,w_scale）写 1 个，与 boltops 版不可同榜算加速比
-  - 文档只写 x_scale 是 per-batch 标度（B,M,1），与 per-token 粒度不符时会静默算错
+  - x_scale 是 (B,M,1)（per-token）、w_scale 是 (B,N,1)（per-channel）；粒度与下游契约不符时静默算错
   source: references/libraries.md
   import_path: lightop.fused_bmm
   signature: 'fused_bmm(x, w, x_scale, w_scale, bias=None, dtype=torch.float8_e4m3fn, output=None, transpose_bm=False, transpose_bm_in=False, config={''MODE'': 0}) -> Tensor'

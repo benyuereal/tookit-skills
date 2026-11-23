@@ -1,0 +1,208 @@
+id: fusion-add-rmsnorm-quant
+title: 残差 + RMSNorm + 动态量化 三合一（add_rmsnorm_quant）
+family: norm
+math: out, res_out, scale = dyn_quant(w*((x+res)/sqrt(mean((x+res)^2,-1)+eps))); 残差先加再归一
+status: measured
+layer: kernel
+op_card: null
+semantics:
+  formula: "out, res_out, scale = per_token_quant(rmsnorm(x+residual)*w)"
+  inputs: [x, residual, weight]
+  outputs: [out, residual_out, scale]
+  traffic_passes:
+    reads: 2
+    writes: 3
+    source: 读 x+residual（2）；写出 out、residual_out、scale（3）。scale 只有 M*4B、占比 <0.1%，但按「产出几份就记几次写」的硬规则记为 3
+  mutates_inputs: [residual]
+variants:
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/rmsnorm.py 的 rms_norm_dynamic_per_token_quant（同族 rms_norm_per_token_quant / rms_norm_per_token_fp8_quant）
+  tier: primary
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - decoder 每层「残差加 + pre-norm + 转 INT8/FP8」一步做完
+  - 需要 residual_out 与量化 scale 同时返回（下游 GEMM 直接用）
+  not_for:
+  - 不需要量化的路径（用 fused_add_rms_norm 即可，少一次写）
+  - 想靠 update_input 省掉 residual_out 拷贝时（见 cons，实测仍会写 residual）
+  pros:
+  - 单 kernel 完成 add+norm+quant：实测 M=8192/H=4096 bf16 下 int8 档 0.2856 ms、fp8 档 0.1971 ms
+  - residual 参数可省，退化后 rel_l2 0.0080 走纯 norm+quant，与 fusion-add-rmsnorm 的入口可组合
+  cons:
+  - update_input=False 时 residual 仍被原地改写（实测 r==x+r），只改 input 不改 residual —— 多变体对比必须各喂副本
+  - gemma_rms_norm_per_token_fp8_quant 的权重语义是 (1+w)（实测 rel_l2 0.0265 vs 0.9905），与 torch RMSNorm 的 w 不同，替换时会静默偏 0.98
+  source: references/libraries.md
+  import_path: lightop.rms_norm_dynamic_per_token_quant
+  signature: "rms_norm_dynamic_per_token_quant(input: Tensor, weight: Tensor, epsilon: float, quant_dtype: torch.dtype, residual: Optional[Tensor]=None, update_input: bool=True, limit: float=-1.0) -> tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import lightop,torch; o,s=lightop.rms_norm_dynamic_per_token_quant(torch.randn(64,512,device='cuda',dtype=torch.bfloat16),torch.randn(512,device='cuda',dtype=torch.bfloat16),1e-5,torch.int8,torch.randn(64,512,device='cuda',dtype=torch.bfloat16),True); assert o.dtype==torch.int8 and s.shape==(64,1)"
+  source_ref: null
+  role: competitor
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/rmsnorm.py rms_norm_per_token_quant（int8 走 dynamic_per_token_quant，fp8 走 rms_norm_fp8_quant）
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 一个入口覆盖 int8/fp8 两种量化 dtype（dtype 参数分派）
+  not_for:
+  - 需要 limit 与 fp8 同时用时（limit 只在 int8 档有效，fp8 档传 limit 会抛 ValueError）
+  pros:
+  - 实测 M=8192/H=4096 bf16 int8 档 0.2791 ms，略快于 dynamic_per_token_quant 的 0.2856 ms
+  cons:
+  - fp8 档 rel_l2 0.0261、int8 档 0.0075；dtype 分派是 Python 层 if，不是单 kernel 双精度
+  source: references/libraries.md
+  import_path: lightop.rms_norm_per_token_quant
+  signature: "rms_norm_per_token_quant(input: Tensor, weight: Tensor, epsilon: float=1e-05, dtype: torch.dtype=torch.int8, residual: Optional[Tensor]=None, update_input: bool=False, limit: float=-1.0) -> Tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import lightop,torch; o,s=lightop.rms_norm_per_token_quant(torch.randn(8,256,device='cuda',dtype=torch.bfloat16),torch.randn(256,device='cuda',dtype=torch.bfloat16),1e-5,torch.int8,torch.randn(8,256,device='cuda',dtype=torch.bfloat16),False); assert o.shape==(8,256)"
+  role: competitor
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/rmsnorm.py rms_norm_per_token_fp8_quant（fp8type 0=e4m3 / 1=e5m2）
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 只出 FP8 的路径（fp8type 选 e4m3/e5m2）
+  not_for:
+  - 需要 INT8 时（那是 rms_norm_per_token_quant 的 int8 分支）
+  pros:
+  - 实测 M=8192/H=4096 bf16 档 0.1971 ms，是本卡最快的一条
+  - fp8 输出 dtype 实测为 torch.float8_e4m3fn，可直接喂 GEMM
+  cons:
+  - 实测 rel_l2 0.0261（fp8 舍入），比 int8 档的 0.0075 大一个档
+  - 无 limit 参数，DeepSeek 式 clamp 该卡不支持
+  source: references/libraries.md
+  import_path: lightop.rms_norm_per_token_fp8_quant
+  signature: "rms_norm_per_token_fp8_quant(input: Tensor, weight: Tensor, epsilon: float=1e-05, fp8type: int=0, residual: Optional[Tensor]=None, update_input: bool=False) -> tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import lightop,torch; o,s=lightop.rms_norm_per_token_fp8_quant(torch.randn(8,256,device='cuda',dtype=torch.bfloat16),torch.randn(256,device='cuda',dtype=torch.bfloat16),1e-5,0,torch.randn(8,256,device='cuda',dtype=torch.bfloat16),False); assert o.dtype==torch.float8_e4m3fn"
+  role: competitor
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter.rmsnorm2d_fwd_with_add_dynamicquant（out-of-place 五参；同族 rmsnorm2d_fwd_with_add 只做 add+norm）
+  tier: structural
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 走 AITER 统一 API / 已在 vLLM-SGLang 生态里的接入
+  not_for:
+  - 需要 residual_out 与量化结果都返回时（它要求调用方预分配 out/res_out/scales 三个张量）
+  pros:
+  - 实测 M=8192/H=4096 bf16 档 0.2559 ms，比 lightop int8 的 0.2856 ms 快
+  - res_out 实测等于 x+r（allclose atol=1e-2），语义与 lightop 一致
+  cons:
+  - 签名不可读（*args/**kwargs 包装），实际声明是 (out,input,input,residual_out,scales,weight,eps)，靠报错反推
+  - rel_l2 0.0151，为 lightop int8 的 0.0075 的两倍
+  source: references/libraries.md
+  import_path: aiter.rmsnorm2d_fwd_with_add_dynamicquant
+  signature: "(pybind11, 签名不可读；实测声明 rmsnorm2d_fwd_with_add_dynamicquant(out, input, residual, residual_out, scales, weight, eps) -> None)"
+  smoke_test: python3 -I -c "import aiter,torch; M,H=64,512; o=torch.empty(M,H,device='cuda',dtype=torch.int8); r=torch.empty(M,H,device='cuda',dtype=torch.bfloat16); s=torch.empty(M,1,device='cuda'); aiter.rmsnorm2d_fwd_with_add_dynamicquant(o,torch.randn(M,H,device='cuda',dtype=torch.bfloat16),torch.randn(M,H,device='cuda',dtype=torch.bfloat16),r,s,torch.randn(H,device='cuda',dtype=torch.bfloat16),1e-5)"
+  role: competitor
+- repo: lightop
+  library_profile_ref: libraries.md §3
+  file_hint: lightop/rmsnorm.py gemma_rms_norm_per_token_fp8_quant
+  tier: reference
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - Gemma 系（权重语义为 1+w）的 add+norm+fp8
+  not_for:
+  - Llama/Qwen 系（w 会被多算一次 1，实测 rel_l2 0.9905 完全对不上）
+  pros:
+  - 与 rms_norm_per_token_fp8_quant 同签名，可原地替换
+  cons:
+  - 权重语义是 (1+w)：实测用 (x+r)/(1+w) 对才到 rel_l2 0.0265，用 w 是 0.9905——换模型族时会静默错
+  source: references/libraries.md
+  import_path: lightop.gemma_rms_norm_per_token_fp8_quant
+  signature: "gemma_rms_norm_per_token_fp8_quant(input: Tensor, weight: Tensor, epsilon: float=1e-05, fp8type: int=0, residual: Optional[Tensor]=None, update_input: bool=False) -> tuple[Tensor, Tensor]"
+  smoke_test: python3 -I -c "import lightop,torch; o,s=lightop.gemma_rms_norm_per_token_fp8_quant(torch.randn(8,256,device='cuda',dtype=torch.bfloat16),torch.randn(256,device='cuda',dtype=torch.bfloat16),1e-5,0,torch.randn(8,256,device='cuda',dtype=torch.bfloat16),False); assert o.dtype==torch.float8_e4m3fn"
+  role: competitor
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: aiter.fused_allreduce_rmsnorm_quant（norm+通信+量化，非本卡的 add+norm+quant）
+  tier: unavailable
+  law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
+  best_for:
+  - 多卡 allreduce 与 norm 融合（属 I5，不属本卡的单卡链）
+  not_for:
+  - 单卡 add+norm+quant（本卡场景）；且本机无 distributed 初始化时不可用
+  pros:
+  - 若多卡链路成立，理论上省一次 allreduce 往返（未实测）
+  cons:
+  - 本机实测不可用：torch.distributed 未初始化，直接调用报 "Expected a value of type 'int' for argument '_fa'"，_fa 是 communicator 句柄
+  - 它不是 add+norm+quant 语义：签名为 (_fa, inp, res_inp, res_out, out, scale_out, w, eps, reg_ptr, reg_bytes, use_1stage)，**不含独立 add 输入**，是 norm+quant 叠在 allreduce 后
+  source: references/libraries.md
+  import_path: aiter.fused_allreduce_rmsnorm_quant
+  signature: "(pybind11, 签名不可读；底层声明 fused_allreduce_rmsnorm_quant(_fa:int, inp, res_inp, res_out, out, scale_out, w, eps, reg_ptr, reg_bytes, use_1stage) -> None)"
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,'fused_allreduce_rmsnorm_quant')"
+  role: unverified
+ceiling:
+  kind: constants
+  ref: Plugins/ops/skills/op-roofline/constants.yaml#memory.stream_read_peak
+  bound: bandwidth
+  note: 纯 memory-bound，字节数由 semantics.traffic_passes 定死（2R2W）；分母用 stream_read_peak=1724 GB/s（status 为 unverified，须并列报实测）
+shapes:
+- decode-m1
+- decode-m32
+- prefill-8k
+last_verdict:
+  status: measured
+  kb_path: null
+  ratio:
+    kind: speedup
+    unit: x
+    value: 1.11
+    vs: aiter.rmsnorm2d_fwd_with_add_dynamicquant 的耗时比（M=8192/H=4096 int8 档；lightop 0.2856 / aiter 0.2559 —— 此处 1.11 是 aiter 相对 lightop 的领先，本卡最优是 fp8 档）
+    scope:
+      cards: 1
+      in_len: M=1024 与 M=8192
+      out_len: H=4096
+      warmup: hot
+      note: bf16 输入；cuda_event 计时；预克隆池 8 组轮换。M=1024 档 aiter 0.0430 / lightop-dyn 0.0516
+  conclusion: 未实测跨库领先；本卡只测了单实现绝对耗时，同口径对比见 vs
+  verified_on: '2026-11-23'
+  traffic_passes:
+    reads: 2
+    writes: 3
+  inputs: [x, residual, weight]
+  outputs: [out, residual_out, scale]
+  baseline_count: 2
+  comparison:
+    baseline: lightop.rms_norm_dynamic_per_token_quant
+    baseline_role: competitor
+    semantics_aligned: true
+    alignment: "双方均为 (inputs=[x,residual,weight], outputs=[out,res_out,scale]) 的 2R2W 口径；aiter 侧需预分配 out/res_out/scales，计时含其分配点已在池内预分配"
+    cand_us: 255.9
+    base_us: 285.6
+    ratio: 1.116
+    significant: true
+  next_probe:
+    surface: precision-drop
+    hypothesis: fp8 档实测 0.1971 ms 比 int8 档 0.2791 ms 快 1.42x，但 rel_l2 从 0.0075 升到 0.0261：若把 scale 改成 per-token-group(128) 而非 per-token，误差应降回 0.01 量级
+    expected: 相对当前 fp8 per-token 再降误差 ≥1.5x 且耗时 +≤15%
+    stop_if: 若分组 scale 后误差不降，说明瓶颈是 fp8 e4m3 的 3 位尾数而非 scale 粒度 ⇒ 标 precision-drop 已到底
+    effort: 2h
+modify_path:
+  kind: replace-call
+  what: torch 分步（x+r → rmsnorm → 动态量化）换成单个 lightop 入口
+  how: lightop.rms_norm_dynamic_per_token_quant(x, w, eps, torch.int8, residual, True)；只要 fp8 就用 rms_norm_per_token_fp8_quant(x, w, eps, 0, residual, False)
+  requires: lightop 0.6.0；residual 若非 None 会被原地改写，调用方勿复用
+hard_preconditions:
+- statement: 入口必须真能 import 且属性存在，否则整卡不可用
+  check: python3 -I -c "import lightop; [assert_ for _ in ()]; assert hasattr(lightop,'rms_norm_dynamic_per_token_quant') and hasattr(lightop,'rms_norm_per_token_quant') and hasattr(lightop,'rms_norm_per_token_fp8_quant')"
+- statement: 该入口会原地改写 residual（即使 update_input=False），多变体必须各喂独立副本
+  check: python3 -I -c "import torch,lightop; M,H=8,64; x=torch.randn(M,H,device='cuda',dtype=torch.bfloat16); r=torch.randn(M,H,device='cuda',dtype=torch.bfloat16); r0=r.clone(); lightop.rms_norm_per_token_quant(x.clone(),torch.ones(H,device='cuda',dtype=torch.bfloat16),1e-5,torch.int8,r,False); assert not torch.equal(r,r0)"
+- statement: gemma 变体的权重语义是 (1+w)，Llama/Qwen 权重直接用会偏 ~0.99 rel_l2
+  check: python3 -I -c "import torch,lightop; M,H=8,256; x=torch.randn(M,H,device='cuda',dtype=torch.bfloat16); r=torch.randn(M,H,device='cuda',dtype=torch.bfloat16); w=torch.randn(H,device='cuda',dtype=torch.bfloat16); o,s=lightop.gemma_rms_norm_per_token_fp8_quant(x,w,1e-5,0,r,False); h=(x.float()+r.float()); ref=h*torch.rsqrt(h.pow(2).mean(-1,keepdim=True)+1e-5)*w.float(); print(float((o.float()*s-ref).norm()/ref.norm()))"
+soft_preconditions:
+- 建议 hot 态；计时用 cuda_event，禁 time.time()
+- 结论只在 M=1024/8192、H=4096、bf16 输入下测得；换 shape 或换 fp16 须重测
+surfaces:
+- fusion-boundary
+- precision-drop
+updated: '2026-11-23'
+baseline_ref:
+  impl: lightop.rms_norm_dynamic_per_token_quant
+  role: competitor
+  traffic_passes:
+    reads: 2
+    writes: 3
+    passes: 5
+    source: 按 semantics 实测入参（x+residual）与出参（out+residual_out+scale）推定，未逐字节校验

@@ -315,6 +315,35 @@ def _check_gemm_regime(cards_dir, repo):
                          "必须写清分母是 1848（纯读）还是 1749（1:1）以及为什么" % p.name)
 
 
+def _check_semantics_required(cards_dir, repo):
+    """E37：已下结论的卡必须声明访存语义。
+
+    2026-11-23 事故：融合残差 RMSNorm 实际 2 读 2 写（268MB），
+    被按「1 输出」（201MB）算达成率，util 虚高 50%。
+    根因不是算错，是**没有地方声明「这算的是几读几写」**。
+
+    分档（一刀切会逼人造假）：
+      status ∈ {measured, tuned}  → 必填（error）
+      有 last_verdict.ratio       → 必填（已下结论的卡不能没有语义）
+      status = draft 且无 ratio   → 允许缺失（索引层，本来就没实测）
+    """
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        if "semantics" in d:
+            continue
+        st = str(d.get("status") or "")
+        lv = d.get("last_verdict") or {}
+        has_ratio = bool(lv.get("ratio"))
+        if st in ("measured", "tuned") or has_ratio:
+            why = ("status=%s" % st) if st in ("measured", "tuned") else "有 last_verdict.ratio"
+            err("E37", p.name,
+                "缺 semantics（%s）—— 必须声明 formula / inputs / outputs / "
+                "traffic_passes；否则「这算的是几读几写」无处可查，"
+                "201MB vs 268MB 的结论反转就会重演" % why)
+
+
 def _check_semantics(cards_dir, repo):
     """E36：semantics 块的内容校验（不只是字段存在）。
 
@@ -1327,6 +1356,7 @@ def validate(atlas, repo):
     # 不是方法极限。**没有 falsifier 的「到顶」等于把工具限制记成物理规律。**
     _check_impl_roles(cards_dir, repo)
     _check_baseline_count(cards_dir, repo)
+    _check_semantics_required(cards_dir, repo)
     _check_semantics(cards_dir, repo)
     _check_impl_to_ceiling(cards_dir, repo)
     _check_pros_cons_substance(cards_dir, repo)
