@@ -98,6 +98,65 @@ class TestPeakConstant(unittest.TestCase):
             "mma_issue_peak=%.1f 与「%.0f TF ÷ (8192 × %s MHz) = %.1f」不符（偏差 %.1f%%）；"
             "改了一个必须同步改另一个" % (issue, peak, clk_mhz, expect, dev * 100))
 
+    def test_peak_values_are_physically_plausible(self):
+        """峰值必须与另一份独立测量同量级；跨档位（fp8 vs bf16）比值必须合理。
+
+        这条抓的是 fp8 那次：540 TF 声称是 bf16（310）的 1.7×，
+        但实测 fp8 只有 49.8 TF —— 比 bf16 慢 5.2×。
+        **fp8 比 bf16 慢 5 倍**这件事本身就是异常信号：
+        若硬件真支持 fp8 加速，它不该比 bf16 慢。
+        所以加一条软下限：任何 compute 类峰值常数低于另一个的 0.1× 或高于 20×，
+        必须在 note 里明确解释，否则本测试报错要求复核。
+        """
+        c = self.c.get("compute") or {}
+        bf16 = _scalar(c, "bf16_gemm_peak_tf")
+        fp8 = _scalar(c, "fp8_gemm_peak_tf")
+        self.assertIsNotNone(bf16, "缺 bf16_gemm_peak_tf")
+        self.assertIsNotNone(fp8, "缺 fp8_gemm_peak_tf")
+        bf16, fp8 = float(bf16), float(fp8)
+        node = c.get("fp8_gemm_peak_tf") or {}
+        note = str(node.get("note") or "") + str(node.get("history") or "")
+        # fp8 慢于 bf16 是反直觉的，必须写明理由，否则视为漏标
+        if fp8 < bf16:
+            self.assertTrue(
+                "慢" in note or "偏低" in note or "慢路径" in note,
+                "fp8 峰值(%.1f)低于 bf16(%.1f)，这不是常态——必须在 note/history 里写明原因"
+                % (fp8, bf16))
+        # 比值跨度检查：超过 20× 或低于 0.1× 必须有解释
+        ratio = fp8 / bf16 if bf16 else 0
+        if ratio > 20 or ratio < 0.1:
+            self.assertTrue(len(note) > 50,
+                            "fp8/bf16 = %.3f 偏离常态，note 必须写清口径（当前 %d 字）"
+                            % (ratio, len(note)))
+
+    def test_every_compute_peak_has_a_reproducible_tool(self):
+        """每个 compute 峰值常数都必须指明一个**能跑的复跑脚本**。
+
+        这是 fp8 那次（540 vs 实测 49.8）真正的根因：
+        旧值的来源写的是 "kb: qwen38-prefill-floor" —— 一条知识库记录，
+        既没有脚本、也没法执行。于是它错了 10.9 倍，几个月没人发现。
+
+        bf16 那次（185）也一样：来源是「由另一个反推值推出」。
+        所以本测试要求每个 compute 类峰值都带 `reproduce:`，
+        且它指向的文件必须真实存在。
+        """
+        c = self.c.get("compute") or {}
+        missing = []
+        for key, node in c.items():
+            if not isinstance(node, dict):
+                continue
+            unit = str(node.get("unit") or "").upper()
+            if "TFLOPS" not in unit:          # 只守算力类
+                continue
+            rep = node.get("reproduce")
+            if not rep:
+                missing.append("%s: 缺 reproduce（无复跑脚本的峰值不许当分母）" % key)
+                continue
+            path = str(rep).split("#")[0].strip()
+            if not (REPO / path).is_file():
+                missing.append("%s: reproduce 指向不存在的文件 %s" % (key, path))
+        self.assertEqual(missing, [], "以下算力峰值缺可复跑的来源：\n" + "\n".join(missing))
+
     def test_model_constant_matches_constants_yaml(self):
         """models/sparse_mla.py 的 MMA_PEAK_PER_CYCLE 必须来自 constants.yaml。"""
         declared = float(_scalar(self.c.get("compute"), "mma_issue_peak"))

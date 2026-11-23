@@ -24,7 +24,7 @@
 | [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | measured | lightop | bandwidth | 融合比分步快 1.70x(M=1024)/2.39x(M=8192)… |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | flash-kda | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | torch | mixed | M>=2048 达峰值的 0.78~0.87（基本到顶）；小 M 是… |
-| [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | draft | tilelang | compute | draft：选型与坑已整理，bench 与 adapter 未落地，… |
+| [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | aiter | compute | aiter fp8 达 49.8 TF，比 bf16 慢 5.3×；… |
 | [`gemm-int8`](cards/gemm-int8.yaml) | gemm | measured | deepgemm | compute | INT8 grouped 达 343 TFLOPS、1621 GB/… |
 | [`hadamard-transform`](cards/hadamard-transform.yaml) | linear-attn | draft | mhc-kernels | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`hc-split-sinkhorn`](cards/hc-split-sinkhorn.yaml) | linear-attn | draft | mhc-kernels | compute | 无实测：索引卡，实现层待按证据推进 |

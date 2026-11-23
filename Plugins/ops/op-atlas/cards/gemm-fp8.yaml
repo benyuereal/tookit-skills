@@ -2,19 +2,38 @@ id: gemm-fp8
 title: FP8 GEMM（含 batched / grouped）
 family: gemm
 math: out[M,N] = A[M,K] @ B[K,N]；A/B fp8-e4m3, acc=fp32, out=bf16
-status: draft
+status: measured
 layer: kernel
 op_card: Plugins/ops/skills/op-gemm-fp8
 impls:
+- repo: aiter
+  library_profile_ref: libraries.md §4
+  file_hint: gemm_a8w8_opus（gfx938 专用）
+  tier: primary
+  law_ref: null
+  best_for:
+  - gfx938/gfx946 的 fp8 E4M3 GEMM（本轮唯一可跑通的路径）
+  not_for:
+  - 期望比 bf16 快的场景（实测慢 5.3×）
+  pros:
+  - 实测 49.8 TF，六形状收敛
+  - kernelId=2（64x64x64 Opus 流水）是 auto 的选择
+  cons:
+  - 比 bf16 慢 5.3×
+  - kernelId=0/1 分别只有 1.2/16.9 TF，参数传错会掉 30×
+  source: references/libraries.md
+  import_path: aiter.gemm_a8w8_opus
+  signature: gemm_a8w8_opus(A,B,x_scale=1.0,w_scale=1.0,bias=None,dtype=torch.bfloat16,kernelId=None)
+  smoke_test: python3 -I -c "import aiter; assert hasattr(aiter,'gemm_a8w8_opus')"
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: examples/gemm_fp8
-  tier: primary
+  tier: fallback
   law_ref: null
   best_for:
   - 大 M 且需自定义 epilogue
   not_for:
-  - M<=32 的 decode（带宽型，thin-M 桶更快）
+  - 本轮唯一可跑通的是 aiter（tilelang fp8 未跑通）
   pros:
   - 源码可读可改，适合实验
   - 可融 epilogue
@@ -32,8 +51,7 @@ impls:
   best_for:
   - 常规稠密 GEMM
   not_for:
-  - 需要精细 layout 控制
-  - gfx938 上的 FP8（本平台无方案）
+  - gfx938 上的 FP8（torch._scaled_mm 报 could not find valid hipblaslt solution）
   pros:
   - 少一层封装，直接调库
   cons:
@@ -86,10 +104,10 @@ impls:
     note: 尚无手写实现——本卡只登记「需要手写 HIP + MFMA」这个结论，源码还没写
   l1_exempt_reason: 本平台无现成 FP8 稠密 GEMM（hipblaslt 不可导入、deepgemm 包装层有 device bug、aiter 只有 MoE 专用），需要手写 HIP；源码尚未编写
 ceiling:
-  kind: constants
+  kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: compute
-  note: 540 TF 是 fp8 分母；bf16 用实测 310 TF。混用会把'还有 4x'判成'到顶'
+  note: 分母 49.8 TF 是 aiter opus 实现的上限，**不是 gfx938 的 fp8 硬件上限**（后者未标定）
 shapes:
 - decode-m1
 - decode-m32
@@ -97,21 +115,31 @@ shapes:
 - batched
 - grouped
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: draft：选型与坑已整理，bench 与 adapter 未落地，无实测结论
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/README.md
+  ratio:
+    value: 49.8
+    vs: aiter opus fp8 实现的绝对算力 TFLOPS（非倍数；硬件上限未标定）
+    scope:
+      cards: 1
+      in_len: M=4096 K=4096
+      out_len: N=4096
+      warmup: hot
+      note: 六个形状 4096³~16384 全部收敛 47.8~49.7 TF；fp8/bf16=0.19 即比 bf16 慢 5.3×；转换开销仅占 1.9%
+  conclusion: aiter fp8 达 49.8 TF，比 bf16 慢 5.3×；本机 fp8 走的是慢路径
+  verified_on: '2026-11-23'
 modify_path:
   kind: source-patch
   what: 修 deepgemm.fp8_gemm 的 CPU alpha/beta bug
   how: patch deepgemm 包装层把 alpha/beta 从 device="cpu" 改成 device="cuda"；否则卡上调用直接抛 device 不匹配
   requires: deepgemm 2.1.0；改的是库源码
 hard_preconditions:
-- statement: deepgemm.fp8_gemm 的包装层把 alpha/beta 写死在 CPU，卡上调用会崩
-  check: 'python3 -I -c "import torch,deepgemm; deepgemm.fp8_gemm((a,sa),(b,sb),d)" → RuntimeError: Expected all tensors to be on the same device'
-- statement: hipBLASLt 在本机不可导入
-  check: python3 -I -c "import hipblaslt" → ModuleNotFoundError
+- statement: torch._scaled_mm 在 gfx938 上不可用（hipBLASLt 无 fp8 方案）
+  check: 调用直接报 "could not find valid hipblaslt solution"
+- statement: fp8 tensor 不能用 torch.randn 直接造（不支持该 dtype）
+  check: torch.randn(...,dtype=torch.float8_e4m3fn) 报 "normal_kernel_cuda not implemented for Float8_e4m3fn"；须先造 bf16 再 .to()
+- statement: kernelId 必须留空让 auto 选；传 0 会掉到 1.2 TF（慢 40×）
+  check: kernelId=0/1/2/auto 实测 1.2/16.9/49.6/50.0 TF
 soft_preconditions:
 - 建议 hot 态测量（冷启动会被首调虚高污染）
 - 建议同卡同频（跨卡比 ratio 时须在 scope 里写明）

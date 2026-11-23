@@ -50,8 +50,8 @@ compute:
     source: >
       本机 hipBLASLt 大 GEMM 实测：N=6144 bf16 1.493 ms = 310.6 TF，fp16 同形状 312.4 TF
       （两条独立库路径吻合，比值 1.006）。20 s 持续加热后掉到 273.9 TF（sclk 仍 1200 MHz）。
-      扫描见 Plugins/ops/skills/op-roofline/results/bf16-peak.json，
-      复跑用 tools/calibrate_bf16_peak.py。
+      扫描见 Plugins/ops/skills/op-roofline/results/bf16-peak.json。
+    reproduce: Plugins/ops/skills/op-roofline/tools/calibrate_bf16_peak.py
     note: >
       **达成率的分母一律用这个实测值**，口径与带宽一致（1724 实测 vs 1100 标称）。
       峰值随 sclk 线性变：600 MHz 减半。跨次比较必须同时记 sclk。
@@ -80,15 +80,30 @@ compute:
     note: "卡 0-5 钉在 600 MHz。**跨卡比较只能用比值，不能用绝对 µs**。"
     verified_on: 2026-10-27
   fp8_gemm_peak_tf:
-    value: 540
+    value: 49.8
     unit: TFLOPS
     status: measured
-    source: "本机 fp8 GEMM 实测 479 TF = 89% 达成，反推峰值 540 TF（kb: qwen38-prefill-floor）"
+    verified_on: 2026-11-23
+    source: >
+      本机 aiter.gemm_a8w8_opus（gfx938 专用 opus kernel）实测峰值 49.8 TF（4096³），
+      六个形状 47.3~49.8 TF 全部收敛。
+    reproduce: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/bench.py
     note: >
-      **fp8 与 bf16 的峰值不可混用**：bf16 实测峰值 310 TF（N=6144 hipBLASLt，sclk 1200 MHz），
-      fp8 实测 540 TF ≈ 1.7×。用错分母会把「还有 4× 空间」判成「已经到顶」，
-      或者反过来把「已经到顶」判成「还有空间」。
-      MMA 形状 16x16x16 的常数只对 bf16 成立，fp8 的发射率**尚未直接标定**，此处只用实测整体峰值。
+      **fp8 在本机比 bf16 慢 5.2×，不是快 1.7×。** bf16 实测峰值 310 TF，
+      fp8 只有 49.8 TF（fp8/bf16 = 0.19）。
+      若硬件真有 fp8 加速，fp8 应该比 bf16 快而不是慢 5 倍——
+      这个比值本身就说明「本机 fp8 走的是慢路径」。
+      用错分母（把 fp8 当快档）会把「几乎没优化空间」判成「还有 11× 空间」。
+    history: >
+      ⚠️ 2026-11-23 更正：旧值 540 TF（"本机 fp8 GEMM 实测 479 TF = 89% 达成，反推峰值"）
+      与实测差 10.9×。旧值来自 kb 里一条无复跑脚本的记录，且从未被本仓库的探针验证过。
+      这次用 aiter 的 gfx938 专用 kernel 扫了六个形状、并做了 kernelId 对照
+      （0→1.2 TF / 1→16.7 TF / 2→49.2 TF / auto→49.3 TF），
+      49.8 TF 是真实上限。**凡是无法用本仓脚本复跑的峰值常数，不许当分母。**
+    caveat: >
+      这测的是 aiter opus 这一条实现的上限，不等于「gfx938 的 fp8 硬件上限」。
+      真正标定硬件 fp8 峰值需要一条打满 MMA 的实现（本轮没有）。
+      所以 49.8 只能当「当前可用实现的分母」，不能当物理上限引用。
 
 launch:
   # 单次 kernel launch 的固定代价。任何「融合能省多少」的估算都以它为上限基数：

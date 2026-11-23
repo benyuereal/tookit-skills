@@ -155,7 +155,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-hip-compile` | — | 手写 HIP 的编译调优：为什么要 aicc 不要 hipcc、怎样**逐字镜像** tilelang 的 `-mllvm` 集（含 FAST_MATH 条件项，漏一条慢 1.16×/CTA 而数值不变）、从 .so 设备 ELF 读 VGPR 算占用率（配 `derive_flags.py` / `inspect_so.py`） |
 | `op-sparse-mla` | `tuned` | 稀疏 MLA 前向（DSA）：q/kv/indices 契约、tilelang / flash_mla / 生产三变体、-1 哨兵语义 |
 | `op-moe-w8a8` | `draft` | FP8 MoE（routed GEMM1/GEMM2 + silu-mul + moe_sum）：M 分档、融合收益判据 |
-| `op-gemm-fp8` | `draft` | FP8 GEMM（batched / 分组）：tilelang / hipBLASLt 两条路、gfx938 FP8/BF8 限制 |
+| `op-gemm-fp8` | `measured` | FP8 GEMM：hipBLASLt 在 gfx938 无方案，aiter opus 实测 49.8 TF（比 bf16 慢 5.3×） |
 | `op-moe-topk-gating` | `draft` | **MoE 第 2 段**：gate→topk→归一化。索引是离散量必须逐位一致；tie-break 需固定 |
 | `op-moe-align-permute` | `draft` | **MoE 第 3 段**：align_block_size + permute。`-1` 只能垫队尾，前置会让输出恒为 0 |
 | `op-fused-add-rmsnorm` | `measured` | 残差 + RMSNorm 融合：**校准件**，字节数完全确定；用 lightop.RMSNormAdd（已跑通门禁） |
