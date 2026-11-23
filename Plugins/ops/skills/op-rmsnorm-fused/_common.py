@@ -13,7 +13,8 @@
 """
 import torch
 
-VARIANTS = ("ref-heavy", "lightop-fused", "torch-native", "fused-3pass-triton")
+VARIANTS = ("ref-heavy", "lightop-fused", "torch-native",
+            "fused-3pass-triton", "fused-3pass-tilelang")
 
 
 def _lightop_version():
@@ -127,6 +128,61 @@ def _triton_runner(x, w, r, **kw):
     return y, residual_out
 
 
+# ---------------------------------------------------------------- tilelang 实现
+# 配方 blk_m=1, threads=256（blk_m>=4 会掉到 240µs，别用）。
+# 实测 2026-11-23：213.0 µs / 1260 GB/s（2读2写 268MB），比 triton 快 3.6%，
+# 但仍慢于 lightop 的 197.4 µs。**换 DSL 不是解药**——三种实现都落在 1200~1360，
+# 离 1:1 可达 1749 还有 22~39%，说明瓶颈是「2读2写交织 + 行内归约」这个访存模式本身。
+_TL_CACHE = {}
+
+
+def _get_tilelang_kernel(M, H, eps=1e-6):
+    key = (M, H)
+    if key in _TL_CACHE:
+        return _TL_CACHE[key]
+    import tilelang
+    import tilelang.language as T
+    dtype = "bfloat16"
+    blk_m, threads = 1, 256
+    inv_n = 1.0 / H
+
+    @tilelang.jit(out_idx=[-2, -1])
+    def _k(M: int, N: int, blk_m: int, threads: int, eps: float):
+        @T.prim_func
+        def main(X: T.Tensor((M, N), dtype), R: T.Tensor((M, N), dtype),
+                 W: T.Tensor((N,), dtype),
+                 RO: T.Tensor((M, N), dtype), Y: T.Tensor((M, N), dtype)):
+            with T.Kernel(T.ceildiv(M, blk_m), threads=threads) as bx:
+                xf = T.alloc_fragment((blk_m, N), "float32")
+                sq = T.alloc_fragment((blk_m, N), "float32")
+                s = T.alloc_fragment((blk_m,), "float32")
+                wv = T.alloc_fragment((N,), "float32")
+                for i, j in T.Parallel(blk_m, N):
+                    xf[i, j] = (X[bx * blk_m + i, j].astype("float32")
+                                + R[bx * blk_m + i, j].astype("float32"))
+                for i, j in T.Parallel(blk_m, N):
+                    RO[bx * blk_m + i, j] = xf[i, j].astype(dtype)
+                for i, j in T.Parallel(blk_m, N):
+                    sq[i, j] = xf[i, j] * xf[i, j]
+                T.reduce_sum(sq, s, dim=1)
+                for j in T.Parallel(N):
+                    wv[j] = W[j].astype("float32")
+                for i, j in T.Parallel(blk_m, N):
+                    Y[bx * blk_m + i, j] = (xf[i, j] * T.rsqrt(s[i] * inv_n + eps)
+                                            * wv[j]).astype(dtype)
+        return main
+    _TL_CACHE[key] = _k(M, H, blk_m, threads, eps)
+    return _TL_CACHE[key]
+
+
+def _tilelang_runner(x, w, r, **kw):
+    """tilelang 融合残差 RMSNorm（等语义：返回 out 与 residual_out 两份）。"""
+    M, H = x.shape
+    k = _get_tilelang_kernel(M, H)
+    ro, y = k(x, r, w)
+    return y, ro
+
+
 def _lightop_fused_runner(x, w, r, **kw):
     """lightop 的 fused_add_rms_norm：**原地改写 x 与 residual**。
 
@@ -155,6 +211,8 @@ def get_runner(name, tilelang_root=None, **kwargs):
         return _triton_runner
     if name == "lightop-fused":
         return _lightop_fused_runner
+    if name == "fused-3pass-tilelang":
+        return _tilelang_runner
     raise RuntimeError(
         "变体 %r 的 adapter 尚未实现。" 
         "**注意：lightop %s 已安装且可用**（import lightop 成功），"

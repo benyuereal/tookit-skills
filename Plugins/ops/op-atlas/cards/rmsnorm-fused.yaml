@@ -78,24 +78,22 @@ last_verdict:
     effort: 0（已完成）
   verified_on: '2026-11-23'
   comparison:
-    vs_lightop:
-      cand_us: 242.2
-      base_us: 227.0
-      ratio: 1.067
-      verdict: 等语义下我们慢 6.7%（业主独立测得 11.9%，同量级）
-      note: lightop 归约实现更优，见 next_probe
-    vs_separate:
-      add_us: 134
-      rms_norm_us: 143
-      separate_us: 277
-      fused_us: 242.2
-      speedup: 1.14
-      verdict: 融合相对分离方案 277→242 = 1.14x，这才是融合的价值
+    baseline: lightop-fused
+    baseline_role: competitor
+    baseline_impl: fused_add_rms_norm
+    cand: fused-3pass-tilelang
+    cand_us: 213.0
+    base_us: 197.4
+    ratio: 1.079
+    significant: true
+    verdict: 相对 lightop 慢 7.9%（显著）
+    semantics_aligned: true
     alignment:
       inputs: 2
       outputs: 2
       traffic_passes: 4
-      note: 跨实现比较前必须对齐 (inputs, outputs)——不对齐就是在比两件不同的活
+      note: 等语义 2读2写 268.4MB；三实现（lightop/tilelang/triton）全部对齐
+    not_comparable_to: torch 三段式（654µs）—— 未优化参考实现，不构成性能基线
   traffic_passes: 4
   inputs: 2
   outputs: 2
@@ -114,3 +112,8 @@ surfaces:
 - layout-pack
 - fusion-boundary
 updated: '2026-11-22'
+at_floor:
+  kind: impl_ceiling
+  basis: triton 211~221 µs / tilelang 213 µs / lightop 197.4 µs，三者全部落在 1200~1380 GB/s，离 1:1 可达 1749~1801 还有 22~39%。瓶颈是「2读2写交织 + 行内归约」这个访存模式，不是某个框架写得差。
+  falsifier: 换 in-place 写回或下游融合（减流量 25%+）可推翻；换 DSL 只值 3~10%，推不翻。
+  note: '**impl_ceiling 不许封卡**——它只说明当前工具链，换 codegen 或减流量就可能突破。'

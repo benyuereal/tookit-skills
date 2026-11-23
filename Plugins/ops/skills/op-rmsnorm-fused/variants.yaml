@@ -23,6 +23,8 @@ variants:
     not_comparable_to:
     - lightop-fused
     - fused-3pass-triton
+  role: correctness_only
+  note: '**不得用于性能对比**：它是未优化的参考实现，打赢它没有工程意义'
 - name: lightop-fused
   source: lightop 0.6.0 的 fused_add_rms_norm（已实测可用，非此前误报的「未安装」）
   status: candidate
@@ -48,6 +50,7 @@ variants:
     - residual
     traffic_passes: 4
     note: 2读(x,r)+2写(out,residual_out)；w 忽略
+  role: competitor
 - name: torch-native
   source: torch 原生 rms_norm（若能用到）
   status: fallback
@@ -68,6 +71,8 @@ variants:
     mutates: []
     traffic_passes: 3
     note: 不融合残差
+  role: correctness_only
+  note: '**不得用于性能对比**：它是未优化的参考实现，打赢它没有工程意义'
 - name: fused-3pass-triton
   source: triton 融合单 kernel（kD：noMask, BLOCK=H, rows/CTA=1, num_warps=4）
   status: candidate
@@ -91,3 +96,27 @@ variants:
     mutates: []
     traffic_passes: 4
     note: 2读+2写；补 residual_out 后与 lightop 等语义
+  role: best_known
+  note: 本卡自研实现，可作为 best_known 基准
+- name: fused-3pass-tilelang
+  source: tilelang 0.1.12+dtk2604（配方 blk_m=1, threads=256；blk_m>=4 掉到 240µs，别用）
+  status: candidate
+  applies_to:
+  - prefill-8k
+  constraints:
+  - H 需为编译期常量；本卡用 H=4096
+  - blk_m 必须为 1：>=4 时 fragment 占用上升，实测掉到 240µs
+  mutates_inputs: false
+  semantics:
+    inputs:
+    - x
+    - residual
+    - weight
+    outputs:
+    - out
+    - residual_out
+    mutates: []
+    traffic_passes: 4
+  measured: 213.0 µs / 1260 GB/s（等语义 2读2写 268MB）；比 triton 快 3.6%，慢于 lightop 的 197.4 µs
+  note: 换 DSL 只值 3.6%，不是解药。见 ledger 的结构性结论。
+  role: best_known

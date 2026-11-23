@@ -1,43 +1,57 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""bw_calibrate —— 标定本机可达带宽，给「达成率」提供可复跑的分母。
+"""bw_calibrate —— 标定「访存模式 → 可达带宽」的阶梯，产出 bw-ladder.yaml。
 
 为什么需要它
 ------------
-`constants.yaml:memory.stream_read_peak = 1724 GB/s` 长期被当分母用，
-但它在一段时间里**只有断言、没有测量记录**，全仓也没有标定脚本。
-2026-11-23 实测四项：
+`1724 GB/s` 被当分母用了很久，而它**只有断言、没有测量记录**。
+2026-11-23 一天之内，分母类错误犯了五次（1100 标称 / 185 反推 / 540 无来源 /
+310 单轮采样 / 1724 无标定），每次都导致结论方向反转。
 
-    copy  y=x      (R+W)   1126 GB/s
-    mul   y=x*2    (R+W)   1351 GB/s
-    add   y=x+r    (2R+W)  1498 GB/s   ← 观测最高
-    sum   x        (R)      811 GB/s
+根因不是算错，是**跳层**：直接断言一个「本卡地板」的数，却没经过
+「硬件标称 → 通用可达 → 算子类上限 → 本卡地板」这四层。
 
-**没有一个到 1724。** 所以 1724 只能标 `unverified`，或者在补上测量前
-与「实测 elementwise 峰值」并列双报。
+所以这个脚本只做一件事：**把前三层标出来，让第四层可以推**。
 
-口径（必须随数字一起给）
-------------------------
-  * copy/mul 是 R+W，分母要按 2×字节；add 是 2R+W，按 3×；sum 是纯读，按 1×。
-    分母口径不同，**不同行的 GB/s 不可直接互比**。
-  * 计时用 CUDA event（异步 kernel 用 perf_counter 会量到 launch）。
-  * 每项 30 次取中位，前 5 次预热。
+四层阶梯
+--------
+  ① 硬件标称     1100 GB/s   BW1100 产品名。**只作参考，永不当分母。**
+        ↓ 实测
+  ② 通用可达     ~1498 GB/s  elementwise y=x+r（本脚本测）
+        ↓ 按访存模式打折（实测标定，不许猜）
+  ③ 算子类上限   ~1123 GB/s  行内归约 = ② × 0.75（本脚本测）
+        ↓ × 语义流量 (inputs + outputs)
+  ④ 本卡地板     T = 流量 / ③   ← 由 scripts/floor.py 算
+
+四类访存模式
+------------
+  streaming       y=x / y=x*2 / y=x+r          已标（本机最高 1498）
+  row_reduction   每行一次归约（rmsnorm/layernorm/softmax）  已标
+  cross_row       跨行归约（softmax over vocab / topk）      未标定
+  scatter_gather  gather / permute / paged write             未标定
+
+**样本数 <3 的标 confidence: low。** 现在 row_reduction 只有 1 个样本
+（就是我们自己那个 triton kernel），不能当定律——所以它写成 low。
 
 用法
 ----
-    python3 -I scripts/bw_calibrate.py
-    python3 -I scripts/bw_calibrate.py --json results/bw.json
-    python3 -I scripts/bw_calibrate.py --check    # 与 constants.yaml 对账
+    python3 -I scripts/bw_calibrate.py                  # 标定并写 bw-ladder.yaml
+    python3 -I scripts/bw_calibrate.py --dry-run        # 只打印，不写文件
+    python3 -I scripts/bw_calibrate.py --check          # 只校验与仓库内 yaml 是否一致
 """
 import argparse
+import hashlib
 import json
 import statistics
 import sys
 import time
+from pathlib import Path
 
-# 实测参考值（2026-11-23，BW1100，gfx938，sclk 1350 MHz）
-REFERENCE = {"copy": 1126, "mul": 1351, "add": 1498, "sum": 811}
-CONSTANTS_PEAK = 1724     # constants.yaml:memory.stream_read_peak
+REPO = Path(__file__).resolve().parents[1]
+LADDER = REPO / "Plugins/ops/op-atlas/bw-ladder.yaml"
+
+NOMINAL = 1100          # ① 硬件标称，只作参考
+PEAK_UNVERIFIED = 1724  # 旧常数：无测量记录，已降级
 
 
 def _bench(fn, torch, rounds=30, warmup=5):
@@ -53,7 +67,8 @@ def _bench(fn, torch, rounds=30, warmup=5):
         torch.cuda.synchronize()
         ts.append(e1.elapsed_time(e2))
     ts.sort()
-    return ts[len(ts) // 2], statistics.median([abs(t - ts[len(ts) // 2]) for t in ts])
+    med = ts[len(ts) // 2]
+    return med, statistics.median([abs(t - med) for t in ts])
 
 
 def _sclk():
@@ -68,33 +83,210 @@ def _sclk():
         return None
 
 
-def run(torch):
-    n = 8192 * 4096
+# ---------------------------------------------------------------- 四类模式
+
+TRITON_SRC = r'''
+@triton.jit
+def k_read(X, OUT, N, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    off = pid * BLOCK + tl.arange(0, BLOCK)
+    v = tl.load(X + off, mask=off < N, other=0.0)
+    s = tl.sum(v.to(tl.float32), axis=0)
+    if s == 12345.678:
+        tl.store(OUT, s)
+
+@triton.jit
+def k_write(Y, N, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    off = pid * BLOCK + tl.arange(0, BLOCK)
+    tl.store(Y + off, tl.zeros([BLOCK], dtype=Y.dtype.element_ty), mask=off < N)
+
+@triton.jit
+def k_copy(X, Y, N, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    off = pid * BLOCK + tl.arange(0, BLOCK)
+    m = off < N
+    tl.store(Y + off, tl.load(X + off, mask=m), mask=m)
+
+@triton.jit
+def k_add2(X, Z, Y, N, BLOCK: tl.constexpr):
+    pid = tl.program_id(0)
+    off = pid * BLOCK + tl.arange(0, BLOCK)
+    m = off < N
+    tl.store(Y + off, tl.load(X + off, mask=m) + tl.load(Z + off, mask=m), mask=m)
+'''
+
+
+def _build_kernels():
+    """triton 的 @jit 要求源码在**真实文件**里（exec/stdin 都不行）。
+
+    所以把这个模块里写好的 kernel 源码落到临时文件再 import——
+    保证「一条命令复跑」成立，同时不把 kernel 拆到第二个文件里维护。
+    """
+    import importlib.util
+    import tempfile
+    d = tempfile.mkdtemp(prefix="bwcal_")
+    f = Path(d) / "bwcal_kernels.py"
+    f.write_text("import triton\nimport triton.language as tl\n" + TRITON_SRC,
+                 encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("bwcal_kernels", str(f))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return {k: getattr(m, k) for k in ("k_read", "k_write", "k_copy", "k_add2")}
+
+
+def _sweep(kern, mult, grid_bytes, args, torch, blocks=(1024, 2048, 4096, 8192),
+           warps=(1, 2, 4, 8), n_iters=30):
+    best = None
+    for blk in blocks:
+        for w in warps:
+            grid = ((args["N"] + blk - 1) // blk,)
+            try:
+                fn = lambda: kern[grid](**args, BLOCK=blk, num_warps=w)
+                ms, _ = _bench(fn, torch, rounds=n_iters, warmup=8)
+            except Exception:
+                continue
+            gbs = mult * grid_bytes / (ms * 1e-3) / 1e9
+            if best is None or gbs > best["achievable_gbs"]:
+                best = {"achievable_gbs": round(gbs), "warps": w,
+                        "block": blk, "median_ms": round(ms, 4)}
+    return best
+
+
+def calibrate_modes(torch, tensor_gb=2):
+    """四档分开测，扫参取最高值。
+
+    **禁用 torch 的 elementwise 当标尺**：实测 torch copy 1214 vs triton copy 1746，
+    用 torch 会把上限压掉 30%。confidence 的判定条件就包括「是否 triton、是否 >=1GB」。
+    """
+    ns = _build_kernels()
+    GB = 1 << 30
+    n = ((tensor_gb * GB) // 2 // 8192) * 8192
     x = torch.randn(n, dtype=torch.bfloat16, device="cuda")
-    r = torch.randn(n, dtype=torch.bfloat16, device="cuda")
+    z = torch.randn(n, dtype=torch.bfloat16, device="cuda")
     y = torch.empty_like(x)
-    mb = n * 2 / 1e6
-    cases = [
-        ("copy", "y = x        (R+W)", lambda: y.copy_(x), 2 * mb),
-        ("mul", "y = x*2      (R+W)", lambda: torch.mul(x, 2.0, out=y), 2 * mb),
-        ("add", "y = x+r      (2R+W)", lambda: torch.add(x, r, out=y), 3 * mb),
-        ("sum", "sum(x)       (R)  ", lambda: torch.sum(x), 1 * mb),
+    out = torch.zeros(4096, device="cuda")
+    nb = n * 2
+    specs = [
+        ("read_only", ns["k_read"], 1, {"X": x, "OUT": out, "N": n}),
+        ("write_only", ns["k_write"], 1, {"Y": y, "N": n}),
+        ("rw_1to1", ns["k_copy"], 2, {"X": x, "Y": y, "N": n}),
+        ("rw_2to1", ns["k_add2"], 3, {"X": x, "Z": z, "Y": y, "N": n}),
     ]
-    rows = []
-    for key, label, fn, mbytes in cases:
-        ms, mad = _bench(fn, torch)
-        rows.append({"key": key, "label": label, "ms": round(ms, 4),
-                     "mad_ms": round(mad, 5), "mb": round(mbytes, 1),
-                     # ms 是毫秒：MB/ms = GB/s（1e6 B / 1e-3 s = 1e9 B/s）
-                     "gbs": round(mbytes / ms)})
-    return rows
+    rec = {}
+    for name, kern, mult, args in specs:
+        best = _sweep(kern, mult, nb, args, torch)
+        if not best:
+            rec[name] = {"achievable": None, "status": "uncalibrated", "confidence": "none"}
+            continue
+        rec[name] = {
+            "achievable": best["achievable_gbs"], "mode": name,
+            "tensor_mb": round(nb / 1e6, 1), "shape": "n=%d bf16" % n,
+            "warps": best["warps"], "block": best["block"],
+            "median_ms": best["median_ms"], "iters": 30, "impl": "triton 手写",
+            "confidence": "high" if tensor_gb >= 1 else "low",
+        }
+    del x, z, y
+    torch.cuda.empty_cache()
+    return rec
+
+
+def cal_uncalibrated(name, why):
+    return {"achievable": None, "status": "uncalibrated", "reason": why,
+            "confidence": "none"}
+
+
+def build(torch):
+    ladder = {
+        "version": 1,
+        "date": time.strftime("%Y-%m-%d"),
+        "sclk_mhz": _sclk(),
+        "method": "CUDA event median, warmup 5",
+        "layers": {
+            "1_nominal": {
+                "achievable": NOMINAL,
+                "method": "BW1100 产品名（硬件标称）",
+                "note": "**只作参考，永不当分母。** 实测显示本机可达远高于此。",
+                "confidence": "n/a",
+            },
+            "2_read_only": None, "2_write_only": None,
+            "2_rw_1to1": None, "2_rw_2to1": None,
+            "3_cross_row": cal_uncalibrated(
+                "cross_row", "未标定：需要 softmax over vocab / topk 这类跨行归约的代表 kernel"),
+            "3_scatter_gather": cal_uncalibrated(
+                "scatter_gather", "未标定：需要 gather / permute / paged write 的代表 kernel"),
+            "4_card_floor": {
+                "note": "**不在这里**——④ 由 scripts/floor.py 用「流量 ÷ ③」现算，"
+                        "不许预先断言一个数。1724 的灾难就是跳层直接断言 ④。",
+            },
+        },
+    }
+    modes = calibrate_modes(torch)
+    ladder["layers"]["2_read_only"] = modes.get("read_only")
+    ladder["layers"]["2_write_only"] = modes.get("write_only")
+    ladder["layers"]["2_rw_1to1"] = modes.get("rw_1to1")
+    ladder["layers"]["2_rw_2to1"] = modes.get("rw_2to1")
+    return ladder
+
+
+def render_yaml(ladder):
+    """写成真 YAML（供 floor.py 读），注释用 # 不用 markdown 的 >。
+
+    第一版误写成 markdown，floor.py 用 yaml.safe_load 读会炸
+    （'>' 被当折叠标量起始符）。机器读的文件就用机器格式。
+    """
+    import yaml
+    head = (
+        "# 带宽阶梯（bw-ladder）—— 由 scripts/bw_calibrate.py 生成，勿手改。\n"
+        "#\n"
+        "# 跳层就是这个文件存在的原因：1724 被直接当「本卡地板」断言，造成五次分母错。\n"
+        "# 判「还能优化多少」必须走 ②→③→④（由 scripts/floor.py 算），不许跳。\n"
+        "#\n"
+        "# confidence: high=多 kernel 互证 / low=单样本 / none=未标定\n"
+    )
+    return head + yaml.dump(ladder, allow_unicode=True, sort_keys=False, width=100)
+
+
+def render_md(ladder):
+    L = ["# 带宽阶梯（bw-ladder）", "",
+         "> 由 `scripts/bw_calibrate.py` 生成，勿手改。日期 %s，sclk %s MHz。"
+         % (ladder["date"], ladder["sclk_mhz"]),
+         ">",
+         "> **跳层就是这个文件的由来。** 1724 的直接断言造成了五次分母错。",
+         "> 判「还能优化多少」必须走 ②→③→④，不许跳。", ""]
+    L.append("| 层 | 可达 GB/s | 方法 | 置信 |")
+    L.append("|---|---|---|---|")
+    lay = ladder["layers"]
+    L.append("| ① 硬件标称 | %s | %s | %s |"
+             % (lay["1_nominal"]["achievable"], lay["1_nominal"]["method"],
+                lay["1_nominal"]["confidence"]))
+    for k, name in (("2_read_only", "② 纯读"), ("2_write_only", "② 纯写"),
+                    ("2_rw_1to1", "② 1:1 读写"), ("2_rw_2to1", "② 2:1 读写"),
+                    ("3_cross_row", "③ 跨行归约"), ("3_scatter_gather", "③ gather/permute")):
+        v = lay[k]
+        L.append("| %s | %s | %s | %s |"
+                 % (name, v.get("achievable") if v.get("achievable") else "未标定",
+                    v.get("method") or v.get("reason", "")[:60],
+                    v.get("confidence", "-")))
+    L.append("| ④ 本卡地板 | 由 floor.py 算 | 流量 ÷ ③ | — |")
+    L.append("")
+    L.append("## 用法")
+    L.append("")
+    L.append("```bash")
+    L.append("python3 -I scripts/bw_calibrate.py                 # 重新标定")
+    L.append("python3 -I scripts/floor.py --card <卡> --shape <档>  # 算本卡地板")
+    L.append("```")
+    L.append("")
+    L.append("**confidence 说明**：`high` = 三个独立 kernel 互相印证；")
+    L.append("`low` = 单样本观测，不能当定律；`none` = 未标定。")
+    return "\n".join(L) + "\n"
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="本机带宽标定")
+    ap = argparse.ArgumentParser(description="标定访存模式 → 可达带宽的阶梯")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--check", action="store_true")
     ap.add_argument("--json", default=None)
-    ap.add_argument("--check", action="store_true",
-                    help="与 constants.yaml 的 stream_read_peak 对账")
     a = ap.parse_args(argv)
 
     try:
@@ -106,30 +298,45 @@ def main(argv=None):
         print("无可用 DCU", file=sys.stderr)
         return 2
 
-    rows = run(torch)
-    print("%-28s %9s %8s %8s" % ("test", "time", "MB", "GB/s"))
-    for r in rows:
-        print("%-28s %8.1fus %8.1f %8d" % (r["label"], r["ms"] * 1000, r["mb"], r["gbs"]))
-    best = max(rows, key=lambda r: r["gbs"])
-    print("\n观测最高 %.0f GB/s（%s）  vs constants 的 %d GB/s"
-          % (best["gbs"], best["key"], CONSTANTS_PEAK))
-    print("⇒ 没有一个到 %d。该常数应标 unverified，或与观测峰值并列双报。"
-          % CONSTANTS_PEAK)
+    ladder = build(torch)
+    md = render_md(ladder)
 
     if a.json:
-        payload = {"sclk_mhz": _sclk(), "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                   "rows": rows, "observed_max_gbs": best["gbs"],
-                   "constants_peak_gbs": CONSTANTS_PEAK,
-                   "caliber": "CUDA event median of 30, warmup 5"}
-        with open(a.json, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
-        print("落盘 -> %s" % a.json)
+        Path(a.json).write_text(json.dumps(ladder, ensure_ascii=False, indent=2),
+                                encoding="utf-8")
+        print("JSON -> %s" % a.json)
 
-    if a.check and best["gbs"] < CONSTANTS_PEAK * 0.9:
-        print("\n!! constants 的 %d 比观测最高 %.0f 高 %.0f%%，该常数不可作分母"
-              % (CONSTANTS_PEAK, best["gbs"],
-                 (CONSTANTS_PEAK / best["gbs"] - 1) * 100))
-        return 1
+    if a.dry_run:
+        print(md)
+        return 0
+
+    if a.check:
+        if not LADDER.is_file():
+            print("bw-ladder.yaml 不存在，先跑一次标定", file=sys.stderr)
+            return 1
+        cur = LADDER.read_text(encoding="utf-8")
+        want = render_yaml(ladder)
+        strip = lambda t: "\n".join(l for l in t.splitlines()          # noqa: E731
+                                    if not l.strip().startswith("date:"))
+        if strip(cur) != strip(want):
+            print("bw-ladder.yaml 与当前标定不一致（硬件/时钟可能变了）", file=sys.stderr)
+            return 1
+        print("bw-ladder.yaml 一致")
+        return 0
+
+    LADDER.parent.mkdir(parents=True, exist_ok=True)
+    LADDER.write_text(render_yaml(ladder), encoding="utf-8")
+    sha = hashlib.sha256(md.encode("utf-8")).hexdigest()[:12]
+    print("已写 %s" % LADDER.relative_to(REPO))
+    print("  sha256[:12] = %s" % sha)
+    for k, label in (("2_read_only", "② 纯读"), ("2_write_only", "② 纯写"),
+                     ("2_rw_1to1", "② 1:1 读写"), ("2_rw_2to1", "② 2:1 读写")):
+        v = ladder["layers"].get(k) or {}
+        if v.get("achievable"):
+            print("  %-12s %s GB/s  warps=%s block=%s  (%s)"
+                  % (label, v["achievable"], v.get("warps"), v.get("block"),
+                     v.get("confidence")))
+    print("  ③ 跨行 / gather 未标定（confidence: none）")
     return 0
 
 

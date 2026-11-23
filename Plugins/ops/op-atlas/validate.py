@@ -43,7 +43,7 @@ RATIO_OTHER_LIMIT = 5     # E24b：ratio_other 超过这个数就提醒复核分
 LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
-ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
+ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls", "at_floor",
                "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer",
                # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
                "modify_path",
@@ -213,6 +213,63 @@ def _check_next_probe(cards_dir, repo):
 
         if lv.get("status") == "tuned" and not np_.get("tuned_from"):
             err("E26", p.name, "status=tuned 但 next_probe 里没有 tuned_from（基线值 + 改法）")
+
+
+def _load_baseline_policy(repo):
+    p = repo / "Plugins/ops/op-atlas/baseline-policy.yaml"
+    if not p.is_file():
+        return None
+    try:
+        import yaml
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:                                            # noqa: BLE001
+        return None
+
+
+def _check_baseline_policy(cards_dir, repo):
+    """E27 硬校验：comparison 的 baseline 必须是允许作性能基准的类型。
+
+    由来：2026-11-23 用「triton 融合 vs torch 三段式」算出 3.65x，
+    这个数在工程上等于零——torch 三段式是未优化参考实现。
+    24 张卡里 19 张「有数但没优化」，根子就在这里。
+    """
+    pol = _load_baseline_policy(repo)
+    if not pol:
+        return
+    roles = pol.get("roles") or {}
+    forbidden = pol.get("forbidden_impl_patterns") or []
+
+    for c in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(c)
+        if problem or not isinstance(d, dict):
+            continue
+        lv = d.get("last_verdict") or {}
+        comp = lv.get("comparison")
+        if not comp or not isinstance(comp, dict):
+            continue
+        base = str(comp.get("baseline") or "")
+        role = str(comp.get("baseline_role") or "")
+        if not base:
+            err("E27", c.name, "comparison 缺 baseline（必须是某个变体名）")
+            continue
+        if not role:
+            err("E27", c.name,
+                "comparison.baseline=%r 未声明 baseline_role —— "
+                "必须标明它凭什么能当性能基准" % base)
+            continue
+        info = roles.get(role) or {}
+        allowed = info.get("allowed_as_performance_baseline")
+        if allowed is False:
+            err("E27", c.name,
+                "comparison.baseline_role=%r（%s）不能当性能基准：%s"
+                % (role, base, info.get("note", "")))
+        import fnmatch
+        for pat in forbidden:
+            if fnmatch.fnmatch(base, pat):
+                err("E27", c.name,
+                    "comparison.baseline=%r 命中禁止模式 %r —— "
+                    "未优化的参考实现打赢了没有工程意义" % (base, pat))
+                break
 
 
 def _check_evidence(cards_dir, repo):
@@ -855,7 +912,10 @@ def validate(atlas, repo):
                      "涨上去说明 kind 分类没收敛，请复核这几条是否本该判成 "
                      "speedup/utilization/throughput" % (n_other, RATIO_OTHER_LIMIT))
 
-    # ---- E27 跨实现比较必须对齐访存口径
+    # ---- E27 基准合法性与语义对齐（读 baseline-policy.yaml）
+    _check_baseline_policy(cards_dir, repo)
+
+    # ---- E27b 跨实现比较必须对齐访存口径
     # 由来：2026-11-23 我们拿「只写 1 份输出（201 MB）」的 kernel 去比
     # lightop 的「写 2 份（268 MB）」，得出「快 1.18x」——**少干 1/3 的活然后说自己快**。
     # 等语义下实际慢 6.7%。这条防线要求：只要写了 comparison，就必须写明对齐口径。
@@ -871,12 +931,13 @@ def validate(atlas, repo):
         outs = lv.get("outputs", (lv.get("ratio") or {}).get("outputs"))
         align = (comp or {}).get("alignment") if isinstance(comp, dict) else None
         if ins is None or outs is None:
-            warns.append("[E27] %s: 有 comparison 但没写 inputs/outputs —— "
-                         "跨实现比较前必须先对齐访存口径（不对齐就是在比两件不同的活）"
-                         % c.name)
+            err("E27", c.name,
+                "有 comparison 但没写 inputs/outputs —— "
+                "跨实现比较前必须先对齐访存口径（不对齐就是在比两件不同的活）")
         elif not align:
-            warns.append("[E27] %s: 有 comparison 但 comparison.alignment 缺失 —— "
-                         "必须写明双方各自的 (inputs, outputs) 是否一致" % c.name)
+            err("E27", c.name,
+                "有 comparison 但 comparison.alignment 缺失 —— "
+                "必须写明双方各自的 (inputs, outputs) 是否一致")
 
     # ---- E19 INDEX 表里的状态/家族/上限必须与卡片一致
     # 由来：13 张卡已 promoted 到 measured，INDEX 里还写着 draft。

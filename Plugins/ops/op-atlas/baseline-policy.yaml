@@ -1,0 +1,70 @@
+# 什么能当性能基准 —— 可机检规则
+#
+# 由来：2026-11-23 我们用「triton 融合 vs torch 三段式」算出 3.65×，
+# 这个数在工程上等于零——torch 三段式是**未优化的参考实现**，
+# 打赢它证明不了任何事。24 张卡里 19 张「有数但没优化」，根子就在这里。
+#
+# 判据：**基准必须是「它也在做同一件优化过的活」**，不是「它更慢所以好打」。
+
+version: 1
+updated: '2026-11-23'
+
+# role 的语义（对应 variants.yaml 的 role 字段）
+roles:
+  competitor:
+    allowed_as_performance_baseline: true
+    meaning: 厂商/第三方已调优实现（lightop / aiter / flash_mla / cudnn 等）
+    note: 唯一可用来算「加速比」的基准类型
+  best_known:
+    allowed_as_performance_baseline: true
+    meaning: 本卡自己的上一版最优（必须写清版本）
+    note: 本机没有厂商实现时的退路
+  correctness_only:
+    allowed_as_performance_baseline: false
+    meaning: 正确性 oracle（fp32 参考、ref-heavy、torch 分步拼接）
+    note: "**只证明「算对了」，不证明「优化得好」**"
+  reference:
+    allowed_as_performance_baseline: false
+    meaning: 同 correctness_only，历史别名
+  unverified:
+    allowed_as_performance_baseline: false
+    meaning: 来源不明或无法复跑的历史数字（如曾经记的 0.51/887）
+
+# 明确禁止当作性能基准的具体实现（按名字匹配）
+forbidden_impl_patterns:
+  - "ref-heavy"           # fp32 torch 参考
+  - "torch-*"             # torch 原生算子
+  - "torch 分步"
+  - "torch 三段式"
+  - "*fp32*"              # fp32 累积参考
+
+# 后果
+consequences:
+  baseline_not_allowed:
+    action: exclude_from_geomean     # 该 ratio 不进 aggregate.py 的几何平均
+    severity: warning                 # 不阻断，但必须报出来
+    message: "基准 {baseline}(role={role}) 不能当性能基准；该 ratio 不进聚合"
+  baseline_missing:
+    action: error
+    severity: error
+    message: "有 comparison 却没有 baseline，或 baseline 未声明 role"
+  semantics_misaligned:
+    action: error
+    severity: error
+    message: "inputs/outputs/traffic_passes 与基线不一致——在比两件不同的活"
+
+# 用法
+usage: |
+  # 卡片里这么写
+  comparison:
+    baseline: lightop                    # 必须能解析到 variants.yaml 的某个变体
+    baseline_role: competitor            # 必须在 roles 里出现
+    semantics_aligned: true
+    cand_us: 213.0
+    base_us: 197.4
+    ratio: 1.079
+    significant: false
+
+  # 校验
+  python3 -I scripts/check_semantics.py <card_dir> <cand> <baseline>
+  python3 Plugins/ops/op-atlas/validate.py        # E27 会读本文件
