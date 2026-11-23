@@ -104,6 +104,15 @@ def get_runner(name, tilelang_root=None, **kwargs):
         raise RuntimeError(
             "变体 aiter-norm 需核对 aiter 的 norm 族调用签名后接入；"
             "本卡当前以 lightop-rmsnormadd 为首选，aiter 仅作非融合对照。")
+def _clone_out(out):
+    """保留全部输出，不只第一个（2026-11-23：tuple 输出曾被静默丢弃）。"""
+    if torch.is_tensor(out):
+        return out.clone()
+    if isinstance(out, (tuple, list)):
+        return type(out)(_clone_out(x) for x in out)
+    return out
+
+
 def run_isolated(fn, *inp):
     copies = [t.clone() if torch.is_tensor(t) else t for t in inp]
     out = fn(*copies)

@@ -123,9 +123,8 @@ def _triton_runner(x, w, r, **kw):
     y = torch.empty_like(x)
     residual_out = torch.empty_like(r)
     kd[(M,)](x, r, w, y, residual_out, x.stride(0), H, 1e-6, H, num_warps=4)
-    # 返回 (out, residual_out) 与 lightop.fused_add_rms_norm 等语义。
-    # 但对于 opcheck 的内核契约，主输出是 out；residual_out 作为附加输出保留。
-    return y
+    # 返回两份，与 lightop.fused_add_rms_norm 等语义（semantics.outputs 声明一致）。
+    return y, residual_out
 
 
 def _lightop_fused_runner(x, w, r, **kw):
@@ -140,7 +139,9 @@ def _lightop_fused_runner(x, w, r, **kw):
     """
     import lightop
     out, residual_out = lightop.fused_add_rms_norm(x, r, w, 1e-6)
-    return out
+    # **两份都返回**：variants.yaml 的 semantics.outputs = [out, residual_out]。
+    # 只返回 out 会让「输出份数」与声明不符，也会让下游拿不到 (x+r)。
+    return out, residual_out
 
 
 def get_runner(name, tilelang_root=None, **kwargs):
@@ -162,10 +163,23 @@ def get_runner(name, tilelang_root=None, **kwargs):
         "RMSNormAdd(...).forward(X,residual)、rms_norm(x,weight,eps) [不融合残差]。" % (name, _lightop_version()))
 
 
+def _clone_out(out):
+    """**保留全部输出**，不只第一个。
+
+    2026-11-23 的教训：lightop.fused_add_rms_norm 返回 (out, residual_out)，
+    而这里原来只 `out.clone() if torch.is_tensor(out) else out` —— tuple 直接透传、
+    不做任何校验。于是「我们少写了一份输出」这件事**没有任何检查能看见**。
+    """
+    if torch.is_tensor(out):
+        return out.clone()
+    if isinstance(out, (tuple, list)):
+        return type(out)(_clone_out(x) for x in out)
+    return out
+
+
 def run_isolated(fn, *inp):
     copies = [t.clone() if torch.is_tensor(t) else t for t in inp]
-    out = fn(*copies)
-    out = out.clone() if torch.is_tensor(out) else out
+    out = _clone_out(fn(*copies))
     poisoned = []
     for name, before, after in zip(INPUT_NAMES, inp, copies):
         if torch.is_tensor(before) and torch.is_tensor(after) and not torch.equal(before, after):
@@ -174,6 +188,25 @@ def run_isolated(fn, *inp):
 
 
 def compare(a, b):
+    """逐份比较。**输出份数必须一致**，否则直接抛——少一份就是少干一份活。
+
+    2026-11-23：这个函数原来只处理单个 tensor。lightop 返回 2 份时
+    调用方会把它当 1 份比，第 2 份被静默忽略。
+    """
+    if isinstance(a, (tuple, list)) or isinstance(b, (tuple, list)):
+        na = len(a) if isinstance(a, (tuple, list)) else 1
+        nb = len(b) if isinstance(b, (tuple, list)) else 1
+        if na != nb:
+            raise ValueError("输出份数不一致：%d vs %d（不可比，先对齐 semantics.outputs）"
+                             % (na, nb))
+        pairs = list(zip(a, b)) if na > 1 else [(a, b)]
+        worst = {"max_abs": 0.0, "mean_abs": 0.0, "cosine": 1.0}
+        for i, (x, y) in enumerate(pairs):
+            m = compare(x, y)
+            worst["max_abs"] = max(worst["max_abs"], m["max_abs"])
+            worst["mean_abs"] = max(worst["mean_abs"], m["mean_abs"])
+            worst["cosine"] = min(worst["cosine"], m["cosine"])
+        return worst
     af, bf = a.float(), b.float()
     diff = (af - bf).abs()
     denom = af.norm() * bf.norm()

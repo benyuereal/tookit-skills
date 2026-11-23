@@ -55,6 +55,9 @@ jobs:
             --contract Plugins/ops/skills/op-fused-add-rmsnorm/contract.yaml \
             --variants ref-heavy --shape decode-m1 --selftest-flaw --require-catch
 
+      - name: 语义对齐自检（比较前必须先对齐 inputs/outputs/passes）
+        run: python3 -I scripts/check_semantics.py --selftest
+
       - name: gaps.md 与卡片同步
         run: python3 -I scripts/gen_gaps.py --check
 

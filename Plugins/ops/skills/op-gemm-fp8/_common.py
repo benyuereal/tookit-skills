@@ -102,6 +102,15 @@ def get_runner(name, tilelang_root=None, **kwargs):
         "不要用假实现绕过。" % name)
 
 
+def _clone_out(out):
+    """保留全部输出，不只第一个（2026-11-23：tuple 输出曾被静默丢弃）。"""
+    if torch.is_tensor(out):
+        return out.clone()
+    if isinstance(out, (tuple, list)):
+        return type(out)(_clone_out(x) for x in out)
+    return out
+
+
 def run_isolated(fn, *inp):
     """可信调用：输入副本 + 输出毒化。"""
     copies = [t.clone() if torch.is_tensor(t) else t for t in inp]

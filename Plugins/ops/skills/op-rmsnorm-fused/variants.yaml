@@ -1,39 +1,93 @@
-# op-rmsnorm-fused 变体矩阵。
-
 variants:
-  - name: ref-heavy
-    source: "本卡 _common.py 的纯 torch fp32 参考"
-    status: reference
-    applies_to: [tiny, decode-m1, decode-m32, prefill-8k]
-    constraints:
-      - "只用于正确性对照，不是性能候选"
-    mutates_inputs: false
-
-  - name: lightop-fused
-    source: "lightop 0.6.0 的 fused_add_rms_norm（已实测可用，非此前误报的「未安装」）"
-    status: candidate
-    measured: "等语义 227.0 us / 1182 GB/s / util 0.686（2读2写 268MB；比我们的 242.2 us 快 6.7%）"
-    applies_to: [decode-m1, decode-m32, prefill-8k]
-    constraints:
-      - "**原地改写 x 与 residual**：多变体对比必须各喂副本（ab.py 已用 256 池轮换）"
-      - "返回两个张量 (out, residual_out)，residual_out ≈ x+r；只写一份输出的实现不可与它比"
-    mutates_inputs: true
-
-  - name: torch-native
-    source: "torch 原生 rms_norm（若能用到）"
-    status: fallback
-    applies_to: [decode-m1, decode-m32, prefill-8k]
-    constraints:
-      - "不融合残差，字节数比融合版多一次往返"
-    mutates_inputs: false
-
-  - name: fused-3pass-triton
-    source: "triton 融合单 kernel（kD：noMask, BLOCK=H, rows/CTA=1, num_warps=4）"
-    status: candidate
-    applies_to: [prefill-8k, decode-m32]
-    constraints:
-      - "H 必须是 2 的幂（无 mask 版本假定 H == BLOCK）"
-      - "输入宽度 H=4096 时 BLOCK=4096，需 num_warps=4 才不超 shared/LDS"
-      - "`num_warps` 与 `rows/CTA` 已扫 12 组合全部收敛到同一档；改这两个参数不会有收益"
-    mutates_inputs: false
-    measured: "cold-L2 186.2 us / 1081 GB/s（util 0.63/1724）；hot-L2 119.2 us 是缓存假象"
+- name: ref-heavy
+  source: 本卡 _common.py 的纯 torch fp32 参考
+  status: reference
+  applies_to:
+  - tiny
+  - decode-m1
+  - decode-m32
+  - prefill-8k
+  constraints:
+  - 只用于正确性对照，不是性能候选
+  mutates_inputs: false
+  semantics:
+    inputs:
+    - x
+    - residual
+    - weight
+    outputs:
+    - out
+    mutates: []
+    traffic_passes: 3
+    note: fp32 参考：2读(x,r)+1读(w,忽略)+1写。**只输出 out，没有 residual_out ⇒ 与 lightop/我们的融合实现不可比**。它只能当正确性 oracle，不能当性能基线。
+    not_comparable_to:
+    - lightop-fused
+    - fused-3pass-triton
+- name: lightop-fused
+  source: lightop 0.6.0 的 fused_add_rms_norm（已实测可用，非此前误报的「未安装」）
+  status: candidate
+  measured: 等语义 227.0 us / 1182 GB/s / util 0.686（2读2写 268MB；比我们的 242.2 us 快 6.7%）
+  applies_to:
+  - decode-m1
+  - decode-m32
+  - prefill-8k
+  constraints:
+  - '**原地改写 x 与 residual**：多变体对比必须各喂副本（ab.py 已用 256 池轮换）'
+  - 返回两个张量 (out, residual_out)，residual_out ≈ x+r；只写一份输出的实现不可与它比
+  mutates_inputs: true
+  semantics:
+    inputs:
+    - x
+    - residual
+    - weight
+    outputs:
+    - out
+    - residual_out
+    mutates:
+    - x
+    - residual
+    traffic_passes: 4
+    note: 2读(x,r)+2写(out,residual_out)；w 忽略
+- name: torch-native
+  source: torch 原生 rms_norm（若能用到）
+  status: fallback
+  applies_to:
+  - decode-m1
+  - decode-m32
+  - prefill-8k
+  constraints:
+  - 不融合残差，字节数比融合版多一次往返
+  mutates_inputs: false
+  semantics:
+    inputs:
+    - x
+    - residual
+    - weight
+    outputs:
+    - out
+    mutates: []
+    traffic_passes: 3
+    note: 不融合残差
+- name: fused-3pass-triton
+  source: triton 融合单 kernel（kD：noMask, BLOCK=H, rows/CTA=1, num_warps=4）
+  status: candidate
+  applies_to:
+  - prefill-8k
+  - decode-m32
+  constraints:
+  - H 必须是 2 的幂（无 mask 版本假定 H == BLOCK）
+  - 输入宽度 H=4096 时 BLOCK=4096，需 num_warps=4 才不超 shared/LDS
+  - '`num_warps` 与 `rows/CTA` 已扫 12 组合全部收敛到同一档；改这两个参数不会有收益'
+  mutates_inputs: false
+  measured: cold-L2 186.2 us / 1081 GB/s（util 0.63/1724）；hot-L2 119.2 us 是缓存假象
+  semantics:
+    inputs:
+    - x
+    - residual
+    - weight
+    outputs:
+    - out
+    - residual_out
+    mutates: []
+    traffic_passes: 4
+    note: 2读+2写；补 residual_out 后与 lightop 等语义
