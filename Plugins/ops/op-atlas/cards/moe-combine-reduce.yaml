@@ -65,6 +65,12 @@ last_verdict:
       note: bf16；加权求和（combine 的 reduce 段）
   conclusion: moe_sum 达 780 GB/s（峰值 0.45），是 combine 段的实测基线
   verified_on: '2026-11-23'
+  next_probe:
+    surface: layout-pack
+    hypothesis: moe_sum 达 780 GB/s（0.45）：若把 M=8192 K=4 的归约改成一次向量读（当前按 K 展开），应提到 0.7 以上
+    expected: ≥1200 GB/s
+    stop_if: 若改向量化后不涨，说明 K=4 的归约已触及写带宽上限 ⇒ 标 at_floor
+    effort: 2h
 modify_path:
   kind: replace-call
   what: 反 permute 的加权求和换融合

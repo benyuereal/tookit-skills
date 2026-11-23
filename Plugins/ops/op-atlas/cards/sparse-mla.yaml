@@ -97,6 +97,13 @@ last_verdict:
       note: mem-only 变体，非整 kernel
   conclusion: 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REPLICATE_H 结构税
   verified_on: '2026-10-29'
+  next_probe:
+    surface: none
+    none_reason: 已收敛到指令数地板而非带宽地板；32k 档的 1.7x 差是 REPLICATE_H 的结构税，消除它需 bm64，而 bm64/thr256 必然溢出（实测 spill 30，慢 2.12x）。
+    hypothesis: 若能把非 acc_o 寄存器从 ~190 压到 ~100，bm64 应不再溢出并消掉 32k 档的 1.7x 税
+    expected: 32k 档从 1.7x 差降到 ≤1.2x
+    stop_if: 若压寄存器需 spill>0 或额外 LDS，说明 bm64 这条路在本机走不通 ⇒ 保持 tuned，不再追 at_floor
+    effort: 8h
 modify_path:
   kind: env-flag
   what: 切 tilelang 的 persistent 后端与 page 分组

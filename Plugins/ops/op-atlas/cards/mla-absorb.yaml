@@ -70,6 +70,12 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/006-mla-decode-absorb/results/mla-decode.json
     sha256: 9cf66b57406c99d995d0e69059de12a035800c97cd78915507a9d5cfe104b67a
     verified_on: '2026-11-23'
+  next_probe:
+    surface: split-k
+    hypothesis: 短 KV（2048）的 0.12 由固定开销主导：把 num_split 从 auto 提到 4 应把短 KV 档提到 0.2 以上
+    expected: KV=2048 档从 0.12 → ≥0.20
+    stop_if: 若 split 增大后短 KV 涨幅 <10%，说明瓶颈是 page 表遍历而非并行度 ⇒ 转 layout-pack 方向
+    effort: 3h
 modify_path:
   kind: env-flag
   what: dense decode 的 num_splits 不可覆盖

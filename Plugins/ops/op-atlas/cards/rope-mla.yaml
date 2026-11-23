@@ -65,6 +65,13 @@ last_verdict:
       note: 这个数是整个 MLA decode kernel 的，rope 只是其中一步；不能当纯 rope 的性能
   conclusion: MLA decode 为 360 GB/s，与纯 rope 的 338 同量级；rope 不是该 kernel 的瓶颈
   verified_on: '2026-11-23'
+  next_probe:
+    surface: none
+    none_reason: 本卡测的是整个 MLA decode kernel 的 KV 读带宽（含 rope），rope 只是其中一步。真正该优化的对象是 mla-absorb，本卡只作为对照基线。
+    hypothesis: 与纯 rope（338 GB/s）同量级说明 rope 不是瓶颈；若把 rope 从 MLA 里摘出去单独测，差值应 <5%
+    expected: 摘除后 MLA decode 耗时变化 <5%
+    stop_if: 若摘除后 MLA 变快 >15%，说明 rope 确实是瓶颈之一 ⇒ 本卡结论作废，重测
+    effort: 1h
 modify_path:
   kind: replace-call
   what: MLA 的 rope 走 flash_mla 内置路径

@@ -148,6 +148,71 @@ def _check_index_matches_cards(cards_dir, index_txt):
                 % (cid, idx_bound, card_bound))
 
 
+# stop_if 必须含机制：不涨时凭什么判死，总不能只写「不涨就停」
+STOP_MECHANISM_WORDS = ("⇒", "因为", "由于", "机制", "说明", "证明", "→")
+
+
+def _check_next_probe(cards_dir, repo):
+    """E26 实现。"""
+    surf_ids = set()
+    sp = repo / "Plugins/ops/skills/op-optimize/references/surfaces.yaml"
+    if sp.is_file():
+        try:
+            import yaml
+            data = yaml.safe_load(sp.read_text(encoding="utf-8")) or []
+            surf_ids = {str(x.get("id")) for x in data if isinstance(x, dict)}
+        except Exception:                                        # noqa: BLE001
+            surf_ids = set()
+
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        np_ = lv.get("next_probe")
+        if not isinstance(np_, dict):
+            err("E26", p.name,
+                "measured/tuned 卡缺 next_probe —— 没有「下一步改什么」的卡只是基线快照")
+            continue
+        extra = set(np_) - {"surface", "hypothesis", "expected", "stop_if",
+                            "effort", "none_reason", "tuned_from"}
+        if extra:
+            err("E26", p.name, "next_probe 未知字段 %s" % sorted(extra))
+
+        surf = str(np_.get("surface") or "")
+        if not surf:
+            err("E26", p.name, "next_probe.surface 缺失（必须是 surfaces.yaml 的 id 或 none）")
+        elif surf == "none":
+            if not str(np_.get("none_reason") or "").strip():
+                err("E26", p.name,
+                    "surface=none 必须写 none_reason（如「已到地板」或「改法属 source-patch」）")
+        elif surf_ids and surf not in surf_ids:
+            err("E26", p.name,
+                "next_probe.surface=%r 不在 surfaces.yaml 里（可选：%s）"
+                % (surf, ", ".join(sorted(surf_ids))))
+
+        hyp = str(np_.get("hypothesis") or "")
+        if not hyp:
+            err("E26", p.name, "next_probe.hypothesis 缺失")
+        elif not re.search(r"\d", hyp):
+            err("E26", p.name,
+                "next_probe.hypothesis 里没有数字 —— 预期不可证伪，"
+                "写成「再看看」也能过机检，那就失去意义了")
+
+        stop = str(np_.get("stop_if") or "")
+        if not stop:
+            err("E26", p.name, "next_probe.stop_if 缺失（不涨时凭什么判死）")
+        elif not any(w in stop for w in STOP_MECHANISM_WORDS):
+            err("E26", p.name,
+                "next_probe.stop_if 里没有机制说明 —— 只写「不涨就停」不算判据，"
+                "要写清「不涨说明什么」（可用 ⇒/因为/由于/机制/说明/证明/→）")
+
+        if lv.get("status") == "tuned" and not np_.get("tuned_from"):
+            err("E26", p.name, "status=tuned 但 next_probe 里没有 tuned_from（基线值 + 改法）")
+
+
 def _check_evidence(cards_dir, repo):
     """E25 实现。见上方注释里的分档规则。"""
     import hashlib
@@ -697,6 +762,15 @@ def validate(atlas, repo):
     for m in re.findall(r"cards/([a-z0-9-]+)\.yaml", index_txt):
         if not (cards_dir / ("%s.yaml" % m)).is_file():
             err("E1", "INDEX.md", "指向不存在的卡 %s" % m)
+
+    # ---- E26：measured/tuned 卡必须写「下一步改什么、改到什么时候停」
+    # 由来：22 张 measured 里 0 张写了下一个攻击面，于是 24 张卡退化成 24 张基线快照。
+    # 但仅要求「字段存在」会变成形式主义——写「再看看」也能过机检。
+    # 所以三条硬要求：
+    #   surface     必须命中 surfaces.yaml 的 id（或 none + 理由）
+    #   hypothesis  必须含**一个数字**（可证伪的预期）
+    #   stop_if     必须含**机制词**（不涨时凭什么判死，不能只写「不涨就停」）
+    _check_next_probe(cards_dir, repo)
 
     # ---- E25 证据指纹：measured/tuned 卡的数字必须能追到可复跑的文件
     # 这是「分母漂移」的同族问题：数字写在卡片与 results 两处，只有一处对。

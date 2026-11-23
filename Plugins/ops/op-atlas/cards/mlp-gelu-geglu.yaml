@@ -66,6 +66,12 @@ last_verdict:
       note: 两者形状不同，不是同口径对比；GNSilu 是 GroupNorm+SiLU 不是纯激活
   conclusion: GNSilu 是 GroupNorm+SiLU 复合算子，不能当纯激活；纯 silu 达 468 GB/s
   verified_on: '2026-11-23'
+  next_probe:
+    surface: precision-drop
+    hypothesis: GNSilu 是 GroupNorm+SiLU 复合算子，纯 silu 达 468 GB/s 而 GNSilu 只有 153：若拆成 norm 与激活两个 kernel，各自应接近自己的上限
+    expected: norm 分量 ≥400 GB/s、激活分量 ≥450 GB/s
+    stop_if: 若拆开后总耗时反而变长，说明融合确实省了一趟 HBM ⇒ 本卡的 153 是融合的代价，不是缺陷
+    effort: 2h
 modify_path:
   kind: replace-call
   what: torch 激活换 lightop.GNSilu

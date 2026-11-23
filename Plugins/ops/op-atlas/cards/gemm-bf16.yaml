@@ -95,6 +95,13 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/results/gemm-crossover.json
     sha256: 5dbd0de69978f49ee4487a54f50c2e59f7f293de3c4d2de4d28d16e9084ad3ca
     verified_on: '2026-11-23'
+  next_probe:
+    surface: none
+    none_reason: M>=2048 已 0.83~0.90，接近 achievable 上限；小 M 的 0.30 带宽是访存模式问题，需改 kernel，属 source-patch。
+    hypothesis: M=1024 档 peak 口径 0.73、steady 0.58，若按 M 分档选不同 tile，应把 M=1024 提到 0.80 以上
+    expected: M=1024 从 0.73 → ≥0.80
+    stop_if: 若分档后仍 <0.78，说明 M=1024 已在下限（块数不足）⇒ 接受现状
+    effort: 2h
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择

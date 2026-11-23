@@ -89,6 +89,13 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/008-paged-decode-ceiling/results/paged-decode.json
     sha256: 29eb455432e6d998cb163b5940b1a2fbcaa1f711bb9b748ab38d88bb532c64ad
     verified_on: '2026-11-23'
+  next_probe:
+    surface: none
+    none_reason: 深挖方案 D0 要求先做分母自证——0.03 这个极端值最可能是分母错（拿整段 KV 字节当分母，或 page 粒度下有效字节算错）。在证伪天花板之前不列攻击面。
+    hypothesis: 若分母正确，同形状最佳实现的耗时应在 3.16 ms 的 1/10 以内；若拿不到，说明 0.03 是分母错而非实现慢
+    expected: 分母修正后 utilization 落在 0.15~0.35（与同机 MLA 吸收式 0.35 同量级）
+    stop_if: 若按 KV 有效字节重算仍 <0.05，说明不是分母问题而是 flash_attn 的 decode kernel 确实每页串行等待 ⇒ 转 not_for，改换实现
+    effort: 2h
 modify_path:
   kind: replace-call
   what: 换掉 flash_attn 的 decode 路径

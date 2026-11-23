@@ -70,6 +70,12 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/004-mha-prefill-ceiling/results/mha-prefill.json
     sha256: d5b9715b4ed57eef649486e8b980df3663f3a3bbaa6f476e2cd1a27d44f0fd5e
     verified_on: '2026-11-23'
+  next_probe:
+    surface: split-k
+    hypothesis: S=8192 达 0.69 of peak，但 S=1024 只有 0.31：若在小 S 上提高 split-KV 切分数，应把 S=1024 提到 0.5 以上
+    expected: S=1024 从 0.31 → ≥0.50
+    stop_if: 若切分后小 S 涨幅 <10%，说明瓶颈是 S 小时的块数不足而非并行度 ⇒ 接受现状并写进 not_for
+    effort: 2h
 modify_path:
   kind: env-flag
   what: 调 split-KV 的切分数

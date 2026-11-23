@@ -65,6 +65,12 @@ last_verdict:
       note: bf16；M=1024 时 213 GB/s，M=8192 时 485 GB/s
   conclusion: 带宽随 M 上升：M=1024 为 213 GB/s、M=8192 为 485 GB/s（后者达峰值 0.28）
   verified_on: '2026-11-23'
+  next_probe:
+    surface: fusion-boundary
+    hypothesis: M=8192 档 485 GB/s 只有峰值的 0.28：若与上游 add 融合省一趟 HBM，应提到 0.5 以上
+    expected: ≥860 GB/s（对齐 rmsnorm-fused 的 887）
+    stop_if: 若融合后仅涨 <15%，说明瓶颈在 H 维的跨 lane 归约而非字节数 ⇒ 转 cross-lane-fold
+    effort: 2h
 modify_path:
   kind: replace-call
   what: torch.nn.LayerNorm 换成 lightop.LayerNorm

@@ -70,6 +70,13 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/009-topk-block-index/results/topk-block-index.json
     sha256: c59dcdcdceaf50317f2bfbebf2aa32ec27aa268766cd48a174d96c849f637735
     verified_on: '2026-11-23'
+  next_probe:
+    surface: none
+    none_reason: 耗时约等于空 kernel（0.79× launch 地板 43 µs），已无优化空间——判据从达成率换成「离 launch 地板多远」后结论明确。
+    hypothesis: 若耗时已是 launch 地板的 0.79 倍，任何优化收益应 <20%
+    expected: 相对当前提升 <20%
+    stop_if: 若测量显示可用融合省掉一次 launch 且收益 >30%，说明还有空间 ⇒ 重开
+    effort: 1h
 modify_path:
   kind: env-flag
   what: 切 fused topk 变换变体

@@ -70,6 +70,12 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/007-mla-full-vs-absorb/results/mla-full-vs-absorb.json
     sha256: c1bb37d77aee116c34fd17b0a8300ba5311f1868e57cf4d105aac38019aba754
     verified_on: '2026-11-23'
+  next_probe:
+    surface: precision-drop
+    hypothesis: 稳定在 0.13 of peak，等 FLOPs 下 flash_attn 快 4.54x：若 D=576 的 LDS 压力是主因，把 D 拆成 2×288 分两趟应提到 0.2 以上
+    expected: ≥0.20 of peak
+    stop_if: 若拆 D 后变慢，说明是 tile 调度而非 LDS 压力 ⇒ 转 layout-pack，或按 achievable 重记
+    effort: 4h
 modify_path:
   kind: env-flag
   what: 调 MLA 的 tile 调度元数据

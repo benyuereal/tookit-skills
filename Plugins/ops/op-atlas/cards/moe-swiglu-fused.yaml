@@ -66,6 +66,13 @@ last_verdict:
       note: 专家内 swiglu；两种 M 耗时几乎相同说明固定开销主导
   conclusion: 专家内 swiglu 在 M=128..1024 区间耗时几乎不变，瓶颈是固定开销不是字节
   verified_on: '2026-11-23'
+  next_probe:
+    surface: none
+    none_reason: M=128..1024 耗时几乎不变（1.00x），瓶颈是固定开销而非字节或算力——它已接近 launch 地板（43 µs），无从优化。
+    hypothesis: 若实测耗时已接近 43 µs 的 launch 地板，则任何优化收益应 <10%
+    expected: 相对当前提升 <10%
+    stop_if: 若测量显示耗时 >2× launch 地板仍不随 M 变化，说明是别的固定开销 ⇒ 重查
+    effort: 1h
 modify_path:
   kind: replace-call
   what: 专家内激活换成融合实现

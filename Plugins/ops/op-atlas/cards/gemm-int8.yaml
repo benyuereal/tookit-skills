@@ -66,6 +66,13 @@ last_verdict:
       note: E=32 grouped contiguous；MAD=0.0032 占中位数 4.3%，两次跑 343/363 TF 有 5% 波动
   conclusion: INT8 grouped 达 343 TFLOPS、1621 GB/s；MAD 为中位数的 0.043，该形状测量不稳
   verified_on: '2026-11-23'
+  next_probe:
+    surface: none
+    none_reason: 343 TFLOPS / 1621 GB/s 已接近峰值，且 MAD 占中位数 4.3%（两次跑差 5%），测量本身不稳。先解决稳定性再谈优化。
+    hypothesis: 若测量稳定（MAD<2%），INT8 应稳定在 360 TF 以上；当前 343 的波动来自 tiling 边界
+    expected: MAD 从 4.3% 降到 <2%
+    stop_if: 若换三种 tiling 后 MAD 仍 >3%，说明该形状本身不稳定 ⇒ 换形状档再测
+    effort: 2h
 modify_path:
   kind: env-flag
   what: 选 W6 packed 的 layout 入口

@@ -66,6 +66,12 @@ last_verdict:
       note: qk-norm 与 rope 融合；同形状 rope 单独为 338 GB/s
   conclusion: qk-norm+rope 融合达 741 GB/s，是 rope 单独（338）的 2.19 倍
   verified_on: '2026-11-23'
+  next_probe:
+    surface: fusion-boundary
+    hypothesis: 融合已比单 rope 快 2.2x（741 vs 338 GB/s）：若把 norm 的平方和也融进同一趟，应再省一趟读
+    expected: ≥1000 GB/s（从 0.43 提到 0.58）
+    stop_if: 若字节数已无冗余（读 1 写 1）而带宽不涨，说明是访存模式而非融合边界 ⇒ 转 gather-path
+    effort: 3h
 modify_path:
   kind: replace-call
   what: QK-norm 与 RoPE 合并成一次调用

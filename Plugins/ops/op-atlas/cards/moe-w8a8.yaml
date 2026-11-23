@@ -79,6 +79,13 @@ last_verdict:
       note: 仅 Marlin GEMM 分量，不含整 pipeline
   conclusion: Marlin GEMM 分量达峰值带宽的 0.888；整体未判；asm mode>=1000 禁用
   verified_on: '2026-10-20'
+  next_probe:
+    surface: none
+    none_reason: 只测了 Marlin GEMM 分量（0.888），整体 pipeline 未判。下一步是补测整体，而不是优化已到 0.888 的分量。
+    hypothesis: 整体 pipeline 的达成率应显著低于 Marlin 分量的 0.888；若低于 0.5，主要差距应在 dispatch/combine 段
+    expected: 整体 0.4~0.6
+    stop_if: 若整体也 >0.85，说明本卡的 pipeline 已集约 ⇒ 标 at_floor（当前不敢这么标）
+    effort: 4h
 modify_path:
   kind: env-flag
   what: 切 Marlin MoE GEMM 的 mode 档

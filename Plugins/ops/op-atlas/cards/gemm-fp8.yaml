@@ -134,6 +134,12 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/results/fp8-gemm.json
     sha256: 586615d5d837affac9aa6f9a7c4be29fbacf9afdceb1cb3a00a9fe6183e17f0f
     verified_on: '2026-11-23'
+  next_probe:
+    surface: precision-drop
+    hypothesis: 换到原生 fp8 MMA 路径（k_pack=1 + MLS，见 sparse-mla 的 bf16_mls_matrix_load 反证）后应达 nominal 560 的 0.35 以上，即 >196 TF
+    expected: 198~280 TF（当前 49.8）
+    stop_if: 若三条路径（aiter opus / tilelang / ck）都停在 50 TF 附近，说明是 gfx938 的 fp8 发射率上限而非实现问题 ⇒ 按 achievable 口径重记分母
+    effort: 6h
 modify_path:
   kind: replace-call
   what: 换掉 aiter opus 这一族实现

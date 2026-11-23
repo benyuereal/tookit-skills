@@ -74,6 +74,12 @@ last_verdict:
       note: 192x32K，grouped G=3 为基线
   conclusion: epilogue 跨 lane 归约换 ds_bpermute，逐位一致；LDS 冲突非杠杆
   verified_on: '2026-11-22'
+  next_probe:
+    surface: cross-lane-fold
+    hypothesis: epilogue 跨 lane 归约已换 ds_bpermute 且逐位一致，LDS 冲突非瓶颈：若把 logits 的写回也向量化，应再快 ≥10%
+    expected: 相对当前再快 ≥1.10x
+    stop_if: 若写回向量化后不涨，说明归约已是主导 ⇒ 该算子到此为止（它已 1.29x）
+    effort: 2h
 modify_path:
   kind: env-flag
   what: 切 grouped 分组调度

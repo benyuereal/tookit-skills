@@ -66,6 +66,12 @@ last_verdict:
       note: bf16 融合残差；M=1024 时仅 322 GB/s，M=8192 时 887 GB/s
   conclusion: 带宽随 M 上升：M=1024 为 322 GB/s、M=8192 为 887 GB/s（后者达峰值 0.51）
   verified_on: '2026-11-23'
+  next_probe:
+    surface: cross-lane-fold
+    hypothesis: M=8192 档 887 GB/s 是峰值的 0.51：剩余差距若在跨 lane 归约，换 ds_bpermute 应提到 0.7 以上
+    expected: ≥1200 GB/s
+    stop_if: 若换归约方式后不涨，说明已达到 achievable 流式上限的可用区间 ⇒ 标 at_floor
+    effort: 3h
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop 融合

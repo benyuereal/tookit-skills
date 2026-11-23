@@ -66,6 +66,12 @@ last_verdict:
       note: bf16；两种 style 差 0.02ms，接近 3×MAD=0.006 的边界
   conclusion: 两种 rotate_style 耗时比为 0.973（差异接近噪声边界）；带宽仅达峰值的 0.21
   verified_on: '2026-11-23'
+  next_probe:
+    surface: gather-path
+    hypothesis: 带宽仅 352 GB/s（0.20）且随 D 线性上升（64/128/256 → 189/346/561）：若把相邻 head 合并成一次向量读，D=128 档应接近 D=256 的 561
+    expected: ≥500 GB/s
+    stop_if: 若合并读后仍 <400，说明 freqs 的访问模式本身不连续 ⇒ 改查表布局，属 source-patch
+    effort: 4h
 modify_path:
   kind: replace-call
   what: 选对 rotate_style 并合入 norm

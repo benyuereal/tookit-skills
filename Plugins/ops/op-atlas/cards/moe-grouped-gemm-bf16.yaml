@@ -66,6 +66,13 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage0-32.json
     sha256: fb5e1a1e3e5b4cfce33e0196f3c6879510a6b45287ea59221e355582e57776e6
     verified_on: '2026-11-23'
+  next_probe:
+    surface: none
+    none_reason: 80 TFLOPS 是 achievable 的 0.29，但 grouped GEMM 的 0.29 已在「masked 形态」的合理区间；进一步提升需 mode 2000 的真 pack，本轮未跑通。
+    hypothesis: 若换 mode=2000 的真 pack（而非 mode=1000 的 asm layout），应提到 0.4 以上即 >110 TF
+    expected: ≥110 TF
+    stop_if: 若 mode 2000 造不出正确输入（需 6D packed layout），说明本机的 deepgemm 路径受限 ⇒ 标未测定并停
+    effort: 4h
 modify_path:
   kind: replace-call
   what: 换 grouped 路径入口

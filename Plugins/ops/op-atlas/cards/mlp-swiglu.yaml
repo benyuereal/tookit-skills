@@ -69,6 +69,12 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/001-swiglu-fused-vs-split/results/result.json
     sha256: f2606cf36568b68d98ad238e3d112d8c123f3b75a99ce692f7a784ac8a28f6ac
     verified_on: '2026-11-23'
+  next_probe:
+    surface: layout-pack
+    hypothesis: 达 copy 峰值的 0.39~0.46，空间在布局：若把 gate/up 的两次读合并成一次 strided 读，应提到 0.6 以上
+    expected: 从 0.46 → ≥0.60
+    stop_if: 若合并后不涨，说明已经是纯字节数下限（读 2 写 1）⇒ 标 at_floor
+    effort: 3h
 modify_path:
   kind: replace-call
   what: 三步 torch 换成 lightop 融合

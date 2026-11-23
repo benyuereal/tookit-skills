@@ -71,6 +71,12 @@ last_verdict:
   - path: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage0-32.json
     sha256: fb5e1a1e3e5b4cfce33e0196f3c6879510a6b45287ea59221e355582e57776e6
     verified_on: '2026-11-23'
+  next_probe:
+    surface: fusion-boundary
+    hypothesis: M/exp<32 部分融合、>64 全拆分，拐点在 32~64：若把拐点下移到 16，应让 M/exp=32 档也走部分融合
+    expected: M/exp=32 档再快 ≥1.15x
+    stop_if: 若下移后 M/exp=32 变慢，说明全拆分在该档确实更优 ⇒ 拐点结论成立，不改
+    effort: 3h
 surfaces:
 - fusion-boundary
 - layout-pack

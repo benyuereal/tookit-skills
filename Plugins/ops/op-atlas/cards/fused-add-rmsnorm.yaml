@@ -68,6 +68,12 @@ last_verdict:
       note: bf16；M=1024 档为 1.70x，M=8192 档为 2.39x；融合带宽 862 GB/s
   conclusion: 融合比分步快 1.70x(M=1024)/2.39x(M=8192)；M 越大收益越高
   verified_on: '2026-11-23'
+  next_probe:
+    surface: fusion-boundary
+    hypothesis: 融合已 2.39x 且 M 越大收益越高：若把下游的量化也融进同一趟，应再省一趟写（3 趟 → 2 趟）
+    expected: 相对当前再快 ≥1.3x
+    stop_if: 若融合量化后精度超容差或 VGPR 溢出（实测 spill>0），说明这条已到边界 ⇒ 标 at_floor
+    effort: 3h
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop.RMSNormAdd
