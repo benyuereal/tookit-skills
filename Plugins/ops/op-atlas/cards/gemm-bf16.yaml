@@ -70,15 +70,15 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/README.md
   ratio:
-    value: 0.84
-    vs: 本机实测 bf16 峰值 279 TF 的达成率（M=4096 K=N=4096）
+    value: 0.9
+    vs: 本机实测 bf16 峰值 279 TF 的达成率（M=4096，peak 口径，与分母同口径）
     scope:
       cards: 1
       in_len: M=4096
       out_len: N=K=4096
       warmup: hot
-      note: M 从 1 到 4096 扫过：小 M 只 0.00~0.16 且带宽 0.30 of 1724；M>=2048 为 0.78~0.87；M=512 有 kernel 切换凹陷
-  conclusion: M>=2048 达峰值的 0.78~0.87（基本到顶）；小 M 是访存受限、带宽仅 0.30
+      note: M=1024/2048/4096 = 0.73/0.83/0.90（peak 口径）；同形状 steady 口径只有 0.58/0.74/0.74。峰值与稳态差 16%，引用必须带口径
+  conclusion: M>=2048 达峰值 0.83~0.90（peak 口径）；小 M 是访存受限、带宽仅 0.30
   verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
