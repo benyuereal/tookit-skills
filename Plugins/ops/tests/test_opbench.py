@@ -155,6 +155,24 @@ class TestFloorAndMetric(unittest.TestCase):
     def test_zero_peak_is_unknown(self):
         self.assertEqual(opbench.floor_status(1.0, 0), ("unknown", 0.0))
 
+    def test_over_peak_is_impossible_not_at_floor(self):
+        """超过峰值必须判 impossible，不能当「达成率很高」放行。
+
+        三次踩中同一个坑：case 004 varlen 多乘 batch（1.8× 峰值）、
+        case 006 循环变量残留（1666 > 1584 GB/s）、185 分母反推错。
+        前两次都是「算出的数超过峰值」，而 floor_status 以前会老老实实返回 at_floor。
+        """
+        for achieved, peak in ((1800, 1200), (1.8, 1.0), (1666, 1584)):
+            status, ratio = opbench.floor_status(achieved, peak)
+            self.assertEqual(status, "impossible",
+                             "%g/%g 应判 impossible（超峰值即记账错），实得 %r"
+                             % (achieved, peak, status))
+            self.assertGreater(ratio, 1.0)
+
+    def test_slightly_over_peak_within_tolerance(self):
+        """容差内的舍入不算错：1.5% 超峰值仍按正常判定。"""
+        self.assertEqual(opbench.floor_status(1218, 1200)[0], "at_floor")
+
     def test_custom_threshold(self):
         self.assertEqual(opbench.floor_status(900, 1000, threshold=0.9)[0], "at_floor")
         self.assertEqual(opbench.floor_status(899, 1000, threshold=0.9)[0], "headroom")

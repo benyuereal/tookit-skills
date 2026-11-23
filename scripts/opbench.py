@@ -75,11 +75,22 @@ def significant(base, cand, k=DEFAULT_K, lower_is_better=True):
     return better, ratio, "显著：ratio=%.4f，|Δ|=%.6g > %.1f*MAD=%.6g" % (ratio, delta, k, noise)
 
 
-def floor_status(achieved, peak, threshold=DEFAULT_FLOOR_THRESHOLD):
-    """达成率判定。achieved/peak 同单位（GB/s、TFLOPS 等）。"""
+def floor_status(achieved, peak, threshold=DEFAULT_FLOOR_THRESHOLD, over_tol=0.02):
+    """达成率判定。achieved/peak 同单位（GB/s、TFLOPS 等）。
+
+    **超过峰值一定是记账错，不是机器变异。** 这条以前只是「返回一个大比值」，
+    于是 1.8× 峰值这种不可能的读数也能一路走进报告。三次踩中：
+      - case 004：varlen 张量没有 batch 维，多乘了 B=4 → 1.8× bf16 峰值
+      - case 006：轮2 循环变量 B 残留成 32，字节数按 B=32 算 → 1666 > 1584 GB/s
+      - constants.yaml：185 是分母反推错（那次的错在分母侧）
+    所以把 over_tol 做成显式判据：超过 peak*(1+over_tol) 返回 "impossible"，
+    调用方必须当错误处理，不许当「达成率很高」继续走。
+    """
     if not peak:
         return "unknown", 0.0
     r = float(achieved) / float(peak)
+    if r > 1.0 + over_tol:
+        return "impossible", r
     return ("at_floor" if r >= threshold else "headroom"), r
 
 
@@ -179,6 +190,11 @@ def selftest():
     st2, r2 = floor_status(600, 1200)
     assert st2 == "headroom", (st2, r2)
     print("[ok] floor_status  %.2f -> %s" % (r, st))
+
+    # 超过峰值必须是 impossible（记账错），不是「达成率很高」
+    st3, r3 = floor_status(1666, 1584)
+    assert st3 == "impossible" and r3 > 1.0, (st3, r3)
+    print("[ok] floor_status  超峰值 %.2f -> %s（记账错，拒出结论）" % (r3, st3))
 
     t = bench_fn(lambda: sum(range(1000)), warmup_ms=5, rep_ms=20, repeats=2, min_iters=2)
     assert t["median_ms"] is not None and t["n"] == 2, t
