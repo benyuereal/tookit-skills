@@ -2,7 +2,7 @@ id: mha-prefill
 title: MHA prefill
 family: attention
 math: out = softmax(QK^T*scale + causal_mask)·V；M 大
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
@@ -12,13 +12,14 @@ impls:
   tier: primary
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
-  - causal、变长 batch
+  - S>=2048 的 causal prefill（实测 0.47~0.62 达成率）
   not_for:
-  - decode 小 M
+  - decode 小 M（memory-bound，结论不可互换）
+  - S=1024 以下（只有 0.31）
   pros:
   - 实现成熟，变体覆盖广
   cons:
-  - 大 M 需调 tile
+  - tile 调度属库内部，再往上需改源码（未测定）
   source: references/libraries.md
   import_path: flash_attn.flash_attn_func
   signature: flash_attn_func(q,k,v,dropout_p=0.0,causal=True)
@@ -41,20 +42,28 @@ impls:
   signature: '@tilelang.jit'
   smoke_test: python3 -I -c "import tilelang; assert hasattr(tilelang,"jit")"
 ceiling:
-  kind: missing
-  ref: null
+  kind: roofline_model
+  ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: compute
-  note: prefill 档算力主导；与 decode 是两种形态，结论不可互换
+  note: 分母用本机实测 bf16 峰值 310 TF（同进程标定），不是标称也不是反推值
 shapes:
 - decode-m1
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 无实测：索引卡，实现层待按证据推进
-  verified_on: null
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/004-mha-prefill-ceiling/README.md
+  ratio:
+    value: 0.62
+    vs: 本机实测 bf16 峰值 310 TF 的达成率（flash_attn causal prefill，S=8192）
+    scope:
+      cards: 1
+      in_len: S=8192
+      out_len: B=4 H=32 D=128
+      warmup: hot
+      note: S=1024/2048/4096 分别为 0.31/0.47/0.57；GQA 把 KV 读砍 4× 只快 3.6%，瓶颈在算力侧非访存侧
+  conclusion: flash_attn causal prefill 达实测峰值的 0.62（S=8192）；瓶颈在算力侧，不在 KV 读
+  verified_on: '2026-11-23'
 modify_path:
   kind: env-flag
   what: 调 split-KV 的切分数

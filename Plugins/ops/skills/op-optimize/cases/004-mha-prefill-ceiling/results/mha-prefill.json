@@ -1,0 +1,63 @@
+{
+  "device": "BW1100",
+  "method": "CUDA event median of 11, warmup 5",
+  "peak_bf16_tf": 310.8,
+  "causal_sweep": [
+    {
+      "S": 1024,
+      "ms": 0.3578,
+      "mad_ms": 0.005,
+      "tflops": 96.0,
+      "of_peak": 0.309
+    },
+    {
+      "S": 2048,
+      "ms": 0.947,
+      "mad_ms": 0.0019,
+      "tflops": 145.1,
+      "of_peak": 0.467
+    },
+    {
+      "S": 4096,
+      "ms": 3.1216,
+      "mad_ms": 0.003,
+      "tflops": 176.1,
+      "of_peak": 0.567
+    },
+    {
+      "S": 8192,
+      "ms": 11.4541,
+      "mad_ms": 0.0053,
+      "tflops": 192.0,
+      "of_peak": 0.618
+    }
+  ],
+  "noncausal_4096": {
+    "ms": 5.553,
+    "tflops": 198.0
+  },
+  "gqa_4096": {
+    "ms": 3.0086,
+    "tflops": 182.7
+  },
+  "ratio_gqa_vs_mha": 0.964,
+  "sdpa_4096": {
+    "ms": 4.9226,
+    "tflops": 111.7,
+    "slower_than_flash_attn": 1.58
+  },
+  "varlen": [
+    {
+      "n_seq": 2,
+      "seq": 2048,
+      "ms": 0.5002,
+      "tflops": 137.4
+    },
+    {
+      "n_seq": 8,
+      "seq": 2048,
+      "ms": 1.7946,
+      "tflops": 153.2
+    }
+  ]
+}

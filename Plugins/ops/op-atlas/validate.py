@@ -103,6 +103,42 @@ def _truth_sources(repo):
     return lib_sections, law_ids
 
 
+def _check_index_matches_cards(cards_dir, index_txt):
+    """E19：INDEX 的「算子一览」表逐行核对卡片。
+
+    只核状态（最易漂）与家族、上限；结论文本是截断的，不做全文比对。
+    """
+    row_re = re.compile(
+        r"^\|\s*\[`([a-z0-9-]+)`\]\(cards/[^)]+\)\s*\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|",
+        re.M)
+    seen = set()
+    for m in row_re.finditer(index_txt):
+        cid = m.group(1)
+        idx_status = m.group(3).strip()
+        idx_family = m.group(2).strip()
+        idx_bound = m.group(5).strip()
+        seen.add(cid)
+        p = cards_dir / ("%s.yaml" % cid)
+        if not p.is_file():
+            continue                                   # E1b 已报
+        c, problem = _load_yaml(p)
+        if problem or not isinstance(c, dict):
+            continue
+        card_status = str(c.get("status") or "").strip()
+        card_family = str(c.get("family") or "").strip()
+        card_bound = str((c.get("ceiling") or {}).get("bound") or "").strip()
+        if idx_status != card_status:
+            err("E19", "INDEX.md",
+                "%s 状态不一致：INDEX=%r 卡片=%r（INDEX 是生成物，跑 sync_index.py）"
+                % (cid, idx_status, card_status))
+        if idx_family and card_family and idx_family != card_family:
+            err("E19", "INDEX.md", "%s 家族不一致：INDEX=%r 卡片=%r"
+                % (cid, idx_family, card_family))
+        if idx_bound and card_bound and idx_bound != card_bound:
+            err("E19", "INDEX.md", "%s 上限口径不一致：INDEX=%r 卡片=%r"
+                % (cid, idx_bound, card_bound))
+
+
 def _peak_constants(repo):
     """从 constants.yaml 取两个达成率分母：bf16 峰值 TFLOPS、流式峰值带宽 GB/s。
 
@@ -533,6 +569,12 @@ def validate(atlas, repo):
     for m in re.findall(r"cards/([a-z0-9-]+)\.yaml", index_txt):
         if not (cards_dir / ("%s.yaml" % m)).is_file():
             err("E1", "INDEX.md", "指向不存在的卡 %s" % m)
+
+    # ---- E19 INDEX 表里的状态/家族/上限必须与卡片一致
+    # 由来：13 张卡已 promoted 到 measured，INDEX 里还写着 draft。
+    # 「一个事实在多处登记、只有一处对」正是分母用错那类错误的温床。
+    # INDEX 现在是生成物（sync_index.py），这里做反向核对。
+    _check_index_matches_cards(cards_dir, index_txt)
 
     # ---- E8 家族文件齐备
     for c in cards:

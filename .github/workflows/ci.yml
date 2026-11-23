@@ -41,6 +41,10 @@ jobs:
       - name: op-atlas validate
         run: python3 -I Plugins/ops/op-atlas/validate.py --atlas Plugins/ops/op-atlas
 
+      - name: op-atlas INDEX 与卡片同步
+        # INDEX 是生成物。手改了卡片没跑 sync_index.py，这里红。
+        run: python3 -I Plugins/ops/op-atlas/sync_index.py --check
+
       # 4. ops 域单测（含 engine 的显著性、三道门、loop 状态机）
       #
       # 用 pytest 而不是 unittest discover：后者在 Plugins/ops/tests 下
