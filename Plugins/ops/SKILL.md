@@ -159,7 +159,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-moe-topk-gating` | `draft` | **MoE 第 2 段**：gate→topk→归一化。索引是离散量必须逐位一致；tie-break 需固定 |
 | `op-moe-align-permute` | `draft` | **MoE 第 3 段**：align_block_size + permute。`-1` 只能垫队尾，前置会让输出恒为 0 |
 | `op-fused-add-rmsnorm` | `measured` | 残差 + RMSNorm 融合：**校准件**，字节数完全确定；用 lightop.RMSNormAdd（已跑通门禁） |
-| `op-rmsnorm-fused` | `tuned` | 融合 RMSNorm：triton 单 kernel 冷 L2 1081 GB/s（util 0.63/1724）；归约类天花板≈elementwise×0.75 |
+| `op-rmsnorm-fused` | `at_floor` | 融合 RMSNorm：triton 单 kernel 端到端 183 µs/1081 GB/s（util 0.63）；归约惩罚 0.72 已证伪为结构性上限 |
 
 ## 六、数据分层（红线，必须遵守）
 

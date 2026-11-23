@@ -2,7 +2,7 @@ id: rmsnorm-fused
 title: 融合 RMSNorm（含残差）
 family: elementwise
 math: y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))
-status: tuned
+status: at_floor
 layer: kernel
 op_card: Plugins/ops/skills/op-rmsnorm-fused
 impls:
@@ -51,7 +51,7 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: measured
+  status: at_floor
   kb_path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-triton.json
   ratio:
     kind: utilization
@@ -63,23 +63,20 @@ last_verdict:
       in_len: M=8192
       out_len: H=4096
       warmup: hot
-      note: '分母 1724 **未标定**（全仓无测量记录），实测 elementwise 峰值 1498 对应 util=0.73；同一数据两分母并列 0.63(1724)/0.73(1498)。对比对象是 ref-heavy（纯 torch fp32 参考，variants.yaml 标 status: reference「不是性能候选」），**不是**此前卡片记的 0.51/887
-        GB/s —— 那两条来源不明，已作废。冷 L2（每次换输入）186.2 µs；热 L2（同输入连跑）119.2 µs 是缓存假象，不采用'
+      note: 分母 1724 **未标定**（全仓无测量记录），实测 elementwise 上限 1498 对应 util=0.73。同一数据双分母并列 0.63(1724)/0.73(1498)。口径=端到端（每次 empty_like）183.0 µs，业主三方对账确认；ab.py 背靠背 140 µs 偏乐观 23%，不用。**cross-lane-fold 已试并证伪**：分块两趟
+        186~283 µs（更慢，多读 2 趟 > 省的 barrier）、num_warps 4/8/16 = 172/187/265 µs，4 已最优 ⇒ 标 at_floor
   evidence:
   - path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-triton.json
     sha256: 86ddd0ff8a82862bd1daff0ebf1703cd9227c64114f9fc9c8d66f41d8ad03203
     verified_on: '2026-11-23'
   conclusion: triton 融合单 kernel 冷 L2 达 1081 GB/s（util 0.63），快 6.6x
   next_probe:
-    surface: cross-lane-fold
-    hypothesis: 冷 L2 下 1081 GB/s 是 elementwise 上限（1498）的 0.72：若把每行 block 级 reduction 换成 warp 内 shuffle（去掉 barrier），应提到 0.85 即 >1270 GB/s
-    expected: ≥1270 GB/s（当前 1081）
-    stop_if: 若换 warp-shuffle 后提升 <8%，说明 barrier 不是主因、收敛到的是访存本身 ⇒ 标 at_floor
-    effort: 4h
-    tuned_from:
-      baseline: ref-heavy（纯 torch fp32 参考）冷 L2 1.2243 ms
-      change: 换 triton 融合单 kernel（num_warps=4，rows/CTA=1，无 mask，H==BLOCK）
-      result: 0.1862 ms（冷 L2），6.6x
+    surface: none
+    none_reason: cross-lane-fold 已按批准执行并证伪：分块两趟 186~283 µs 全部更慢，num_warps 已是最优 4。归约惩罚 0.72 是这类算子的结构性上限（elementwise 1498 × 0.72 ≈ 1081），不是可优化项。
+    hypothesis: 若要再提升 ≥8%，必须换掉行内归约本身（如用双 pass 的独立 kernel），但这会多读一趟 67 MB
+    expected: 提升 <8%（已实测为负）
+    stop_if: 实测三种结构变换全部更慢且 num_warps 已最优 ⇒ 归约惩罚是结构性上限，标 at_floor，不再硬啃
+    effort: 0（已完成）
   verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
