@@ -45,7 +45,7 @@ ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: compute
-  note: 分母用本机实测 bf16 峰值 310 TF（同进程标定），不是标称也不是反推值
+  note: 分母用本机实测 bf16 峰值 279 TF（同进程标定），不是标称也不是反推值
 shapes:
 - decode-m1
 - decode-m32
@@ -54,8 +54,8 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/004-mha-prefill-ceiling/README.md
   ratio:
-    value: 0.62
-    vs: 本机实测 bf16 峰值 310 TF 的达成率（flash_attn causal prefill，S=8192）
+    value: 0.69
+    vs: 本机实测 bf16 峰值 279 TF 的达成率（flash_attn causal prefill，S=8192）
     scope:
       cards: 1
       in_len: S=8192

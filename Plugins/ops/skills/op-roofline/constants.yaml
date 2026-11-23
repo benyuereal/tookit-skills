@@ -41,29 +41,49 @@ compute:
     shape: [16, 16, 16]
     flops: 8192
     status: measured
+  # ---- 算力分母的三层口径（2026-11-23 立规矩）----------------------------
+  # 混用三类数是本仓库最贵的一类错误。三者语义完全不同，不可互相顶替：
+  #   nominal     : 芯片规格/厂商给出的硬件名义峰值。**不可复跑**（来自规格书），
+  #                 只能当「上限」引用，不能当达成率分母。
+  #   achievable  : 本机某个**高质量实现**实测到的值。可复跑。当「还有多少空间」的分母。
+  #   impl_measured: 某一条具体实现的实测值。可复跑。只代表那条实现，不外推到硬件。
+  # 判定规则：报「达成率」用 achievable；报「这条实现多快」用 impl_measured；
+  #          报「离硬件上限多远」用 nominal，并同时给出前两者。
   bf16_gemm_peak_tf:
-    value: 310
+    value: 279
+    caliber: achievable
     unit: TFLOPS
     status: measured
-    at_sclk_mhz: 1200
+    at_sclk_mhz: 1350
     verified_on: 2026-11-23
     source: >
-      本机 hipBLASLt 大 GEMM 实测：N=6144 bf16 1.493 ms = 310.6 TF，fp16 同形状 312.4 TF
-      （两条独立库路径吻合，比值 1.006）。20 s 持续加热后掉到 273.9 TF（sclk 仍 1200 MHz）。
-      扫描见 Plugins/ops/skills/op-roofline/results/bf16-peak.json。
+      本机 hipBLASLt 大 GEMM（N=6144）10 轮独立采样的峰值中位数 = 279 TF
+      （单轮样本 270/270/271/274/276/282/283/286/295/306，极差 13%）。
+      fp16 独立路径同形状 309 TF，同量级。
+      sclk 全程 1350 MHz（hy-smi 档位 8，测量期间轮询确认未变动）。
     reproduce: Plugins/ops/skills/op-roofline/tools/calibrate_bf16_peak.py
     note: >
-      **达成率的分母一律用这个实测值**，口径与带宽一致（1724 实测 vs 1100 标称）。
-      峰值随 sclk 线性变：600 MHz 减半。跨次比较必须同时记 sclk。
-      小 N 不能当峰值——N=1024 只有 41 TF（固定开销/块数不足），N=2048 只有 178 TF。
+      **报 bf16 达成率用这个值**（achievable 口径）。
+      与 fp8 标称 560 的 2:1 关系自洽：279/280 = 99.7%。
+      稳态（median 耗时）只有 273 TF，持续加热 20 s 后掉到 243 TF——
+      报「持续跑能到多少」不要用峰值。
+    measurement_lesson: >
+      ⚠️ 2026-11-23 第二次更正（同一天内）：先前写 310 TF 是**单轮 11 次采样的偶然高值**。
+      改成 10 轮独立采样取峰值中位数后是 279。差 11% 足以让 bf16 峰值
+      「超过」由 fp8 标称推出的理论值 280，制造出一个假矛盾。
+      **教训：峰值标定必须多轮独立采样取中位数，单轮 min 会把偶发高值当峰值。**
+    vs_nominal: >
+      fp8 标称 560 TF 是业主确认的口径；按本机实测的同库 fp8/bf16 = 1.98×
+      确认是 2:1 双速率，故 bf16 标称 = 280 TF。
+      本机 hipBLASLt 实测 279 TF = 99.7% —— bf16 是成熟实现，已打满。
   mma_issue_peak:
-    value: 31.6
+    value: 25.2
     unit: "条 MFMA(16x16x16 bf16)/cycle（全 GPU）"
     status: derived
     verified_on: 2026-11-23
     source: >
-      由上面的实测峰值反解：310.6 TF / (8192 flop × 1200 MHz) = 31.6 条/cycle，
-      即 0.49 条/CU/cycle（64 CU）。fp16 独立测得 312 TF，反解 31.8，吻合。
+      由上面的实测峰值反解：279 TF / (8192 flop × 1350 MHz) = 25.2 条/cycle，
+      即 0.39 条/CU/cycle（64 CU）。
     note: >
       用来判「谁被算力卡住」；单算子占用率 80%+ 才算。本项目稀疏 MLA 只有 11~24%。
     history: >
@@ -79,31 +99,73 @@ compute:
     source: "hy-smi 读生产卡 6-9 实际运行档位"
     note: "卡 0-5 钉在 600 MHz。**跨卡比较只能用比值，不能用绝对 µs**。"
     verified_on: 2026-10-27
-  fp8_gemm_peak_tf:
+  nominal_peak_tf:
+    value: 560
+    caliber: nominal
+    precision: fp8              # ← 业主确认：560 是 fp8 口径
+    unit: TFLOPS
+    status: unverified          # 来自芯片规格/业主确认，本仓库无法复跑
+    verified_on: 2026-11-23
+    source: >
+      业主确认：gfx938 的 560 TF 是 **fp8** 口径的峰值算力。
+      nominal 来自芯片规格，本仓库无法复跑——按口径规则，nominal 不要求 reproduce。
+    note: >
+      **gfx938 是 2:1 双速率**：fp8 是 bf16 的 2 倍。
+      证据（同库同形状对照，唯一能判双速率的测法）：
+        aiter.gemm_a8w8_opus (fp8)  vs  aiter.gemm_a16w16_opus (bf16)
+        N=6144: 9.7336 ms vs 19.2342 ms → 算力比 1.98×
+      这条必须记牢：它直接决定所有 mixed precision 判断。
+      ⇒ bf16 nominal = 560/2 = 280 TF；实测 279 TF = **99.7%，已打满**。
+      ⇒ 用 bf16 的分母（279）去算 fp8 的达成率会错 2 倍，反之亦然。
+    fp8_nominal_tf: 560
+    bf16_nominal_tf: 280
+
+  fp8_impl_measured_tf:
     value: 49.8
+    caliber: impl_measured
     unit: TFLOPS
     status: measured
     verified_on: 2026-11-23
     source: >
-      本机 aiter.gemm_a8w8_opus（gfx938 专用 opus kernel）实测峰值 49.8 TF（4096³），
-      六个形状 47.3~49.8 TF 全部收敛。
+      本机 aiter.gemm_a8w8_opus（gfx938 opus kernel）实测 49.8 TF（4096³），
+      六形状 47.8~49.7 TF 收敛。这只是**这一条实现**的值。
     reproduce: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/bench.py
     note: >
-      **fp8 在本机比 bf16 慢 5.2×，不是快 1.7×。** bf16 实测峰值 310 TF，
-      fp8 只有 49.8 TF（fp8/bf16 = 0.19）。
-      若硬件真有 fp8 加速，fp8 应该比 bf16 快而不是慢 5 倍——
-      这个比值本身就说明「本机 fp8 走的是慢路径」。
-      用错分母（把 fp8 当快档）会把「几乎没优化空间」判成「还有 11× 空间」。
+      **这个数只代表 aiter 的 opus 实现族，不代表硬件 fp8 上限。**
+      同库的 bf16（gemm_a16w16_opus）只有 24.7 TF，比 hipBLASLt 的 310 TF 慢 8.8×
+      —— 说明 opus 这一族实现整体慢，49.8 是被这一族拖下来的，不是 fp8 的天花板。
     history: >
-      ⚠️ 2026-11-23 更正：旧值 540 TF（"本机 fp8 GEMM 实测 479 TF = 89% 达成，反推峰值"）
-      与实测差 10.9×。旧值来自 kb 里一条无复跑脚本的记录，且从未被本仓库的探针验证过。
-      这次用 aiter 的 gfx938 专用 kernel 扫了六个形状、并做了 kernelId 对照
-      （0→1.2 TF / 1→16.7 TF / 2→49.2 TF / auto→49.3 TF），
-      49.8 TF 是真实上限。**凡是无法用本仓脚本复跑的峰值常数，不许当分母。**
+      ⚠️ 2026-11-23 两次更正，值得完整记录：
+      ① 旧值 540 TF（"实测 479 TF = 89% 达成反推"）来源是 kb 的一条记录，
+         **无复跑脚本**，从未被本仓探针验证。这个质疑成立。
+      ② 但我第一次的修法把 540 改成 49.8 并声称「这是 fp8 峰值」——**方向相反且更危险**。
+         49.8 是 impl_measured，被我当成了 achievable/硬件上限。后果是把
+         「还有约 11 倍空间」判成「几乎没有空间」，会让人放弃优化。
+      ③ 我自己数据里就有反证没往下走：fp8 若比 bf16 慢 5.3×，原生 fp8 不可能如此。
+         正确读法是「本机 fp8 那条实现慢」，不是「fp8 硬件不行」。
+
+  fp8_native_speedup:
+    value: 2.0
+    caliber: achievable
+    unit: "倍（fp8 相对同库同形状 bf16 的耗时倒数）"
+    status: measured
+    verified_on: 2026-11-23
+    source: >
+      同库同形状对照（这是唯一能判「原生 fp8 vs dequant 回退」的测法）：
+        aiter.gemm_a8w8_opus  vs  aiter.gemm_a16w16_opus
+        4096³: 0.4616/2.9034 ms → 耗时比 0.523 ⇒ fp8 快 1.91×
+        2048³: 0.7315/0.4616 ms → 耗时比 0.631 ⇒ fp8 快 1.58×
+      耗时比 ≈0.5 说明是**原生 fp8 MMA**（2× 吞吐）；
+      若是 dequant 回退，两边都跑 bf16 MMA，比值应 ≈1.0。
+    reproduce: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/bench.py
+    note: >
+      **本机有原生 fp8 路径**，不是 dequant 回退。这条是上面那个误判的直接否证。
+      但「有原生路径」不等于「有高质量实现」——aiter opus 族整体慢（bf16 也只有 24.7 TF），
+      所以 fp8 在这条实现上只有 49.8 TF。
     caveat: >
-      这测的是 aiter opus 这一条实现的上限，不等于「gfx938 的 fp8 硬件上限」。
-      真正标定硬件 fp8 峰值需要一条打满 MMA 的实现（本轮没有）。
-      所以 49.8 只能当「当前可用实现的分母」，不能当物理上限引用。
+      判「是否原生 fp8」必须**同库同形状**对照。
+      跨库比较（aiter fp8 对 hipBLASLt bf16）会把库的差距记成精度的差距——
+      这就是 2026-11-23 那次误判的根因。
 
 launch:
   # 单次 kernel launch 的固定代价。任何「融合能省多少」的估算都以它为上限基数：

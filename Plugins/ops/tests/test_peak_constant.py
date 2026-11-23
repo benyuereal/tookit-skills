@@ -98,64 +98,97 @@ class TestPeakConstant(unittest.TestCase):
             "mma_issue_peak=%.1f 与「%.0f TF ÷ (8192 × %s MHz) = %.1f」不符（偏差 %.1f%%）；"
             "改了一个必须同步改另一个" % (issue, peak, clk_mhz, expect, dev * 100))
 
-    def test_peak_values_are_physically_plausible(self):
-        """峰值必须与另一份独立测量同量级；跨档位（fp8 vs bf16）比值必须合理。
+    def test_every_compute_peak_declares_its_caliber(self):
+        """每个算力常数必须声明口径：nominal / achievable / impl_measured。
 
-        这条抓的是 fp8 那次：540 TF 声称是 bf16（310）的 1.7×，
-        但实测 fp8 只有 49.8 TF —— 比 bf16 慢 5.2×。
-        **fp8 比 bf16 慢 5 倍**这件事本身就是异常信号：
-        若硬件真支持 fp8 加速，它不该比 bf16 慢。
-        所以加一条软下限：任何 compute 类峰值常数低于另一个的 0.1× 或高于 20×，
-        必须在 note 里明确解释，否则本测试报错要求复核。
+        这是 2026-11-23 那次误判的根因，也是本仓库最贵的一类错误。
+        当时把 aiter opus 的 fp8 实测 49.8 TF 当成了「fp8 峰值」，
+        而它其实是**某一条实现**的值（impl_measured），
+        achievable 应该是「最佳实现实测」，nominal 才是硬件规格。
+
+        混用三者会让结论**方向反过来**：
+          impl_measured 当 nominal → 把 11 倍空间判成「已到顶」→ 放弃优化（最危险）
+          nominal 当 achievable   → 把「已到顶」判成「还有空间」→ 白花时间
+
+        三层语义在 constants.yaml 的 compute 段开头有完整说明。
         """
         c = self.c.get("compute") or {}
-        bf16 = _scalar(c, "bf16_gemm_peak_tf")
-        fp8 = _scalar(c, "fp8_gemm_peak_tf")
-        self.assertIsNotNone(bf16, "缺 bf16_gemm_peak_tf")
-        self.assertIsNotNone(fp8, "缺 fp8_gemm_peak_tf")
-        bf16, fp8 = float(bf16), float(fp8)
-        node = c.get("fp8_gemm_peak_tf") or {}
-        note = str(node.get("note") or "") + str(node.get("history") or "")
-        # fp8 慢于 bf16 是反直觉的，必须写明理由，否则视为漏标
-        if fp8 < bf16:
-            self.assertTrue(
-                "慢" in note or "偏低" in note or "慢路径" in note,
-                "fp8 峰值(%.1f)低于 bf16(%.1f)，这不是常态——必须在 note/history 里写明原因"
-                % (fp8, bf16))
-        # 比值跨度检查：超过 20× 或低于 0.1× 必须有解释
-        ratio = fp8 / bf16 if bf16 else 0
-        if ratio > 20 or ratio < 0.1:
-            self.assertTrue(len(note) > 50,
-                            "fp8/bf16 = %.3f 偏离常态，note 必须写清口径（当前 %d 字）"
-                            % (ratio, len(note)))
-
-    def test_every_compute_peak_has_a_reproducible_tool(self):
-        """每个 compute 峰值常数都必须指明一个**能跑的复跑脚本**。
-
-        这是 fp8 那次（540 vs 实测 49.8）真正的根因：
-        旧值的来源写的是 "kb: qwen38-prefill-floor" —— 一条知识库记录，
-        既没有脚本、也没法执行。于是它错了 10.9 倍，几个月没人发现。
-
-        bf16 那次（185）也一样：来源是「由另一个反推值推出」。
-        所以本测试要求每个 compute 类峰值都带 `reproduce:`，
-        且它指向的文件必须真实存在。
-        """
-        c = self.c.get("compute") or {}
-        missing = []
+        allowed = {"nominal", "achievable", "impl_measured"}
+        bad = []
         for key, node in c.items():
             if not isinstance(node, dict):
                 continue
             unit = str(node.get("unit") or "").upper()
             if "TFLOPS" not in unit:          # 只守算力类
                 continue
-            rep = node.get("reproduce")
-            if not rep:
-                missing.append("%s: 缺 reproduce（无复跑脚本的峰值不许当分母）" % key)
+            cal = node.get("caliber")
+            if cal is None:
+                bad.append("%s: 缺 caliber（必须标明 nominal/achievable/impl_measured）" % key)
+            elif cal not in allowed:
+                bad.append("%s: caliber=%r 非法（只允许 %s）" % (key, cal, sorted(allowed)))
+        self.assertEqual(bad, [], "以下算力常数口径未标明：\n" + "\n".join(bad))
+
+    def test_reproducible_only_where_it_makes_sense(self):
+        """`reproduce:` 只对实测类（achievable / impl_measured）强制。
+
+        nominal 峰值来自芯片规格，**本来就不可能复跑**——强行要求脚本，
+        只会逼人伪造一个「复跑脚本」来骗过测试。
+        这正是 540 那次的反面教材：它声称 measured，实际来源是不可执行的 kb 记录。
+
+        所以规则是：
+          achievable / impl_measured  → 必须带 reproduce，且文件必须存在
+          nominal                     → 必须带 source 说明规格出处，不要求脚本
+        """
+        c = self.c.get("compute") or {}
+        bad = []
+        for key, node in c.items():
+            if not isinstance(node, dict):
                 continue
-            path = str(rep).split("#")[0].strip()
-            if not (REPO / path).is_file():
-                missing.append("%s: reproduce 指向不存在的文件 %s" % (key, path))
-        self.assertEqual(missing, [], "以下算力峰值缺可复跑的来源：\n" + "\n".join(missing))
+            if "TFLOPS" not in str(node.get("unit") or "").upper():
+                continue
+            cal = node.get("caliber")
+            rep = node.get("reproduce")
+            if cal in ("achievable", "impl_measured"):
+                if not rep:
+                    bad.append("%s(%s): 缺 reproduce（实测值必须能复跑）" % (key, cal))
+                    continue
+                path = str(rep).split("#")[0].strip()
+                if not (REPO / path).is_file():
+                    bad.append("%s(%s): reproduce 指向不存在的文件 %s" % (key, cal, path))
+            elif cal == "nominal":
+                if not node.get("source"):
+                    bad.append("%s(nominal): 缺 source（规格出处必须写明）" % key)
+        self.assertEqual(bad, [], "口径与可复跑性不匹配：\n" + "\n".join(bad))
+
+    def test_native_fp8_judged_by_same_library_ratio(self):
+        """判「是否原生 fp8」必须用**同库同形状**对照，这条要留证据。
+
+        2026-11-23 的误判根因：拿 aiter 的 fp8（49.8 TF）去比 hipBLASLt 的 bf16（310 TF），
+        得出「fp8 比 bf16 慢 5.3×」→ 进而误判「fp8 硬件不行」。
+        但那比的是**两个库**，不是两种精度。
+
+        正确的测法是同库同形状：aiter fp8 vs aiter bf16。
+        实测耗时比 0.52~0.63（fp8 反而快 1.6~1.9×），
+        ⇒ 本机**有**原生 fp8 路径，不是 dequant 回退。
+
+        本测试守两件事：
+          ① fp8_native_speedup 这个常数存在且 >1（证明原生路径存在）
+          ② 常数的 note 里必须写明「同库同形状」，防止有人又拿跨库比
+        """
+        c = self.c.get("compute") or {}
+        node = c.get("fp8_native_speedup")
+        self.assertIsNotNone(
+            node, "缺 fp8_native_speedup——没有它就无法判断本机 fp8 是原生还是 dequant 回退")
+        val = float(_scalar(c, "fp8_native_speedup"))
+        self.assertGreater(
+            val, 1.0,
+            "fp8_native_speedup=%.2f ≤1 说明同库对照下 fp8 没比 bf16 快；"
+            "那才是真的 dequant 回退，需要重新定性" % val)
+        note = str(node.get("note") or "") + str(node.get("caveat") or "") \
+            + str(node.get("source") or "")
+        self.assertIn("同库", note,
+                      "fp8_native_speedup 的说明里必须点明「同库同形状」——"
+                      "跨库比较会把库差距记成精度差距，这正是 11-23 误判的根因")
 
     def test_model_constant_matches_constants_yaml(self):
         """models/sparse_mla.py 的 MMA_PEAK_PER_CYCLE 必须来自 constants.yaml。"""

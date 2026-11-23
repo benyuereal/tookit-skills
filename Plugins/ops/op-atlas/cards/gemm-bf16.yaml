@@ -71,7 +71,7 @@ last_verdict:
   kb_path: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/README.md
   ratio:
     value: 0.84
-    vs: 本机实测 bf16 峰值 310 TF 的达成率（M=4096 K=N=4096）
+    vs: 本机实测 bf16 峰值 279 TF 的达成率（M=4096 K=N=4096）
     scope:
       cards: 1
       in_len: M=4096

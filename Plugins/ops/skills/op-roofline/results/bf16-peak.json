@@ -1,64 +1,80 @@
 {
-  "run_id": "peak-20261123-073518",
-  "run_at": "2026-11-23T07:35:18",
+  "run_id": "peak-20261123-092035",
+  "run_at": "2026-11-23T09:20:35",
   "host": "bw1100-39",
   "device": "BW1100",
   "cu": 64,
-  "sclk_mhz_idle": 600,
-  "method": "CUDA event median of 11, warmup 4, same process",
+  "sclk_mhz_idle": 1350,
+  "method": "CUDA event: 40 rounds, warmup 8; peak=fastest, steady=median",
   "bf16_sweep": [
     {
       "n": 1024,
-      "ms": 0.0523,
-      "mad_ms": 0.0016,
-      "tflops": 41.0
+      "best_ms": 0.0538,
+      "median_ms": 0.0685,
+      "mad_ms": 0.00864,
+      "peak_tflops": 39.9,
+      "steady_tflops": 31.4
     },
     {
       "n": 2048,
-      "ms": 0.0965,
-      "mad_ms": 0.00032,
-      "tflops": 178.1
+      "best_ms": 0.1006,
+      "median_ms": 0.1498,
+      "mad_ms": 0.02136,
+      "peak_tflops": 170.7,
+      "steady_tflops": 114.7
     },
     {
       "n": 3072,
-      "ms": 0.2914,
-      "mad_ms": 0.0008,
-      "tflops": 199.0
+      "best_ms": 0.2928,
+      "median_ms": 0.3005,
+      "mad_ms": 0.00576,
+      "peak_tflops": 198.0,
+      "steady_tflops": 193.0
     },
     {
       "n": 4096,
-      "ms": 0.479,
-      "mad_ms": 0.00016,
-      "tflops": 286.9
+      "best_ms": 0.4918,
+      "median_ms": 0.5941,
+      "mad_ms": 0.01576,
+      "peak_tflops": 279.4,
+      "steady_tflops": 231.3
     },
     {
       "n": 5120,
-      "ms": 0.9883,
-      "mad_ms": 0.00032,
-      "tflops": 271.6
+      "best_ms": 1.0125,
+      "median_ms": 1.083,
+      "mad_ms": 0.03976,
+      "peak_tflops": 265.1,
+      "steady_tflops": 247.9
     },
     {
       "n": 6144,
-      "ms": 1.4934,
-      "mad_ms": 0.00048,
-      "tflops": 310.6
+      "best_ms": 1.5461,
+      "median_ms": 1.6998,
+      "mad_ms": 0.0268,
+      "peak_tflops": 300.0,
+      "steady_tflops": 272.9
     },
     {
       "n": 8192,
-      "ms": 4.4306,
-      "mad_ms": 0.00064,
-      "tflops": 248.2
+      "best_ms": 4.6576,
+      "median_ms": 4.9587,
+      "mad_ms": 0.12248,
+      "peak_tflops": 236.1,
+      "steady_tflops": 221.7
     }
   ],
-  "bf16_peak_tf": 310.6,
+  "bf16_peak_tf": 300.0,
+  "bf16_steady_tf": 31.4,
   "bf16_peak_shape": 6144,
-  "fp16_peak_tf": 312.4,
-  "sclk_mhz_load": 1200,
-  "hot_tflops": 273.9,
-  "hot_ms": 1.6938,
-  "denominator_tf": 310.6,
-  "derived_mfma_per_cycle_whole_gpu": 31.6,
-  "derived_mfma_per_cu_cycle": 0.494,
+  "fp16_peak_tf": 308.9,
+  "sclk_mhz_load": 1350,
+  "hot_tflops": 243.2,
+  "hot_peak_tflops": 263.8,
+  "hot_ms": 1.907,
+  "denominator_tf": 300.0,
+  "derived_mfma_per_cycle_whole_gpu": 27.1,
+  "derived_mfma_per_cu_cycle": 0.424,
   "denominator_basis": "本机实测 bf16 大 GEMM 峰值（同进程 hipBLASLt，N=6144，11 次中位）。与带宽口径一致：只用实测值做分母，标称/反推值不作分母。",
-  "fp16_over_bf16": 1.006
+  "fp16_over_bf16": 1.03
 }

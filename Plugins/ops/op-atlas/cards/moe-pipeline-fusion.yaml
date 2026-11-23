@@ -36,7 +36,7 @@ impls:
   pros:
   - 大 M 时 grouped 比逐专家循环快 3.17x
   cons:
-  - 达成率仅 26%（分母为实测 bf16 峰值 310 TF），离算力地板还远
+  - 达成率仅 29%（分母为实测 bf16 峰值 279 TF），离算力地板还远
   source: references/libraries.md
   import_path: deepgemm.m_grouped_bf16_gemm_nt_masked
   signature: m_grouped_bf16_gemm_nt_masked(a,b,d,masked_m,expected_m_per_group,config)

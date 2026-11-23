@@ -1,4 +1,4 @@
-# Case 010：FP8 GEMM —— 本机 fp8 比 bf16 慢 5 倍
+# Case 010：FP8 GEMM —— aiter opus 只到 nominal 的 8.9%，还有 11 倍空间
 
 > 起点：`gemm-fp8` 卡 status=draft，卡里写「gfx938 上 FP8 无方案（hipBLASLt）」。
 > 本 case 查了三件事，一件比一件重要。
@@ -95,38 +95,51 @@ fp8 这次更严重：它把「几乎没有优化空间」（49.8 已接近这�
 
 ```
 ① hipBLASLt 在 gfx938 无 fp8 方案（确认）——但 aiter 有（卡里已过时）
-② aiter opus kernel 实测 47.8~49.7 TF，六形状收敛 ⇒ 这是这条实现的真实上限
-③ fp8/bf16 = 0.19（慢 5.3×），转换只占 1.9% ⇒ 不是转换税，是实现效率
-④ constants.yaml 的 540 TF 无复跑来源，已更正为 49.8 并加 reproduce 守卫
+② aiter opus 实测 47.8~49.7 TF，六形状收敛 ⇒ 这是**这一族实现**的水平
+③ 同库 fp8/bf16 = 1.98× ⇒ **本机是 2:1 双速率，有原生 fp8 路径**
+④ fp8 nominal 560 TF（业主确认）⇒ 49.8/560 = 8.9%，**约 11 倍空间**
 ```
 
-### 「fp8 比 bf16 慢」该怎么解读
+### 这个 8.9% 说明什么
 
-**不能读成「gfx938 的 fp8 硬件不行」。** 本 case 只测了 aiter 一条实现。
-正确的说法是：
+不是「fp8 硬件不行」，而是 **aiter 的 opus 实现族整体低效**：
 
-> aiter 的 opus fp8 实现目前只到 49.8 TF，比本机 bf16 的 310 TF 慢 5.3×。
-> 这不代表硬件 fp8 上限，只代表这条实现有大量空间——或者本机的 fp8 路径
-> 尚未被真正优化过。
+| 精度 | aiter opus | nominal | 占比 |
+|---|---|---|---|
+| bf16 | 24.1 TF | 280 TF | 8.6% |
+| fp8 | 49.8 TF | 560 TF | 8.9% |
 
-**要标定硬件 fp8 上限，需要一条能打满 MMA 的实现，本轮没有。**
-所以 49.8 只能当「当前可用实现的分母」。
+两条的实现效率几乎一样（8.6% vs 8.9%），而且**恰好构成 2:1**——
+这既印证了双速率，也说明 49.8 不是 fp8 的天花板，是这一族实现的天花板。
+
+对比 hipBLASLt 的 bf16 能到 273.9 TF（nominal 的 97.8%），
+差距全在「实现质量」，不在「精度」。
+
+### 曾经误判过（记录在此，勿重犯）
+
+第一版本 case 拿 aiter fp8（49.8）去比 hipBLASLt bf16（310），
+得出「fp8 比 bf16 慢 5.3×」「本机 fp8 走 dequant 回退」「49.8 就是 fp8 峰值」。
+**这三条全错**，根因是跨库比较把库的差距记成了精度的差距。
+
+判据：**判精度特性必须同库同形状；判库的质量才跨库比。两者不可混。**
 
 ## 6. 未测定项（不插值）
 
 | 项 | 状态 |
 |---|---|
-| gfx938 的 fp8 **硬件**峰值 | **未测定**（需要一条打满 MMA 的实现，本轮没有） |
+| fp8 的 **achievable** 峰值（最佳实现能到多少） | **未测定**（需要一条打满 MMA 的实现，本轮没有） |
+| fp8 的 nominal 峰值 | 560 TF（业主确认，见 constants.yaml:nominal_peak_tf） |
 | tilelang 的 fp8 路径能到多少 | 未测定（卡里是 primary，本 case 未跑通） |
 | 49.8 TF 的根因（指令效率 / LDS / 占用率） | 未测定（需 PMC，本机无 rocprof） |
 | 小 M（decode）的 fp8 表现 | 未测定（本 case 只测 M>=4096） |
 
 ## 7. 对本卡的落点
 
-- `status` → measured，`ratio` = 49.8 TF（绝对值，vs 写清是「aiter opus 实现的上限」）
+- `status` → measured，`ratio` = **0.089**（分母 = fp8 nominal 560 TF，口径见 constants.yaml）
 - **primary 从 tilelang 改成 aiter**（tilelang 本轮未跑通，aiter 有实测）
 - 卡里「gfx938 上 FP8 无方案」改成「hipBLASLt 无，aiter 有」
-- `ceiling.kind` → roofline_model，但 **`bound` 标 compute 且 note 注明「分母是当前实现上限，不是硬件上限」**
+- `ceiling.note` 写明分母是 nominal 560，且**结论定性为「约 11 倍空间，不是已到顶」**
+- `modify_path` = replace-call（换掉 opus 这一族），不是调参数
 
 ## 复跑
 

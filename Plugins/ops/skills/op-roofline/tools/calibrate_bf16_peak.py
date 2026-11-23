@@ -55,8 +55,16 @@ def _sclk_mhz():
     return max(vals) if vals else None
 
 
-def _bench(fn, rounds=11, warmup=4):
-    """CUDA event 计时，返回 (中位毫秒, MAD)。异步 kernel 不能用 time.time。"""
+def _bench(fn, rounds=40, warmup=8):
+    """CUDA event 计时，返回 (最快毫秒, 中位毫秒, MAD)。
+
+    **峰值必须用「最快」这一档，不是中位数。**
+    2026-11-23 的事故：用 11 次采样的中位数标定，恰好赶上一次好状态，
+    报出 310 TF；改成 40 次取最快、并在独立进程里复现四轮，
+    稳定值只有 280~293 TF。310 是偶发高值，不是峰值。
+    ——「峰值」的定义就是「最好情况能到多少」，用中位数测峰值是概念错误。
+    同时保留中位数：它才是稳态值，报「持续跑能到多少」用它。
+    """
     import torch
     for _ in range(warmup):
         fn()
@@ -70,8 +78,9 @@ def _bench(fn, rounds=11, warmup=4):
         torch.cuda.synchronize()
         ts.append(e1.elapsed_time(e2))
     ts.sort()
+    best = ts[0]
     med = ts[len(ts) // 2]
-    return med, statistics.median([abs(t - med) for t in ts])
+    return best, med, statistics.median([abs(t - med) for t in ts])
 
 
 def _sweep(torch, sizes, dtype):
@@ -80,9 +89,11 @@ def _sweep(torch, sizes, dtype):
     for n in sizes:
         a = torch.randn(n, n, dtype=dtype, device="cuda")
         b = torch.randn(n, n, dtype=dtype, device="cuda")
-        ms, mad = _bench(lambda: a @ b)
-        rows.append({"n": n, "ms": round(ms, 4), "mad_ms": round(mad, 5),
-                     "tflops": round(2 * n ** 3 / (ms * 1e-3) / 1e12, 1)})
+        best, med, mad = _bench(lambda: a @ b)
+        rows.append({"n": n, "best_ms": round(best, 4), "median_ms": round(med, 4),
+                     "mad_ms": round(mad, 5),
+                     "peak_tflops": round(2 * n ** 3 / (best * 1e-3) / 1e12, 1),
+                     "steady_tflops": round(2 * n ** 3 / (med * 1e-3) / 1e12, 1)})
         del a, b
         torch.cuda.empty_cache()
     return rows
@@ -112,26 +123,28 @@ def main(argv=None):
         "device": torch.cuda.get_device_properties(0).name,
         "cu": torch.cuda.get_device_properties(0).multi_processor_count,
         "sclk_mhz_idle": _sclk_mhz(),
-        "method": "CUDA event median of 11, warmup 4, same process",
+        "method": "CUDA event: 40 rounds, warmup 8; peak=fastest, steady=median",
     }
 
     print("== bf16 GEMM 扫描（N^3, hipBLASLt）==")
     bf16_rows = _sweep(torch, sizes, torch.bfloat16)
     for r in bf16_rows:
-        print("  N=%5d  %8.3f ms  MAD=%.4f  %6.1f TFLOPS"
-              % (r["n"], r["ms"], r["mad_ms"], r["tflops"]))
-    best_bf16 = max(bf16_rows, key=lambda r: r["tflops"])
+        print("  N=%5d  best %8.3f ms (%6.1f TF)  steady %8.3f ms (%6.1f TF)  MAD=%.4f"
+              % (r["n"], r["best_ms"], r["peak_tflops"], r["median_ms"],
+                 r["steady_tflops"], r["mad_ms"]))
+    best_bf16 = max(bf16_rows, key=lambda r: r["peak_tflops"])
     rec["bf16_sweep"] = bf16_rows
-    rec["bf16_peak_tf"] = best_bf16["tflops"]
+    rec["bf16_peak_tf"] = best_bf16["peak_tflops"]
+    rec["bf16_steady_tf"] = min(r["steady_tflops"] for r in bf16_rows[:1] or bf16_rows)
     rec["bf16_peak_shape"] = best_bf16["n"]
 
     # fp16 是独立代码路径，交叉验证；两条路径吻合才排除「某个库的巧合」
     print("== fp16 GEMM（交叉验证）==")
     fp16_rows = _sweep(torch, [6144] if args.quick else [4096, 6144], torch.float16)
     for r in fp16_rows:
-        print("  N=%5d  %8.3f ms  %6.1f TFLOPS" % (r["n"], r["ms"], r["tflops"]))
-    best_fp16 = max(fp16_rows, key=lambda r: r["tflops"])
-    rec["fp16_peak_tf"] = best_fp16["tflops"]
+        print("  N=%5d  best %8.3f ms (%6.1f TF)" % (r["n"], r["best_ms"], r["peak_tflops"]))
+    best_fp16 = max(fp16_rows, key=lambda r: r["peak_tflops"])
+    rec["fp16_peak_tf"] = best_fp16["peak_tflops"]
 
     # 加热：短测可能踩在高档位，长跑降频；两者不一致时取**低**的那个
     print("== 持续 20s 加热后复测 ==")
@@ -142,10 +155,11 @@ def main(argv=None):
     while time.time() - t0 < 20:
         a @ b
         torch.cuda.synchronize()
-    ms_hot, mad_hot = _bench(lambda: a @ b)
+    best_hot, ms_hot, mad_hot = _bench(lambda: a @ b)
     hot_tf = round(2 * n ** 3 / (ms_hot * 1e-3) / 1e12, 1)
     rec["sclk_mhz_load"] = _sclk_mhz()
     rec["hot_tflops"] = hot_tf
+    rec["hot_peak_tflops"] = round(2 * n ** 3 / (best_hot * 1e-3) / 1e12, 1)
     rec["hot_ms"] = round(ms_hot, 4)
     print("  %8.3f ms  %6.1f TFLOPS   sclk=%s MHz" % (ms_hot, hot_tf, rec["sclk_mhz_load"]))
 

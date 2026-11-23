@@ -39,11 +39,12 @@ def _cu_count(device=None):
     return CU_FALLBACK
 
 
-MMA_PEAK_PER_CYCLE = 31.6   # constants.yaml:compute.mma_issue_peak
-MMA_PEAK_SOURCE = "constants.yaml:compute.mma_issue_peak（由实测 310 TF @1200MHz 反解，2026-11-23）"
-# 历史：旧值 19.7 由「2048^3 实测 217 TF = 88% 峰值」反推，两头都错——
-# 2048³ 只要 0.097 ms，固定开销占比大，不能当峰值；按它反推的 185 TF 低于同机实测 310 TF。
-# 后果是 bf16 达成率被高估 ~1.7×。见 constants.yaml 的 history 段。
+MMA_PEAK_PER_CYCLE = 25.2   # constants.yaml:compute.mma_issue_peak
+MMA_PEAK_SOURCE = "constants.yaml:compute.mma_issue_peak（由实测 279 TF @1350MHz 反解，2026-11-23）"
+# 历史（同一天改了两次，都值得记）：
+#   19.7 ← 由「2048^3 实测 217 TF = 88% 峰值」反推，小形状不能当峰值
+#   31.6 ← 由单轮采样的偶发高值 310 TF 反解，多轮采样后实际是 279
+#   25.2 ← 279 TF / (8192 × 1350 MHz)。与 fp8 标称 560 的 2:1 关系自洽（279/280=99.7%）
 CU = _cu_count()
 # 每 CU 的 VGPR 文件（32-bit 寄存器数）。本项目所有 kernel 都用
 # `-mllvm=-support-768-vgprs=true` 编译，故为 768 模式 = 4 SIMD × 64 lane × 768 = 196608；

@@ -107,7 +107,7 @@ ceiling:
   kind: roofline_model
   ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: compute
-  note: 分母 49.8 TF 是 aiter opus 实现的上限，**不是 gfx938 的 fp8 硬件上限**（后者未标定）
+  note: 分母用 fp8 nominal 560 TF（业主确认口径）。aiter 实测 49.8 TF = 8.9% ⇒ 约 11 倍空间
 shapes:
 - decode-m1
 - decode-m32
@@ -118,21 +118,21 @@ last_verdict:
   status: measured
   kb_path: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/README.md
   ratio:
-    value: 49.8
-    vs: aiter opus fp8 实现的绝对算力 TFLOPS（非倍数；硬件上限未标定）
+    value: 0.089
+    vs: fp8 nominal 峰值 560 TF 的达成率（aiter opus 实测 49.8 TF）
     scope:
       cards: 1
       in_len: M=4096 K=4096
       out_len: N=4096
       warmup: hot
-      note: 六个形状 4096³~16384 全部收敛 47.8~49.7 TF；fp8/bf16=0.19 即比 bf16 慢 5.3×；转换开销仅占 1.9%
-  conclusion: aiter fp8 达 49.8 TF，比 bf16 慢 5.3×；本机 fp8 走的是慢路径
+      note: 六个形状 47.8~49.7 TF 收敛；同库 fp8/bf16=1.98× 确认 2:1 双速率；aiter bf16 也只有 24.1 TF（nominal 的 8.6%），说明是这一族实现整体低效
+  conclusion: aiter fp8 达 49.8 TF，仅为 nominal 560 TF 的 0.089；约 11 倍空间
   verified_on: '2026-11-23'
 modify_path:
-  kind: source-patch
-  what: 修 deepgemm.fp8_gemm 的 CPU alpha/beta bug
-  how: patch deepgemm 包装层把 alpha/beta 从 device="cpu" 改成 device="cuda"；否则卡上调用直接抛 device 不匹配
-  requires: deepgemm 2.1.0；改的是库源码
+  kind: replace-call
+  what: 换掉 aiter opus 这一族实现
+  how: aiter 的 opus 族整体低效（bf16 也只有 nominal 的 8.6%），换更高效率的实现；49.8 TF 距 560 还有 11 倍，是本卡最大的空间
+  requires: 需要一条能打满 MMA 的 fp8 实现（tilelang 路径本轮未跑通）
 hard_preconditions:
 - statement: torch._scaled_mm 在 gfx938 上不可用（hipBLASLt 无 fp8 方案）
   check: 调用直接报 "could not find valid hipblaslt solution"
@@ -140,6 +140,8 @@ hard_preconditions:
   check: torch.randn(...,dtype=torch.float8_e4m3fn) 报 "normal_kernel_cuda not implemented for Float8_e4m3fn"；须先造 bf16 再 .to()
 - statement: kernelId 必须留空让 auto 选；传 0 会掉到 1.2 TF（慢 40×）
   check: kernelId=0/1/2/auto 实测 1.2/16.9/49.6/50.0 TF
+- statement: 判「是否原生 fp8」必须同库同形状对照，不可跨库比
+  check: 同库 aiter fp8/bf16 = 1.98×（原生双速率）；跨库比（aiter fp8 vs hipBLASLt bf16）会得出「fp8 慢 5 倍」的错误结论
 soft_preconditions:
 - 建议 hot 态测量（冷启动会被首调虚高污染）
 - 建议同卡同频（跨卡比 ratio 时须在 scope 里写明）
