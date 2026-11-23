@@ -157,7 +157,7 @@
   {
    "name": "rmsnorm-fused",
    "path": "Plugins/ops/skills/op-rmsnorm-fused",
-   "status": "measured",
+   "status": "tuned",
    "shapes": [
     "decode-m1",
     "decode-m32",
@@ -167,12 +167,13 @@
    "variants": [
     "ref-heavy",
     "lightop-fused",
-    "torch-native"
+    "torch-native",
+    "fused-3pass-triton"
    ],
-   "best_variant": null,
-   "floor_status": "bandwidth_bound（M=8192 时 887 GB/s，达峰值 0.51）",
+   "best_variant": "triton 融合单 kernel（cold-L2 1081 GB/s, util 0.63/1724）",
+   "floor_status": "cold-L2 1081 GB/s = util 0.63(1724)/0.73(1498)；归约类天花板≈elementwise峰值×0.75。原记「887 GB/s/0.51」为无来源数字，已作废",
    "last_verified": "2026-11-23",
-   "evidence": "SKILL.md 判据 + _common.py 参考实现；ref-heavy 已过 correctness 门",
+   "evidence": "Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-triton.json",
    "open_questions": [
     "lightop-fused 的残差融合版实际达成率",
     "hidden 非 2 的幂时的向量化损失"
