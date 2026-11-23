@@ -58,6 +58,29 @@ directions:
     note: "2026-11-13 新增。LDS 探针实测：1 CTA/CU 比 2 慢 67~69%，本 kernel 对驻留数极度敏感。已判死 1 条路（lds_cut_to_3cta，结构零余量）；剩下的路是 d 跨 CTA 切分（重写级）。"
 
 candidates:
+  - id: mainloop_restage
+    parent: prefetch_1slice
+    direction: bypass-tilelang-codegen
+    status: pending
+    priority: 2
+    hypothesis: >
+      沿 prefetch_1slice 留下的结构再走一步：它证明了「在 num_stages=0 的循环里
+      手工加预取 = 用循环携带依赖换重叠」。所以不要再手工搬 T.copy，
+      而是把 num_stages 从 0 打开、让编译器自己做软件流水，
+      保留它那段「切片0 索引前移」的地址算式（那是有效的部分）。
+    expect: >
+      若编译器的流水能吃掉循环携带依赖，耗时应回到基线以下；
+      若 LDS 预算挡住 num_stages>=1，则证明 handwrite_mainloop 是唯一出路。
+    why: >
+      prefetch_1slice 的失败点不在「预取」而在「谁来做预取」。
+      它把预取手工塞进循环，于是预取本身变成依赖；交给编译器则预取与计算
+      由同一套流水调度。这条候选是**从 stalled 父代再出发**的第一次实践。
+    blocked_by: >
+      未测定（2026-11-23）：本机没有 tilelang 源码树。bench/bench.py --mode config
+      需要 --tilelang-root 指向 perf/sparse_mla/sparse_mla_fwd.py，实测该路径不存在。
+      所以这条候选只完成了「从 stalled 父代再出发」的排队，**没有完成验证**。
+      不许把它的存在读成「stalled 机制已经产生收益」。
+
   - id: maxn32
     direction: shorten-max-chain
     status: pending
@@ -145,6 +168,24 @@ candidates:
     expect: "HumanEval ≥ 162/164 且 GPQA 不低于基线（同温度同采样）"
     evidence: "ledger §五"
 
+stalled:
+  # 变慢但结构变了 —— 可以当父代，方向未封（loop.py 的 stalled 落点）
+  - id: prefetch_1slice
+    kind: stalled
+    direction: bypass-tilelang-codegen
+    ratio_vs_parent: '1.195'
+    what_changed: >
+      把 T.copy(KV_spilt0_local→shared) 提到循环体最前、切片0 的 gather 索引改成
+      min(i_i+1, vN-1)、循环前加 prologue —— 结构上多了一段跨迭代的寄存器依赖，
+      不再是纯 T.Pipelined 主体
+    why: "**预取方向彻底关闭（第 3 次独立复现）**。只预取切片 0（把 `T.copy(KV_spilt0_local→shared)` 提到循环体最前，切片0 的 gather 索引改成 `min(i_i+1, valid_NI-1)`，循环前加 prologue）——S=128 base 0.9071 → 1.0839（**+19.5%**）、S=64 0.4153 → 0.5763（**+38.8%**），输出**逐位一致**。加上此前的 3 片预取（+33%）与 2 片（+21%），与在途片数正相关但仍单调为负。**机制（推测，未单独坐实）**：`KV_spilt0_local` 变成循环携带寄存器依赖（本轮末写、下轮初读），破坏了编译器对 `T.Pipelined` 主体做软件流水/展开的能力；同时 `T.min(i_i+1, ...)` 的地址算式落在内层 `T.Parallel` 里，每元素重算一次。⇒ 不是「预取这个想法错」，而是「在 num_stages=0 的循环里手工加预取 = 用循环携带依赖换重叠，后者更贵」。要真做重叠得在编译器层面重排（即 handwrite_mainloop 的原意），而我们已论证它被 LDS/VGPR 预算卡死。"
+    on: '2026-11-13'
+    reclassified_from: refuted
+    reclassified_why: >
+      2026-11-23：本条 why 原文已写明「不是预取这个想法错，而是在这个循环结构里
+      手工加预取不划算」—— 这正是 stalled 的定义（变慢但结构变了）。
+      原先记成 refuted 会连带封掉 bypass-tilelang-codegen 方向，属于误判死。
+      改记 stalled 后，它可作为「编译器层面重排」路线的前置父代。
 refuted:
   - id: gemm_is_bottleneck
     kind: claim
@@ -254,10 +295,6 @@ refuted:
     device_dependency: "只在 gfx938 三张卡上各测一次，未做卡间交叉复验（同一次测量内 fm/hip 同进程交替，比值可信；绝对 ms 随负载漂移）。其他 gfx 未验证。"
     source: "/tmp/calib_s128.py（卡 4）、/tmp/recheck128.py（卡 0、卡 6），2026-11-13"
     verified_on: "2026-11-13"
-  - id: prefetch_1slice
-    why: "**预取方向彻底关闭（第 3 次独立复现）**。只预取切片 0（把 `T.copy(KV_spilt0_local→shared)` 提到循环体最前，切片0 的 gather 索引改成 `min(i_i+1, valid_NI-1)`，循环前加 prologue）——S=128 base 0.9071 → 1.0839（**+19.5%**）、S=64 0.4153 → 0.5763（**+38.8%**），输出**逐位一致**。加上此前的 3 片预取（+33%）与 2 片（+21%），与在途片数正相关但仍单调为负。**机制（推测，未单独坐实）**：`KV_spilt0_local` 变成循环携带寄存器依赖（本轮末写、下轮初读），破坏了编译器对 `T.Pipelined` 主体做软件流水/展开的能力；同时 `T.min(i_i+1, ...)` 的地址算式落在内层 `T.Parallel` 里，每元素重算一次。⇒ 不是「预取这个想法错」，而是「在 num_stages=0 的循环里手工加预取 = 用循环携带依赖换重叠，后者更贵」。要真做重叠得在编译器层面重排（即 handwrite_mainloop 的原意），而我们已论证它被 LDS/VGPR 预算卡死。"
-    kind: impl
-    note: "gfx938 / 2026-11-13 / S=128 与 S=64，320k / pool=full / 同进程 ABBA。脚本 /tmp/pf1_bench.py、/tmp/pf_h64.py。"
   - id: bf16_mls_matrix_load
     why: "**bf16 走不了 MLS（硬件矩阵 LDS 读），这是编译期硬约束**。给 Q 的 global→shared `T.copy` 加 `prefer_instruction=\"matrix_load\"` 后编译失败：`MatrixLoad dst Gemm consumer must have kPack=1, got 2`。我们的 `kpack = min((kv_vectorized+3)//4, 2) = 2`（由 gather 向量化宽度推出，mmac_k=32），而 MLS 要求 k_pack=1；把 kpack 降到 1 等于把 gather 宽度砍半，伤访存，不划算。⇒ **MLS 只能经由 fp8 取得**（`gemm_fp8_channelwise` 用 k_pack=1 + MLS，gfx938 8192³ 432 TF vs 标量 LDS 332 TF）。这条同时说明：fp8 不只是精度/显存选项，它是解锁 MLS 的前提。"
     kind: impl

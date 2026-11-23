@@ -160,3 +160,52 @@ def copy_of(d):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCandidatesYamlPreservesComments(unittest.TestCase):
+    """改 candidates.yaml 不许把注释吃掉。
+
+    candidates.yaml 的注释不是装饰——它承载了「纪律」与 40+ 条判死的机制叙述，
+    是这张卡最有价值的资产。用 yaml.safe_load→yaml.dump 往返会把它全丢掉
+    （2026-11-23 实际发生：264 行带注释 → 343 行无注释，恢复靠 git checkout）。
+
+    所以：loop.py 的所有写路径必须是**文本级**增删（_to_stalled/_to_refuted 用的
+    就是这种方式），不许 round-trip。本测试守住这条。
+    """
+
+    def test_loop_does_not_roundtrip_yaml(self):
+        import re
+        src = LOOP.read_text(encoding="utf-8")
+        # 找所有 yaml.dump 调用；它们只允许出现在测试/输出路径，不许出现在写卡片处
+        dumps = [m.start() for m in re.finditer(r"yaml\.dump\(", src)]
+        self.assertEqual(
+            dumps, [],
+            "loop.py 里出现 yaml.dump —— 写 candidates.yaml 时必须文本级增删，"
+            "round-trip 会把全部注释吃掉")
+
+    def test_writers_preserve_existing_comments(self):
+        """真正的行为断言：写一次后，原有注释一行不少。"""
+        loop = _load_loop()
+        src = (
+            "# 卡片级纪律：这三行注释必须活下来\n"
+            "# 第二行\n"
+            "defaults: {}\n"
+            "directions:\n"
+            "  - id: d1\n"
+            "    statement: 'x'\n"
+            "    status: open\n"
+            "    refutes: 0\n"
+            "candidates:\n"
+            "  - id: c1\n"
+            "    direction: d1\n"
+            "    status: pending\n"
+            "# refuted 段的说明\n"
+            "refuted: []\n"
+        )
+        out = loop._to_stalled(src, "c1", "更慢", "结构变了", "d1")
+        for line in ("# 卡片级纪律：这三行注释必须活下来", "# 第二行", "# refuted 段的说明"):
+            self.assertIn(line, out, "写 stalled 时丢了注释：%s" % line)
+
+        out2 = loop._to_refuted(out, "c1", "机制不成立", "direction", "d1")
+        for line in ("# 卡片级纪律：这三行注释必须活下来", "# refuted 段的说明"):
+            self.assertIn(line, out2, "写 refuted 时丢了注释：%s" % line)
