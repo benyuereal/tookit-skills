@@ -108,6 +108,10 @@ def main(argv=None):
             "note": "per-round median → cross-round median；base 每轮重测",
         },
         "env": env_fingerprint(),
+        "measure_mode": "back-to-back, no per-iter sync",
+        "measure_note": ("背靠背连续调用，kernel 间可能重叠 ⇒ 偏乐观。卡片/周报口径须用端到端（含每次分配）。"
+                         "本卡未做三方对账，偏乐观幅度未测定。"
+      "rmsnorm-fused 实测该差为 23%（140 vs 183 µs），可作量级参考。"),
         "shape": {"s": a.s, "heads": a.heads, "d": d_qk, "topk": a.topk,
                   "nvalid": a.nvalid, "seed": a.seed},
         "runs": [],

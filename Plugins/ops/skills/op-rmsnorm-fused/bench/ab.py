@@ -75,9 +75,23 @@ def main(argv=None):
                                 "significant": sig, "why": why,
                                 "maxdiff": None, "rel": None})
         print("# %s: %.4fms (%.4fx) %s" % (tag, med, ratio or 0, why))
+        print("# ⚠ 口径=背靠背无 per-iter sync，偏乐观约 23%；"
+              "卡片口径用端到端（183.0 µs / util 0.63）")
 
+    # ⚠️ 测量口径必须写进 JSON，否则读的人会把「背靠背无 sync」的数当成绩。
+    # 2026-11-23 三方对账（业主亲自跑，同机 prefill-8k）：
+    #   ab.py 背靠背无 per-iter sync   140 µs  偏乐观 23%（kernel 间重叠）
+    #   events 隔离 + 预分配 y         172.5 µs 纯 kernel
+    #   C.get_runner 端到端（含分配）   183.0 µs ← **卡片采用这个口径**
+    # 本文件的 _measure 走 opbench.bench_fn，是连续调用（背靠背），
+    # 所以这里报的 ms 天生偏乐观；卡片/周报一律用端到端口径。
     out = {"caliber": {"what": "op_call", "alloc": False, "state": "hot",
                        "rounds": a.rounds, "timer": "hip_event"},
+           "measure_mode": "back-to-back, no per-iter sync",
+           "measure_note": ("偏乐观约 23%（kernel 间可重叠）。"
+                            "卡片/周报口径必须用端到端（每次 empty_like）："
+                            "2026-11-23 实测 183.0 µs / 1081 GB/s / util 0.63。"
+                            "纯 kernel（event 隔离）172.5 µs。"),
            "shape": dict(shape, shape=a.shape),
            "runs": [row]}
     if a.json:

@@ -67,7 +67,7 @@ last_verdict:
         GB/s —— 那两条来源不明，已作废。冷 L2（每次换输入）186.2 µs；热 L2（同输入连跑）119.2 µs 是缓存假象，不采用'
   evidence:
   - path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-triton.json
-    sha256: 2ba287ea19080f7c377346e90270be28e05fd917e7b2ea9c8707f1015024ffd6
+    sha256: 86ddd0ff8a82862bd1daff0ebf1703cd9227c64114f9fc9c8d66f41d8ad03203
     verified_on: '2026-11-23'
   conclusion: triton 融合单 kernel 冷 L2 达 1081 GB/s（util 0.63），快 6.6x
   next_probe:

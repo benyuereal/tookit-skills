@@ -37,6 +37,20 @@ REPO = Path(__file__).resolve().parents[1]
 CARDS = REPO / "Plugins/ops/op-atlas/cards"
 
 
+def _missing_evidence_cards(cards_dir=CARDS):
+    """缺 evidence 的 measured/tuned 卡（它们不进聚合，但必须在输出里交代清楚）。"""
+    import yaml
+    out = []
+    for p in sorted(Path(cards_dir).glob("*.yaml")):
+        d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        if not lv.get("evidence"):
+            out.append(d.get("id") or p.stem)
+    return out
+
+
 def _load_cards(cards_dir=CARDS, include_missing_evidence=False):
     """读卡。**缺 evidence 的卡默认不进聚合**（业主 2026-11-23 裁决）。
 
@@ -159,7 +173,20 @@ def render(agg, only_family=None):
     lines.append("")
     tot_sp = [c for c in _ALL if c["kind"] == "speedup"]
     tot_real = [c for c in tot_sp if c["value"] and c["value"] > 1.2]
-    lines.append("全仓：有数卡 %d 张 / 真实加速(>1.2x) %d 张 / 全仓几何平均 %s"
+    # ---- 完整账：只报「进聚合的」会让人以为覆盖掉了一半。
+    # 24 张有数 = 11 张进聚合 + 13 张缺证据（E25 判 missing，按裁决不进聚合）。
+    miss = _MISSING or []
+    total_all = len(_ALL) + len(miss)
+    lines.append("")
+    lines.append("全仓：有数卡 %d 张 = 进聚合 %d + 缺证据(不进聚合) %d"
+                 % (total_all, len(_ALL), len(miss)))
+    if miss:
+        lines.append("  缺证据的 %d 张（E25 missing_evidence，详见 op-atlas/gaps.md §一）："
+                     % len(miss))
+        # 按名字排序打印，一行不超过 4 个
+        for i in range(0, len(miss), 4):
+            lines.append("    " + "  ".join(miss[i:i + 4]))
+    lines.append("  进聚合的 %d 张：真实加速(>1.2x) %d 张 / 几何平均 %s"
                  % (len(_ALL), len(tot_real),
                     ("%.2fx" % geomean([c["value"] for c in tot_sp]))
                     if tot_sp else "-"))
@@ -172,6 +199,7 @@ def render(agg, only_family=None):
 
 
 _ALL = []
+_MISSING = []
 
 
 def selftest():
@@ -225,8 +253,9 @@ def main(argv=None):
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
-    global _ALL
+    global _ALL, _MISSING
     _ALL = _load_cards(a.cards, include_missing_evidence=a.include_missing)
+    _MISSING = _missing_evidence_cards(a.cards) if not a.include_missing else []
     if not _ALL:
         print("没有可聚合的卡（缺 evidence 的已排除；"
               "用 --include-missing-evidence 看全量）", file=sys.stderr)

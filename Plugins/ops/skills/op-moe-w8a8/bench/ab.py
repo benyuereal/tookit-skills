@@ -78,6 +78,10 @@ def main(argv=None):
 
     out = {"caliber": {"what": "op_call", "alloc": False, "state": "hot",
                        "rounds": a.rounds, "timer": "hip_event"},
+"measure_mode": "back-to-back, no per-iter sync",
+           "measure_note": ("背靠背连续调用，kernel 间可能重叠 ⇒ 偏乐观。卡片/周报口径须用端到端（含每次分配）。"
+                            "本卡未做三方对账，偏乐观幅度未测定。"
+      "rmsnorm-fused 实测该差为 23%（140 vs 183 µs），可作量级参考。"),
            "shape": dict(shape, shape=a.shape),
            "runs": [row]}
     if a.json:
