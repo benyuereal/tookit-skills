@@ -80,9 +80,9 @@ MLS 还有一条 dtype 前置条件：`kPack=1`。bf16 kernel 因 gather 向量�
 
 同机同 gfx938 的 `/workspace/hbird-gemm` 有一份「压到硬件极限」的完整记录：
 
-- `docs/DESIGN.md`：Phase 0-10 的阶段表（每步改什么、涨多少），
+- `/workspace/hbird-gemm/docs/DESIGN.md`：Phase 0-10 的阶段表（每步改什么、涨多少），
   A-read 流水线（3 buffer + 2 步 lead）= 2.1711 → 2.1070 ms，且比双缓冲更省寄存器
-- `docs/w12/records/2026-11-sub160-wall.md`：死路清单
+- `/workspace/hbird-gemm/docs/w12/records/2026-11-sub160-wall.md`：死路清单
   - `buffer_load ... slc` 慢 13%（bit-exact），默认 descriptor 最优
   - 源码级 4-stage prefetch 的 waitcnt 深度由 scheduler 决定，控制不了
   - `#pragma unroll 1` 用在 epilogue → 128 个累加寄存器全溢出（388 条 buffer_store）
