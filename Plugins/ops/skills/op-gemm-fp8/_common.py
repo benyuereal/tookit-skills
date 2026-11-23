@@ -75,9 +75,27 @@ def runner_kwargs(params):
     return {"M": M, "N": N, "K": K}
 
 
+def _aiter_runner(A, B, **kw):
+    """aiter 的 gfx938 opus fp8 GEMM。
+
+    实测 2026-11-23：aiter fp8 47.8 TF vs aiter bf16 24.6 TF（同库同形状）⇒ 1.94x。
+    **这条比值证明是原生 fp8 MMA，不是 dequant 回退** —— 若走回退两边都跑 bf16 MMA，
+    比值应 ≈1.0。判「是否原生 fp8」必须同库同形状对照，跨库比会得出错误结论。
+    """
+    import aiter
+    # build_inputs 的 _fp8_sim 已做量化模拟但保持 bf16 dtype。真 fp8 kernel 需要
+    # float8_e4m3fn：直接用 .to() 转换（数值上等价于再做一次 fp8 舍入，误差 <1 ulp）。
+    A8 = A if A.dtype == torch.float8_e4m3fn else A.to(torch.float8_e4m3fn)
+    B8 = B if B.dtype == torch.float8_e4m3fn else B.to(torch.float8_e4m3fn)
+    out = aiter.gemm_a8w8_opus(A8, B8)
+    return out.to(torch.bfloat16) if out.dtype != torch.bfloat16 else out
+
+
 def get_runner(name, tilelang_root=None, **kwargs):
     if name not in VARIANTS:
         raise ValueError("未知变体 %r（可选 %s）" % (name, " / ".join(VARIANTS)))
+    if name == "aiter":
+        return _aiter_runner
     raise RuntimeError(
         "变体 %r 在本机不可用：需先安装 TileLang(hcu) / aiter 的 FP8 GEMM 后端"
         "（见 variants.yaml 的 source 字段）。adapter 已就绪，缺的是后端——"

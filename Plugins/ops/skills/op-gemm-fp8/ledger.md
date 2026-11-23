@@ -42,3 +42,46 @@ python3 Plugins/ops/skills/op-gemm-fp8/bench/ab.py \
 - 分母按档位选：decode 档用带宽 1724 GB/s；prefill 档用 fp8 算力峰值。
   两档混用会把结论判反。
 - `tiny` 档只用于验证门是否通，**绝不用于性能结论**。
+
+## 2026-11-23：原生 fp8 路径验证（结论：存在，但只有 nominal 的 8.6%）
+
+**问题**：本机有没有原生 fp8 MMA 路径？还是所有自称 fp8 的实现都在做 dequant 回退？
+
+### 三条证据
+
+| 路径 | 结果 |
+|---|---|
+| `torch._scaled_mm`（hipBLASLt） | **FAIL**：`could not find valid hipblaslt solution` |
+| `aiter.gemm_a8w8_opus`（kernelId=auto） | **OK**：48.2 TF（4096³） |
+| **同库同形状** fp8/bf16 速率比 | **1.92x** |
+
+### 判定
+
+```
+同一份矩阵形状、同一个库（aiter）：
+  gemm_a8w8_opus  (fp8)   2.8768 ms = 47.8 TF
+  gemm_a16w16_opus (bf16) 5.5829 ms = 24.6 TF
+  ⇒ 算力比 1.94x（复测 1.92x）
+```
+
+**若走 dequant 回退，fp8 输入会先反量化成 bf16 再跑同一套 MMA，
+两边耗时应相同（比值 ≈1.0）。实测 1.92~1.94x 说明是原生 fp8 双速率通路。**
+
+### 结论
+
+1. **hipBLASLt 在 gfx938 上确实没有 fp8 方案** —— 这条原判断成立。
+2. **但本机有原生 fp8 路径**（aiter opus），不是 dequant 回退。
+3. 它的水平是 **48~50 TF，只有 fp8 nominal(560) 的 0.086**。
+   ⇒ **方向不是「找原生路径」（已存在），而是「这条实现为什么这么低」。**
+
+### 一条必须记住的判据
+
+**判「是否原生 fp8」必须同库同形状对照。** 跨库比（aiter 的 fp8 对 hipBLASLt 的 bf16）
+会把**库的差距**记成**精度的差距** —— 两库的 bf16 本身差 8.8x。
+2026-11-23 早前正是这样得出「fp8 比 bf16 慢 5.3x」的错误结论。
+
+### 未测定
+
+- aiter opus 为什么只有 48 TF（缺 PMC 归因）
+- tilelang / hand-hip 两条路径（本机未跑通）
+- 是否存在比 opus 更快的 fp8 实现

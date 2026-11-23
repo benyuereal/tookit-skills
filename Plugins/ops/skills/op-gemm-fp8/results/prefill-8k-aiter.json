@@ -1,0 +1,38 @@
+{
+  "caliber": {
+    "what": "op_call",
+    "alloc": false,
+    "state": "hot",
+    "rounds": 3,
+    "timer": "hip_event"
+  },
+  "shape": {
+    "params": {
+      "M": 8192,
+      "N": 4096,
+      "K": 4096
+    },
+    "note": "算力型：杠杆是 MMAC 发射率与每 barrier 工作量",
+    "_name": "prefill-8k",
+    "shape": "prefill-8k"
+  },
+  "runs": [
+    {
+      "skv": 0,
+      "variants": [
+        {
+          "tag": "aiter",
+          "ms": 5.785964488983154,
+          "mad": 0.009305196649887826,
+          "delta_pct": 0.1197405676042873,
+          "significant": false,
+          "why": "在噪声内（|Δ|=0.00691986 <= 3.0*MAD=0.0279156），判 INCONCLUSIVE",
+          "maxdiff": null,
+          "rel": null
+        }
+      ],
+      "base_ms": 5.7790446281433105,
+      "base_mad": 0.003936608632405303
+    }
+  ]
+}

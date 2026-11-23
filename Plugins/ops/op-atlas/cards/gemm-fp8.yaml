@@ -120,25 +120,25 @@ last_verdict:
   ratio:
     kind: utilization
     unit: ratio
-    value: 0.089
-    vs: fp8 nominal 峰值 560 TF 的达成率（aiter opus 实测 49.8 TF）
+    value: 0.086
+    vs: fp8 nominal 560 TF 的达成率（aiter opus，4096³）
     scope:
       cards: 1
       in_len: M=4096 K=4096
       out_len: N=4096
       warmup: hot
-      note: 六个形状 47.8~49.7 TF 收敛；同库 fp8/bf16=1.98× 确认 2:1 双速率；aiter bf16 也只有 24.1 TF（nominal 的 8.6%），说明是这一族实现整体低效
-  conclusion: aiter fp8 达 49.8 TF，仅为 nominal 560 TF 的 0.089；约 11 倍空间
+      note: 47.8~48.2 TF；prefill-8k(M=8192) 档 47.4 TF。同库 fp8/bf16=1.92x ⇒ 原生 fp8，非 dequant 回退
+  conclusion: aiter fp8 达 48 TF（nominal 560 的 0.086）；同库比值 1.92x 证原生路径存在
   verified_on: '2026-11-23'
   evidence:
-  - path: Plugins/ops/skills/op-optimize/cases/010-fp8-gemm-ceiling/results/fp8-gemm.json
-    sha256: 586615d5d837affac9aa6f9a7c4be29fbacf9afdceb1cb3a00a9fe6183e17f0f
+  - path: Plugins/ops/skills/op-gemm-fp8/results/prefill-8k-aiter.json
+    sha256: 2e02e30d769c4364def436e1bfabbc87d89b3054bcbfbe35706736306d208203
     verified_on: '2026-11-23'
   next_probe:
     surface: precision-drop
-    hypothesis: 换到原生 fp8 MMA 路径（k_pack=1 + MLS，见 sparse-mla 的 bf16_mls_matrix_load 反证）后应达 nominal 560 的 0.35 以上，即 >196 TF
-    expected: 198~280 TF（当前 49.8）
-    stop_if: 若三条路径（aiter opus / tilelang / ck）都停在 50 TF 附近，说明是 gfx938 的 fp8 发射率上限而非实现问题 ⇒ 按 achievable 口径重记分母
+    hypothesis: 同库比值 1.92x 已证明是原生 fp8，但只到 nominal 的 0.086；若 opus 的 kernelId=2 未打满 MMA，换 tilelang/ck 路径应达 nominal 的 0.3 即 >168 TF
+    expected: ≥168 TF（当前 48）
+    stop_if: 若三条实现路径都停在 50 TF 附近，说明是 gfx938 fp8 发射率上限而非实现问题 ⇒ 按 achievable 口径重记分母并标 at_floor
     effort: 6h
 modify_path:
   kind: replace-call
