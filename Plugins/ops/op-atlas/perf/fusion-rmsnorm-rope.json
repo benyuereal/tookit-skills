@@ -1,0 +1,84 @@
+{
+ "card": "fusion-rmsnorm-rope",
+ "generated_on": "2026-11-23",
+ "machine": "BW1100 gfx938 / torch 2.11.0",
+ "note": "只测到融合档；split 参考因 rope_2d_fwd 调用签名不符未取到完整分步数。另测得「2x rmsnorm2d_fwd 单做 norm」0.2093ms(S=2048)/0.6298ms(S=8192)",
+ "records": [
+  {
+   "variant": "aiter-fused-qk-rmsnorm-rope",
+   "median_us": 111.5,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 2,
+    "passes": 4
+   },
+   "shape": {
+    "B": 1,
+    "S": 2048,
+    "NH": 32,
+    "D": 128,
+    "dtype": "bfloat16",
+    "name": "prefill-2k"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_i2c.py"
+  },
+  {
+   "variant": "aiter-fused-qk-rmsnorm-rope",
+   "median_us": 346.9,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 2,
+    "passes": 4
+   },
+   "shape": {
+    "B": 1,
+    "S": 8192,
+    "NH": 32,
+    "D": 128,
+    "dtype": "bfloat16",
+    "name": "prefill-8k"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_i2c.py"
+  }
+ ]
+}

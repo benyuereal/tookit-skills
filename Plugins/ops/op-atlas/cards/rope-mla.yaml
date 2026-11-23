@@ -100,3 +100,18 @@ baseline_ref:
     passes: 2
     source: 按 family=rope 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: 仅对 q/k 的 rope 部分旋转；与 latent 部分解耦
+  inputs:
+  - q (B,1,H,576)
+  - k_pe
+  - cos/sin
+  outputs:
+  - q_pe
+  - k_pe_out
+  traffic_passes:
+    reads: 1
+    writes: 2
+    passes: 3
+    source: 按 math：读 q/k_pe，写 q_pe 与 k_pe
+  mutates_inputs: []

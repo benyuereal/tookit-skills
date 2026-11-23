@@ -97,3 +97,18 @@ baseline_ref:
     passes: 4
     source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: y = sum_k w_ik*permuted[slot_ik]（输出经 output 参数写入，函数返回 None）
+  inputs:
+  - permuted (tokens,H)
+  - gate_w (tokens,topk)
+  - slot_idx
+  - output (M,H) 传出参数
+  outputs:
+  - output (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 实测 2026-11-23：lightop.moe_align_sum.moe_sum(input, output) 返回 None，输出写进调用方给的 output buffer。writes 仍按 1 份计（写的是 output）
+  mutates_inputs: []

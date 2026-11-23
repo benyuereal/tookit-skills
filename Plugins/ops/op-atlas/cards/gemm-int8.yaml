@@ -122,3 +122,18 @@ baseline_ref:
     passes: 3
     source: 按 family=gemm 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: out = (A_i8*s_a) @ (B_i8*s_b); acc=int32，出栈时反量化
+  inputs:
+  - A_i8 (M,K)
+  - B_i8 (K,N)
+  - s_a
+  - s_b
+  outputs:
+  - out (M,N) bf16
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 math：读 A、B 与标量 scale，写 C
+  mutates_inputs: []

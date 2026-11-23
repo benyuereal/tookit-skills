@@ -99,3 +99,19 @@ baseline_ref:
     passes: 3
     source: 按 family=norm 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: q = rmsnorm(q,-1)*w_q; k = rmsnorm(k,-1)*w_k
+  inputs:
+  - q (B,S,H,D)
+  - k (B,S,H,D)
+  - w_q
+  - w_k
+  outputs:
+  - q_out
+  - k_out
+  traffic_passes:
+    reads: 2
+    writes: 2
+    passes: 4
+    source: 按 math：读 q/k，写回 q/k（融合视角下原地）
+  mutates_inputs: []

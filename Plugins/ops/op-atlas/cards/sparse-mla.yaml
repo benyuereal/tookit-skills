@@ -127,3 +127,17 @@ baseline_ref:
     passes: 4
     source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: out[i,:] = Σ_{j∈TopK(i)} softmax(q_i·k_j)·v_j
+  inputs:
+  - q (B,S,H,576)
+  - kv (pages,64,1,576)
+  - indices (B,S,topk)
+  outputs:
+  - out (B,S,H,512)
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 math：读 q、kv（按 indices 稀疏 gather）、indices，写 out
+  mutates_inputs: []

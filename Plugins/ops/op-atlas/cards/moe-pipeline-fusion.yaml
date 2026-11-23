@@ -100,3 +100,18 @@ baseline_ref:
     passes: 4
     source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: 五段 pipeline（dispatch→gate_up→swiglu→down→combine）的融合边界选择
+  inputs:
+  - x
+  - W_gate_up
+  - W_down
+  - gate_w
+  outputs:
+  - y
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 引擎层，不是单 kernel；读写按整体流水计的粗算，bench 前须按实际段数重核
+  mutates_inputs: []

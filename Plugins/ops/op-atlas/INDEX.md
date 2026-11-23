@@ -25,7 +25,8 @@
 | [`flash-attention-fwd`](cards/flash-attention-fwd.yaml) | attention | measured | — | mixed | causal 相对 non-causal 耗时比为 0.60；两条路… |
 | [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | measured | — | bandwidth | 融合比分步快 1.70x(M=1024)/2.39x(M=8192)… |
 | [`fusion-add-rmsnorm-quant`](cards/fusion-add-rmsnorm-quant.yaml) | norm | measured | — | bandwidth | 未实测跨库领先；本卡只测了单实现绝对耗时，同口径对比见 vs |
-| [`fusion-rmsnorm-rope`](cards/fusion-rmsnorm-rope.yaml) | rope | measured | — | bandwidth | 未实测跨实现对比；仅 aiter 融合档绝对耗时 |
+| [`fusion-rmsnorm-rope`](cards/fusion-rmsnorm-rope.yaml) | rope | measured | — | bandwidth | 融合档 0.1077ms 已快于单做 norm 的 2 次 0.20… |
+| [`fusion-rope-kv-write`](cards/fusion-rope-kv-write.yaml) | kv | measured | — | bandwidth | 真融合比同入口的 bf16 split 分支快 2.18x；选 fp… |
 | [`fusion-silu-mul-quant`](cards/fusion-silu-mul-quant.yaml) | activation | measured | — | bandwidth | 比 silu_and_mul+quant 分步快 2.25x/2.3… |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | — | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |

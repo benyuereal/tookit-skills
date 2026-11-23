@@ -125,3 +125,19 @@ baseline_ref:
     passes: 4
     source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: out = softmax(q·K_page^T/sqrt(d))·V_page（K/V 按 page 间接寻址）
+  inputs:
+  - q (B,1,H,D)
+  - k_cache (pages,PS,H,D)
+  - v_cache
+  - block_table
+  outputs:
+  - out (B,1,H,D)
+  - softmax_lse (B,H,1)
+  traffic_passes:
+    reads: 3
+    writes: 2
+    passes: 5
+    source: 实测确认（2026-11-23）：同上：flash_mla_with_kvcache 返回 (out, lse) 两份
+  mutates_inputs: []

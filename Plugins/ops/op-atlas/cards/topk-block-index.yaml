@@ -103,3 +103,16 @@ baseline_ref:
     passes: 4
     source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: idx = topk(scores, K)；无效槽位填 -1
+  inputs:
+  - scores (B,L)
+  - page_table
+  outputs:
+  - idx (B,K) int32
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 实测确认（2026-11-23）：实测 lightop.fast_topk_transform_fused 返回单个 Tensor（topk 必须=2048）
+  mutates_inputs: []

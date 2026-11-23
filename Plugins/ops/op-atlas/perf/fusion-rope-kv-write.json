@@ -1,0 +1,86 @@
+{
+ "card": "fusion-rope-kv-write",
+ "generated_on": "2026-11-23",
+ "machine": "BW1100 gfx938 / torch 2.11.0",
+ "note": "同一入口两条分支：fp8 KV cache 走真融合 kernel，bf16 cache 落回 wrapper 的 split 分支；traffic_passes 未含 k_buffer/v_buffer 的额外原地写",
+ "records": [
+  {
+   "variant": "lightop-fused-fp8-cache",
+   "median_us": 112.7,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 3,
+    "writes": 3,
+    "passes": 6
+   },
+   "shape": {
+    "T": 2048,
+    "HQ": 32,
+    "HK": 8,
+    "D": 128,
+    "page_size": 64,
+    "dtype": "bfloat16",
+    "name": "decode-m32"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion2.py"
+  },
+  {
+   "variant": "lightop-wrapper-split-bf16-cache (NOT fused)",
+   "median_us": 245.2,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 3,
+    "writes": 3,
+    "passes": 6
+   },
+   "shape": {
+    "T": 2048,
+    "HQ": 32,
+    "HK": 8,
+    "D": 128,
+    "page_size": 64,
+    "dtype": "bfloat16",
+    "name": "decode-m32"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion2.py"
+  }
+ ]
+}

@@ -101,3 +101,16 @@ baseline_ref:
     passes: 2
     source: 按 family=rope 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: x_rot = x*cos(θ) + rotate_half(x)*sin(θ)
+  inputs:
+  - x (B,S,H,D)
+  - cos/sin cache
+  outputs:
+  - x_rot
+  traffic_passes:
+    reads: 1
+    writes: 1
+    passes: 2
+    source: 按 math：读 x，写 x_rot（cache 只有 S*D 大小）
+  mutates_inputs: []

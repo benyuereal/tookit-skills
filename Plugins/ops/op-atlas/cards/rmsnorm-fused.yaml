@@ -129,3 +129,18 @@ baseline_ref:
     passes: 4
     source: 卡片声明
   note: bench 时拿这条当性能基准
+semantics:
+  formula: y = w * ((x+r) / sqrt(mean((x+r)^2,-1) + eps))
+  inputs:
+  - x (M,H)
+  - r (M,H)
+  - w (H,)
+  outputs:
+  - out (M,H)
+  - residual_out (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 2
+    passes: 4
+    source: 按 math + 实测：2 读 2 写（residual_out 与 lightop 等语义）；2026-11-23 实测确认
+  mutates_inputs: []

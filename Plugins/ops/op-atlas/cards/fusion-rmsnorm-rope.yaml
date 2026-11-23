@@ -116,15 +116,15 @@ last_verdict:
   ratio:
     kind: speedup
     unit: x
-    value: null
-    vs: 未实测跨实现对比（aiter 融合档只测了绝对耗时 0.0920/0.3477 ms）
+    value: 1.86
+    vs: aiter 融合档相对「2×rmsnorm2d_fwd 单做 norm」的耗时比（S=2048；S=8192 档为 1.82x）——不是相对完整分步，rope 段未计入
     scope:
       cards: 1
       in_len: S=2048 与 S=8192
       out_len: NH=32 D=128
       warmup: hot
-      note: bf16 4D 输入；cuda_event；预克隆池 16 组轮换。分步基线因 rope_2d_fwd 调用失败未取到数
-  conclusion: 未实测跨实现对比；仅 aiter 融合档绝对耗时
+      note: bf16 4D 输入；cuda_event；预克隆池 16 组轮换。融合 0.1077 ms vs 仅 norm 0.2093 ms（S=2048）
+  conclusion: 融合档比单做 2 次 norm 还快 1.86x(S=2048)/1.82x(S=8192)；rope 段另计
   verified_on: '2026-11-23'
   traffic_passes:
     reads: 2
@@ -133,6 +133,15 @@ last_verdict:
   outputs: [q_out, k_out]
   baseline_count: 1
   single_source: true
+  comparison:
+    baseline: split 2x rmsnorm2d_fwd
+    baseline_role: competitor
+    semantics_aligned: false
+    alignment: "不可比：融合档含 rope，split 参考只做 norm，少一段计算。此处仅用来说明「融合档比单做 norm 还快」，不构成加速比结论"
+    cand_us: 107.7
+    base_us: 209.3
+    ratio: 1.943
+    significant: true
   next_probe:
     surface: occupancy
     hypothesis: head_dim 只支持 128、freqs 只支持 fp32，且 B=1/S=2048/NH=32 时读 67MB 数量级；若把 freqs 预取进 LDS 并把 4D 摊平成 2D 发射，占用率应还能提 20% 以上
@@ -148,7 +157,7 @@ hard_preconditions:
 - statement: aiter 入口硬约束 head_dim=128、freqs fp32、输入 4D [B,S,H,D]
   check: python3 -I -c "import aiter,torch; B,S,H,D=1,8,4,128; q=torch.randn(B,S,H,D,device='cuda',dtype=torch.bfloat16); f=torch.randn(S,D,device='cuda',dtype=torch.float32); aiter.fused_qk_rmsnorm_rope(q,q,torch.ones(D,device='cuda',dtype=torch.bfloat16),torch.ones(D,device='cuda',dtype=torch.bfloat16),f,1e-6)"
 - statement: freqs 必须是 interleaved 布局（[cos0,sin0,cos1,sin1...]），neox 的 [cos|sin] 不报错但语义错
-  check: python3 -I -c "import torch,aiter; B,S,H,D=1,4,2,128; q=torch.randn(B,S,H,D,device='cuda',dtype=torch.bfloat16); w=torch.ones(D,device='cuda',dtype=torch.bfloat16); f=torch.cat([torch.ones(S,D//2,device='cuda'),torch.zeros(S,D//2,device='cuda')],-1); o=aiter.fused_qk_rmsnorm_rope(q,q,w,w,f,1e-6)[0]; ref=q.float()*torch.rsqrt(q.float().pow(2).mean(-1,keepdim=True)+1e-6); print(float((o.float()-ref).norm()/ref.norm()))  # 应 >>0.1 即证明不是 identity"
+  check: python3 -I -c "import torch,aiter; B,S,H,D=1,4,2,128; q=torch.randn(B,S,H,D,device='cuda',dtype=torch.bfloat16); w=torch.ones(D,device='cuda',dtype=torch.bfloat16); f=torch.cat([torch.ones(S,D//2,device='cuda'),torch.zeros(S,D//2,device='cuda')],-1); o=aiter.fused_qk_rmsnorm_rope(q,q,w,w,f,1e-6)[0]; ref=q.float()*torch.rsqrt(q.float().pow(2).mean(-1,keepdim=True)+1e-6); print(float((o.float()-ref).norm()/ref.norm()))"
 - statement: lightop.rms_rotary_embedding_fuse 原地改写 query/key，且 cos_sin_cache dtype 必须与 q/k 一致
   check: python3 -I -c "import lightop,torch; T,H,D=8,4,64; q=torch.randn(T,H*D,device='cuda',dtype=torch.bfloat16); q0=q.clone(); cs=torch.randn(64,D,device='cuda',dtype=torch.bfloat16); lightop.rms_rotary_embedding_fuse(torch.arange(T,device='cuda'),q,q,D,cs,False,torch.ones(D,device='cuda',dtype=torch.bfloat16),torch.ones(D,device='cuda',dtype=torch.bfloat16),None,None,1e-5); assert not torch.equal(q,q0)"
 soft_preconditions:

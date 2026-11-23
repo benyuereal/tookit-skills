@@ -238,3 +238,16 @@ baseline_ref:
     passes: 3
     source: 'GEMM: 读 A、读 B、写 C'
   note: 实测 498.5 TF @8192³（本机最强 fp8 路径）
+semantics:
+  formula: out[M,N] = A[M,K] @ B[K,N]; A/B fp8-e4m3, acc=fp32, out=bf16
+  inputs:
+  - A (M,K) fp8
+  - B (K,N) fp8
+  outputs:
+  - out (M,N) bf16
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 math：读 A、B，写 C（scale 为标量）
+  mutates_inputs: []

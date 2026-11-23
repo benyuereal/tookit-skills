@@ -98,3 +98,18 @@ baseline_ref:
     passes: 4
     source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: y = (silu(x*W_gate)*(x*W_up))*W_down，专家内完成
+  inputs:
+  - x (M,H)
+  - W_gate
+  - W_up
+  - W_down
+  outputs:
+  - y (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 math：同 mlp-swiglu，专家内
+  mutates_inputs: []

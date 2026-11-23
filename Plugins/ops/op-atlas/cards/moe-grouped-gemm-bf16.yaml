@@ -104,3 +104,16 @@ baseline_ref:
     passes: 4
     source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: y_e = x_e * W_e；按专家分组，每组 token 数不等
+  inputs:
+  - x (E,M,K)
+  - W (E,N,K)
+  outputs:
+  - y (E,M,N)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 math：读 x、W，写 y
+  mutates_inputs: []

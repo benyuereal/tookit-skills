@@ -98,3 +98,18 @@ baseline_ref:
     passes: 3
     source: 按 family=activation 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: y = gelu(x*W_up) * (x*W_gate) * W_down
+  inputs:
+  - x (M,H)
+  - W_gate
+  - W_up
+  - W_down
+  outputs:
+  - y (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 math：同 swiglu 结构，读 x、写 y
+  mutates_inputs: []

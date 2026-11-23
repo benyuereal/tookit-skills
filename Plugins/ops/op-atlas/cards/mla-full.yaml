@@ -113,3 +113,19 @@ baseline_ref:
     passes: 4
     source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: out = softmax(q·W_uk·c_kv^T)·W_uv·c_kv
+  inputs:
+  - q
+  - c_kv (pages,64,1,576)
+  - W_uk
+  - W_uv
+  outputs:
+  - out
+  - softmax_lse
+  traffic_passes:
+    reads: 2
+    writes: 2
+    passes: 4
+    source: 实测确认（2026-11-23）：同 flash_mla 族；get_mla_metadata 只返回 (meta, None) 供调度，主 kernel 返回 (out, lse)
+  mutates_inputs: []

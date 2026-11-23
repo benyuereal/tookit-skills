@@ -119,3 +119,19 @@ baseline_ref:
     passes: 4
     source: 按 family=moe 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: y = Σ_shared + Σ_topk（输出经 output 参数写入，函数返回 None）
+  inputs:
+  - input
+  - b_qweight (含 int8 权重与 scale)
+  - output (M,H) 传出参数
+  - topk_weights
+  - sorted_token_ids
+  outputs:
+  - output (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 'signature 含 `output: torch.Tensor` 为传出参数；按 lightop 的 out-param 惯例返回 None。实际输出份数以小 shape 实跑确认为 1（待补）'
+  mutates_inputs: []

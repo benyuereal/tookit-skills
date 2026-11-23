@@ -118,3 +118,17 @@ baseline_ref:
     passes: 4
     source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: logits[i,j] = Σ_h max(0, Q[i,h,:]·K[j,:]) · W[i,h]
+  inputs:
+  - q (B,L,H,D)
+  - k (S,H,D)
+  - w (B,L,H)
+  outputs:
+  - logits (B,L,S)
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 math：读 q/k/w，写 logits
+  mutates_inputs: []

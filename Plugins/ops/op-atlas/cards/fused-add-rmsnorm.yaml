@@ -105,3 +105,17 @@ baseline_ref:
     passes: 3
     source: 按 family=norm 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: y = w*((x+r)/sqrt(mean((x+r)^2,-1)+eps))
+  inputs:
+  - x (M,H)
+  - r (M,H)
+  - w (H,)
+  outputs:
+  - y (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 math：读 x、r（w 只有 H 大小可忽略），写 y
+  mutates_inputs: []

@@ -113,3 +113,17 @@ baseline_ref:
     passes: 4
     source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: out = softmax(QK^T*scale + causal_mask)·V
+  inputs:
+  - q (B,S,H,D)
+  - k (B,S,H,D)
+  - v (B,S,H,D)
+  outputs:
+  - out (B,S,H,D)
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 实测确认（2026-11-23）：同 flash_attn_func：默认单输出 Tensor
+  mutates_inputs: []

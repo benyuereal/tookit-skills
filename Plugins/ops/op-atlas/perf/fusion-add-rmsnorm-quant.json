@@ -1,0 +1,296 @@
+{
+ "card": "fusion-add-rmsnorm-quant",
+ "generated_on": "2026-11-23",
+ "machine": "BW1100 gfx938 / torch 2.11.0",
+ "note": "traffic_passes.writes=3 (out, residual_out, scale)；scale 仅 M*4B，占比 <0.1%",
+ "records": [
+  {
+   "variant": "lightop-dyn-quant-int8",
+   "median_us": 51.6,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 1024,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "decode-m32"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  },
+  {
+   "variant": "lightop-per-token-int8",
+   "median_us": 41.4,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 1024,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "decode-m32"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  },
+  {
+   "variant": "lightop-per-token-fp8",
+   "median_us": 40.6,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 1024,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "decode-m32"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  },
+  {
+   "variant": "aiter-add-dynamicquant",
+   "median_us": 43.0,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 1024,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "decode-m32"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  },
+  {
+   "variant": "lightop-dyn-quant-int8",
+   "median_us": 285.6,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 8192,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "prefill-8k"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  },
+  {
+   "variant": "lightop-per-token-int8",
+   "median_us": 279.1,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 8192,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "prefill-8k"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  },
+  {
+   "variant": "lightop-per-token-fp8",
+   "median_us": 197.1,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 8192,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "prefill-8k"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  },
+  {
+   "variant": "aiter-add-dynamicquant",
+   "median_us": 255.9,
+   "unit": "us",
+   "caliber": {
+    "what": "op_call",
+    "alloc_in_timing": "depends_on_fn(池内预克隆, 单次调用内分配不计)",
+    "state": "hot",
+    "input_strategy": "preclone_pool_rotating",
+    "pool_size": 8,
+    "timer": "hip_event",
+    "rounds": 3,
+    "statistic": "median",
+    "n": 3,
+    "clock_mhz": 1200,
+    "gpu_exclusive": true
+   },
+   "traffic_passes": {
+    "reads": 2,
+    "writes": 3,
+    "passes": 5
+   },
+   "shape": {
+    "M": 8192,
+    "H": 4096,
+    "dtype": "bfloat16",
+    "name": "prefill-8k"
+   },
+   "evidence": {
+    "file": "/tmp/fusion_bench_raw.json",
+    "sha256": "ae0556994179ddf1eb2be229593a7e5bb4b4dee07222fc6b0cc55c9fff63105b",
+    "verified_on": "2026-11-23",
+    "machine": "BW1100 gfx938 / torch 2.11.0"
+   },
+   "reproduce": "python3 -I /tmp/bench_fusion.py"
+  }
+ ]
+}

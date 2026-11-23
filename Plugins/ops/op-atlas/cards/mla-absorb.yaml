@@ -119,3 +119,18 @@ baseline_ref:
     passes: 4
     source: 按 family=attention 推定（**未实测，须用 --actual 校正**）
   note: bench 时拿这条当性能基准
+semantics:
+  formula: q_eff = q*W_kv; out = softmax(q_eff·c_kv^T)·V
+  inputs:
+  - q (B,1,H,576)
+  - c_kv (pages,64,1,576)
+  - W_kv
+  outputs:
+  - out (B,1,H,512)
+  - softmax_lse (B,H,1)
+  traffic_passes:
+    reads: 2
+    writes: 2
+    passes: 4
+    source: '实测确认（2026-11-23）：实测 flash_mla.flash_mla_with_kvcache 返回 tuple(2)=(out, lse)；框架证据 sglang/flashmla_backend.py: `o, _ = flash_mla_with_kvcache(...)`'
+  mutates_inputs: []
