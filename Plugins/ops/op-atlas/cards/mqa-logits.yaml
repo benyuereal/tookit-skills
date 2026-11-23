@@ -5,7 +5,7 @@ math: logits[i,j] = Σ_h max(0, Q[i,h,:]·K[j,:]) · W[i,h]；H=32, D=128
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: csrc/mqa_logits/paged/paged_mqa_logits_grouped.cu
@@ -82,6 +82,23 @@ last_verdict:
     expected: 相对当前再快 ≥1.10x
     stop_if: 若写回向量化后不涨，说明归约已是主导 ⇒ 该算子到此为止（它已 1.29x）
     effort: 2h
+  regimes:
+    prefill:
+      m: null
+      kind: speedup
+      value: 1.29
+      bound: bandwidth
+      note: epilogue 优化
+    decode:
+      m: 1
+      kind: bandwidth
+      value: null
+      bound: memory
+      note: 未测定
+      denominator:
+        value: 1848
+        source: bw-ladder.yaml 2_read_only
+        why: decode 只读 KV/权重，纯读路径
 modify_path:
   kind: env-flag
   what: 切 grouped 分组调度

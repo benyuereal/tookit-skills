@@ -219,7 +219,7 @@ def run_card(card, shape_name, bandwidth_bytes):
                     "clone_in_timing_region": False,
                     "interleaved": True, "timer": "cuda_event",
                     "note": "同一进程内交替测量；两种输入策略各报一组"},
-        "impls": res, "significance_clone": sig, "significance_reuse": sig_reuse,
+        "variants": res, "significance_clone": sig, "significance_reuse": sig_reuse,
         "bandwidth_bytes": bandwidth_bytes,
         "wall_s": round(time.time() - t0, 1),
     }
@@ -292,7 +292,7 @@ def main(argv=None):
     print("\n# sclk=%s MHz  rounds=%d clones=%d  字节=%d"
           % (payload["sclk_mhz"], ROUNDS, CLONES, nbytes))
     print("%-24s %10s %10s %10s %10s" % ("实现", "clone µs", "reuse µs", "策略差", "clone GB/s"))
-    for tag, v in sorted(payload["impls"].items(), key=lambda kv: kv[1]["clone"]["median_ms"]):
+    for tag, v in sorted(payload["variants"].items(), key=lambda kv: kv[1]["clone"]["median_ms"]):
         print("%-24s %10.1f %10.1f %9.1f%% %10.0f"
               % (tag, v["clone"]["median_ms"] * 1000, v["reuse"]["median_ms"] * 1000,
                  v["strategy_delta_pct"] or 0,

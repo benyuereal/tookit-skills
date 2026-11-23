@@ -5,7 +5,7 @@ math: dst = permute(src, slot_map)；slot_map 由 counts/offsets 按 align 倍�
 status: draft
 layer: kernel
 op_card: Plugins/ops/skills/op-moe-align-permute
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: align_block_size + permute

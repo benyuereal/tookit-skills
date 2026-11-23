@@ -32,7 +32,7 @@ class TestFamilyMapping(unittest.TestCase):
         for p in CARDS.glob("*.yaml"):
             d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
             fam = d.get("family")
-            for i in d.get("impls") or []:
+            for i in d.get("variants") or []:
                 tot[fam] += 1
                 if i.get("import_path") or i.get("l1_exempt_reason"):
                     ok[fam] += 1

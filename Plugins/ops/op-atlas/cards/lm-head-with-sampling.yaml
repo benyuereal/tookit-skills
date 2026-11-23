@@ -5,7 +5,7 @@ math: logits = h*W_vocab^T；idx = topk/topp(softmax(logits))
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: lm_head + sampling 融合

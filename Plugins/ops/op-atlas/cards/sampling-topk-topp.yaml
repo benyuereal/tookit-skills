@@ -5,7 +5,7 @@ math: idx = topk(softmax(logits)); idx = topp(softmax(logits), p)
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: sampling 融合族

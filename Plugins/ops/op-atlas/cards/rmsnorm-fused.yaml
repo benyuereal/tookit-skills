@@ -5,7 +5,7 @@ math: y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))
 status: measured
 layer: kernel
 op_card: Plugins/ops/skills/op-rmsnorm-fused
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: 融合 norm 族

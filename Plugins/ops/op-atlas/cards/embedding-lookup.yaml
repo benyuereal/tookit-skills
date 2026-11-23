@@ -5,7 +5,7 @@ math: y = weight[token_ids]；gather 型
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: triton
   library_profile_ref: libraries.md §9
   file_hint: Triton hcu 的 gather 路径（形状随数据变化，表达力优先）

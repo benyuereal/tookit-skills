@@ -5,7 +5,7 @@ math: conv1d + hadamard + norm 的融合链
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: mhc-kernels
   library_profile_ref: libraries.md §11
   file_hint: kernels/mhc_fused.hip

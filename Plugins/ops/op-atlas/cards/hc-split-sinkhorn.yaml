@@ -5,7 +5,7 @@ math: 对路由矩阵做 Sinkhorn 迭代归一（行列交替）
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: mhc-kernels
   library_profile_ref: libraries.md §11
   file_hint: MHC 的 sinkhorn 迭代

@@ -5,7 +5,7 @@ math: W_packed = prepack(W, fmt)；fmt ∈ {W6 packed, HIPC, marlin, aiter shuff
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: aiter_moe_shfl_weight

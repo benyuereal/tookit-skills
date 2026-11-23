@@ -5,7 +5,7 @@ math: cache[block_table[slot], offset, :] = k/v
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-attn
   library_profile_ref: libraries.md §7
   file_hint: paged KV 写入

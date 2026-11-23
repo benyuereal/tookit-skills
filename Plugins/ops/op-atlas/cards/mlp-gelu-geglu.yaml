@@ -5,7 +5,7 @@ math: y = gelu(x*W_up) * (x*W_gate) * W_down
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: gelu 融合族

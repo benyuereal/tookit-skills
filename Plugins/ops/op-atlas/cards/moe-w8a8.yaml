@@ -5,7 +5,7 @@ math: y = Σ_shared W_s x + Σ_{e∈topk} g_e · (W_e x)；W 为 int8 权重，�
 status: draft
 layer: kernel
 op_card: Plugins/ops/skills/op-moe-w8a8
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: lightop-4stage（mode 500-525）

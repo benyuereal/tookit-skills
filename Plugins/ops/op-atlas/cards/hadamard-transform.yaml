@@ -5,7 +5,7 @@ math: H_n = H_2 ⊗ H_{n/2}；蝶形变换，O(n log n)
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: mhc-kernels
   library_profile_ref: libraries.md §11
   file_hint: kernels/ 里的蝶形变换

@@ -5,7 +5,7 @@ math: scale[m] = amax(x[m,:])/QMAX；q[m,:] = round(x[m,:]/scale[m])
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: lightop 的量化融合族（per-token / per-block）

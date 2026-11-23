@@ -5,7 +5,7 @@ math: 比较 draft 与 target 的分布，按概率接受 / 拒绝采样
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: in-house
   library_profile_ref: null
   file_hint: 接受判据实现

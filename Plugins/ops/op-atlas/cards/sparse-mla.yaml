@@ -5,7 +5,7 @@ math: out[i,:] = Σ_{j∈TopK(i)} softmax(q_i·k_j)·v_j；索引 j 来自稀疏
 status: tuned
 layer: kernel
 op_card: Plugins/ops/skills/op-sparse-mla
-impls:
+variants:
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang / tilelang-prefetch

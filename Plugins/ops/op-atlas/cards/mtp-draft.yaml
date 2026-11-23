@@ -5,7 +5,7 @@ math: draft head 逐步生成候选 token，供主模型验证
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: in-house
   library_profile_ref: null
   file_hint: draft head 前向

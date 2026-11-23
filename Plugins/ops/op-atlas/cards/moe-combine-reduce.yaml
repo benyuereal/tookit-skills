@@ -5,7 +5,7 @@ math: y_i = sum_k w_ik*permuted[slot_ik]；按 gate 权重加权
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: moe_sum

@@ -5,7 +5,7 @@ math: w, idx = normalize(topk(softmax(x @ W_gate^T), K))；idx 是离散量
 status: draft
 layer: kernel
 op_card: Plugins/ops/skills/op-moe-topk-gating
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: gate+topk 融合 kernel

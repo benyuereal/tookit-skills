@@ -5,7 +5,7 @@ math: out = softmax(QK^T*scale + mask)·V；分块在线 softmax
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-attn
   library_profile_ref: libraries.md §7
   file_hint: flash attention 前向
@@ -76,6 +76,23 @@ last_verdict:
     stop_if: 若做不到 0.55 以下，说明 flash_attn 的 causal 分块粒度已定型 ⇒ 接受，不改
     effort: 2h
     falsifier: 若 flash_attn 支持自定义 causal 分块粒度（当前 0.60 的耗时比来自半块浪费），或出现能利用三角边界的实现，则重新推进。
+  regimes:
+    prefill:
+      m: 8192
+      kind: speedup
+      value: 1.66
+      bound: compute
+      note: causal 相对 non-causal
+    decode:
+      m: 1
+      kind: bandwidth
+      value: null
+      bound: memory
+      note: 未测定
+      denominator:
+        value: 1848
+        source: bw-ladder.yaml 2_read_only
+        why: decode 只读 KV/权重，纯读路径
 modify_path:
   kind: replace-call
   what: varlen 换固定长度（消除变长调度开销）

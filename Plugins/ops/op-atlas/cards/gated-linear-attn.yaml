@@ -5,7 +5,7 @@ math: o_t = (q_t ⊙ sum_{s<=t} (prod gates)*k_s^T v_s) 的门控递推
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-kda
   library_profile_ref: libraries.md §11
   file_hint: flash_kda 的 KDA 递推

@@ -5,7 +5,7 @@ math: y_t = sum_{k=0..K-1} w_k*x_{t-k}；因果卷积，tile 内移位
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: causal-conv1d
   library_profile_ref: libraries.md §11
   file_hint: causal_conv1d 包的 conv1d 实现

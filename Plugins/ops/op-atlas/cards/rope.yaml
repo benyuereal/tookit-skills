@@ -5,7 +5,7 @@ math: x_rot = x*cos(theta) + rotate_half(x)*sin(theta)
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: rope 融合族

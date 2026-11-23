@@ -61,7 +61,8 @@ class TestDepthRules(unittest.TestCase):
 
     def test_current_repo_has_no_e28_errors(self):
         out = _validate()
-        self.assertNotIn("[E28]", out, out[-900:])
+        # E28 的 warning 是正常的（如 regime 未测定）；只断言无 error
+        self.assertRegex(out, r"结果：0 错误", out[-900:])
 
     def test_surface_none_without_falsifier_is_error(self):
         import yaml

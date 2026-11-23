@@ -12,8 +12,8 @@
 
 八类检查（E1~E8）：
   E1  cards ↔ INDEX 双向一致（每张卡在 INDEX 出现；INDEX 每个链接真实存在）
-  E2  impls.library_profile_ref 的 §号在 libraries.md 里真实存在
-  E3  impls.law_ref 的 L 号在 pipeline-laws.md 里真实存在
+  E2  variants.library_profile_ref 的 §号在 libraries.md 里真实存在
+  E3  variants.law_ref 的 L 号在 pipeline-laws.md 里真实存在
   E4  status 与 data/ops/registry.json 对齐（registry 无此算子时 op_card 必须为 null）
   E5  ceiling.ref 可解析（文件存在 / constants 键存在 / missing 时 ref 为 null）
   E6  字段白名单 —— 卡片结构上**没有字段**可以承载技术描述
@@ -43,14 +43,14 @@ RATIO_OTHER_LIMIT = 5     # E24b：ratio_other 超过这个数就提醒复核分
 LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
-ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls", "at_floor",
+ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "variants", "at_floor",
                "baseline_ref",
                "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer",
                # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
                "modify_path",
                # 风险分级：不满足会崩 vs 不满足只是不赚
                "hard_preconditions", "soft_preconditions"}
-REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "impls",
+REQUIRED_TOP = {"id", "title", "family", "math", "status", "op_card", "variants",
                 "ceiling", "last_verdict", "updated"}
 ALLOWED_IMPL = {"repo", "library_profile_ref", "file_hint", "tier", "law_ref", "role",
                 "best_for", "not_for", "pros", "cons", "source",
@@ -64,7 +64,9 @@ REQUIRED_CEIL = {"kind", "ref"}
 ALLOWED_VERDICT = {"status", "kb_path", "ratio", "geomean", "evidence",
                    "next_probe", "conclusion", "verified_on",
                    # E27：访存口径。跨实现比较前必须先对齐 (inputs, outputs)
-                   "traffic_passes", "inputs", "outputs", "comparison"}
+                   "traffic_passes", "inputs", "outputs", "comparison",
+                   "baseline_count", "single_source", "all_sources_far_from_peak",
+                   "baseline_count_note", "regimes", "next_probe_decode"}
 REQUIRED_VERDICT = {"status", "kb_path", "conclusion", "verified_on"}
 
 # E7：裸绝对耗时（0.887 ms / 1.29s / 83 us）——必须带分母或干脆不写
@@ -237,7 +239,7 @@ def _check_baseline_ref(cards_dir, repo):
         if problem or not isinstance(d, dict):
             continue
         br = d.get("baseline_ref")
-        impls = [i for i in (d.get("impls") or []) if isinstance(i, dict)]
+        variants = [i for i in (d.get("variants") or []) if isinstance(i, dict)]
         # 允许 competitor 与 best_known（本卡自研最优，见 baseline-policy.yaml）。
         # 源码树实现没有 import_path，用 "<repo>/源码树" 作标识（与 source_ref 对应）。
         def _ident(i):
@@ -246,7 +248,7 @@ def _check_baseline_ref(cards_dir, repo):
                 return str(ip)
             sr = i.get("source_ref") or {}
             return "%s/源码树" % (i.get("repo") or sr.get("path", "?"))
-        base_ips = {_ident(i) for i in impls
+        base_ips = {_ident(i) for i in variants
                     if i.get("role") in ("competitor", "best_known")}
         comp_ips = base_ips
         has_comp = bool(base_ips)
@@ -279,29 +281,90 @@ def _check_baseline_ref(cards_dir, repo):
                 "确实没有基准时用 no_baseline_reason 显式声明")
 
 
+def _check_gemm_regime(cards_dir, repo):
+    """E28d：gemm / attention 类卡必须分 prefill 与 decode 两个 regime。
+
+    2026-11-23：6 张 gemm 卡全是方阵大 M 的 prefill 口径，没有一张登记 decode 形状。
+    而 LLM 推理的瓶颈在 decode（逐 token 生成，memory-bound）。
+    实测 M=1 时 torch.mm bf16 67µs vs aiter fp8 843µs —— **慢 12.6 倍**，
+    同一张卡两个 regime 是两个完全不同的病，开的药也不同。
+    """
+    NEED = {"gemm", "attention"}
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        if d.get("family") not in NEED:
+            continue
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        reg = lv.get("regimes")
+        if not isinstance(reg, dict):
+            warns.append("[E28] %s: %s 类卡缺 regimes —— "
+                         "必须分别登记 prefill(compute-bound, TFLOPS) 与 "
+                         "decode(memory-bound, GB/s)，否则等于没报"
+                         % (p.name, d.get("family")))
+            continue
+        dec = reg.get("decode") or {}
+        if dec.get("kind") != "bandwidth":
+            warns.append("[E28] %s: decode regime 的 kind 必须是 bandwidth"
+                         "（decode 是读权重，不是算力）" % p.name)
+        if not dec.get("denominator"):
+            warns.append("[E28] %s: decode regime 缺 denominator —— "
+                         "必须写清分母是 1848（纯读）还是 1749（1:1）以及为什么" % p.name)
+
+
+def _check_baseline_count(cards_dir, repo):
+    """E28c：能实跑且语义对齐的基线有几个。=1 时必须显式标 single_source。
+
+    业主：**孤儿数字必须显式标出来，不能混在正常卡里冒充有据。**
+    2026-11-23 gemm-fp8 的 0.086 就是「只有 aiter 一家」却当成正常结论。
+    """
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        n = lv.get("baseline_count")
+        if n is None:
+            continue
+        try:
+            n = int(n)
+        except (TypeError, ValueError):
+            err("E28", p.name, "baseline_count 必须是整数")
+            continue
+        if n <= 1 and not lv.get("single_source"):
+            warns.append("[E28] %s: baseline_count=%d 却没标 single_source —— "
+                         "孤儿数字必须显式标注（单个实现的结论不可外推为硬件上限）"
+                         % (p.name, n))
+
+
 def _check_impl_roles(cards_dir, repo):
     """E28a：102 个 impl 必须全部声明 role，且 tier=primary 的不能是禁用的 role。"""
     for p in sorted(cards_dir.glob("*.yaml")):
         d, problem = _load_yaml(p)
         if problem or not isinstance(d, dict):
             continue
-        for idx, i in enumerate(d.get("impls") or []):
+        for idx, i in enumerate(d.get("variants") or []):
             if not isinstance(i, dict):
                 continue
             role = i.get("role")
             ip = i.get("import_path") or "(无 import_path)"
             if not role:
                 err("E28", p.name,
-                    "impls[%d] %s 缺 role —— 必须声明它是 competitor / best_known / "
+                    "variants[%d] %s 缺 role —— 必须声明它是 competitor / best_known / "
                     "correctness_only / template / unverified 中的哪一种" % (idx, ip))
                 continue
             if role not in IMPL_ROLES:
                 err("E28", p.name,
-                    "impls[%d] role=%r 非法（只允许 %s）"
+                    "variants[%d] role=%r 非法（只允许 %s）"
                     % (idx, role, sorted(IMPL_ROLES)))
             if i.get("tier") == "primary" and role in NON_BASELINE_ROLES:
                 err("E28", p.name,
-                    "impls[%d] %s 是 tier=primary 但 role=%r —— "
+                    "variants[%d] %s 是 tier=primary 但 role=%r —— "
                     "%s 不能当主实现/基准" % (idx, ip, role, role))
 
 
@@ -679,35 +742,35 @@ def validate(atlas, repo):
             err("E1", where, "%s 未在 INDEX.md 登记" % cid)
 
         # ---- E2 / E3 指针可解析
-        impls = c.get("impls") or []
-        if not isinstance(impls, list) or not impls:
-            err("E6", where, "impls 必须是非空数组")
-            impls = []
-        for i, impl in enumerate(impls):
+        variants = c.get("variants") or []
+        if not isinstance(variants, list) or not variants:
+            err("E6", where, "variants 必须是非空数组")
+            variants = []
+        for i, impl in enumerate(variants):
             _no_import_pre = impl.get("repo") in ("in-house",) or \
                 impl.get("repo") in _NON_INSTALLABLE
             if not isinstance(impl, dict):
-                err("E6", where, "impls[%d] 不是 mapping" % i)
+                err("E6", where, "variants[%d] 不是 mapping" % i)
                 continue
             iextra = set(impl) - ALLOWED_IMPL
             if iextra:
-                err("E6", where, "impls[%d] 未知字段 %s" % (i, sorted(iextra)))
+                err("E6", where, "variants[%d] 未知字段 %s" % (i, sorted(iextra)))
             imiss = REQUIRED_IMPL - set(impl)
             if imiss:
-                err("E6", where, "impls[%d] 缺必填 %s" % (i, sorted(imiss)))
+                err("E6", where, "variants[%d] 缺必填 %s" % (i, sorted(imiss)))
             if impl.get("tier") not in TIERS:
-                err("E6", where, "impls[%d].tier=%r 非法" % (i, impl.get("tier")))
+                err("E6", where, "variants[%d].tier=%r 非法" % (i, impl.get("tier")))
 
             ref = impl.get("library_profile_ref")
             if ref is None:
                 if impl.get("repo") not in ("in-house", None):
-                    err("E2", where, "impls[%d] 非 in-house 缺 library_profile_ref" % i)
+                    err("E2", where, "variants[%d] 非 in-house 缺 library_profile_ref" % i)
             else:
                 m = re.fullmatch(r"libraries\.md §(\d{1,2})", str(ref))
                 if not m:
-                    err("E2", where, "impls[%d] ref 格式非法 %r" % (i, ref))
+                    err("E2", where, "variants[%d] ref 格式非法 %r" % (i, ref))
                 elif int(m.group(1)) not in lib_sections:
-                    err("E2", where, "impls[%d] %s 在 libraries.md 不存在（现有 §%s）"
+                    err("E2", where, "variants[%d] %s 在 libraries.md 不存在（现有 §%s）"
                         % (i, ref, sorted(lib_sections)))
 
             law = impl.get("law_ref")
@@ -717,17 +780,17 @@ def validate(atlas, repo):
                     f, _, anchor = txt.partition("#")
                     target = repo / f
                     if not target.is_file():
-                        err("E3", where, "impls[%d] law_ref 文件不存在 %r" % (i, f))
+                        err("E3", where, "variants[%d] law_ref 文件不存在 %r" % (i, f))
                     elif anchor not in {
                             m for m in re.findall(r"(?m)^#{1,4}\s+([A-Za-z]\d+)\b",
                                                   target.read_text(encoding="utf-8",
                                                                   errors="ignore"))}:
-                        err("E3", where, "impls[%d] 锚点 %s 在 %s 中不存在" % (i, anchor, f))
+                        err("E3", where, "variants[%d] 锚点 %s 在 %s 中不存在" % (i, anchor, f))
                 elif txt not in law_ids:
-                    err("E3", where, "impls[%d] law_ref=%r 无法解析（用 <file>#<anchor> 或 Q5 这类锚点；现有 %s）"
+                    err("E3", where, "variants[%d] law_ref=%r 无法解析（用 <file>#<anchor> 或 Q5 这类锚点；现有 %s）"
                         % (i, txt, sorted(law_ids)))
             if impl.get("tier") == "avoid" and not law:
-                warn("W1", where, "impls[%d] avoid 条目无 law_ref，机制会丢失" % i)
+                warn("W1", where, "variants[%d] avoid 条目无 law_ref，机制会丢失" % i)
 
             # E12：repo 必须是 libraries-registry.yaml 里的 canonical id。
             # 这条拦的是「同一库多个异名」（DeepGEMM / deepgemm-das 并存），
@@ -737,11 +800,11 @@ def validate(atlas, repo):
                 warn("E12", where, "libraries-registry.yaml 不可读，跳过库名校验")
             elif repo_name in lib_removed:
                 err("E12", where,
-                    "impls[%d] repo=%r 已从环境移除（替换为 %r）"
+                    "variants[%d] repo=%r 已从环境移除（替换为 %r）"
                     % (i, repo_name, lib_removed[repo_name]))
             elif repo_name not in lib_canon:
                 err("E12", where,
-                    "impls[%d] repo=%r 不在 libraries-registry.yaml 里"
+                    "variants[%d] repo=%r 不在 libraries-registry.yaml 里"
                     "（canonical id 见该文件；异名会被这条拦下）"
                     % (i, repo_name))
 
@@ -751,7 +814,7 @@ def validate(atlas, repo):
                 for f in ("best_for", "not_for"):
                     v = impl.get(f)
                     if not v:
-                        err("E10", where, "impls[%d] tier=primary 缺 %s" % (i, f))
+                        err("E10", where, "variants[%d] tier=primary 缺 %s" % (i, f))
                 # L1：primary 必须能落到具体函数并验证它存在。
                 # 只写「lightop 有 rope 融合族」只是知道在哪个库，不是映射。
                 # 源码树/自研必须有 source_ref——只写库名等于「不知道自己长什么样」。
@@ -760,12 +823,12 @@ def validate(atlas, repo):
                 if _no_import_pre:
                     if not isinstance(sr, dict):
                         err("E15", where,
-                            "impls[%d] repo=%r 必须带 source_ref（path/symbol/line/build_cmd）"
+                            "variants[%d] repo=%r 必须带 source_ref（path/symbol/line/build_cmd）"
                             % (i, impl.get("repo")))
                     else:
                         miss_k = {"path","symbol","line","build_cmd","note"} - set(sr)
                         if miss_k:
-                            err("E15", where, "impls[%d] source_ref 缺 %s"
+                            err("E15", where, "variants[%d] source_ref 缺 %s"
                                 % (i, sorted(miss_k)))
                 # in-house 与源码树类库（installed: false）没有可导入的函数，
                 # L1 对它不适用——它们的「映射」是源码路径而非 库.函数。
@@ -776,18 +839,18 @@ def validate(atlas, repo):
                             # 源码树/in-house 必须写明为什么 L1 不适用
                             if not impl.get("l1_exempt_reason"):
                                 err("E13", where,
-                                    "impls[%d] 是源码树/自研，缺 l1_exempt_reason"
+                                    "variants[%d] 是源码树/自研，缺 l1_exempt_reason"
                                     "（为什么没有 库.函数）" % i)
                             else:
                                 L1_EXEMPT[0] += 1
                         else:
                             err("E13", where,
-                                "impls[%d] tier=primary 缺 %s（L1：要能落到 库.函数）"
+                                "variants[%d] tier=primary 缺 %s（L1：要能落到 库.函数）"
                                 % (i, f))
             for f in ("best_for", "not_for", "pros", "cons"):
                 v = impl.get(f)
                 if v is not None and not isinstance(v, list):
-                    err("E10", where, "impls[%d] %s 必须是列表" % (i, f))
+                    err("E10", where, "variants[%d] %s 必须是列表" % (i, f))
 
         # ---- E4 status 与 registry 对齐
         reg = reg_status.get(cid)
@@ -1050,6 +1113,8 @@ def validate(atlas, repo):
     # 后来发现 tilelang 能做到 0.82（我 0.78）——那是 triton 的 codegen 上限，
     # 不是方法极限。**没有 falsifier 的「到顶」等于把工具限制记成物理规律。**
     _check_impl_roles(cards_dir, repo)
+    _check_baseline_count(cards_dir, repo)
+    _check_gemm_regime(cards_dir, repo)
     _check_baseline_ref(cards_dir, repo)
     _check_depth_rules(cards_dir, repo)
 

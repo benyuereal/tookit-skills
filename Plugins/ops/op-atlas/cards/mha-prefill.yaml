@@ -5,7 +5,7 @@ math: out = softmax(QK^T*scale + causal_mask)·V；M 大
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-attn
   library_profile_ref: libraries.md §7
   file_hint: MHA prefill
@@ -78,6 +78,23 @@ last_verdict:
     expected: S=1024 从 0.31 → ≥0.50
     stop_if: 若切分后小 S 涨幅 <10%，说明瓶颈是 S 小时的块数不足而非并行度 ⇒ 接受现状并写进 not_for
     effort: 2h
+  regimes:
+    prefill:
+      m: 8192
+      kind: utilization
+      value: 0.69
+      bound: compute
+      note: S=8192
+    decode:
+      m: 1
+      kind: bandwidth
+      value: null
+      bound: memory
+      note: 未测定；decode 属 paged-attention-decode 卡
+      denominator:
+        value: 1848
+        source: bw-ladder.yaml 2_read_only
+        why: decode 只读 KV/权重，纯读路径
 modify_path:
   kind: env-flag
   what: 调 split-KV 的切分数

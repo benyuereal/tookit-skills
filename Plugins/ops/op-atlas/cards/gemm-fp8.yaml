@@ -5,7 +5,7 @@ math: out[M,N] = A[M,K] @ B[K,N]；A/B fp8-e4m3, acc=fp32, out=bf16
 status: measured
 layer: kernel
 op_card: Plugins/ops/skills/op-gemm-fp8
-impls:
+variants:
 - repo: aiter
   library_profile_ref: libraries.md §4
   file_hint: gemm_a8w8_opus（gfx938 专用）
@@ -15,12 +15,13 @@ impls:
   - gfx938/gfx946 的 fp8 E4M3 GEMM（本轮唯一可跑通的路径）
   not_for:
   - 期望比 bf16 快的场景（实测慢 5.3×）
+  - decode 档（M<=128）：比 bf16 慢 12.6 倍
   pros:
   - 实测 49.8 TF，六形状收敛
   - kernelId=2（64x64x64 Opus 流水）是 auto 的选择
   cons:
-  - 比 bf16 慢 5.3×
-  - kernelId=0/1 分别只有 1.2/16.9 TF，参数传错会掉 30×
+  - 比 bf16 慢 4.5 倍——不是硬件上限，是 fp8 kernel 没发挥硬件
+  - lightop channelwise_kme 比它再慢 30%，别当更优选项
   source: references/libraries.md
   import_path: aiter.gemm_a8w8_opus
   signature: gemm_a8w8_opus(A,B,x_scale=1.0,w_scale=1.0,bias=None,dtype=torch.bfloat16,kernelId=None)
@@ -72,10 +73,12 @@ impls:
   - 标准接入路径，有统一 API
   not_for:
   - 需要单一路径可预测性能
+  - decode 档（M<=128）：比 bf16 慢 12.6 倍
   pros:
   - 统一 API + 回退
   cons:
-  - 查表未命中会静默换后端
+  - 比 bf16 慢 4.5 倍——不是硬件上限，是 fp8 kernel 没发挥硬件
+  - lightop channelwise_kme 比它再慢 30%，别当更优选项
   source: references/libraries.md
   import_path: aiter.gemm_a8w8_opus
   signature: gemm_a8w8_opus(...) —— AITER 的 INT8/fp8 GEMM 入口族
@@ -159,9 +162,38 @@ last_verdict:
     verified_on: '2026-11-23'
   next_probe:
     surface: precision-drop
-    hypothesis: 同库比值 1.92x 已证明是原生 fp8，但只到 nominal 的 0.086；若 opus 的 kernelId=2 未打满 MMA，换 tilelang/ck 路径应达 nominal 的 0.3 即 >168 TF
-    expected: ≥168 TF（当前 48）
-    stop_if: 若三条实现路径都停在 50 TF 附近，说明是 gfx938 fp8 发射率上限而非实现问题 ⇒ 按 achievable 口径重记分母并标 at_floor
+    hypothesis: torch.mm bf16 实测 214~231 TF；fp8 同 FLOPs 本该是 bf16 的 2 倍≈430~460 TF。若本机 fp8 栈成熟，应能见到 ≥150 TF 的实现（当前最好 49）
+    expected: ≥150 TF（当前 49，差 3 倍以上）
+    stop_if: 试遍 aiter / lightop / triton / torch 四条路仍无 ≥150 TF ⇒ 判「本机 fp8 栈未成熟」（库版本/kernel 覆盖/DCU 支持度），写进 gaps.md，不再逐个试
+    effort: 8h
+  baseline_count: 2
+  all_sources_far_from_peak: true
+  baseline_count_note: 两个独立库都可用（aiter 48.2 TF / lightop channelwise_kme 30.4 TF），**都没有 single_source 问题**；但两者都只到 bf16（214~231 TF）的 1/5~1/7，说明本机 fp8 路线整体不成熟，不是哪家弱
+  regimes:
+    prefill:
+      m: 4096
+      kind: utilization
+      value: 0.086
+      bound: compute
+      note: 方阵大 M，算力主导
+    decode:
+      m: 1
+      kind: bandwidth
+      value: 0.01
+      bound: memory
+      note: fp8 理论下界 9.1 µs，当前最好 860 µs，**差 94 倍**
+      denominator:
+        value: 1848
+        source: bw-ladder.yaml 2_read_only
+        why: decode 只读权重
+      measured: 'M=1: aiter fp8 842.6 µs, 权重 16.8MB ⇒ u=0.01；lightop kme 0.51ms u=0.02；**fp8 权重只有 bf16 的一半，本该快 2 倍，实测慢 12.6 倍**'
+      baseline: 无合格基线（全部远离峰值）
+      all_sources_far_from_peak: true
+  next_probe_decode:
+    surface: gemv-kernel-selection
+    hypothesis: fp8 权重 16.8MB / 1848 GB/s = 9.1 µs 是 decode 下界；当前最好 860 µs（u=0.01），**差 94 倍**。换 GEMV 专用 kernel（或 batch 合并）应能到 <50 µs
+    expected: <50 µs（当前 860）
+    stop_if: 试遍 aiter / lightop / torch 的 GEMV 路径仍 ≥300 µs ⇒ 判「本机 decode fp8 栈不可用」，写进 gaps.md
     effort: 6h
 modify_path:
   kind: replace-call

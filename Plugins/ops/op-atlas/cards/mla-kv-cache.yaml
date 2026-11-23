@@ -5,7 +5,7 @@ math: cache[slot] = c_kv_latent；压缩后的 KV，非完整 K/V
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: MLA latent 缓存

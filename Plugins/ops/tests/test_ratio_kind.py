@@ -32,7 +32,7 @@ def _card_with(ratio_block):
     card = {
         "id": "probe", "title": "probe", "family": "gemm", "math": "x",
         "status": "measured", "layer": "kernel", "op_card": None,
-        "impls": [{"repo": "torch", "tier": "primary", "best_for": ["x"], "not_for": ["y"],
+        "variants": [{"repo": "torch", "tier": "primary", "best_for": ["x"], "not_for": ["y"],
                    "pros": ["p"], "cons": ["c"], "source": "s",
                    "import_path": "torch.mm", "signature": "torch.mm(a,b)",
                    "smoke_test": 'python3 -I -c "import torch"'}],

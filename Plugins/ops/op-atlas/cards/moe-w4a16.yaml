@@ -5,7 +5,7 @@ math: y = sum_e g_e*(x * dequant(W4_e)^T)；权重 4bit，激活 16bit
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: aiter
   library_profile_ref: libraries.md §5
   file_hint: MOE_C 后端（调优表在独立仓库 Moe 的 moe_c_configs/，按 gfx × 量化类型组织）

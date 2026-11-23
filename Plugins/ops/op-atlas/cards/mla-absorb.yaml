@@ -5,7 +5,7 @@ math: q_eff = q*W_kv；out = softmax(q_eff*c_kv^T)*V；收缩维正交
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: MLA absorb 路径
@@ -78,6 +78,24 @@ last_verdict:
     expected: KV=2048 档从 0.12 → ≥0.20
     stop_if: 若 split 增大后短 KV 涨幅 <10%，说明瓶颈是 page 表遍历而非并行度 ⇒ 转 layout-pack 方向
     effort: 3h
+  regimes:
+    prefill:
+      m: null
+      kind: tflops
+      value: null
+      bound: compute
+      note: 未测定（本卡主战场是 decode）
+    decode:
+      m: 1
+      kind: bandwidth
+      value: 0.35
+      bound: memory
+      denominator:
+        value: 1724
+        source: 流式只读峰值（**未标定**）
+        why: decode 只读 KV
+      measured: KV=32768/B=8 达 0.35 of 1724；短 KV 0.07~0.12
+      baseline: flash_mla
 modify_path:
   kind: env-flag
   what: dense decode 的 num_splits 不可覆盖

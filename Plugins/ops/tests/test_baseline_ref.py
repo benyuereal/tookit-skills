@@ -56,7 +56,7 @@ class TestBaselineRef(unittest.TestCase):
     def test_every_impl_has_valid_role(self):
         bad, n = [], 0
         for cid, d in _cards():
-            for i in d.get("impls") or []:
+            for i in d.get("variants") or []:
                 n += 1
                 r = i.get("role")
                 if r not in VALID_ROLES:
@@ -67,7 +67,7 @@ class TestBaselineRef(unittest.TestCase):
     def test_primary_is_never_template_or_correctness_only(self):
         bad = []
         for cid, d in _cards():
-            for i in d.get("impls") or []:
+            for i in d.get("variants") or []:
                 if i.get("tier") == "primary" and i.get("role") in ("template",
                                                                     "correctness_only",
                                                                     "wrong_op"):
@@ -101,20 +101,23 @@ class TestBaselineRef(unittest.TestCase):
         self.assertEqual(bad, [],
                          "以下卡 baseline_ref 缺 traffic_passes（会把 201MB/268MB 混算）：%s" % bad)
 
-    def test_gemm_bf16_torch_is_correctness_only(self):
-        """gemm-bf16 曾把 torch.mm 标 primary —— 这直接违反了 baseline-policy。"""
+    def test_gemm_bf16_torch_is_competitor_now(self):
+        """2026-11-23 更正：torch.mm 实测 214 TF（bf16 峰的 77%），是优化过的实现。
+
+        此前标 correctness_only 是错的——它走了成熟的 hipBLASLt/rocBLAS kernel。
+        「有没有优化过」要看实测，不看它是不是 pytorch。
+        """
         d = dict(_cards())["gemm-bf16"]
-        torch_impls = [i for i in d["impls"] if i.get("repo") == "torch"]
-        self.assertTrue(torch_impls, "gemm-bf16 应有 torch 条目作为正确性参考")
-        for i in torch_impls:
-            self.assertEqual(i.get("role"), "correctness_only")
-            self.assertNotEqual(i.get("tier"), "primary",
-                                "torch.mm 不能是 primary（未优化参考）")
+        torch_vs = [i for i in d["variants"] if i.get("repo") == "torch"]
+        self.assertTrue(torch_vs, "gemm-bf16 应有 torch 条目")
+        for i in torch_vs:
+            self.assertEqual(i.get("role"), "competitor",
+                             "torch.mm 实测 214 TF，够格当 competitor")
 
     def test_gemm_bf16_has_real_competitor(self):
         """gemm-bf16 必须有真正的 bf16 competitor，且不能是 fp8 实现。"""
         d = dict(_cards())["gemm-bf16"]
-        comp = [i for i in d["impls"] if i.get("role") == "competitor"]
+        comp = [i for i in d["variants"] if i.get("role") == "competitor"]
         self.assertTrue(comp, "gemm-bf16 没有 competitor")
         for i in comp:
             ip = str(i.get("import_path") or "")
@@ -125,7 +128,8 @@ class TestBaselineRef(unittest.TestCase):
         r = subprocess.run([sys.executable, "-I", str(VALIDATE),
                             "--atlas", str(CARDS.parent), "--repo", str(REPO)],
                            capture_output=True, text=True)
-        self.assertNotRegex(r.stdout + r.stderr, r"\[E28\]")
+        # E28 的 warning（regime 未测定等）是正常的；只断言无 error
+        self.assertRegex(r.stdout, r"结果：0 错误")
 
 
 if __name__ == "__main__":

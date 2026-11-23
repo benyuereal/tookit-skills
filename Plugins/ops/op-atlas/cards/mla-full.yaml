@@ -5,7 +5,7 @@ math: out = softmax(q*W_uk*c_kv^T)*W_uv*c_kv；不预先吸收
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: MLA full 路径
@@ -78,6 +78,23 @@ last_verdict:
     expected: ≥0.20 of peak
     stop_if: 若拆 D 后变慢，说明是 tile 调度而非 LDS 压力 ⇒ 转 layout-pack，或按 achievable 重记
     effort: 4h
+  regimes:
+    prefill:
+      m: 512
+      kind: utilization
+      value: 0.14
+      bound: compute
+      note: q_len>=64，算力主导
+    decode:
+      m: 1
+      kind: bandwidth
+      value: null
+      bound: memory
+      note: 未测定；q_len=1 会退化为吸收式路径
+      denominator:
+        value: 1848
+        source: bw-ladder.yaml 2_read_only
+        why: decode 只读 KV/权重，纯读路径
 modify_path:
   kind: env-flag
   what: 调 MLA 的 tile 调度元数据

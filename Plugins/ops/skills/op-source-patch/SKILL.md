@@ -28,7 +28,7 @@ kind: tool
 
 | 步 | 做什么 | 产物 | 判定 |
 |---|---|---|---|
-| ① 定位 | 从 `card.impls[].file_hint` 找到产物/库名，再到对应 `*-source` skill 找源码入口 | 一句 `库/文件/函数` | 答不出具体文件就不进下一步 |
+| ① 定位 | 从 `card.variants[].file_hint` 找到产物/库名，再到对应 `*-source` skill 找源码入口 | 一句 `库/文件/函数` | 答不出具体文件就不进下一步 |
 | ② 取源 | **优先用本地已有**（见 §三）；没有再拉；记录 ref/commit | `SOURCES.md` 一行 | 必须写 commit/tag，不写就是不可复现 |
 | ③ 编译 | gfx938 目标，记录编译器版本与 flags | `build.log` + flags 快照 | 复用 `op-hip-compile` 的 `derive_flags.py` |
 | ④ 改 | **patch 形式，不直接改树** | `patches/NNNN-<name>.patch` | `patch -p1 --dry-run` 必须干净套用 |
@@ -67,7 +67,7 @@ kind: tool
 ## 六、一个完整的真实闭环（LightOp MQA）
 
 ```bash
-# ① 定位：card.impls[0].file_hint → 目标库的 attention/mqa 入口（paged_mqa_logits）
+# ① 定位：card.variants[0].file_hint → 目标库的 attention/mqa 入口（paged_mqa_logits）
 # ② 取源：本地已有
 ls /workspace/lightop/*.tgz        # 源码 tar，不要再 git clone
 # ③ 编译：按 gfx 显式指定（漏了会用错架构）

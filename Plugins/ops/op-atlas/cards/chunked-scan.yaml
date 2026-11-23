@@ -5,7 +5,7 @@ math: h_t = A_t*h_{t-1} + B_t*x_t；按块并行，块间串行
 status: draft
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: tilelang
   library_profile_ref: libraries.md §8
   file_hint: tilelang 的 scan 表达

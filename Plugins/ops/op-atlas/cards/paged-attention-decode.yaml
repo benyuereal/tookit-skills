@@ -5,7 +5,7 @@ math: out = softmax(q·K_page^T/sqrt(d))·V_page；K/V 按 page 间接寻址
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-attn
   library_profile_ref: libraries.md §7
   file_hint: paged attention decode 路径

@@ -5,7 +5,7 @@ math: out = (A_i8 * s_a) @ (B_i8 * s_b)；acc=int32，出栈时反量化
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: deepgemm
   library_profile_ref: libraries.md §6
   file_hint: m_grouped_i8_gemm_nt_contiguous（W6 packed）
@@ -76,6 +76,26 @@ last_verdict:
     stop_if: 若换三种 tiling 后 MAD 仍 >3%，说明该形状本身不稳定 ⇒ 换形状档再测
     effort: 2h
     falsifier: 若测量稳定性提升（当前 MAD 占中位数 4.3%），使 343 TF 这个数可信，且出现更高吞吐的 INT8 路径，则重新推进。
+  regimes:
+    prefill:
+      m: 4096
+      kind: tflops
+      value: 343.4
+      bound: compute
+      note: 方阵大 M，算力主导
+    decode:
+      m: 1
+      kind: bandwidth
+      value: null
+      bound: memory
+      note: 未测定：需先跑通 marlin_i8_contiguous_weight 的 pack
+      denominator:
+        value: 1848
+        source: bw-ladder.yaml 2_read_only
+        why: decode 只读权重
+      measured: '**未测定**（本轮的 int8 复现卡在 W6 packed weight 前置条件）'
+      baseline: null
+      all_sources_far_from_peak: null
 modify_path:
   kind: env-flag
   what: 选 W6 packed 的 layout 入口

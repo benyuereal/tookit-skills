@@ -50,7 +50,7 @@ class TestImportPathCallable(unittest.TestCase):
         cls.entries = []
         for p in sorted(CARDS.glob("*.yaml")):
             d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-            for i in d.get("impls") or []:
+            for i in d.get("variants") or []:
                 if i.get("import_path"):
                     cls.entries.append((p.stem, i["import_path"]))
 

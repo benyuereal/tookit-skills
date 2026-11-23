@@ -5,7 +5,7 @@ math: y = (silu(x*W_gate)*(x*W_up))*W_down，专家内完成
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: lightop
   library_profile_ref: libraries.md §3
   file_hint: moe silu-mul 融合

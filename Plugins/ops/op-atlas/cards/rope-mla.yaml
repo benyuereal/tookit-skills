@@ -5,7 +5,7 @@ math: 仅对 q/k 的 rope 部分旋转；与 latent 部分解耦
 status: measured
 layer: kernel
 op_card: null
-impls:
+variants:
 - repo: flash-mla
   library_profile_ref: libraries.md §7
   file_hint: MLA rope 路径
