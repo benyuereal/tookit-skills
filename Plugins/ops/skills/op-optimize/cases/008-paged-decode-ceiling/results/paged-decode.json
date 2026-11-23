@@ -1,0 +1,78 @@
+{
+  "device": "BW1100",
+  "bw_stream_gbs": 1545,
+  "method": "CUDA event median of 7, warmup 3",
+  "paged_vs_dense": {
+    "dense_ms": 1.0235,
+    "paged_ms": 1.6338,
+    "paged_overhead": 1.6
+  },
+  "sweep_sq": [
+    {
+      "SQ": 1,
+      "ms": 3.1643,
+      "mad_ms": 0.0024,
+      "tflops": 1.4
+    },
+    {
+      "SQ": 2,
+      "ms": 3.1619,
+      "mad_ms": 0.0021,
+      "tflops": 2.7
+    },
+    {
+      "SQ": 4,
+      "ms": 3.1635,
+      "mad_ms": 0.0027,
+      "tflops": 5.4
+    },
+    {
+      "SQ": 8,
+      "ms": 3.1592,
+      "mad_ms": 0.0013,
+      "tflops": 10.9
+    },
+    {
+      "SQ": 16,
+      "ms": 3.1642,
+      "mad_ms": 0.0013,
+      "tflops": 21.7
+    },
+    {
+      "SQ": 32,
+      "ms": 3.1747,
+      "mad_ms": 0.0013,
+      "tflops": 43.3
+    }
+  ],
+  "sweep_batch": [
+    {
+      "B": 1,
+      "ms": 0.4696,
+      "gbs": 9,
+      "of_peak": 0.006,
+      "per_seq_us": 469.6
+    },
+    {
+      "B": 8,
+      "ms": 1.0179,
+      "gbs": 33,
+      "of_peak": 0.021,
+      "per_seq_us": 127.2
+    },
+    {
+      "B": 32,
+      "ms": 3.1606,
+      "gbs": 42,
+      "of_peak": 0.027,
+      "per_seq_us": 98.8
+    },
+    {
+      "B": 64,
+      "ms": 6.0782,
+      "gbs": 44,
+      "of_peak": 0.029,
+      "per_seq_us": 95.0
+    }
+  ]
+}

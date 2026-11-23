@@ -2,25 +2,25 @@ id: paged-attention-decode
 title: Paged attention decode
 family: attention
 math: out = softmax(q·K_page^T/sqrt(d))·V_page；K/V 按 page 间接寻址
-status: draft
+status: measured
 layer: kernel
 op_card: null
 impls:
 - repo: flash-attn
   library_profile_ref: libraries.md §7
   file_hint: paged attention decode 路径
-  tier: primary
+  tier: avoid
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
-  - page 16/64 行、GQA 分组
-  - decode 小 M
+  - 本轮实测未找到合适形状（decode 只有 0.03 of peak）
   not_for:
-  - 需要新的 attention 变体语义
+  - decode（q_len=1）：实测 0.01~0.03 of peak，与 query 数无关，参数调不动
   pros:
   - 实现成熟稳定，与框架集成好
   - 与 vLLM/SGLang 集成
   cons:
-  - scale 与 sink 语义需核对
+  - paged 比连续 KV 慢 1.60×
+  - block_size 必须被 64 整除（报错文案写 gfx936，实际 gfx938）
   source: references/libraries.md
   import_path: flash_attn.flash_attn_varlen_func
   signature: flash_attn_varlen_func(q,k,v,max_seqlen_q,max_seqlen_k,cu_seqlens_q,cu_seqlens_k,block_table=...)
@@ -61,30 +61,38 @@ impls:
   signature: decode_attention_fwd(q,kv_cache,...)
   smoke_test: python3 -I -c "import boltops; assert importlib.import_module("boltops.mla").decode_attention_fwd is not None"
 ceiling:
-  kind: missing
-  ref: null
+  kind: roofline_model
+  ref: Plugins/ops/skills/op-roofline/constants.yaml
   bound: bandwidth
-  note: decode 档 KV 读取主导；page 布局决定访存合并度
+  note: decode q_len=1，每步只读 KV；分母用流式只读峰值（同进程标定）
 shapes:
 - decode-m1
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
-  kb_path: null
-  ratio: null
-  conclusion: 未测定：flash_attn 的 paged 路径在当前版本内部报错（见下）
+  status: measured
+  kb_path: Plugins/ops/skills/op-optimize/cases/008-paged-decode-ceiling/README.md
+  ratio:
+    value: 0.03
+    vs: 流式只读峰值带宽的达成率（B=32 KV=8192 D=128，连续 KV）
+    scope:
+      cards: 1
+      in_len: KV=8192
+      out_len: B=32 H=32 D=128 q_len=1
+      warmup: hot
+      note: paged 比连续 KV 再慢 1.60×；SQ 从 1 到 32 耗时恒为 3.16 ms（0.5% 波动）；同机 MLA 吸收式达 0.35，差一个数量级
+  conclusion: flash_attn decode 只达峰值 0.03；同机 MLA 吸收式 0.35，差一个数量级
   verified_on: '2026-11-23'
 modify_path:
   kind: replace-call
-  what: 从 flash_attn 换到 flash_mla 的 decode 路径
-  how: 把 flash_attn_varlen_func 换成 flash_mla_with_kvcache（后者专为 decode 的 paged KV 优化）
-  requires: KV 是 paged 布局且 head_dim 在 flash_mla 支持范围内
+  what: 换掉 flash_attn 的 decode 路径
+  how: 本机 decode 需换实现（flash_mla 吸收式达 0.35）；调参数无效——SQ 从 1 到 32 耗时不变，说明固定代价不由 query 数决定
+  requires: MLA 类模型可走 flash_mla；标准 MHA 的替代实现本轮未跑通（boltops 未测定）
 hard_preconditions:
-- statement: flash_attn_varlen_func 的 block_table 路径在当前版本抛 empty_like(NoneType)
-  check: 'python3 -I -c "import flash_attn,torch; q=torch.randn(8,1,32,128,dtype=torch.bfloat16,device=''cuda''); kv=torch.randn(2048,16,32,128,dtype=torch.bfloat16,device=''cuda''); bt=torch.arange(2048,dtype=torch.int32,device=''cuda'').view(8,256);
-    flash_attn.flash_attn_varlen_func(q,kv,kv,max_seqlen_q=1,max_seqlen_k=4096,seqused_k=torch.full((8,),4096,dtype=torch.int32,device=''cuda''),block_table=bt)" → TypeError: empty_like(): argument input
-    must be Tensor, not NoneType'
+- statement: paged 的 block_size 必须被 64 整除
+  check: 16/32 直接报 "Paged KV cache block size must be divisible by 64"（文案写 gfx936，实机 gfx938）
+- statement: q 必须是 (B, S, H, D) 布局；decode 时 S=1
+  check: 传 (B, H, S, D) 会静默算错形状或 assert
 soft_preconditions:
 - 未测定，不计入统计
 surfaces:

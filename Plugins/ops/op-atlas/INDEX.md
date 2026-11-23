@@ -52,7 +52,7 @@
 | [`moe-w8a8`](cards/moe-w8a8.yaml) | moe | draft | lightop | mixed | Marlin GEMM 分量达峰值带宽的 0.888；整体未判；as… |
 | [`mqa-logits`](cards/mqa-logits.yaml) | attention | measured | lightop | bandwidth | epilogue 跨 lane 归约换 ds_bpermute，逐位… |
 | [`mtp-draft`](cards/mtp-draft.yaml) | sampling | draft | in-house | compute | 无实测：索引卡，实现层待按证据推进 |
-| [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | draft | flash-attn | bandwidth | 未测定：flash_attn 的 paged 路径在当前版本内部报错… |
+| [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | measured | flash-mla | bandwidth | flash_attn decode 只达峰值 0.03；同机 MLA… |
 | [`qk-norm`](cards/qk-norm.yaml) | norm | measured | lightop | bandwidth | qk-norm+rope 融合达 741 GB/s，是 rope 单… |
 | [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | lightop | bandwidth | 无实测：索引卡。所有 FP8 路径的前置判据都挂在这张卡上 |
 | [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | measured | lightop | bandwidth | 带宽随 M 上升：M=1024 为 322 GB/s、M=8192 … |
