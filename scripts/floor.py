@@ -148,9 +148,14 @@ def analyze(spec, ladder):
     """spec 字段：bytes_mb / pattern / flops / peak_tf(或 precision) / t_actual_us。
 
     **两个地板都算，取更慢的那个当 binding。** 只算一个会给出方向相反的结论。
+
+    launch_us 是加性项：小 kernel 的耗时下界是「launch + 数据搬运」，
+    不是「数据搬运」。不加上它，topk（34.2 µs vs 43 µs launch 地板）会算出
+    负 remaining——那是判据本身错了，不是实现突破了物理。
     """
     t = spec.get("t_actual_us")
-    floors = []          # (时间 µs, 名称, 依据)
+    launch = float(spec.get("launch_us") or 0.0)
+    floors = []          # (时间 µs, 名称, 依据, 分母)
     if spec.get("bytes_mb") and spec.get("pattern"):
         f, peak, why = memory_floor(spec["bytes_mb"], spec["pattern"], ladder)
         if f is None:                       # 模式未标定：先返回错误，别再往下算
@@ -168,6 +173,7 @@ def analyze(spec, ladder):
 
     bind = max(floors, key=lambda x: x[0])
     t_floor, bind_kind, bind_why, bind_den = bind
+    t_floor += launch                       # launch 是加性固定代价，不是可重叠项
     remaining = (t / t_floor - 1.0) if t else None
     g, advice = gate(remaining)
 
@@ -179,6 +185,8 @@ def analyze(spec, ladder):
         note_other = ""
     parts = ["%s 地板 %.1f us（%s）" % (k, f, w) for f, k, w, _ in floors]
     basis = "；".join(parts) + "；binding=%s" % bind_kind
+    if launch:
+        basis += "；+ launch %.0f us" % launch
     if t:
         basis += "；实测 %.1f us" % t
     if note_other:
@@ -214,7 +222,7 @@ def card_spec(card_id):
         return None, "缺 floor_inputs（要有 bytes_mb/pattern 或 flops，以及 t_actual_us/basis）"
     spec = {k: fi.get(k) for k in
             ("bytes_mb", "pattern", "flops", "peak_tf", "precision",
-             "t_actual_us", "is_reduction")}
+             "t_actual_us", "is_reduction", "launch_us", "floor_override")}
     if not fi.get("basis"):
         return None, "floor_inputs 缺 basis —— 只有数字没有依据，拒算"
     if spec["t_actual_us"] is None:
@@ -269,6 +277,34 @@ def selftest():
                  "flops": 1.0e9, "peak_tf": 279.0, "t_actual_us": 242.2}, fake)
     assert r["binding"] == "memory", r
     print("[ok] 带宽绑定 → binding=memory（remaining=%.3f）" % r["remaining"])
+
+    # launch 地板是加性项：小 kernel 的地板是「搬运 + 43 µs」，不是只算搬运。
+    # 不加它，MB 级数据会算出几百个百分点的假空间。
+    r_fl = {"layers": dict(fake["layers"])}
+    r_fl["layers"]["3_row_reduction"] = {"penalty_ratio": 0.79}
+    no_l = analyze({"bytes_mb": 0.5, "pattern": "rw_1to1", "t_actual_us": 50.0}, r_fl)
+    w_l = analyze({"bytes_mb": 0.5, "pattern": "rw_1to1", "t_actual_us": 50.0,
+                   "launch_us": 43.0}, r_fl)
+    assert no_l["remaining"] > 50, "0.5MB/1200GB/s 的地板极小，remaining 必然爆表"
+    assert w_l["remaining"] < 1.0, "带 launch 后 remaining 应落回可用区间"
+    print("[ok] launch 加性项 → remaining %.0f%% → %.1f%%（不加会给出假空间）"
+          % (no_l["remaining"] * 100, w_l["remaining"] * 100))
+
+    # topk 那类「已低于空 kernel 地板」必须老实判 below_floor，不许掩盖
+    r = analyze({"bytes_mb": 0.05, "pattern": "rw_1to1", "t_actual_us": 34.2,
+                 "launch_us": 43.0}, r_fl)
+    assert r["gate"] == "below_floor", r
+    print("[ok] 低于 launch 地板 → 老实报 below_floor（topk 34.2us < 43us）")
+
+    # 归约折扣必须真的放宽地板，否则成熟实现会算出 +50% 假空间
+    a_no = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 242.2}, r_fl)
+    a_red = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 242.2,
+                     "is_reduction": True}, r_fl)
+    assert a_red["t_floor_us"] > a_no["t_floor_us"], "归约折扣应把地板放宽"
+    assert a_red["remaining"] < a_no["remaining"], "归约折扣应让 remaining 变小"
+    print("[ok] 归约折扣 0.79 → 地板 %.1f → %.1f us，remaining %+.1f%% → %+.1f%%"
+          % (a_no["t_floor_us"], a_red["t_floor_us"],
+             a_no["remaining"] * 100, a_red["remaining"] * 100))
     print("\nselftest PASS")
     return 0
 
