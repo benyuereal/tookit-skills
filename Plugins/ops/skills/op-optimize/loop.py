@@ -62,7 +62,14 @@ OK, WARN = "\033[32m", "\033[33m"
 
 # 两个上限是**常量不是开关**：能拿参数绕过去的规则等于没规则。
 MAX_IMPL_FAILS = 3          # 同一实现连挂 N 次 ⇒ 这个实现判死（方向预算不动）
-MAX_DIRECTION_REFUTES = 2   # 同一方向证伪 N 次 ⇒ 封方向（拒绝再受理同类候选）
+MAX_DIRECTION_REFUTES = 2   # 同一方向**机制上**被证伪 N 次 ⇒ 封方向（stalled 不计）
+
+# 「不赚」分两类，落点不同（2026-11-23 从 CompoundingKernel 引入）：
+#   refuted  机制上不成立（例：双流叠两个 GEMM 同引擎，物理不可能）⇒ **计方向预算**，可以封
+#   stalled  变慢了但**结构变了**，值得留作父代 ⇒ **不计方向预算**，不封，只是不采纳
+# 依据：论文 Quant/030 的最优路径 270 步里有 76 步持平或更慢，
+# 最终仍从 6.25× 涨到 27.36× ——最好的结果不是从一直变快的路径长出来的。
+# 所以「变慢」不能直接读成「这条路没戏」。
 
 # verify 的口径（同为常量，不给开关去绕）：
 VERIFY_TIMEOUT_S = 3600     # done_when 是外部命令，最长给 1 小时（跑真 bench 也够）
@@ -80,13 +87,15 @@ def _c(s, color):
 def load_candidates(card):
     p = card / "candidates.yaml"
     if not p.exists():
-        return {"defaults": {}, "directions": [], "candidates": [], "refuted": []}
+        return {"defaults": {}, "directions": [], "candidates": [],
+                "refuted": [], "stalled": []}
     import yaml
     d = yaml.safe_load(p.read_text()) or {}
     d.setdefault("defaults", {})
     d.setdefault("directions", [])
     d.setdefault("candidates", [])
     d.setdefault("refuted", [])
+    d.setdefault("stalled", [])
     return d
 
 
@@ -166,6 +175,25 @@ def done_when_problems(cands, tags=None):
             probs.append("候选 %s 已是 adopted 但没写 done_when：完成判定没有外部裁决点"
                          "（模型说完成不算数）⇒ 补一条命令，再用 verify 重新裁决" % cid)
     return probs
+
+
+def stalled_parent_problems(cands):
+    """stalled 条目必须真被当过父代 —— 否则「留作父代」只是换了个名字的判死。
+
+    这是 CompoundingKernel 那条机制能否落地的**唯一验收点**：
+    如果 stalled 里的条目从来没有后验候选引用它，
+    那这套改动就只是把 refuted 改了个名，等于没做。
+    判据：`candidates[].parent == <stalled 的 id>`，或记录里有 `parent=<id>`。
+    """
+    stalled = [r for r in (cands.get("stalled") or []) if isinstance(r, dict)]
+    if not stalled:
+        return []
+    used = set()
+    for c in cands.get("candidates") or []:
+        if isinstance(c, dict) and c.get("parent"):
+            used.add(str(c["parent"]))
+    return ["stalled 条目 %s 从未被当过 parent（父代账本名存实亡）" % r.get("id")
+            for r in stalled if str(r.get("id")) not in used]
 
 
 def load_contract_tol(card, default=2e-3):
@@ -606,8 +634,8 @@ def cmd_status(a):
     pend = [c for c in cands["candidates"]
             if isinstance(c, dict) and c.get("status", "pending") == "pending"]
     print("卡片      %s" % card)
-    print("候选      待做 %d / 已判死 %d / 共记录 %d 条实验"
-          % (len(pend), len(cands["refuted"]), len(recs)))
+    print("候选      待做 %d / 已判死 %d / 停滞可作父代 %d / 共记录 %d 条实验"
+          % (len(pend), len(cands["refuted"]), len(cands.get("stalled") or []), len(recs)))
     table = direction_table(cands)
     if table:
         print("方向      " + " · ".join(
@@ -615,6 +643,8 @@ def cmd_status(a):
                             "（已封）" if v["exhausted"] else "")
             for k, v in sorted(table.items())))
     for prob in budget_problems(cands):
+        print(_c("⚠ " + prob, WARN))
+    for prob in stalled_parent_problems(cands):
         print(_c("⚠ " + prob, WARN))
     if recs:
         last = recs[-1]
@@ -664,6 +694,10 @@ def cmd_queue(a):
                   % ("fails", len(fails), MAX_IMPL_FAILS, fails[-1]))
         if mark:
             print("      %-8s %s" % ("note", mark))
+    if d.get("stalled"):
+        print("\n# 停滞（变慢但结构变了 —— 可以当父代，方向未封）")
+        for r in d["stalled"]:
+            print("%-22s %-28s %s" % (r["id"], r.get("what_changed", ""), r.get("why", "")))
     if d["refuted"]:
         print("\n# 已判死（别重开；机制比结论重要）")
         for r in d["refuted"]:
@@ -1034,6 +1068,9 @@ def _to_refuted(text, tag, why, kind, direction=None):
     if blk:
         text = text[:blk[0]] + text[blk[1]:]
     text = _drop_refuted(text, tag)
+    # 同一 id 只能在一个落点：从 stalled 转 refuted 时要把 stalled 的残影清掉，
+    # 否则两处各说各话（一处说「结构变了值得留」，一处说「机制不成立」）。
+    text = _drop_item(text, "stalled", tag)
     body = "  - id: %s\n    kind: %s\n" % (_scalar(tag), _scalar(kind))
     if direction:
         body += "    direction: %s\n" % _scalar(direction)
@@ -1044,6 +1081,46 @@ def _to_refuted(text, tag, why, kind, direction=None):
     else:
         text = text[:m.end()] + body + text[m.end():]
     return text.replace("refuted: []\n", "refuted:\n")
+
+
+def _to_stalled(text, tag, why, what_changed, direction=None, ratio=None):
+    """把条目挪进 stalled —— **变慢但结构变了，留作父代**。
+
+    与 _to_refuted 的区别只有一条：stalled **不计方向预算**，所以方向不会被封。
+    结构上必须记 `what_changed`（结构上变了什么），否则「变慢」就退化成
+    「试过，慢」——那是本仓库明令禁止的写法，也没法当父代复用。
+    """
+    blk = _cand_block(text, tag)
+    if blk:
+        text = text[:blk[0]] + text[blk[1]:]
+    text = _drop_item(text, "stalled", tag)
+    text = _drop_item(text, "refuted", tag)
+    body = "  - id: %s\n    kind: stalled\n" % _scalar(tag)
+    if direction:
+        body += "    direction: %s\n" % _scalar(direction)
+    if ratio is not None:
+        body += "    ratio_vs_parent: %s\n" % _yaml_scalar(str(ratio))
+    body += "    what_changed: %s\n" % _yaml_scalar(what_changed)
+    body += "    why: %s\n    on: %s\n" % (_yaml_scalar(why), time.strftime("%Y-%m-%d"))
+    m = re.search(r"(?m)^stalled:[ \t]*$\n?", text)
+    if not m:
+        # stalled 段放在 refuted 之前（保持「越靠上越可用」的阅读顺序）
+        anchor = re.search(r"(?m)^refuted:[ \t]*$", text)
+        if anchor:
+            text = text[:anchor.start()] + "stalled:\n" + body + text[anchor.start():]
+        else:
+            text = text.rstrip("\n") + "\nstalled:\n" + body
+    else:
+        text = text[:m.end()] + body + text[m.end():]
+    return text.replace("stalled: []\n", "stalled:\n")
+
+
+def _drop_item(text, section, tag):
+    """删掉某段里同 id 的旧条目（保证落点切换是幂等的）。"""
+    blk = _item_block(text, section, tag)
+    if blk is None:
+        return text
+    return text[:blk[0]] + text[blk[1]:]
 
 
 def _add_direction(text, dir_id):
@@ -1143,6 +1220,47 @@ def cmd_direction_refuted(a):
                  "下一个候选必须来自 op-constrain 重定后的约束。" % (dir_id, dir_id), WARN))
     else:
         print("回 op-constrain：这条约束不成立，重定一个再开候选。")
+    return 0
+
+
+def cmd_stalled(a):
+    """候选变慢但结构变了：留作父代，**不耗方向预算、不封方向**。
+
+    要求 `--what-changed` 写清结构上变了什么。没有它，「变慢」就退化成
+    「试过，慢」——既违反本仓库的结论纪律，也没法被后续候选当父代复用。
+    """
+    card = a.card
+    p = card / "candidates.yaml"
+    cands = load_candidates(card)
+    what_changed = str(getattr(a, "what_changed", "") or "").strip()
+    if not what_changed:
+        print(_c("拒绝：stalled 必须带 --what-changed（结构上变了什么）。"
+                 "只写「变慢」等于「试过，慢」，既不能当父代也没法迁移。", WARN))
+        return 2
+    cand = None
+    if a.tag:
+        cand = next((c for c in cands["candidates"]
+                     if isinstance(c, dict) and c.get("id") == a.tag), None)
+    direction = a.direction or (cand or {}).get("direction")
+
+    text = p.read_text()
+    text = _to_stalled(text, a.tag, a.why, what_changed, direction,
+                       ratio=getattr(a, "ratio", None))
+    _write_candidates(p, text)
+    append_record(card, {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "card": card.name, "tag": a.tag,
+        "direction": direction, "decision": "STALLED",
+        "what_changed": what_changed, "why": a.why,
+        "ratio_vs_parent": getattr(a, "ratio", None),
+    })
+    print("候选 %s 已记入 stalled（结构变了：%s）" % (a.tag, what_changed))
+    print("  → 不耗方向预算。它可以被当成后续候选的 parent："
+          "loop.py 不限制从 stalled 节点再出发。")
+    if direction:
+        table = direction_table(load_candidates(card))
+        info = table.get(str(direction)) or {}
+        print("  → 方向 %s 的计数不变（仍是 %s/%d）"
+              % (direction, info.get("refutes", "?"), MAX_DIRECTION_REFUTES))
     return 0
 
 
@@ -1315,6 +1433,15 @@ def main():
     d.add_argument("--direction", help="直接点名方向（候选已不在队列里时用）")
     d.add_argument("--why", required=True)
 
+    st = sub.add_parser("stalled",
+                        help="变慢但结构变了：留作父代，不计方向预算、不封方向")
+    st.add_argument("tag")
+    st.add_argument("--why", required=True, help="为什么这次更慢（机制）")
+    st.add_argument("--what-changed", required=True, dest="what_changed",
+                    help="结构上变了什么（父代复用要看这个）")
+    st.add_argument("--ratio", help="相对 parent 的耗时比（>1 表示更慢），有就写")
+    st.add_argument("--direction", help="候选已不在队列里时直接点名方向")
+
     f = sub.add_parser("refute", help=argparse.SUPPRESS)   # 已拆分，保留只为给出迁移提示
     f.add_argument("tag", nargs="?")
     f.add_argument("--why")
@@ -1334,6 +1461,7 @@ def main():
             "resume": cmd_resume,
             "impl-broken": cmd_impl_broken,
             "direction-refuted": cmd_direction_refuted,
+            "stalled": cmd_stalled,
             "refute": cmd_refute, "verify": cmd_verify,
             "adopt": cmd_adopt}[a.cmd](a) or 0
 
