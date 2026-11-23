@@ -44,7 +44,7 @@ LAYERS = {"kernel", "engine"}
 
 # E6：顶层字段白名单。只有这些，多的一个字也进不来。
 ALLOWED_TOP = {"id", "title", "family", "math", "status", "op_card", "variants", "at_floor",
-               "baseline_ref", "semantics",
+               "baseline_ref", "semantics", "floor_inputs",
                "ceiling", "shapes", "last_verdict", "surfaces", "updated", "layer",
                # L3：这张卡最可行的一条改法（不是「可以调参」这种废话）
                "modify_path",
