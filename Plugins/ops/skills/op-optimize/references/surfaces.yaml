@@ -112,3 +112,27 @@
   check: "pmc: SQ_INSTS_VALU 与 MMAC 指令数之比；查 epilogue 归约写法"
   evidence: "grouped MQA 换成 ds_bpermute_b32：VALU -15.8%，墙钟 1.29x，逐位一致"
   cost: S
+
+- id: slc-policy
+  statement: 全局访存加 SLC/流式缓存提示（buffer_load ... slc）能否提速
+  law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点五
+  class: isa-policy
+  precondition: 该 kernel 的权重在 tile 内没有真实复用
+  check: 同一 kernel 编两版（默认 descriptor vs slc），bit-exact 后比耗时
+  evidence: >
+    hbird 实测：gate_up 0.868×（慢 13%）、qkv 打平、输出 bit-exact。
+    结论是默认 descriptor 最优 —— slc 只是花掉了 prefetch ring 本来免费的 sector。
+  verdict: dead_end
+  cost: S
+- id: prefetch-depth-isa
+  statement: 源码写几段预取/多少 lookahead，能否控制实际 waitcnt 深度
+  law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点六
+  class: isa-policy
+  precondition: 使用 HCU 后端编译器，且有 prefetch 结构
+  check: 反汇编看 vmcnt 模式，对比源码写的 stage 数；或开关 wait-rewrite pass 比耗时
+  evidence: >
+    hbird：4-stage prefetch 关掉 wait-rewrite pass 后 4.5263 → 2.6548 ms，
+    但两种情况下发出的 vmcnt(1)(2)(3) 模式完全一样。
+    ⇒ 深度由 scheduler 决定，源码控制不了。这解释了「调 num_stages 常没用」。
+  verdict: dead_end
+  cost: L

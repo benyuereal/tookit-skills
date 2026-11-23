@@ -76,6 +76,27 @@ last_verdict:
     stop_if: 若 mode 2000 造不出正确输入（需 6D packed layout），说明本机的 deepgemm 路径受限 ⇒ 标未测定并停
     effort: 4h
     falsifier: 若 deepgemm 的 mode=2000 真 pack 能造出合法 6D 输入（当前 mode=1000 asm layout 卡在 0.29），则重新推进。
+  regimes:
+    prefill:
+      m: 大 M
+      kind: compute-bound
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，需用 compute 峰值做分母
+      value: null
+      unmeasured: true
+      note: 未实测：本卡的实测数据只在 decode 档（或形状不同），prefill 档待补
+    decode:
+      m: decode-m32
+      kind: bandwidth
+      denominator:
+        value: null
+        source: bw-ladder.yaml:2_read_only
+        why: decode 逐 token，权重/KV 读取主导
+      value: null
+      unmeasured: true
+      note: 未实测：需按 decode 形状单独跑
 modify_path:
   kind: replace-call
   what: 换 grouped 路径入口

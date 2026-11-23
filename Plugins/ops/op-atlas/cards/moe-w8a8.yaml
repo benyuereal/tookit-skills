@@ -90,6 +90,27 @@ last_verdict:
     stop_if: 若整体也 >0.85，说明本卡的 pipeline 已集约 ⇒ 标 at_floor（当前不敢这么标）
     effort: 4h
     falsifier: 若整体 pipeline 的段占比测出来（当前只测了 Marlin GEMM 分量 0.888），且非 Marlin 段有明确空间，则重新推进。
+  regimes:
+    prefill:
+      m: 大 M
+      kind: compute-bound
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，需用 compute 峰值做分母
+      value: null
+      unmeasured: true
+      note: 未实测：本卡的实测数据只在 decode 档（或形状不同），prefill 档待补
+    decode:
+      m: decode-m32
+      kind: bandwidth
+      denominator:
+        value: null
+        source: bw-ladder.yaml:2_read_only
+        why: decode 逐 token，权重/KV 读取主导
+      value: null
+      unmeasured: true
+      note: 未实测：需按 decode 形状单独跑
 modify_path:
   kind: env-flag
   what: 切 Marlin MoE GEMM 的 mode 档

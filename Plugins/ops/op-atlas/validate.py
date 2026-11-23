@@ -315,6 +315,65 @@ def _check_gemm_regime(cards_dir, repo):
                          "必须写清分母是 1848（纯读）还是 1749（1:1）以及为什么" % p.name)
 
 
+REGIME_FAMILIES = {"attention", "gemm", "moe"}
+REGIME_KINDS = {"compute-bound", "bandwidth", "utilization", "latency"}
+
+
+def _check_regimes(cards_dir, repo):
+    """E38：attention / gemm / moe 族必须分 prefill 与 decode 两个 regime。
+
+    「达成率 0.89」在 prefill（算力主导）与 decode（带宽主导）下是两个完全不同的东西，
+    混在一张卡里等于没报。这是 E24（量纲）的同族问题。
+
+    与 E28 的区别：E28 是软提醒（warn），E38 查的是**结构完整性**（error）：
+    每个 regime 必须有 kind + denominator{source}。
+    **value 允许为 null** —— 未实测是合法状态，编一个数才是错的。
+
+    denominator.source 必须引用 constants.yaml 或 bw-ladder.yaml 的键名，
+    不许写字面量（560 / 1724）——1724 已被标 unverified，写死就复活了那个错。
+    """
+    import re
+    for p in sorted(cards_dir.glob("*.yaml")):
+        d, problem = _load_yaml(p)
+        if problem or not isinstance(d, dict):
+            continue
+        if d.get("family") not in REGIME_FAMILIES:
+            continue
+        lv = d.get("last_verdict") or {}
+        if lv.get("status") not in ("measured", "tuned"):
+            continue
+        reg = lv.get("regimes")
+        if not isinstance(reg, dict):
+            err("E38", p.name,
+                "%s 族卡缺 regimes —— 必须分别登记 prefill(compute-bound) 与 "
+                "decode(bandwidth)；达成率在两种约束下不是同一个东西"
+                % d.get("family"))
+            continue
+        for name in ("prefill", "decode"):
+            node = reg.get(name)
+            if not isinstance(node, dict):
+                err("E38", p.name, "regimes 缺 %s 档" % name)
+                continue
+            if node.get("kind") not in REGIME_KINDS:
+                err("E38", p.name,
+                    "regimes.%s.kind=%r 非法（允许 %s）"
+                    % (name, node.get("kind"), sorted(REGIME_KINDS)))
+            den = node.get("denominator")
+            if not isinstance(den, dict):
+                err("E38", p.name,
+                    "regimes.%s 缺 denominator —— 达成率必须有明确分母" % name)
+                continue
+            src = str(den.get("source") or "")
+            if not src:
+                err("E38", p.name,
+                    "regimes.%s.denominator 缺 source（必须引用 constants.yaml / "
+                    "bw-ladder.yaml 的键名，不许写字面量）" % name)
+            elif not re.search(r"(constants|bw-ladder)\.yaml", src):
+                err("E38", p.name,
+                    "regimes.%s.denominator.source=%r 没有引用仓库内的常数文件 —— "
+                    "写死字面量会让 1724 那类无来源分母复活" % (name, src))
+
+
 def _check_semantics_required(cards_dir, repo):
     """E37：已下结论的卡必须声明访存语义。
 
@@ -1356,6 +1415,7 @@ def validate(atlas, repo):
     # 不是方法极限。**没有 falsifier 的「到顶」等于把工具限制记成物理规律。**
     _check_impl_roles(cards_dir, repo)
     _check_baseline_count(cards_dir, repo)
+    _check_regimes(cards_dir, repo)
     _check_semantics_required(cards_dir, repo)
     _check_semantics(cards_dir, repo)
     _check_impl_to_ceiling(cards_dir, repo)

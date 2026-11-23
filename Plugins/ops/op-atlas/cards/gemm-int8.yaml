@@ -79,10 +79,14 @@ last_verdict:
   regimes:
     prefill:
       m: 4096
-      kind: tflops
+      kind: compute-bound
       value: 343.4
       bound: compute
       note: 方阵大 M，算力主导
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，分母用 compute 峰值
     decode:
       m: 1
       kind: bandwidth

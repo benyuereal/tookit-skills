@@ -20,6 +20,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MODELS = os.path.join(HERE, "models")
 
 
+def _fp8_peak(const):
+    """fp8 峰值分母：取 fp8_peak_layers.achievable_tf；取不到就报错，不猜。
+
+    achievable 而非 nominal：达成率回答的是「离本机最好实现多远」，
+    468 与 579.7 是两回事（见 constants.yaml 的三层口径说明）。
+    """
+    layers = (const.get("compute") or {}).get("fp8_peak_layers") or {}
+    v = layers.get("achievable_tf")
+    if v is None:
+        raise SystemExit(
+            "constants.yaml 缺 compute.fp8_peak_layers.achievable_tf —— "
+            "分母不可猜。旧版静默用 540 导致天花板算低 4~7%。")
+    return float(v)
+
+
 def _load_constants():
     """极简 YAML 子集读取（只认 key: value / 二级缩进），避免依赖 pyyaml。"""
     path = os.path.join(HERE, "constants.yaml")
@@ -198,11 +213,33 @@ def main():
         else:
             clock_note.append("未能探测当前 sclk")
 
-    if a.op not in ("sparse-mla", "mqa-logits"):
-        raise SystemExit("暂时只有 sparse-mla / mqa-logits 的模型")
+    # 动态分发：模型自己声明参数签名（MODEL_SPEC），derive 只负责喂常数与打印。
+    # 旧版硬编码 `if a.op not in ("sparse-mla","mqa-logits")`，
+    # 新增模型必须改 derive.py 本身 —— 这违背「模型是数据，derive 是引擎」的分层。
+    spec_ = getattr(model, "MODEL_SPEC", None)
+    if spec_ is None:
+        raise SystemExit(
+            "模型 %s 缺 MODEL_SPEC —— 必须声明 analyze 的参数签名。"
+            "示例：MODEL_SPEC = {'fn': 'analyze', 'args': ['s','h','skv','d'], "
+            "'peak': 'fp8'} 或 {'peak': 'bf16', 'bound': 'memory'}" % a.op)
 
-    if a.op == "mqa-logits":
-        peak = _num(const.get("compute", {}).get("fp8_gemm_peak_tf"), 540)
+    peak_kind = spec_.get("peak")
+    peak = None
+    if peak_kind == "fp8":
+        peak = _fp8_peak(const)
+    elif peak_kind == "bf16":
+        node = (const.get("compute") or {}).get("bf16_gemm_peak_tf") or {}
+        peak = node.get("value") if isinstance(node, dict) else node
+        if peak is None:
+            raise SystemExit("constants.yaml 缺 compute.bf16_gemm_peak_tf")
+
+    if spec_.get("legacy") == "mqa-logits":
+        # 分母必须来自 constants，且**不许有静默 fallback**。
+        # 旧版写 `...get("fp8_gemm_peak_tf"), 540`，但 constants.yaml 里根本没有这个键
+        # （只有 fp8_peak_layers），于是永远用 540 这个过时常数，
+        # 而业主口径是 nominal 560 / achievable 579.7 —— 天花板算低 4~7% 且无人察觉。
+        # 这与 tooling.md「缺常数不许静默用默认值」直接冲突。
+        peak = _fp8_peak(const)
         r = model.analyze(a.s, a.h, a.skv, a.d, BM=a.bm, BN=a.bi,
                           kv_bytes=a.kv_bytes, q_bytes=a.kv_bytes,
                           peak_tf=peak, bw_gbs=bw, fuse_topk=a.fuse_topk,

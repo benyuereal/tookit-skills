@@ -19,7 +19,9 @@
     q_per_ktile=BM    ⇒ AI = 2·BM·H/bytes（真 GEMM 把 BM 行 query 和 heads 一起当 N 维）
         = prefill 的正常 tile 形状 ⇒ 8192 FLOP/B ⇒ **算力受限**
 
-机器平衡点 = peak_tf/bw = 540e12/1724e9 ≈ 313 FLOP/B。
+机器平衡点 = peak_tf/bw。fp8 achievable 579.7e12（constants.yaml:fp8_peak_layers）
+除以带宽实测（bw_calibrate：add 1634 GB/s 为观测最高）≈ 355 FLOP/B。
+注意 1724 已被标 unverified（无测量来源），不要用它算平衡点。
 
 推论（可直接指导设计，不必试）：
   1. **decode 是访存受限**，杠杆是「把 next_n / 跨 query 的复用并进 GEMM 的 N 维」= 重构数据流，
@@ -35,6 +37,15 @@
 CU_FALLBACK = 64            # constants.yaml:compute.cu_count（gfx938 实测，2026-11-13 由 69 更正为 64）
 CU_FALLBACK_SOURCE = "constants.yaml:compute.cu_count"
 
+
+# derive.py 的动态分发契约：模型声明自己需要什么输入、用哪个精度峰值。
+MODEL_SPEC = {
+    "fn": "analyze",
+    "args": ["s", "h", "skv", "d"],
+    "peak": "fp8",          # 分母用 constants.fp8_peak_layers.achievable_tf
+    "legacy": "mqa-logits", # 保留原有打印格式
+    "bound": "mixed",
+}
 
 def _cu_count(device=None):
     """从设备查询 CU 数；读不到时退回 constants.yaml 的实测值并打印来源。
@@ -59,7 +70,7 @@ CU = _cu_count()
 
 
 def analyze(S, H, SKV, D, BM=128, BN=128, kv_bytes=2, q_bytes=2,
-            peak_tf=540.0, bw_gbs=1724.0, fuse_topk=False,
+            peak_tf=579.7, bw_gbs=1634.0, fuse_topk=False,
             q_per_ktile=1, next_n=1, fold_nextn=False):
     """返回各吞吐地板与算术强度。时间单位 µs。
 

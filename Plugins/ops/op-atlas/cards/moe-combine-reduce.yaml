@@ -73,6 +73,27 @@ last_verdict:
     expected: ≥1200 GB/s
     stop_if: 若改向量化后不涨，说明 K=4 的归约已触及写带宽上限 ⇒ 标 at_floor
     effort: 2h
+  regimes:
+    prefill:
+      m: 大 M
+      kind: compute-bound
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，需用 compute 峰值做分母
+      value: null
+      unmeasured: true
+      note: 未实测：本卡的实测数据只在 decode 档（或形状不同），prefill 档待补
+    decode:
+      m: decode-m32
+      kind: bandwidth
+      denominator:
+        value: null
+        source: bw-ladder.yaml:2_read_only
+        why: decode 逐 token，权重/KV 读取主导
+      value: null
+      unmeasured: true
+      note: 未实测：需按 decode 形状单独跑
 modify_path:
   kind: replace-call
   what: 反 permute 的加权求和换融合

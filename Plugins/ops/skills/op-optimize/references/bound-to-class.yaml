@@ -1,0 +1,54 @@
+# bound → class 映射：derive.py 算出瓶颈类型后，用它决定先试哪一类攻击面。
+#
+# 为什么需要这张表
+# ----------------
+# surfaces.yaml 有 11 条攻击面（每条带 class / check / evidence），
+# derive.py 能算 cost_bound（compute / memory / mixed），
+# 但两者之间**没有绑定** —— 所以 loop.py 的第 3 步「定位瓶颈」可以被整步跳过：
+# agent 不知道卡在算力还是内存，直接列候选、改代码、凭感觉说快了。
+#
+# 实测证据（2026-11-23）：`grep -nE "derive|bound|bottleneck" loop.py` 零结果。
+# 于是 6 步循环的第 3 步在物理上可省。
+#
+# 这张表把它变成硬映射：loop.py 只认 bottleneck.class，
+# direction 不在该 class 允许的集合内就拒跑；没有 bottleneck 记录也拒跑。
+
+version: 1
+updated: '2026-11-23'
+
+bound_to_class:
+  memory:
+    classes: [residency, layout, memory-path, isa-policy]
+    why: >
+      带宽到顶时，唯一有意义的方向是「少搬字节」或「抬驻留摊薄固定开销」。
+      不试 precision（降精度只会让字节更少，但那是另一条路，先归到 layout）与
+      pipeline（流水掩盖不了已经饱和的带宽）。
+    first_try: [layout-pack, fusion-boundary, occupancy]
+
+  compute:
+    classes: [pipeline, precision, tier, isa-policy]
+    why: >
+      算力到顶时看两条：每条 MMA 配了多少搬运指令（pipeline / tier），
+      以及能不能换更快的精度路径（precision）。
+      不试 residency —— 算力饱和时加驻留只增加争用。
+    first_try: [cross-lane-fold, precision-drop, table-miss]
+
+  mixed:
+    classes: [residency, layout, memory-path, pipeline, precision, tier, isa-policy]
+    why: >
+      compute 与 memory 两个地板都没顶到 = 挡路的是第三样东西
+      （依赖链 / 固定延迟 / 占用率）。此时不预设方向，全部 class 都可试，
+      但必须先有 PMC 证据说明到底谁在挡。
+    first_try: [occupancy, prefetch-depth, grid-tail]
+
+# class 到 surfaces.yaml 里 id 的对照（改 surfaces.yaml 的 class 字段时要同步这里）
+class_members:
+  residency: [occupancy, grid-tail, split-k]
+  pipeline: [prefetch-depth, barrier-width, fusion-boundary, cross-lane-fold]
+  layout: [layout-pack]
+  tier: [table-miss]
+  precision: [precision-drop]
+  memory-path: [gather-path]
+  # isa-policy：两条都是已证伪的死路（slc 负收益 / 源码控制不了 waitcnt 深度）。
+  # 留在映射里是为了「查得到、别重试」，不是推荐去试。
+  isa-policy: [slc-policy, prefetch-depth-isa]

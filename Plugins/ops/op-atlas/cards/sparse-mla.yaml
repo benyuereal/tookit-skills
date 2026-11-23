@@ -108,6 +108,27 @@ last_verdict:
     stop_if: 若压寄存器需 spill>0 或额外 LDS，说明 bm64 这条路在本机走不通 ⇒ 保持 tuned，不再追 at_floor
     effort: 8h
     falsifier: 若非 acc_o 寄存器能从 ~190 压到 ~100 使 bm64 不溢出（当前 bm64/thr256 实测 spill 30、慢 2.12×），则重新推进。
+  regimes:
+    prefill:
+      m: 大 M
+      kind: compute-bound
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，需用 compute 峰值做分母
+      value: null
+      unmeasured: true
+      note: 未实测：本卡的实测数据只在 decode 档（或形状不同），prefill 档待补
+    decode:
+      m: decode-s128
+      kind: bandwidth
+      denominator:
+        value: null
+        source: bw-ladder.yaml:2_read_only
+        why: decode 逐 token，权重/KV 读取主导
+      value: 0.94
+      unmeasured: false
+      note: decode 值取自本卡 last_verdict.ratio（若其本身是 decode 口径）
 modify_path:
   kind: env-flag
   what: 切 tilelang 的 persistent 后端与 page 分组

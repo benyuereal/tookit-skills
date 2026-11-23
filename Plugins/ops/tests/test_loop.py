@@ -47,7 +47,7 @@ defaults:
   skv: [32768, 131072]
 
 directions:
-  - id: fuse-kv-splits
+  - id: split-k
     statement: "把 4 路 KV 切分合并，砍掉重复载入"
     status: open
     refutes: 0
@@ -65,6 +65,7 @@ directions:
 candidates:
   - id: maxn32
     direction: shorten-max-chain
+    parent_surface: cross-lane-fold
     status: pending
     priority: 1
     hypothesis: "running max 每 32 块更新一次"
@@ -72,7 +73,7 @@ candidates:
     evidence: "ledger 30"
 
   - id: kv4
-    direction: fuse-kv-splits
+    direction: split-k
     priority: 2
     hypothesis: "kv 切 4 份"
     expect: "-3%"
@@ -80,7 +81,7 @@ candidates:
 refuted:
   - id: merge
     kind: impl
-    direction: fuse-kv-splits
+    direction: split-k
     why: "慢 2.12×，VGPR 256 / spill 30：4 路切分是寄存器生命周期分段，合并后生命周期全程重叠。"
 """
 
@@ -359,6 +360,13 @@ class TestCandidatesFile(unittest.TestCase):
         self._td = tempfile.TemporaryDirectory()
         self.card = Path(self._td.name)
         (self.card / "candidates.yaml").write_text(CARD_YAML, encoding="utf-8")
+        # 第 3 步的产物：真实卡由 derive.py 生成 roofline.json。
+        # 没有它 loop.py run 会拒跑（bottleneck_problems），
+        # 所以测试卡也要有这个文件，否则每个 run 测试都在测「门禁拦住了」。
+        import json
+        (self.card / "roofline.json").write_text(
+            json.dumps({"bound": "mixed",
+                        "evidence": "测试用：derive.py bound=mixed"}), encoding="utf-8")
 
     def tearDown(self):
         self._td.cleanup()
@@ -378,7 +386,7 @@ class TestCandidatesFile(unittest.TestCase):
     # ---------------------------------------------------------- impl-broken
 
     def test_impl_broken_counts_without_touching_direction(self):
-        before = loop.direction_table(self._cands())["fuse-kv-splits"]["refutes"]
+        before = loop.direction_table(self._cands())["split-k"]["refutes"]
         rc, out = self._quiet(loop.cmd_impl_broken,
                               SimpleNamespace(card=self.card, tag="kv4", why="锚点没落上，算错"))
         self.assertEqual(rc, 0, out)
@@ -387,7 +395,7 @@ class TestCandidatesFile(unittest.TestCase):
         self.assertEqual(len(kv4["fails"]), 1)
         self.assertIn("锚点没落上", kv4["fails"][0])
         # * 核心断言：实现失败不吃方向预算
-        self.assertEqual(loop.direction_table(d)["fuse-kv-splits"]["refutes"], before)
+        self.assertEqual(loop.direction_table(d)["split-k"]["refutes"], before)
         self.assertNotIn("kv4", [r["id"] for r in d["refuted"]])
         self.assertIn("方向预算没动", out)
 
@@ -403,7 +411,7 @@ class TestCandidatesFile(unittest.TestCase):
         self.assertIn("连挂 3 次", entry["why"])
         self.assertIn("第 3 次", entry["why"])
         # 方向依旧开着
-        self.assertEqual(loop.direction_table(d)["fuse-kv-splits"]["refutes"], 0)
+        self.assertEqual(loop.direction_table(d)["split-k"]["refutes"], 0)
         self.assertEqual(loop.budget_problems(d), [])
 
     def test_impl_broken_undeclared_tag_refused(self):
@@ -417,7 +425,7 @@ class TestCandidatesFile(unittest.TestCase):
         recs = [r for r in loop.read_records(self.card) if r["decision"] == "IMPL_BROKEN"]
         self.assertEqual(len(recs), 1)
         self.assertEqual(recs[0]["tag"], "kv4")
-        self.assertEqual(recs[0]["direction"], "fuse-kv-splits")
+        self.assertEqual(recs[0]["direction"], "split-k")
         self.assertFalse(recs[0]["exhausted"])
 
     # ----------------------------------------------------- direction-refuted
@@ -428,21 +436,21 @@ class TestCandidatesFile(unittest.TestCase):
                                               why="机制：合并 buffer ⇒ 生命周期重叠 ⇒ 溢出"))
         self.assertEqual(rc, 0, out)
         d = self._cands()
-        self.assertEqual(loop.direction_table(d)["fuse-kv-splits"]["refutes"], 1)
+        self.assertEqual(loop.direction_table(d)["split-k"]["refutes"], 1)
         self.assertNotIn("kv4", [c["id"] for c in d["candidates"]])
         entry = {r["id"]: r for r in d["refuted"]}["kv4"]
         self.assertEqual(entry["kind"], "direction")
-        self.assertEqual(entry["direction"], "fuse-kv-splits")
+        self.assertEqual(entry["direction"], "split-k")
         self.assertIn("回 op-constrain", out)
 
     def test_direction_refuted_twice_seals_the_direction(self):
         self._quiet(loop.cmd_direction_refuted,
                     SimpleNamespace(card=self.card, tag="kv4", direction=None, why="第一次"))
         self._quiet(loop.cmd_direction_refuted,
-                    SimpleNamespace(card=self.card, tag="maxn32", direction="fuse-kv-splits",
+                    SimpleNamespace(card=self.card, tag="maxn32", direction="split-k",
                                     why="第二次（直接点名方向）"))
         d = self._cands()
-        info = loop.direction_table(d)["fuse-kv-splits"]
+        info = loop.direction_table(d)["split-k"]
         self.assertEqual(info["refutes"], loop.MAX_DIRECTION_REFUTES)
         self.assertEqual(info["status"], "exhausted")
         self.assertTrue(info["exhausted"])
@@ -451,12 +459,12 @@ class TestCandidatesFile(unittest.TestCase):
         self._quiet(loop.cmd_direction_refuted,
                     SimpleNamespace(card=self.card, tag="kv4", direction=None, why="第一次"))
         self._quiet(loop.cmd_direction_refuted,
-                    SimpleNamespace(card=self.card, tag=None, direction="fuse-kv-splits",
+                    SimpleNamespace(card=self.card, tag=None, direction="split-k",
                                     why="第二次"))
         # 模型又在已封方向上生成了一个候选
         self._write((self.card / "candidates.yaml").read_text().replace(
             "\nrefuted:\n",
-            "\n  - id: kv4_v2\n    direction: fuse-kv-splits\n    status: pending\n"
+            "\n  - id: kv4_v2\n    direction: split-k\n    status: pending\n"
             "    hypothesis: \"再试一次\"\n\nrefuted:\n"))
         rc, out = self._quiet(loop.cmd_run, SimpleNamespace(card=self.card, tags=["kv4_v2"],
                                                             force=False))
@@ -472,7 +480,7 @@ class TestCandidatesFile(unittest.TestCase):
                     SimpleNamespace(card=self.card, tag="kv4", direction=None, why="第一次"))
         self._write((self.card / "candidates.yaml").read_text().replace(
             "\nrefuted:\n",
-            "\n  - id: kv4_v2\n    direction: fuse-kv-splits\n    status: pending\n"
+            "\n  - id: kv4_v2\n    direction: split-k\n    status: pending\n"
             "    hypothesis: \"换一种合并方式\"\n\nrefuted:\n"))
         rc, out = self._quiet(loop.cmd_queue, SimpleNamespace(card=self.card))
         self.assertEqual(rc, 0, out)
@@ -487,7 +495,7 @@ class TestCandidatesFile(unittest.TestCase):
         self.assertIn("已建条目", out)
 
     def test_direction_refuted_without_direction_refused(self):
-        self._write(CARD_YAML.replace("    direction: fuse-kv-splits\n    priority: 2\n",
+        self._write(CARD_YAML.replace("    direction: split-k\n    priority: 2\n",
                                       "    priority: 2\n"))
         rc, out = self._quiet(loop.cmd_direction_refuted,
                               SimpleNamespace(card=self.card, tag="kv4", direction=None, why="x"))
@@ -518,7 +526,7 @@ class TestCandidatesFile(unittest.TestCase):
         self.assertIn("不在 candidates.yaml 的队列里", out)
 
     def test_run_refuses_candidate_without_direction(self):
-        self._write(CARD_YAML.replace("    direction: fuse-kv-splits\n    priority: 2\n",
+        self._write(CARD_YAML.replace("    direction: split-k\n    priority: 2\n",
                                       "    priority: 2\n"))
         rc, out = self._quiet(loop.cmd_run, SimpleNamespace(card=self.card, tags=["kv4"],
                                                             force=False))
@@ -583,10 +591,10 @@ class TestCandidatesFile(unittest.TestCase):
         self._quiet(loop.cmd_direction_refuted,
                     SimpleNamespace(card=self.card, tag="kv4", direction=None, why="一"))
         self._quiet(loop.cmd_direction_refuted,
-                    SimpleNamespace(card=self.card, tag=None, direction="fuse-kv-splits", why="二"))
+                    SimpleNamespace(card=self.card, tag=None, direction="split-k", why="二"))
         self._write((self.card / "candidates.yaml").read_text().replace(
             "\nrefuted:\n",
-            "\n  - id: kv4_v2\n    direction: fuse-kv-splits\n    status: pending\n"
+            "\n  - id: kv4_v2\n    direction: split-k\n    status: pending\n"
             "    hypothesis: \"再试\"\n\nrefuted:\n"))
         rc, out = self._quiet(loop.cmd_status, SimpleNamespace(card=self.card))
         self.assertIn("caveat 候选 kv4_v2", out)          # 拦住的原因要说出来
@@ -658,6 +666,9 @@ class TestDoneWhen(unittest.TestCase):
         self._td = tempfile.TemporaryDirectory()
         self.card = Path(self._td.name)
         (self.card / "candidates.yaml").write_text(CARD_YAML, encoding="utf-8")
+        import json as _json
+        (self.card / "roofline.json").write_text(
+            _json.dumps({"bound": "mixed", "evidence": "测试用"}), encoding="utf-8")
         # 主张门的前置：adopted 必须有够格的 run 记录。
         # 这里放一条「三门全过」的记录，让本类专注测 done_when 机制本身；
         # 主张门自己的行为由 TestClaimGate 覆盖。

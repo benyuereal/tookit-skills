@@ -18,6 +18,14 @@ CU_FALLBACK = 64            # constants.yaml:compute.cu_count（gfx938 实测，
 CU_FALLBACK_SOURCE = "constants.yaml:compute.cu_count"
 
 
+# derive.py 的动态分发契约。
+MODEL_SPEC = {
+    "fn": "analyze",
+    "args": ["s", "h", "topk", "d", "bm", "thr", "bi", "split"],
+    "peak": "bf16",         # 分母用 constants.compute.bf16_gemm_peak_tf
+    "bound": "mixed",
+}
+
 def _cu_count(device=None):
     """从设备查询 CU 数；读不到时退回 constants.yaml 的实测值并打印来源。
 
@@ -59,7 +67,7 @@ WAVE = 64
 
 
 def analyze(S, H, topk, d, bm, thr, bi, split, replicate_h=None,
-            clock_ghz=1.15, bw_gbs=1724.0, nvalid=None, lds_bytes=None):
+            clock_ghz=1.15, bw_gbs=1634.0, nvalid=None, lds_bytes=None):
     nvalid = topk if nvalid is None else nvalid
     replicate_h = replicate_h if replicate_h is not None else (2 if H >= 64 else 4 if H >= 32 else 1)
     h_per_block = H // replicate_h

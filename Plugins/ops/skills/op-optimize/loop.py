@@ -153,6 +153,124 @@ def budget_problems(cands, tags=None):
     return probs
 
 
+BOUND_TO_CLASS = None
+
+
+def _bound_map():
+    """读 bound-to-class.yaml（derive 的 bound → 可试的攻击面 class）。"""
+    global BOUND_TO_CLASS
+    if BOUND_TO_CLASS is not None:
+        return BOUND_TO_CLASS
+    p = Path(__file__).parent / "references" / "bound-to-class.yaml"
+    try:
+        import yaml
+        d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        BOUND_TO_CLASS = d.get("bound_to_class") or {}
+    except Exception:                                            # noqa: BLE001
+        BOUND_TO_CLASS = {}
+    return BOUND_TO_CLASS
+
+
+def _class_of(direction):
+    """direction(surface id) → class。来自 class_members 的反查表。"""
+    p = Path(__file__).parent / "references" / "bound-to-class.yaml"
+    try:
+        import yaml
+        d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:                                            # noqa: BLE001
+        return None
+    for cls, ids in (d.get("class_members") or {}).items():
+        if direction in (ids or []):
+            return cls
+    return None
+
+
+def bottleneck_problems(cands, tags=None, card=None):
+    """第 3 步（定位瓶颈）的机检：没有 bottleneck 记录就不许跑候选。
+
+    2026-11-23 实测：`grep -nE "derive|bound|bottleneck" loop.py` 零结果。
+    后果是 agent 可以完全不跑 derive、不知道卡在算力还是内存，
+    直接列候选改代码——正是 SKILL.md 自己批评的「凭感觉说快了」。
+
+    两条判据：
+      1. candidates.yaml 顶层必须有 bottleneck 块，且含 bound 与 derive_evidence
+      2. 每个 pending 候选的 direction 必须属于 bottleneck.bound 允许的 class
+    """
+    probs = []
+    bn = cands.get("bottleneck")
+    # 真值优先级：<卡>/roofline.json（derive.py 的正式产物）> candidates.yaml 的
+    # bottleneck 块（手工补充）。两份都在时以 roofline.json 为准，
+    # 因为它是脚本产出的，而 bottleneck 块是人写的。
+    roof = None
+    p_roof = (card / "roofline.json") if card else None
+    if p_roof is not None and p_roof.is_file():
+        try:
+            import json
+            roof = json.loads(p_roof.read_text(encoding="utf-8"))
+        except Exception:                                        # noqa: BLE001
+            roof = None
+    if not isinstance(bn, dict) and not roof:
+        probs.append("缺 bottleneck 记录：先做第 3 步（derive.py 出 bound + "
+                     "按 surfaces 的 check 取证），再列候选")
+        return probs
+    if roof:
+        bound = str(roof.get("bound") or "")
+        ev = str(roof.get("evidence") or roof.get("derive_evidence") or
+                 "roofline.json 的 bound（derive.py 产出）").strip()
+    else:
+        bound = str(bn.get("bound") or "")
+        ev = str(bn.get("derive_evidence") or "").strip()
+    if not bound:
+        probs.append("bottleneck 缺 bound（应为 compute/memory/mixed，来自 derive.py）")
+    if roof is None and not ev:
+        probs.append("bottleneck 缺 derive_evidence —— 「卡在 X」必须有 derive 输出或 "
+                     "PMC 读数做证据，不许只写结论")
+    allowed = set((_bound_map().get(bound) or {}).get("classes") or [])
+    if bound and not allowed:
+        probs.append("bound=%r 在 bound-to-class.yaml 里没有映射" % bound)
+        return probs
+    for c in cands.get("candidates") or []:
+        if not isinstance(c, dict):
+            continue
+        cid = str(c.get("id") or "?")
+        if tags is not None and cid not in tags:
+            continue
+        if str(c.get("status") or "pending") != "pending":
+            continue
+        d = c.get("direction")
+        if not d:
+            continue
+        cls = _class_of(str(d))
+        if cls is None:
+            # surfaces.yaml 是**标准攻击面库**，但真实卡可以有更具体的子方向名
+            # （如 op-sparse-mla 的 bypass-tilelang-codegen）。
+            # 只要该卡声明了 parent_surface 就按它归 class；没有则放行但要求显式说明。
+            ps = str(c.get("parent_surface") or "")
+            if ps:
+                cls = _class_of(ps)
+            if cls is None:
+                # 无 parent_surface 且不在 surfaces 里：不拦，但要求候选自己写 class
+                decl = str(c.get("class") or "")
+                if decl and decl in allowed:
+                    continue
+                if decl:
+                    probs.append(
+                        "候选 %s 的 class=%r 与 bottleneck.bound=%s 不匹配（允许 %s）"
+                        % (cid, decl, bound, sorted(allowed)))
+                else:
+                    probs.append(
+                        "候选 %s 的 direction=%s 不在 surfaces.yaml 里，且没写 "
+                        "parent_surface 或 class —— 无法判断它属于哪类攻击面"
+                        % (cid, d))
+                continue
+        if cls not in allowed:
+            probs.append(
+                "候选 %s 的 direction=%s（class=%s）与 bottleneck.bound=%s 不匹配："
+                "该 bound 只允许 %s"
+                % (cid, d, cls, bound, sorted(allowed)))
+    return probs
+
+
 def done_when_problems(cands, tags=None):
     """`status: adopted` 的候选必须带 `done_when`（一条 shell 命令）。
 
@@ -772,6 +890,11 @@ def cmd_run(a):
             print(_c("拒绝跑 %s：不在 candidates.yaml 的队列里。先把它写进队列"
                      "（带 direction + expect），再跑 —— 没登记的实验记账无从谈起。" % tag, WARN))
             return 2
+    # 第 3 步（定位瓶颈）没做 ⇒ 拒跑。这是 6 步循环里唯一原本零机检的一步，
+    # 不拦的话 agent 可以直接列候选改代码，跳过「卡在算力还是内存」的判断。
+    for prob in bottleneck_problems(cands, tags=set(a.tags), card=card):
+        print(_c("拒绝跑：" + prob, WARN))
+        return 2
     # 已 adopted 但没写 done_when ⇒ 它的「完成」没有任何外部裁决点，不许再跑
     for prob in done_when_problems(cands, tags=set(a.tags)):
         print(_c("拒绝跑：" + prob, WARN))

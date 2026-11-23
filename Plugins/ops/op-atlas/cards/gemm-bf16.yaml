@@ -150,6 +150,10 @@ last_verdict:
       value: 0.9
       bound: compute
       note: 方阵大 M，算力主导
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 达成率型，分母用对应精度的实测峰值
     decode:
       m: 1
       kind: bandwidth

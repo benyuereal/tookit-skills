@@ -177,9 +177,9 @@ last_verdict:
       value: 0.89
       bound: compute
       denominator:
-        value: 560
-        source: nominal
-        why: 规格口径
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 达成率型，分母用对应精度的实测峰值
       measured: '8192³: 2205.7 µs = 498.5 TF'
     prefill_mid:
       m: 4096
@@ -187,9 +187,9 @@ last_verdict:
       value: 0.82
       bound: compute
       denominator:
-        value: 560
-        source: nominal
-        why: 规格口径
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 达成率型，分母用对应精度的实测峰值
       measured: '4096³: 300.3 µs = 457.6 TF'
     decode:
       m: 1
@@ -201,6 +201,16 @@ last_verdict:
         source: bw-ladder.yaml 2_read_only
         why: decode 只读权重
       measured: 'M=1: aiter fp8 842.6 µs u=0.01；**未测 hipBLASLt 的 decode 档**'
+    prefill:
+      m: 大 M
+      kind: compute-bound
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，分母用 compute 峰值
+      value: null
+      unmeasured: true
+      note: 未实测：本卡数据只在 decode 档
   next_probe_decode:
     surface: precision-drop
     hypothesis: fp8 权重 16.8MB/1848 = 9.1 µs 是 decode 下界；当前 aiter 860 µs 差 94 倍。但 hipBLASLt 的 decode 档未测

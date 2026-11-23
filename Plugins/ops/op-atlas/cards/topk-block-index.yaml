@@ -80,6 +80,27 @@ last_verdict:
     stop_if: 若测量显示可用融合省掉一次 launch 且收益 >30%，说明还有空间 ⇒ 重开
     effort: 1h
     falsifier: 若能与 mqa-logits 融进同一 kernel 省掉一次 launch（当前 0.79× launch 地板），则重新推进。
+  regimes:
+    prefill:
+      m: 大 M
+      kind: compute-bound
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，需用 compute 峰值做分母
+      value: null
+      unmeasured: true
+      note: 未实测：本卡的实测数据只在 decode 档（或形状不同），prefill 档待补
+    decode:
+      m: decode-m32
+      kind: bandwidth
+      denominator:
+        value: null
+        source: bw-ladder.yaml:2_read_only
+        why: decode 逐 token，权重/KV 读取主导
+      value: 0.79
+      unmeasured: false
+      note: decode 值取自本卡 last_verdict.ratio（若其本身是 decode 口径）
 modify_path:
   kind: env-flag
   what: 切 fused topk 变换变体

@@ -1,42 +1,45 @@
 # GAPS —— 已知未覆盖与证据缺口（生成物，勿手改）
 
 > 由 `scripts/gen_gaps.py` 生成。改这张表请改脚本或卡片，不要直接编辑本文件。
-> 生成时间：2026-11-23 16:49
+> 生成时间：2026-11-23 18:38
 >
 > **它防的是「用覆盖数掩盖深度不足」。** 46 张卡容易被当成全覆盖，
-> 实际有 13 张挂不上可复跑证据、5 个家族零实测。
+> 实际有 17 张挂不上可复跑证据、4 个家族零实测。
 
 ## 一、证据缺口（`missing_evidence`）
 
-`measured` 的本义是「有数**且可追**」。下列 13 张卡有结论但挂不上可复跑的 results 文件（E25 判 missing）。
+`measured` 的本义是「有数**且可追**」。下列 17 张卡有结论但挂不上可复跑的 results 文件（E25 判 missing）。
 
 | 卡片 | 连续缺证据批数 | 处置 |
 |---|---|---|
-| `flash-attention-fwd` | 2 | **降级 draft**（连续 ≥2 批） |
-| `fused-add-rmsnorm` | 2 | **降级 draft**（连续 ≥2 批） |
-| `gemm-int8` | 2 | **降级 draft**（连续 ≥2 批） |
-| `layernorm` | 2 | **降级 draft**（连续 ≥2 批） |
-| `mlp-gelu-geglu` | 2 | **降级 draft**（连续 ≥2 批） |
-| `moe-combine-reduce` | 2 | **降级 draft**（连续 ≥2 批） |
-| `moe-swiglu-fused` | 2 | **降级 draft**（连续 ≥2 批） |
-| `moe-w8a8` | 2 | **降级 draft**（连续 ≥2 批） |
-| `mqa-logits` | 2 | **降级 draft**（连续 ≥2 批） |
-| `qk-norm` | 2 | **降级 draft**（连续 ≥2 批） |
-| `rope` | 2 | **降级 draft**（连续 ≥2 批） |
-| `rope-mla` | 2 | **降级 draft**（连续 ≥2 批） |
-| `sparse-mla` | 2 | **降级 draft**（连续 ≥2 批） |
+| `flash-attention-fwd` | 3 | **降级 draft**（连续 ≥2 批） |
+| `fused-add-rmsnorm` | 3 | **降级 draft**（连续 ≥2 批） |
+| `fusion-add-rmsnorm-quant` | 1 | 本批 warning，下批仍缺则降级 |
+| `fusion-rmsnorm-rope` | 1 | 本批 warning，下批仍缺则降级 |
+| `fusion-rope-kv-write` | 1 | 本批 warning，下批仍缺则降级 |
+| `fusion-silu-mul-quant` | 1 | 本批 warning，下批仍缺则降级 |
+| `gemm-int8` | 3 | **降级 draft**（连续 ≥2 批） |
+| `layernorm` | 3 | **降级 draft**（连续 ≥2 批） |
+| `mlp-gelu-geglu` | 3 | **降级 draft**（连续 ≥2 批） |
+| `moe-combine-reduce` | 3 | **降级 draft**（连续 ≥2 批） |
+| `moe-swiglu-fused` | 3 | **降级 draft**（连续 ≥2 批） |
+| `moe-w8a8` | 3 | **降级 draft**（连续 ≥2 批） |
+| `mqa-logits` | 3 | **降级 draft**（连续 ≥2 批） |
+| `qk-norm` | 3 | **降级 draft**（连续 ≥2 批） |
+| `rope` | 3 | **降级 draft**（连续 ≥2 批） |
+| `rope-mla` | 3 | **降级 draft**（连续 ≥2 批） |
+| `sparse-mla` | 3 | **降级 draft**（连续 ≥2 批） |
 
 ## 二、零实测家族
 
 | 家族 | 卡数 | 为什么零实测 |
 |---|---|---|
-| `kv` | 3 | 3 张卡全 draft；paged 写入的测量被 launch 开销淹没（见 case 009 的同类问题） |
 | `linear-attn` | 6 | 9 条映射已有，但 0 张实测；本机未找到可跑通的 chunked-scan / gated-linear-attn 入口 |
 | `memory` | 1 | embedding-lookup 1 张 draft；属访存类，判据与 rope 同源但未跑 |
 | `quant` | 3 | 4 条映射 0 实测；per-token/per-block 判据未落地 |
 | `sampling` | 3 | 3 张卡全 draft；判据未定（top-k 与 top-p 的截断语义不同） |
 
-有实测的家族 7 / 12：`activation`、`attention`、`elementwise`、`gemm`、`moe`、`norm`、`rope`
+有实测的家族 8 / 12：`activation`、`attention`、`elementwise`、`gemm`、`kv`、`moe`、`norm`、`rope`
 
 ## 二b、分母未标定
 
@@ -62,5 +65,5 @@
 
 ## 四、当前实测覆盖
 
-有数卡 24 / 全部 49 张。其中证据齐全 11 张、缺证据 13 张。
+有数卡 28 / 全部 53 张。其中证据齐全 11 张、缺证据 17 张。
 

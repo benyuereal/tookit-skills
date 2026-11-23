@@ -29,10 +29,17 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 VALIDATE = REPO / "Plugins/ops/op-atlas/validate.py"
+CARDS = REPO / "Plugins/ops/op-atlas/cards"
 GAPS = REPO / "Plugins/ops/op-atlas/gaps.md"
 CARD = REPO / "Plugins/ops/op-atlas/cards/paged-attention-decode.yaml"
 RESULTS = (REPO / "Plugins/ops/skills/op-optimize/cases"
            / "008-paged-decode-ceiling/results/paged-decode.json")
+
+
+def _validate_atlas_dir(atlas):
+    r = subprocess.run([sys.executable, "-I", str(VALIDATE), "--atlas", str(atlas),
+                        "--repo", str(REPO)], capture_output=True, text=True)
+    return r.stdout + r.stderr
 
 
 def _validate():
@@ -53,18 +60,32 @@ class TestEvidence(unittest.TestCase):
             raise unittest.SkipTest("测试前提：paged-decode.json 应存在")
 
     def test_hash_mismatch_is_error(self):
-        """改了 results 但没更新卡片的 sha256 → 必须 error。"""
-        bak = RESULTS.read_bytes()
+        """卡片的 sha256 与实际文件不符 → 必须 error。
+
+        在临时 atlas 上做：只改卡片里记录的 sha256，不动任何真文件。
+        早期版本改仓内 results 再 try/finally 恢复，测试进程被 timeout 杀掉时
+        （实测发生过两次）文件会永久留在 {} 状态，下一轮 validate 报「哈希不符」，
+        而真因是测试没跑完。
+        """
+        import shutil
+        import tempfile
+        d = Path(tempfile.mkdtemp())
         try:
-            RESULTS.write_text("{}", encoding="utf-8")
-            out = _validate()
+            atlas = d / "op-atlas"
+            shutil.copytree(REPO / "Plugins/ops/op-atlas", atlas)
+            card = atlas / "cards" / "paged-attention-decode.yaml"
+            import yaml
+            c = yaml.safe_load(card.read_text(encoding="utf-8"))
+            ev = c["last_verdict"]["evidence"][0]
+            ev["sha256"] = "0" * 64          # 与真实文件必然不符
+            card.write_text(yaml.dump(c, allow_unicode=True, sort_keys=False),
+                            encoding="utf-8")
+            out = _validate_atlas_dir(atlas)
             self.assertIn("哈希不符", out)
             self.assertIn("paged-attention-decode", out)
-            self.assertRegex(out, r"结果：\d+ 错误")
-            m = __import__("re").search(r"结果：(\d+) 错误", out)
-            self.assertGreater(int(m.group(1)), 0, "哈希不符必须是 error，不能只是警告")
+            self.assertRegex(out, r"结果：[1-9]\d* 错误")
         finally:
-            RESULTS.write_bytes(bak)
+            shutil.rmtree(d, ignore_errors=True)
 
     def test_restore_clears_error(self):
         out = _validate()

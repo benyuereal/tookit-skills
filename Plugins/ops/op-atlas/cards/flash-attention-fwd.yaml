@@ -79,10 +79,14 @@ last_verdict:
   regimes:
     prefill:
       m: 8192
-      kind: speedup
+      kind: compute-bound
       value: 1.66
       bound: compute
       note: causal 相对 non-causal
+      denominator:
+        value: null
+        source: constants.yaml:compute.bf16_gemm_peak_tf
+        why: 算力主导，分母用 compute 峰值
     decode:
       m: 1
       kind: bandwidth

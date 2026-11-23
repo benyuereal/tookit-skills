@@ -61,6 +61,7 @@ candidates:
   - id: mainloop_restage
     parent: prefetch_1slice
     direction: bypass-tilelang-codegen
+    parent_surface: cross-lane-fold
     status: pending
     priority: 2
     hypothesis: >
@@ -83,6 +84,7 @@ candidates:
 
   - id: maxn32
     direction: shorten-max-chain
+    parent_surface: barrier-width
     status: pending
     priority: 1
     hypothesis: "running max 不必每块更新，每 32 块求一次"
@@ -92,6 +94,7 @@ candidates:
 
   - id: bm64_vgpr_squeeze
     direction: raise-heads-per-wave
+    parent_surface: occupancy
     status: pending
     priority: 1
     hypothesis: "把 thr256 下的非 acc_o VGPR 从 ~190 压到 ~100，让 bm64 不再溢出"
@@ -102,6 +105,7 @@ candidates:
 
   - id: handwrite_mainloop
     direction: bypass-tilelang-codegen
+    parent_surface: cross-lane-fold
     status: pending
     priority: 3
     hypothesis: "手写主循环 HIP，绕开 tilelang 的布局转换（64 条标量 LDS）"
@@ -114,6 +118,7 @@ candidates:
   #    已验证事实。绝对站位数字不进本文件（见 data/kb/README.md 条目纪律），只留相对值。
   - id: hcu_buffer_load_gather
     direction: bypass-tilelang-codegen
+    parent_surface: cross-lane-fold
     status: verified
     priority: 1
     hypothesis: "手写 kernel 内层 KV gather 必须走 tl::hcu_buffer_load（单条向量化硬件 buffer_load_dwordx4 + buffer 描述符 + 硬件 OOB clamp），不能用标量 global load 循环"
@@ -126,6 +131,7 @@ candidates:
 
   - id: aicc_mllvm_compile
     direction: bypass-tilelang-codegen
+    parent_surface: cross-lane-fold
     status: verified
     priority: 1
     hypothesis: "手写 HIP kernel 必须用 aicc + **完整镜像对标 tilelang kernel 的编译 flag**（含 pass_configs 条件项）；hipcc 不行（不是慢，是拒收）"
@@ -138,6 +144,7 @@ candidates:
 
   - id: kernel_body_bytecopy_needs_flag_mirror
     direction: bypass-tilelang-codegen
+    parent_surface: cross-lane-fold
     status: verified
     priority: 2
     hypothesis: "「kernel body 是 tilelang 生成体逐字节搬入」不等于「二进制相同」——搬入方必须逐条镜像编译 flag（含 pass_configs 条件项）+ host launch 参数，否则同体不同速"
@@ -149,6 +156,7 @@ candidates:
 
   - id: large_s_ceiling_structure
     direction: cross-head-kv-reuse
+    parent_surface: gather-path
     status: verified
     priority: 1
     hypothesis: "H=64 档大 S（≥64）落后 flash_mla ~1.13-1.19× 且随 S 单调恶化是结构性的：计算地板 2.2× + REPLICATE_H=2（block_m 唯一可达点）+ 缺跨 head KV 复用；所有 body 内调参已穷尽，破局需重写 kernel"
@@ -161,6 +169,7 @@ candidates:
 
   - id: maxn32_e2e
     direction: shorten-max-chain
+    parent_surface: barrier-width
     status: pending
     priority: 2
     hypothesis: "maxn32 的精度代价在端到端评测上不可见"
@@ -173,6 +182,7 @@ stalled:
   - id: prefetch_1slice
     kind: stalled
     direction: bypass-tilelang-codegen
+    parent_surface: cross-lane-fold
     ratio_vs_parent: '1.195'
     what_changed: >
       把 T.copy(KV_spilt0_local→shared) 提到循环体最前、切片0 的 gather 索引改成
@@ -280,6 +290,7 @@ refuted:
   - id: cross_head_kv_reuse_g64
     kind: direction
     direction: raise-heads-per-wave
+    parent_surface: occupancy
     why: "**在 gfx938 上不可行，且不是实现问题，是三条硬约束互斥（先算后写，没动代码）。** ① **复用维度只能是 head**：topk 索引按 (token, kv_group=1) 共享，同一 token 的 64 个 head 读同一份 2048 行 KV ⇒「一份 KV 只读一次」⇔ 一个 CTA 覆盖全部 heads ⇔ bm=64 / REPLICATE_H=1。② **寄存器按 head 数线性膨胀，且 acc_o 与 Q_spilt 同阶**：两者各需 `bm·512/thr` VGPR/线程（bm32/thr256 = 64+64 = 128，实测声明段 120、编译器 256；bm64/thr256 = 128+128 = **256，恰好等于单线程硬上限**，还没算 KV fragment ≈32 与临时量 ≈90 ⇒ 声明段 342）。R1 ⇒ 编译前即可判「必然 spill」，实测 scratch 141 B（另一 build 636 B）、DRAM 420→1724 MB（4.09×）、墙钟 +98%。③ **退到 thr512 能消 spill**（acc_o/Q 各 64，总 252、scratch 0），但同时 heads/wave = `64·bm/thr` 从 16 掉回 8（LDS/MFMA 1.16→2.19），且 768-VGPR 模式下 `VF_LIMIT/(256·thr)`=196608/131072=**1 ⇒ CTA/CU 掉到 1**（R3；1 CTA/CU 实测比 2 慢 67~69%），墙钟 +38.6%（S=128/320k，三档 SKV 一致）。**三条不等式无解**：heads/wave=16 且 m=64 ⇒ thr=256；放得下 ⇒ `2·bm·512/thr + 临时量(~128) ≤ 256` ⇒ bm ≤ 32；occupancy≥2 ⇒ `256·thr ≤ 98304` ⇒ thr ≤ 384。**没有任何 thr 同时满足。** 收益侧同样不成立：复用只把逻辑 KV 读 512→256 MiB（内存地板 311→156 µs），而实测 DRAM 348 MB 在 1724 GB/s 下只占 202 µs = 实耗 693 µs 的 **29%**（MBU 26.9%，无单元打满），且要完全串行才拿得到这 101 µs ⇒ **上界 ≈14.6%**，覆盖不了任何一条路 38.6%/98% 的代价。**LDS 不是约束**（24576+bm·bi·4：bm64=32768=50%，仍允许 2 CTA/CU）；**occupancy 在 thr256 也不会掉到 1**（VGPR 允许 3、LDS 允许 2）——杀的只有 VGPR 这一项。"
     note: "**可迁移机制（换算子/换设备都成立）**：(a)「复用一份输入」的收益上界 = **该输入在墙钟里的占比**，不是「字节数减半」；先在 PMC 看对应单元占用率，<50% 就别指望复用换时间。(b) 要让一个 CTA 服务 N 个消费者，累加器按 N 线性膨胀；判据 = 先算 `acc_vgpr = N·输出宽·4B/(thr·4B)`，它与输入片段 VGPR 之和必须 ≤ 单线程硬上限（gfx9 = 256），否则 R1 直接否，不用编译。(c)「抬 amortization（heads-per-wave）」与「抬占用（CTA/CU）」在 thr 上反向：前者要 thr 小、后者要 thr 大，同一个 N 撑不住两边时该换算法而不是调参。**同时判死 candidates:bm64_vgpr_squeeze 的可行路径**：要压的 ~128 VGPR 几乎全是 Q_spilt，把 Q 搬出寄存器已在 bm32 上实测慢 3.0×（refuted:q_in_shared），剩下的临时量不是主项；按本轮「只追加」纪律未改该条 status，loop 侧应改判 refuted。"
     device: "gfx938 / BW1100 / sclk 1200 MHz（测量时）/ CU=64（torch multi_processor_count 探测；constants.yaml 记 69、tilelang 头注释记 70，三者不一致，见 device_dependency）"

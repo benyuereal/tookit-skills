@@ -47,3 +47,25 @@
 | `DeepGEMM` | kernel | grouped / MoE GEMM，需按 layout 或 arch 精细控制 | 普通稠密大 GEMM（hipBLASLt 够用） | `libraries.md §6` |
 | `hipBLASLt` | kernel | 常规稠密 GEMM | 精细 layout 控制；gfx938 的 FP8 | `libraries.md §6` |
 | `TileLang` | kernel | 形状不定、要 tile 级表达力 | GEMM 主体（布局税） | `libraries.md §8` |
+
+## 手工流水线的完整实例（外部参考）
+
+同机同 gfx938 的 `/workspace/hbird-gemm` 是一份「压到硬件极限」的完整记录，
+**负结果比正结果值钱**，以下是它已经试过的：
+
+| 项 | 结论 | 数字 |
+|---|---|---|
+| Phase 0-10 阶段表 | 每步改什么、涨多少 | 见 `docs/DESIGN.md` |
+| A-read 流水线（3 buffer + 2 步 lead） | 正收益，且比双缓冲更省寄存器（24 vs 32 dwords） | 2.1711 → 2.1070 ms |
+| 4 缓冲 | 无额外收益 | 2.1085 ms |
+| `buffer_load ... slc` 缓存提示 | **死路**：默认 descriptor 最优 | gate_up 0.868×（慢 13%），bit-exact |
+| 源码级 4-stage prefetch 深度 | **死路**：深度由 scheduler 定，源码控制不了 | 关 pass 后 4.5263 → 2.6548 ms，但 vmcnt 模式一样 |
+| `#pragma unroll 1` 用在 epilogue | **死路**：累加器索引变动态 → 128 个寄存器全溢出 | 388 条 `buffer_store` |
+| 非转置 A 的 LDS 读（fp8） | **编译不过**：MLS dispatcher 只有 `_trans` atom | — |
+| 每 CU 只放 1 CTA | 慢 27.5% | 2716.2 vs 2130.0 µs |
+
+**适用条件**：tile 256×256×64 fp8 / 512 threads / 2 CTA per CU / 768-VGPR /
+M=1..128 decode 档 / sclk 1350 MHz。换 tile、dtype、M 档数字会变；
+但「slc 负收益」「源码控制不了 waitcnt 深度」来自机制，大概率可迁移。
+
+ISA 层原语见 `op-hip-compile/references/isa-census.md §四点五/四点六`。
