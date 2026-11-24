@@ -979,7 +979,9 @@ def cmd_run(a):
                  "改用卡片自己的 bench/opcheck 命令跑，再用 `impl-broken` / `direction-refuted` 记账。"
                  % bench, WARN))
         return 2
-    skv = a.skv or d.get("skv") or [32768]
+    # skv 是 sparse-mla 的扫描维度，不是所有卡的必需项。
+    # 没声明 sweep 的卡（rmsnorm 等）用 [None]，适配器自己输出 skv: 0 占位。
+    skv = a.skv or d.get("skv") or ([] if d.get("no_sweep") else [32768]) or [None]
     ab_json = db_dir(card) / "_ab.json"
     # bench 参数必须由卡片自己声明，不能硬编码某一个卡的形状。
     # 原先这里写死了 --s/--topk/--nvalid/--heads/--skv（sparse-mla 的形状），
@@ -1030,12 +1032,22 @@ def cmd_run(a):
     ab = json.loads(ab_json.read_text())
 
     acc = {}
-    if not a.no_acc and (card / d.get("acc", "bench/acc_probe.py")).exists():
+    # 精度门是**可选适配器**。它的参数同样由卡片声明（acc_args），
+    # 不能把 sparse-mla 的 --qscale/--skv 写死——那张卡的 qscale 是 logit 尺度，
+    # 别的算子没有这个概念。原实现让 rmsnorm 这类卡要么报参数错、要么跑到错的档位。
+    acc_adapter = d.get("acc", "bench/acc_probe.py")
+    if not a.no_acc and (card / acc_adapter).exists():
         acc_json = db_dir(card) / "_acc.json"
-        cmd = [sys.executable, str(card / d.get("acc", "bench/acc_probe.py")), *a.tags,
-               "--json", str(acc_json),
-               "--qscale", *[str(x) for x in (a.qscale or d.get("acc_qscale") or [1, 10])],
-               "--skv", str(skv[0])]
+        acc_args = d.get("acc_args")
+        if acc_args is None:
+            acc_args = ["--qscale", *[str(x) for x in (a.qscale or d.get("acc_qscale") or [1, 10])],
+                        "--skv", str(skv[0])]
+            print("note: 未声明 defaults.acc_args，退回 sparse-mla 默认（--qscale/--skv）",
+                  flush=True)
+        else:
+            acc_args = [str(x) for x in acc_args]
+        cmd = [sys.executable, str(card / acc_adapter), *a.tags,
+               "--json", str(acc_json), *acc_args]
         print("$ " + " ".join(cmd), flush=True)
         if subprocess.call(cmd) == 0 and acc_json.exists():
             raw = json.loads(acc_json.read_text())
@@ -1064,17 +1076,22 @@ def cmd_run(a):
                 {"median_ms": run["base_ms"], "mad_ms": run.get("base_mad", 0.0)},
                 {"median_ms": v.get("ms"), "mad_ms": v.get("mad", 0.0)})
             sig = bool(_sig)
-            shape_key = "s%dk%d" % (ab.get("shape", {}).get("S") or a.s or 0,
-                                    run["skv"])
+            # shape_key 原先写死 "s%dk%d"（sparse-mla 的 S 与 KV）。
+            # 改成：优先用适配器自报的 shape_key，否则用 sweep 值，都没有就用 "default"。
+            shape_key = (ab.get("shape", {}).get("shape_key")
+                         or ("s%dk%d" % (ab.get("shape", {}).get("S") or a.s or 0, run.get("skv", 0))
+                             if run.get("skv") is not None else "default"))
             if decision == "ACCEPTED_NUMERICS":
                 decision = "ACCEPTED_NUMERICS_PENDING_E2E"
             if order.index(decision) < order.index(worst):
                 worst = decision
-            print("%-14s %-9d %+8.1f %s  %s" % (v["tag"], run["skv"], v.get("delta_pct", 0.0),
+            _skv_disp = run.get("skv")
+            print("%-14s %-9s %+8.1f %s  %s" % (v["tag"],
+                  _skv_disp if _skv_disp is not None else "-", v.get("delta_pct", 0.0),
                                                 decision, why))
             append_record(card, {
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "card": card.name,
-                "tag": v["tag"], "skv": run["skv"],
+                "tag": v["tag"], "skv": run.get("skv"),
                 "direction": (declared.get(v["tag"]) or {}).get("direction"),
                 "shape": ab.get("shape", {}),
                 "base_ms": run["base_ms"], "base_mad": run.get("base_mad", 0.0),

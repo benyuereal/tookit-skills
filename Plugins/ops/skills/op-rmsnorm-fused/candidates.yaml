@@ -1,5 +1,6 @@
 defaults:
   rounds: 5
+  no_sweep: true
   bench_args:
   - --shape
   - prefill-8k
@@ -25,7 +26,7 @@ candidates:
   priority: 1
   action_class: reduce-bytes
   expect: triton 融合 vs lightop 融合（同语义 2读2写）
-  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape tiny --variants lightop-fused,fused-3pass-triton
+  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape tiny --variants fused-3pass-triton
   note: lightop.RMSNormAdd 本身就融合残差；这条验证的是「融合前 vs 融合后」的差异
   variant: fused-3pass-triton
 - id: inplace-residual
