@@ -130,10 +130,23 @@ class TestIsaPolicySurfaces(unittest.TestCase):
         p = REPO / "Plugins/ops/skills/op-optimize/references/surfaces.yaml"
         sur = yaml.safe_load(p.read_text(encoding="utf-8"))
         by_id = {s["id"]: s for s in sur if isinstance(s, dict)}
+        # verdict 有两种合法值：
+        #   dead_end         —— 全局死路（任何作用域都别试）
+        #   scoped_negative  —— 在**特定作用域**内实测为负（如 slc 在 packed GEMM 上 -13%），
+        #                       但有复用的访存模式不受此结论约束
+        # 业主 2026-11-24 指正：厂商 kernel 里 slc 0 条 ≠ 这个杠杆不存在。
+        # hbird 实测是 -13% 的**作用域内**负结果，必须带 scope，不能升全局。
         for sid in ("slc-policy", "prefetch-depth-isa"):
             self.assertIn(sid, by_id, "%s 被删了——它是已验证的死路，删了会让人重试" % sid)
-            self.assertEqual(by_id[sid].get("verdict"), "dead_end",
-                             "%s 必须标 verdict: dead_end" % sid)
+            v = by_id[sid].get("verdict")
+            self.assertIn(v, ("dead_end", "scoped_negative"),
+                          "%s 的 verdict=%r 非法" % (sid, v))
+            if v == "scoped_negative":
+                sc = by_id[sid].get("scope") or {}
+                self.assertTrue(sc, "%s 标了 scoped_negative 却没有 scope —— "
+                                    "没有作用域的负结果是万能禁令" % sid)
+                self.assertIn("promotion_rule", sc,
+                              "%s 的 scope 缺 promotion_rule（怎么才能升为全局）" % sid)
             self.assertIn("evidence", by_id[sid], "%s 缺 evidence（必须带实测数字）" % sid)
 
     def test_isa_surface_anchors_resolve(self):

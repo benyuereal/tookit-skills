@@ -34,9 +34,17 @@ def _load():
 class TestDominantMapping(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        import yaml
         cls.m, cls.surfaces = _load()
         cls.map = cls.m.get("dominant_to_surface") or {}
         cls.ids = {str(x.get("id")) for x in cls.surfaces if isinstance(x, dict)}
+        # ISA 级 surface 单独放在 data/ops/isa-surfaces.yaml（它们的 check 需要
+        # 反汇编产物，与主表的 PMC/计时类不同）。映射表可以引用两边。
+        isa = REPO / "data/ops/isa-surfaces.yaml"
+        if isa.is_file():
+            d = yaml.safe_load(isa.read_text(encoding="utf-8")) or {}
+            cls.ids |= {str(x.get("id")) for x in (d.get("surfaces") or [])
+                        if isinstance(x, dict)}
 
     def test_all_five_dominants_mapped(self):
         """五个 dominant 一个都不能漏。"""

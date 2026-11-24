@@ -117,3 +117,43 @@ memory/  ✗ 不许是代码（数据 + 只读检索脚本）
 
 **必须先做 M2+M3 再 M6**：先建立「它是引擎」的机器判据，再搬文件。
 反过来会在搬的过程中产生大量临时引用。
+
+---
+
+## 五、迁移实操教训（2026-11-24 实测，踩过两次）
+
+### 1. `Path(__file__)` 的常量必须一次性全查，不要按报错逐个修
+
+迁 `loop.py` 到 `engine/` 时，有两类路径常量断了，**我是按报错逐个修**的：
+
+| 断的常量 | 报错现象 |
+|---|---|
+| `bound-to-class.yaml` | 所有卡报「bound='mixed' 在 bound-to-class.yaml 里没有映射」 |
+| `SURFACES_PATH` / `SCENARIOS_PATH` | `enumerate` 报「找不到 references/surfaces.yaml」 |
+
+**正确做法**：搬迁前先
+```bash
+grep -n 'Path(__file__)' <被迁文件> | grep -v '^.*resolve().parents'
+```
+把**所有**依赖 `__file__` 的常量列出来，一次改完。
+
+### 2. shim 无法完美模拟模块身份
+
+`skills/op-optimize/loop.py` 作为 shim 时，尝试过三种方案让被 import 的行为与 engine 一致：
+
+| 方案 | 失败原因 |
+|---|---|
+| `runpy.run_path(..., "__main__")` | 无条件执行 `main()`，pytest 下 argparse 无参数 → `sys.exit(2)` |
+| `globals().update(engine.__dict__)` | **只拷名字**，测试改 `loop.VERIFY_TIMEOUT_S` 改的是 shim 的字典，engine 读不到 |
+| `exec(engine_src, globals())` | `__file__` 仍是 shim 的 → `REPO_ROOT` 和 `references` 路径全错 |
+
+**结论**：shim 只能保证「当脚本跑」时行为一致。**任何测试如果依赖模块级可变全局，必须直连 engine 路径**，不许经过 shim。
+这条已写进 shim 的 docstring，7 个测试已改。
+
+### 3. 测试应当镜像真实布局
+
+`test_ops_gate` 的模拟布局里原本拷的是 `skills/op-optimize/loop.py`。
+迁移后那个文件成了 shim，它会去找 `Plugins/ops/engine/loop.py`——
+所以模拟布局里**也要有 engine**，否则 shim `sys.exit`。
+
+**规律**：凡是「复制到临时目录再跑」的测试，迁目录后都要检查它复制的那份是否还自足。
