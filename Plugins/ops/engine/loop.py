@@ -700,8 +700,11 @@ def _significant(base, cand, k=3.0):
 
 # ---------------------------------------------------------------- 子命令
 
-SURFACES_PATH = Path(__file__).resolve().parent / "references" / "surfaces.yaml"
-SCENARIOS_PATH = Path(__file__).resolve().parent / "references" / "scenarios.yaml"
+# references/ 是**知识**，留在 skills/op-optimize/ 下（见 docs/ENGINE.md 模块表）。
+# 实现迁到 engine/ 后，这里必须显式跨目录 —— 原先是同目录，迁移时漏了这一处。
+_REFS = Path(__file__).resolve().parents[1] / "skills" / "op-optimize" / "references"
+SURFACES_PATH = _REFS / "surfaces.yaml"
+SCENARIOS_PATH = _REFS / "scenarios.yaml"
 
 
 def load_surfaces():
