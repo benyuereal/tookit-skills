@@ -174,7 +174,10 @@ def _check_next_probe(cards_dir, repo):
             import yaml
             data = yaml.safe_load(sp.read_text(encoding="utf-8")) or []
             surf_ids = {str(x.get("id")) for x in data if isinstance(x, dict)}
-        except Exception:                                        # noqa: BLE001
+        except (OSError, ValueError, AttributeError) as e:
+            # 读不到 surfaces.yaml 会让「方向不在表里」全线误报；
+            # 显式报错比静默空集合好——空集合是"全都非法"，那是假象。
+            err("E26", str(sp), "读不到 surfaces.yaml，方向校验无法进行：%s" % e)
             surf_ids = set()
 
     for p in sorted(cards_dir.glob("*.yaml")):
@@ -563,8 +566,10 @@ def _check_impl_to_ceiling(cards_dir, repo):
         b16 = comp.get("bf16_gemm_peak_tf") or {}
         if isinstance(b16, dict) and b16.get("value"):
             ach["bf16"] = float(b16["value"])
-    except Exception:                                            # noqa: BLE001
-        pass
+    except (OSError, ValueError, KeyError, AttributeError) as e:
+        # 读不到常数不能静默跳过：E29 的判据全依赖它，
+        # 静默 pass 会让「宣称 N 倍空间」这类检查**整体失效而无人察觉**。
+        err("E29", "constants.yaml", "读不到 achievable 峰值，E29 无法判定：%s" % e)
 
     for p in sorted(cards_dir.glob("*.yaml")):
         d, problem = _load_yaml(p)
