@@ -110,6 +110,30 @@ def check_verification(doc):
         if int(s["claims_verified"]) != actual:
             probs.append("summary.claims_verified=%s 与实际已复验记录数 %d 不符"
                          % (s["claims_verified"], actual))
+
+    # ── absorption 数组：**此前完全没被校验** ────────────────────────────────
+    # 实测（2026-11-24）：mqa_opt 的 absorption 用的是 where/action，
+    # 而 schema 约定是 absorb_target/absorb_action —— 校验器只查记录**内**的
+    # absorb 字段，顶层 absorption 数组整个漏检，所以 rc=0 放过了不一致。
+    # 这是「校验器自己没被校验」的又一例：有规则，但规则挂在了错的地方。
+    for j, a in enumerate(doc.get("absorption") or []):
+        if not isinstance(a, dict):
+            probs.append("absorption[%d] 必须是 object" % j)
+            continue
+        item = str(a.get("item") or "")[:40] or "#%d" % j
+        if "absorb" not in a:
+            probs.append("absorption[%d]（%s）缺 absorb —— 不能默认吸收" % (j, item))
+            continue
+        if a["absorb"] is True:
+            # 吸收了就必须说清落点与动作；否则「吸收」只是表态
+            for k in ("absorb_target", "absorb_action"):
+                if not a.get(k):
+                    probs.append("absorption[%d]（%s）absorb=true 但缺 %s"
+                                 % (j, item, k))
+        elif a["absorb"] is False:
+            if not a.get("why"):
+                probs.append("absorption[%d]（%s）absorb=false 但没说 why —— "
+                             "不吸收的理由必须留痕" % (j, item))
     return probs
 
 

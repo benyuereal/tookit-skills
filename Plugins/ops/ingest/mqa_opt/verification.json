@@ -15,22 +15,22 @@
     {
       "item": "LDS swizzle 在 PMC 显示 9.6 冲突时仍只快 0.36%",
       "absorb": true,
-      "where": "op-profiling/references/counters.md + surfaces.yaml 的 lds-read-form",
       "why": "硬反例：PMC 计数器非零 ≠ 它是瓶颈。我们之前把 SQ_WAIT_INST_LDS/SQ_INSTS_LDS 当代理指标（D4 因 SQ_LDS_BANK_CONFLICT 采不到），这条说明**代理指标同样会误导**。",
-      "action": "在 counters.md 补：任何 PMC 归因必须配一次「修掉它」的实测，否则只是相关性"
+      "absorb_target": "op-profiling/references/counters.md + surfaces.yaml 的 lds-read-form",
+      "absorb_action": "在 counters.md 补：任何 PMC 归因必须配一次「修掉它」的实测，否则只是相关性"
     },
     {
       "item": "timing-only 探针不能当消融项",
       "absorb": true,
-      "where": "scripts/ablate.py（待实现 derived_from/numerically_valid）",
       "why": "ablate.py 收到这类项时算出负 share，只报 unexplained，没拦住。已登记 D9。",
-      "action": "见 DEBT D9"
+      "absorb_target": "scripts/ablate.py（待实现 derived_from/numerically_valid）",
+      "absorb_action": "见 DEBT D9"
     },
     {
       "item": "mqa 的 1.27x 主收益（bp 路径）",
       "absorb": false,
       "why": "这是别人的优化成果，我们复现了但不能当成自己的卡片数据。",
-      "action": "只进 ingest 层留证"
+      "absorb_action": "只进 ingest 层留证"
     }
   ],
   "records": [

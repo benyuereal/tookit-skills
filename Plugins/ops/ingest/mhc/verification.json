@@ -100,44 +100,44 @@
     {
       "item": "Step2 mix 达 85% 峰值（1597 GB/s / 1870）",
       "absorb": true,
-      "where": "op-roofline/models + bw-ladder 的 rw_1to1 档对照",
       "why": "证明 rw_1to1 类算子在正确实现下能到 85%+。我们的 rmsnorm 到 86.5%（1454/1680），两者互证：1:1 档的真实可达率在 0.85 附近，不是 floor.py 假设的 0.79（归约折扣）。",
-      "action": "用 1454/1680=0.866 与 1597/1870=0.854 两个独立实现共同把 3_row_reduction 折扣从 0.79 上调"
+      "absorb_target": "op-roofline/models + bw-ladder 的 rw_1to1 档对照",
+      "absorb_action": "用 1454/1680=0.866 与 1597/1870=0.854 两个独立实现共同把 3_row_reduction 折扣从 0.79 上调"
     },
     {
       "item": "proj4 的 +17% 且逐位一致",
       "absorb": true,
-      "where": "op-hip-compile/references + kernel_scaffold 的 loop-shape 参数",
       "why": "「改循环形状、不改算法」也能拿 17%，且 bit-identical。这类改动风险最低、最该优先试。我们的 forge 目前只改 THREADS/VEC，没有「循环形状」这个维度。",
-      "action": "给 kernel_scaffold 的 fused-add-reduce 模板加一个 ORDER/SWIZZLE 参数维度"
+      "absorb_target": "op-hip-compile/references + kernel_scaffold 的 loop-shape 参数",
+      "absorb_action": "给 kernel_scaffold 的 fused-add-reduce 模板加一个 ORDER/SWIZZLE 参数维度"
     },
     {
       "item": "weight 复用（MB>1）被证伪 + NOB 反证",
       "absorb": true,
-      "where": "surfaces.yaml 的 reuse-across-iter 方向",
       "why": "带反证的证伪：不只看「MB 更慢」，还用 NOB（完全去掉 weight 流只 +13%）证明 weight 本来就不是瓶颈。**反证比证伪本身更有价值。**",
-      "action": "在 reuse-across-iter 的 evidence 里补：复用前先做 NOB 类反证，确认该流是瓶颈"
+      "absorb_target": "surfaces.yaml 的 reuse-across-iter 方向",
+      "absorb_action": "在 reuse-across-iter 的 evidence 里补：复用前先做 NOB 类反证，确认该流是瓶颈"
     },
     {
       "item": "Step3 融合慢 1.7x（流碎裂）",
       "absorb": true,
-      "where": "surfaces.yaml 的 fusion-boundary",
       "why": "我们这条 surface 写着 expected_gain 20~60%，把融合当无条件利好。这是硬反例。根因是两半的最优 CTA 粒度不相容（1-token vs 128-token）。",
-      "action": "改 fusion-boundary 的 precondition：融合前必须问「两半最优 CTA 粒度是否相容」"
+      "absorb_target": "surfaces.yaml 的 fusion-boundary",
+      "absorb_action": "改 fusion-boundary 的 precondition：融合前必须问「两半最优 CTA 粒度是否相容」"
     },
     {
       "item": "跨层 post||pre 不是合法调度",
       "absorb": true,
-      "where": "surfaces.yaml 的 pipeline-depth",
       "why": "数据依赖：pre(L+1) 读的正是 post(L) 写的。任何「跨层重叠」的收益声明都是无效数。这是**正确性层面的否决**，不是性能层面的。",
-      "action": "在 pipeline-depth 的 legality 里加：有 RAW 依赖的两段不许宣称重叠收益"
+      "absorb_target": "surfaces.yaml 的 pipeline-depth",
+      "absorb_action": "在 pipeline-depth 的 legality 里加：有 RAW 依赖的两段不许宣称重叠收益"
     },
     {
       "item": "mHC 整体 1.89x / 天花板 2.06x",
       "absorb": false,
-      "where": "-",
       "why": "这是文档声明。虽然我们复现了（1.89x 精确吻合），但它属于「别人的优化成果」。吸纳的是**方法**，不是把 2.06x 写进我们的卡当 measured —— 我们没跑过生产路径。",
-      "action": "不进卡。只在 ingest 层留证，卡上仍标 missing_evidence"
+      "absorb_target": "-",
+      "absorb_action": "不进卡。只在 ingest 层留证，卡上仍标 missing_evidence"
     }
   ]
 }
