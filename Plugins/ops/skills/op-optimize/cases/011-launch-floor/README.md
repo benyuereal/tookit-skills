@@ -1,0 +1,37 @@
+# Case 011：launch 成本不是常数（实测）
+
+**日期**：2026-11-24　**卡**：6（独占）　**方法**：41 次采样取中位，MAD 全部 <1 µs
+
+## 结论
+
+`constants.yaml` 里 `launch.floor_us = 43` **既不是空 kernel，也不对应任何具体算子**——
+它恰好等于 **grid=8192** 的开销。真空 launch 是 **10 µs**，我们高估了 4 倍。
+
+| 网格 (blocks × threads) | 实测 |
+|---|---|
+| 1 × 1（真空） | **10.6 µs** |
+| 1 × 256 | 9.8 µs |
+| 64 × 256 | 9.8 µs |
+| 1024 × 256 | 13.4 µs |
+| 8192 × 256 | **40.3 µs** |
+| 65536 × 256 | **247.8 µs** |
+
+线性拟合：`launch_us ≈ 9.88 + 0.003632 × grid_blocks`
+
+## 为什么这条重要
+
+判据 B（launch_fraction > 0.30 → launch-bound）的分子就是这个数。
+用 43 当所有算子的 launch 成本，会让 topk（34.2 µs）判成 126% 占比；
+用真空 10 µs 则是 29%——**刚好在阈值另一侧**。判定翻转 → EV 全盘翻转。
+
+## 复现
+
+```bash
+hipcc -O3 --offload-arch=gfx938 launch_sweep.hip -o launch_sweep
+flock /tmp/opbench-gpu.lock -c "HIP_VISIBLE_DEVICES=6 ./launch_sweep"
+```
+
+## 未验证
+
+- **每参数成本（评审估约 8 字节/参数）没有实测**。在补测之前，
+  `launch_model` 里不应包含 n_params 项。

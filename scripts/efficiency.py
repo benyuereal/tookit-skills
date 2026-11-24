@@ -335,6 +335,147 @@ def compute_mbu(achieved_bw, pattern, ladder_path=None):
 
 # --------------------------------------------------------------- record 入口
 
+# ---------------------------------------------------------------- roofline 判据
+# 业主 2026-11-24：指标要跟着 bound 走，不是两个都报。
+#   算术强度 AI = FLOPs / Bytes；拐点 ridge = peak_flops / peak_bw
+#   AI < ridge  → memory-bound → 看 MBU
+#   AI > ridge  → compute-bound → 看 MFU
+# 混着看会得出方向相反的结论：一个 bandwidth-bound 的 norm 算子，
+# MFU 只有 0.02，但那不代表它差——它本来就不该在算力上跑满。
+
+def ridge_point(precision="bf16", pattern="rw_2to1",
+                constants_path=None, ladder_path=None):
+    """拐点 = 算力峰值 / 带宽峰值。返回 {ridge, peak_flops, peak_bw, ...}。"""
+    pf = resolve_peak_denominator(precision, constants_path)
+    if "error" in pf:
+        return pf
+    pb = resolve_bw_denominator(pattern, ladder_path)
+    if "error" in pb:
+        return pb
+    flops = pf["value"] * 1e12                       # TFLOPS → FLOP/s
+    bw = pb["value"] * 1e9                           # GB/s → B/s
+    return {
+        "ridge_flops_per_byte": round(flops / bw, 2),
+        "peak_flops": pf,
+        "peak_bw": pb,
+        "formula": "ridge = peak_flops(TF) × 1e12 / (peak_bw(GB/s) × 1e9)",
+    }
+
+
+def classify_by_launch(t_actual_us, launch_us=43.0, threshold=0.30):
+    """判据 B：延迟占比。**先于 roofline 判**。
+
+    为什么 roofline 判不了 launch-bound：launch 是**加性固定成本**，
+    而 roofline 的两个地板（带宽/算力）都是**可分摊成本**。
+    topk 34.2 µs 的算子按 roofline 算字节只要 0.3 µs，AI 毫无意义，
+    ridge 判不出它被 launch 主导——但实测就是 34 µs。
+
+    所以顺序是：先扣 launch，再谈利用率。
+
+    LFU（Launch Fraction Utilization）= 有效工作耗时 / 总耗时。
+    接近 1 = 有效工作占主导；接近 0 = 全是 launch 开销。
+    """
+    if not t_actual_us or t_actual_us <= 0:
+        return {"error": "判 launch 占比需要实测耗时"}
+    frac = float(launch_us) / float(t_actual_us)
+    lfu = max(0.0, 1.0 - frac)
+    is_launch = frac > threshold
+    return {
+        "launch_us": float(launch_us),
+        "t_actual_us": float(t_actual_us),
+        "launch_fraction": round(frac, 3),
+        "threshold": threshold,
+        "lfu": round(lfu, 3),
+        "is_launch_bound": is_launch,
+        "why": ("launch %.0f µs / 实测 %.1f µs = %.0f%% > 阈值 %.0f%% ⇒ launch 主导"
+                % (launch_us, t_actual_us, frac * 100, threshold * 100)) if is_launch
+               else ("launch 占 %.0f%% ≤ 阈值 %.0f%% ⇒ 不是 launch 主导，继续按 roofline 判"
+                     % (frac * 100, threshold * 100)),
+        "primary_metric": "LFU" if is_launch else None,
+    }
+
+
+def decide_metric(t_actual_us, flops=None, bytes_moved=None,
+                  launch_us=43.0, precision="bf16", pattern="rw_2to1", **kw):
+    """**总入口**：先判 launch，再判 roofline。
+
+    顺序不可反：一个 40 µs 的算子若先按 roofline 判成 memory-bound，
+    agent 会去优化访存，可 43 µs 的 launch 已经超过整个耗时——白干。
+    """
+    lb = classify_by_launch(t_actual_us, launch_us)
+    if "error" in lb:
+        return lb
+    if lb["is_launch_bound"]:
+        return {"bound": "launch", "launch": lb,
+                "primary_metric": "LFU",
+                "direction": "融合（把 N 次 launch 合成 1 次是唯一有效手段）",
+                "note": "launch-bound 下 MBU/MFU 都无意义——先扣掉固定成本再谈利用率"}
+    rb = classify_bound(flops, bytes_moved, precision, pattern, **kw)
+    if "error" in rb:
+        return {"bound": "unknown", "launch": lb, "error": rb["error"],
+                "note": "不够 launch-bound，但 roofline 也算不出（缺 flops 或 bytes）"}
+    return {"bound": rb["primary_metric"].lower() if rb["primary_metric"] != "both" else "mixed",
+            "launch": lb, "roofline": rb,
+            "primary_metric": rb["primary_metric"], "report": rb["report"]}
+
+
+def classify_bound(flops, bytes_moved, precision="bf16", pattern="rw_2to1",
+                   band=0.15, **kw):
+    """按算术强度判该看 MFU 还是 MBU。
+
+    band：ridge 附近的灰区（默认 ±15%）。落在灰区里两个都报，
+    因为此时两条腿都可能顶到——强行二选一会误导。
+    """
+    if not (flops and bytes_moved and bytes_moved > 0):
+        return {"error": "判 bound 需要 flops 与 bytes_moved 都已知"
+                         "（拿不到就别猜该看哪个指标）"}
+    r = ridge_point(precision, pattern, **kw)
+    if "error" in r:
+        return r
+    ai = float(flops) / float(bytes_moved)
+    ridge = r["ridge_flops_per_byte"]
+    lo, hi = ridge * (1 - band), ridge * (1 + band)
+    if ai < lo:
+        which, why = "MBU", "AI=%.1f < ridge×0.85=%.1f ⇒ 带宽受限" % (ai, lo)
+    elif ai > hi:
+        which, why = "MFU", "AI=%.1f > ridge×1.15=%.1f ⇒ 算力受限" % (ai, hi)
+    else:
+        which, why = "both", "AI=%.1f 落在 ridge=%.1f 的 ±15%% 灰区 ⇒ 两条腿都可能顶到" % (
+            ai, ridge)
+    return {"ai_flops_per_byte": round(ai, 2), "ridge": r,
+            "primary_metric": which, "why": why,
+            "report": (["MBU"] if which == "MBU" else
+                       ["MFU"] if which == "MFU" else ["MFU", "MBU"])}
+
+
+def efficiency(record, card=None, constants_path=None, ladder_path=None):
+    """按 roofline 自动选指标，只报该看的那个。
+
+    这是对外的主入口：调用方不需要知道该看 MFU 还是 MBU。
+    """
+    flops = _first_number(record, ("flops", "achieved_flops", "tflops"))
+    byts = _first_number(record, ("bytes", "bytes_moved", "traffic_bytes"))
+    precision = (record.get("precision") or _card_meta(card).get("precision")
+                 or "bf16")
+    pattern = record.get("pattern") or _card_meta(card).get("pattern") or "rw_2to1"
+    cls = classify_bound(flops, byts, precision, pattern,
+                         constants_path=constants_path, ladder_path=ladder_path)
+    if "error" in cls:
+        return cls
+    out = {"bound": cls}
+    for m in cls["report"]:
+        if m == "MFU" and flops:
+            r = compute_mfu(flops if (flops or 0) < 1e6 else flops / 1e12,
+                            precision, constants_path)
+        elif m == "MBU" and byts:
+            r = efficiency_from_record(record, card, constants_path, ladder_path)
+            r = {k: v for k, v in r.items() if k in ("mbu", "denominator", "error")}
+        else:
+            continue
+        out[m.lower()] = r
+    return out
+
+
 def _grid_ctas(val):
     """grid → 总 CTA 数；非法返回 None。整数就是总数，列表取积。"""
     if isinstance(val, int) and not isinstance(val, bool):

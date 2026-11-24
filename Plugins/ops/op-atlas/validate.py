@@ -800,7 +800,10 @@ def _check_resources_block(lv, where, err):
         err("E43", where, "last_verdict.resources 必须是 mapping")
         return
     allowed = {"vgpr", "lds_per_cta", "ctas_per_cu", "waves_per_cu",
-               "achieved_bw", "bw_util", "proxies", "source", "status"}
+               "achieved_bw", "bw_util", "proxies", "source", "status",
+               # compute-bound 卡在 S4 记的是 MFU，不是 bw_util；
+               # grid/threads_per_cta 是推 ctas_per_cu 的必需输入（PMC CSV 直接给）
+               "mfu", "grid", "threads_per_cta"}
     extra = set(r) - allowed
     if extra:
         err("E43", where, "resources 未知字段 %s" % sorted(extra))

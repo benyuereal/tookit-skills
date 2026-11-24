@@ -1,138 +1,136 @@
-# 攻击面预枚举（op-optimize 的候选方向来源）
-#
-# 为什么有这个文件：candidates.yaml 要求每个候选写 direction，且 direction
-# 必须在 directions 段里声明。此前这一步要人/agent **凭空发明**一个方向名——
-# 探索期本来就模糊，这是真实的探索成本来源。
-# 这个文件把「发明」变成「从表里挑」：挑是廉价的，想是昂贵的。
-#
-# 纪律：
-#   - id 即 direction 的取值。不在本表里的 direction，enumerate 不生成。
-#   - 每条必须挂一条 pipeline-laws 的定律（law）。判死时要能追溯到机制，
-#     不许写「试过，慢」。
-#   - check 必须是一条**可复跑**的探测命令或明确的 PMC 计数器名，
-#     不许写「看看是不是瓶颈」这种无法执行的判据。
-#   - precondition 写清楚「在什么条件下这条才值得试」。不写条件的攻击面
-#     会变成万能借口。
-
 - id: occupancy
-  statement: "CTA/CU 驻留数是否被 LDS 或寄存器打到更低档"
+  statement: CTA/CU 驻留数是否被 LDS 或寄存器打到更低档
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: residency
-  precondition: "已知 tile 形状，且实测 occupancy < 目标档"
-  check: "pmc: GRBM_COUNT + CSV 的 grd/wgr 算 CTA 数；inspect_so.py 看 VGPR/LDS 定驻留档（SQ_WAVES 本机 CSV 不提供，见 op-profiling/references/counters.md）"
-  evidence: "同 body LDS 16→32KB 会把 3 CTA/CU 打到 2，墙钟 +27.5%"
+  precondition: 已知 tile 形状，且实测 occupancy < 目标档
+  check: 'pmc: GRBM_COUNT + CSV 的 grd/wgr 算 CTA 数；inspect_so.py 看 VGPR/LDS 定驻留档（SQ_WAVES 本机 CSV 不提供，见 op-profiling/references/counters.md）'
+  evidence: 同 body LDS 16→32KB 会把 3 CTA/CU 打到 2，墙钟 +27.5%
   cost: M
-
+  expected_gain: ≤15%（受 ISA 与硬件 wave 上限约束，超过要重新查分母）
+  precondition_check: python3 -I scripts/efficiency.py --record <results.json> --index 0 | grep -E 'ctas_per_cu|waves_per_cu'
 - id: grid-tail
-  statement: "grid 是否为 CU 数的整数倍；尾波占比多少"
+  statement: grid 是否为 CU 数的整数倍；尾波占比多少
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: residency
-  precondition: "grid 不是 CU 倍数的整数倍，且 kernel 占总时间 >5%"
-  check: "pmc: GRBM_COUNT；对比 grid 与 CU 数取模"
-  evidence: "尾波 >10% 时尾块占用整卡却只干 10% 的活"
+  precondition: grid 不是 CU 倍数的整数倍，且 kernel 占总时间 >5%
+  check: 'pmc: GRBM_COUNT；对比 grid 与 CU 数取模'
+  evidence: 尾波 >10% 时尾块占用整卡却只干 10% 的活
   cost: S
-
+  expected_gain: ≤5%（尾块只影响最后一波）
+  precondition_check: python3 -I -c "import json,sys;d=json.load(open('<results.json>'));print(d['metrics']['grid'])" | awk '{print $1%64}'
 - id: prefetch-depth
-  statement: "预取/流水深度是否真的是延迟杠杆（多半不是）"
+  statement: 预取/流水深度是否真的是延迟杠杆（多半不是）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q2
   class: pipeline
-  precondition: "load-only 消融尚未达到流式读峰值；否则调深度无效"
-  check: "python3 -I scripts/probe_stream.py（拿流式峰值）+ load-only 变体计时"
-  evidence: "2-stage 双缓冲会把 occupancy 16→8 waves，实测 0.65x"
+  precondition: load-only 消融尚未达到流式读峰值；否则调深度无效
+  check: python3 -I scripts/probe_stream.py（拿流式峰值）+ load-only 变体计时
+  evidence: 2-stage 双缓冲会把 occupancy 16→8 waves，实测 0.65x
   cost: S
-
+  expected_gain: ≈0（已实测证伪：源码级预取深度不可控）
+  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep SQ_WAIT_INST_LDS
 - id: barrier-width
-  statement: "每个 barrier 之间摊了多少工作；barrier 是否过密"
+  statement: 每个 barrier 之间摊了多少工作；barrier 是否过密
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
   class: pipeline
-  precondition: "PMC 显示同步类指令占 VALU 发射的显著比例"
-  check: "pmc: SQ_WAIT_INST_LDS / SQ_INSTS_VALU（SQ_INSTS_BARRIER 本机 CSV 不提供；且 SWAIT 需先用带 LDS 的 kernel 验证非零，见 op-profiling/references/counters.md）"
-  evidence: "barrier 宽度与每 barrier 工作量不匹配时，MMAC 发射率被同步打断"
+  precondition: PMC 显示同步类指令占 VALU 发射的显著比例
+  check: 'pmc: SQ_WAIT_INST_LDS / SQ_INSTS_VALU（SQ_INSTS_BARRIER 本机 CSV 不提供；且 SWAIT 需先用带 LDS 的 kernel 验证非零，见 op-profiling/references/counters.md）'
+  evidence: barrier 宽度与每 barrier 工作量不匹配时，MMAC 发射率被同步打断
   cost: M
-
+  expected_gain: ≤8%
+  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep -E 'SQ_WAIT_INST_LDS|SQ_INSTS_VALU'
 - id: layout-pack
-  statement: "是否每一步都付一次 pack/shuffle/转置"
+  statement: 是否每一步都付一次 pack/shuffle/转置
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: layout
-  precondition: "变体输入布局与生产 kernel 输出布局不一致"
-  check: "对比变体与生产 kernel 的 tensor stride/dtype；pmc: GRBM_COUNT 看是否多一次 kernel"
-  evidence: "每换一次数据组织就多一份搬运；微基准快、生产掉分多半是这条"
+  precondition: 变体输入布局与生产 kernel 输出布局不一致
+  check: '对比变体与生产 kernel 的 tensor stride/dtype；pmc: GRBM_COUNT 看是否多一次 kernel'
+  evidence: 每换一次数据组织就多一份搬运；微基准快、生产掉分多半是这条
   cost: M
-
+  expected_gain: 15~40%（多一趟 HBM 往返就是线性收益）
+  precondition_check: python3 -I scripts/floor.py --card <card> --json | grep -E 'bytes_mb|remaining'
 - id: table-miss
-  statement: "该 shape 是否落在库的调优表里（未命中往往是最大收益）"
+  statement: 该 shape 是否落在库的调优表里（未命中往往是最大收益）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: tier
-  precondition: "目标是 MoE / grouped GEMM 且走的是查表型后端"
-  check: "打印 get_aiter_moe_config 的 solution_type / 查 DeepGEMM MODE 表"
-  evidence: "AITER 慢通常意味着查表没命中，而不是 kernel 慢"
+  precondition: 目标是 MoE / grouped GEMM 且走的是查表型后端
+  check: 打印 get_aiter_moe_config 的 solution_type / 查 DeepGEMM MODE 表
+  evidence: AITER 慢通常意味着查表没命中，而不是 kernel 慢
   cost: S
-
+  expected_gain: ≤20%
+  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep TCC_MISS
 - id: fusion-boundary
-  statement: "融合是否把本可并行的 kernel 串成了依赖链"
+  statement: 融合是否把本可并行的 kernel 串成了依赖链
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
   class: pipeline
-  precondition: "候选是融合改动，且原 kernel 之间本可并行"
-  check: "用 scripts/opbench.py bench_fn 分别量融合版与分拆版的 sum"
-  evidence: "pre_big_fuse 把独立 kernel 串成依赖链并多占 smem，实测慢 1.7x"
+  precondition: 候选是融合改动，且原 kernel 之间本可并行
+  check: 用 scripts/opbench.py bench_fn 分别量融合版与分拆版的 sum
+  evidence: pre_big_fuse 把独立 kernel 串成依赖链并多占 smem，实测慢 1.7x
   cost: L
-
+  expected_gain: 20~60%（省下的往返次数 × 单趟成本）
+  precondition_check: python3 -I scripts/floor.py --card <card> --json | grep traffic
 - id: precision-drop
-  statement: "能否降到 fp8/int8 且仍过契约容差"
+  statement: 能否降到 fp8/int8 且仍过契约容差
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   class: precision
-  precondition: "主口径对 fp32 参考有足够余量；压力档无相对退化"
-  check: "opcheck correctness --contract <card>/contract.yaml；看 max_abs vs 容差"
-  evidence: "降精度是唯一能在不改结构的前提下改变算术强度的手段"
+  precondition: 主口径对 fp32 参考有足够余量；压力档无相对退化
+  check: opcheck correctness --contract <card>/contract.yaml；看 max_abs vs 容差
+  evidence: 降精度是唯一能在不改结构的前提下改变算术强度的手段
   cost: L
-
+  expected_gain: 约 2×（fp8 相对 bf16 的理论上限比）
+  precondition_check: python3 -I scripts/efficiency.py --ridge
 - id: split-k
-  statement: "split-K 切片数是否按 shape 单独搜过"
+  statement: split-K 切片数是否按 shape 单独搜过
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: residency
-  precondition: "M 小且 N/K 大，单个 CTA 的 K 维工作量过长"
-  check: "scripts/opbench.py bench_fn 扫 s = 1,2,4,8，5 轮取中位数"
-  evidence: "shipped 默认 s 往往不是最优；plan 层存在的理由就是这个"
+  precondition: M 小且 N/K 大，单个 CTA 的 K 维工作量过长
+  check: scripts/opbench.py bench_fn 扫 s = 1,2,4,8，5 轮取中位数
+  evidence: shipped 默认 s 往往不是最优；plan 层存在的理由就是这个
   cost: S
-
+  expected_gain: 10~30%（M 小 N/K 大时才有效）
+  precondition_check: python3 -I -c "print(open('<results.json>').read().count('split'))"
 - id: gather-path
-  statement: "数据搬运（gather/scatter）是否在关键路径且串行"
+  statement: 数据搬运（gather/scatter）是否在关键路径且串行
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: memory-path
-  precondition: "attention / indexer 类算子，且 MMA 占比远小于搬运"
-  check: "pmc: 对比 MMA 指令占比与 gather 相关指令/等待时间"
-  evidence: "FP8 MLA 消融：MMA 只占 40ms 中的 3.3ms，gather 占约 9ms 且完全串行"
+  precondition: attention / indexer 类算子，且 MMA 占比远小于搬运
+  check: 'pmc: 对比 MMA 指令占比与 gather 相关指令/等待时间'
+  evidence: FP8 MLA 消融：MMA 只占 40ms 中的 3.3ms，gather 占约 9ms 且完全串行
   cost: M
-
+  expected_gain: 20~50%（取决于随机度）
+  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep TA_FLAT_READ_WAVEFRONTS
 - id: cross-lane-fold
-  statement: "跨 lane 归约是否用了更长指令序列（如 shfl 而非 bpermute）"
+  statement: 跨 lane 归约是否用了更长指令序列（如 shfl 而非 bpermute）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
   class: pipeline
-  precondition: "epilogue 含跨 lane 归约，且 VALU 中非 MMAC 占比高"
-  check: "pmc: SQ_INSTS_VALU 与 MMAC 指令数之比；查 epilogue 归约写法"
-  evidence: "grouped MQA 换成 ds_bpermute_b32：VALU -15.8%，墙钟 1.29x，逐位一致"
+  precondition: epilogue 含跨 lane 归约，且 VALU 中非 MMAC 占比高
+  check: 'pmc: SQ_INSTS_VALU 与 MMAC 指令数之比；查 epilogue 归约写法'
+  evidence: grouped MQA 换成 ds_bpermute_b32：VALU -15.8%，墙钟 1.29x，逐位一致
   cost: S
-
+  expected_gain: ≤8%（已实测证伪：分块两趟全更慢）
+  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep -E 'SQ_INSTS_VALU|SQ_INSTS_LDS'
 - id: slc-policy
   statement: 全局访存加 SLC/流式缓存提示（buffer_load ... slc）能否提速
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点五
   class: isa-policy
   precondition: 该 kernel 的权重在 tile 内没有真实复用
-  check: "hipcc 编两版（默认 descriptor vs -DW12SLC=1），opcheck correctness 验 bit-exact 后用 opbench 比耗时"
-  evidence: >
-    hbird 实测：gate_up 0.868×（慢 13%）、qkv 打平、输出 bit-exact。
-    结论是默认 descriptor 最优 —— slc 只是花掉了 prefetch ring 本来免费的 sector。
+  check: hipcc 编两版（默认 descriptor vs -DW12SLC=1），opcheck correctness 验 bit-exact 后用 opbench 比耗时
+  evidence: 'hbird 实测：gate_up 0.868×（慢 13%）、qkv 打平、输出 bit-exact。 结论是默认 descriptor 最优 —— slc 只是花掉了 prefetch ring 本来免费的 sector。
+
+    '
   verdict: dead_end
   cost: S
+  expected_gain: ≈0（已实测 -13%）
+  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep -c slc
 - id: prefetch-depth-isa
   statement: 源码写几段预取/多少 lookahead，能否控制实际 waitcnt 深度
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点六
   class: isa-policy
   precondition: 使用 HCU 后端编译器，且有 prefetch 结构
-  check: "dccobjdump --recompile 看 vmcnt 模式；或 hipcc 加 -mllvm=-hcu-update-wait-by-reverse-search=false 对比 opbench 耗时"
-  evidence: >
-    hbird：4-stage prefetch 关掉 wait-rewrite pass 后 4.5263 → 2.6548 ms，
-    但两种情况下发出的 vmcnt(1)(2)(3) 模式完全一样。
-    ⇒ 深度由 scheduler 决定，源码控制不了。这解释了「调 num_stages 常没用」。
+  check: dccobjdump --recompile 看 vmcnt 模式；或 hipcc 加 -mllvm=-hcu-update-wait-by-reverse-search=false 对比 opbench 耗时
+  evidence: 'hbird：4-stage prefetch 关掉 wait-rewrite pass 后 4.5263 → 2.6548 ms， 但两种情况下发出的 vmcnt(1)(2)(3) 模式完全一样。 ⇒ 深度由 scheduler 决定，源码控制不了。这解释了「调 num_stages 常没用」。
+
+    '
   verdict: dead_end
   cost: L
+  expected_gain: ≈0（已实测 -1.3%）
+  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep vmcnt

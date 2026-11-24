@@ -203,6 +203,41 @@ last_verdict:
   inputs: 2
   outputs: 1
   traffic_passes: 3
+  bottleneck:
+    bound: compute
+    root_cause: 8192³ bf16 GEMM 算术强度 AI=4096 FLOP/B，远高于本机 ridge=161，算力受限。MFU=0.895（249.6 TF / 279 achievable）。剩余 10.5% 不在算法，而在**寄存器把并发锁死**：VGPR=212 ⇒ CTA/CU=min(196608/(212×512), 65536/65536)=1，只有一个 CTA
+      驻留，跨 CTA 的延迟隐藏完全丧失
+    evidence:
+    - kind: counters
+      what: PMC 实测放置条件（kernel Cijk_Ailk_Bljk_BBH_MT256x256x16）
+      value: grd=524288 wgr=512 lds=65536 vgpr=212 sgpr=112
+      reproduce: hipprof --pmc --pmc-type 3 -o /tmp/pmc-gemm/x python3 -I /tmp/gemm_pmc.py
+    - kind: ratio
+      what: MFU = 249.6 TF / 279 TF（constants.yaml achievable）
+      value: '0.895'
+      reproduce: python3 -I scripts/efficiency.py --flops 249.6 --precision bf16
+    - kind: ablation
+      what: ridge 判定：AI=4096 ≫ ridge=161 ⇒ 算力受限
+      value: python3 -I scripts/efficiency.py --ridge
+      reproduce: python3 -I scripts/efficiency.py --ridge
+    caliber: MFU 用 achievable 279 TF 作分母（非 nominal 560）；AI 用 FLOPs/字节，8192³ 为 4096
+  resources:
+    vgpr: 212
+    lds_per_cta: 65536
+    ctas_per_cu: 1
+    waves_per_cu: 8
+    achieved_bw: 60.9
+    bw_util: 0.035
+    mfu: 0.895
+    proxies:
+      wait_inst_lds_per_inst_lds: null
+      lds_per_mfma: null
+    source: PMC CSV /tmp/pmc-gemm/x.csv（2026-11-24，HIP_VISIBLE_DEVICES=6）；ctas_per_cu/waves_per_cu 由 vgpr/lds/threads 按公式推出
+    status: complete
+    grid: 524288
+    threads_per_cta: 512
+  rounds: 1
+  verdict: adopt
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择
@@ -243,3 +278,9 @@ floor_inputs:
   t_source: results
   basis: (M·K+N·K+M·N)×2B=3×4096²×2B=100.7MB；t=0.5275 ms 是 M=N=K=4096 的 ms
   evidence: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/results/gemm-crossover.json
+progress:
+  stage: S4
+  since: 2026-11-24T09:50
+  blocked_by: null
+  last_verdict: adopt
+  rounds: 1
