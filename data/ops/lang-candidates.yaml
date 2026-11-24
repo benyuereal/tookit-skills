@@ -1,0 +1,107 @@
+# 语言候选：什么算子、什么场景该用什么语言实现
+#
+# 为什么需要这张表：`loop.py enumerate` 只给「攻击面」（fusion-boundary 等），
+# **没有任何东西告诉 agent「用什么语言实现」**。而这个选择影响巨大——
+# 同是 rmsnorm prefill-8k，lightop(197µs) / tilelang(221) / triton(242) 差 23%。
+#
+# 但不存在「哪个语言更好」，只存在「哪个算子+哪个场景该用哪个」。
+# 本表把这件事从人的经验变成可机检的判据。
+#
+# 纪律：`evidence` 必须是本仓真实实测，且带 `reproduce`。
+# 没有实测的条目要标 `unmeasured`，不许伪装成有数据。
+
+version: 1
+updated: '2026-11-24'
+discipline: >
+  排序优先用实测数据；没有实测时用 use_when/avoid_when 给先验排序并标 low_confidence。
+  语言与攻击面正交：语言回答「用什么写」，攻击面回答「改哪里」。
+  两者合成 (surface, language) 二元组，不许把语言塞进 EV 的四因子。
+
+languages:
+
+- id: hip
+  name: HIP
+  what: 手工 C++/HIP kernel，本机唯一能精细控制指令流的路径
+  strengths:
+  - 唯一能控制 VGPR / LDS / MFMA 排布
+  - 能读到 ISA（dccobjdump 反汇编）
+  - 厂商实现（lightop/aiter）走的就是这条路
+  weaknesses:
+  - 迭代最慢
+  - 需要理解硬件资源模型
+  use_when:
+  - 瓶颈已确认在 LDS bank / 寄存器压力 / MFMA 排布
+  - 已有厂商实现，只想改一两处
+  - 需要看 ISA 做归因（只有 HIP 有 .co 可反汇编）
+  avoid_when:
+  - 只是想快速验证一个访存模式
+  - 纯 elementwise，Triton 已足够
+  evidence: >
+    rmsnorm-fused prefill-8k：lightop（厂商 HIP）197.0 µs，
+    比 tilelang 快 12%、比 triton 快 23%。
+  reproduce: 'python3 -I Plugins/ops/skills/op-rmsnorm-fused/bench/ab.py --shape prefill-8k --variants lightop-fused --base fused-3pass-triton --measure-mode event_isolated'
+
+- id: tilelang
+  name: TileLang
+  what: 面向 tile 的 DSL，tile 原语比 Triton 更直接
+  strengths:
+  - tile 形状是显式参数，扫参空间直观
+  - 生成的代码接近手工 HIP 的质量
+  weaknesses:
+  - 生态小，遇到问题资料少
+  - 本仓只在 rmsnorm 上验证过
+  use_when:
+  - 需要系统地扫 tiling 空间
+  - Triton 打不过厂商实现时，作为第二条 DSL 路线
+  avoid_when:
+  - 需要精细控制非 tile 维度
+  evidence: >
+    rmsnorm-fused prefill-8k：221.0 µs，与 lightop（197.0）差 12%，
+    比 triton（242.0）快 9%. 是「和厂商一个水平」的那一档。
+  reproduce: 'python3 -I Plugins/ops/skills/op-rmsnorm-fused/bench/ab.py --shape prefill-8k --variants fused-3pass-tilelang'
+
+- id: triton
+  name: Triton
+  what: Python 内嵌 DSL，编译到 AMDGCN
+  strengths:
+  - 迭代最快（改一行就能跑）
+  - autotune 成熟
+  - 带宽标定必须用它（torch elementwise 到不了峰值）
+  weaknesses:
+  - 控不了 LDS bank / 寄存器排布
+  - 小 kernel 固定开销大
+  - 归约类算子比厂商实现慢 20%
+  use_when:
+  - 快速试错，<30 分钟要出可用版本
+  - 纯 elementwise / reduce，访存规整
+  - 需要扫参（autotune 便宜）
+  - 标定机器常数（带宽/算力上限）
+  avoid_when:
+  - 已确认瓶颈在 LDS bank / 寄存器压力
+  - 需要 MFMA 手工排布
+  - 归约密集且已有厂商实现
+  evidence: >
+    两面证据：
+    (a) 强项——bw_calibrate 用 Triton 手写 kernel 标定到纯读 1965 GB/s，
+        而 torch elementwise 只有 1051 GB/s（旧版 bw_calibrate 读数）。
+    (b) 弱项——rmsnorm-fused prefill-8k：242.0 µs，比 lightop（197.0）慢 23%，
+        比 tilelang（221.0）慢 9%。
+  reproduce: 'python3 -I scripts/bw_calibrate.py'
+
+- id: cu
+  name: CUDA（经 hipify）
+  what: 本机是 AMD，CUDA 只能经 hipify 移植
+  strengths:
+  - 有大量现成 CUDA kernel 可移植
+  weaknesses:
+  - 不能原生开发
+  - hipify 后仍需手工调（warp 宽度、LDS 大小都不同）
+  - 移植质量取决于源码用了多少 NVIDIA 专有特性（TMA/WGMMA 直接不可用）
+  use_when:
+  - 有成熟的 CUDA 实现要搬到本机
+  - 该算子在 CUDA 生态有公认最优实现（如 CUTLASS 系）
+  avoid_when:
+  - 要从零开发（直接用 HIP 更快）
+  - 源码重度依赖 TMA / WGMMA / cp.async
+  evidence: '未测定（本仓尚无 hipify 移植实例）。标 unmeasured。'
+  unmeasured: true
