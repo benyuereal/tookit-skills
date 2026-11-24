@@ -28,7 +28,7 @@ variants:
 - name: lightop-fused
   source: lightop 0.6.0 的 fused_add_rms_norm（已实测可用，非此前误报的「未安装」）
   status: candidate
-  measured: 等语义 227.0 us / 1182 GB/s / util 0.686（2读2写 268MB；比我们的 242.2 us 快 6.7%）
+  measured: 等语义 197.0 us / 1363 GB/s（2读2写 268MB @ M=8192）；2026-11-24 四源复核（ledger §D 裁决：227.0 作废）
   applies_to:
   - decode-m1
   - decode-m32

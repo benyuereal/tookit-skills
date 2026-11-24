@@ -1,43 +1,43 @@
 {
- "card": "rmsnorm-fused",
- "shape": "prefill-8k",
- "flops": 0,
- "bytes": 268435456,
- "ai": 0.0,
- "ridge": {
-  "value": 161.27,
-  "peak_flops": {
-   "id": "compute.bf16_gemm_peak_tf",
-   "value": 279.0,
-   "date": "2026-11-23",
-   "caliber": "achievable"
+  "card": "rmsnorm-fused",
+  "shape": "prefill-8k",
+  "flops": 0,
+  "bytes": 268435456,
+  "ai": 0.0,
+  "ridge": {
+    "value": 161.27,
+    "peak_flops": {
+      "id": "compute.bf16_gemm_peak_tf",
+      "value": 279.0,
+      "date": "2026-11-23",
+      "caliber": "achievable"
+    },
+    "peak_bw": {
+      "id": "bw-ladder.layers.2_rw_1to1.achievable",
+      "value": 1680.0,
+      "date": "2026-11-23",
+      "caliber": "achievable"
+    }
   },
-  "peak_bw": {
-   "id": "bw-ladder.layers.2_rw_1to1.achievable",
-   "value": 1680.0,
-   "date": "2026-11-23",
-   "caliber": "achievable"
-  }
- },
- "bound": "memory",
- "primary_metric": "MBU",
- "floors": {
-  "t_compute_us": 0.0,
-  "t_memory_us": 202.3,
-  "launch_us": 40.5,
-  "launch_model": {
-   "grid_blocks": 8192
-  }
- },
- "t_floor_us": 202.3,
- "remaining_rule": "relative_gap",
- "remaining": 0.1088,
- "denominator_provenance": {
-  "peak_bw": "bw-ladder.yaml 1:1 档实测",
-  "peak_flops": "constants.yaml bf16 achievable"
- },
- "note": "原先 remaining=-0.0404 用的是背靠背口径 t_actual（194.4µs），而 t_floor(202.3µs) 是端到端可比口径——两个口径相减，符号都不可信。改用 ledger.md 的 event 隔离实测 227.0µs 重算。",
- "t_actual_us": 227.0,
- "t_actual_mode": "event_isolated",
- "t_floor_mode": "event_isolated"
+  "bound": "memory",
+  "primary_metric": "MBU",
+  "floors": {
+    "t_compute_us": 0.0,
+    "t_memory_us": 202.3,
+    "launch_us": 40.5,
+    "launch_model": {
+      "grid_blocks": 8192
+    }
+  },
+  "t_floor_us": 202.3,
+  "remaining_rule": "relative_gap",
+  "remaining": -0.0262,
+  "denominator_provenance": {
+    "peak_bw": "bw-ladder.yaml 1:1 档实测",
+    "peak_flops": "constants.yaml bf16 achievable"
+  },
+  "note": "原先 remaining=-0.0404 用背靠背口径 t_actual(194.4µs) 与端到端 t_floor(202.3µs) 相减，两个口径不可比。改用 2026-11-24 ledger §D 裁决后的 lightop 197.0µs（四源复核，函数式直调×3，MAD 0.3~0.6；原 227.0 无法复现已作废）。t_actual 低于 t_floor 说明 **3_row_reduction 的归约折扣 0.79 偏保守**：实测折扣应为 159.8/197.0=0.811。见 docs/DEBT 与 results/forged-vs-lightop.json。",
+  "t_actual_us": 197.0,
+  "t_actual_mode": "event_isolated",
+  "t_floor_mode": "event_isolated"
 }
