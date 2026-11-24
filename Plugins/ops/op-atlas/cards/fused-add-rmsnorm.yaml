@@ -60,10 +60,11 @@ last_verdict:
   status: measured
   kb_path: null
   ratio:
-    kind: speedup
+    kind: utilization
     unit: ratio
-    value: 0.549
-    vs: lightop.RMSNormAdd 同形状（M=8192 H=4096 bf16，201.3MB，event_isolated）
+    value: 0.831
+    vs: 2_rw_2to1 档实测 1730 GB/s；3 趟 201.3MB ÷ 140.0µs = 1438 GB/s ⇒ 83.1%。对照 lightop.RMSNormAdd
+      同形状 255.2µs → 140.0µs 快 1.82x
     scope:
       cards: 1
       concurrency: 1
@@ -80,14 +81,14 @@ last_verdict:
     stop_if: 若融合量化后精度超容差或 VGPR 溢出（实测 spill>0），说明这条已到边界 ⇒ 标 at_floor
     effort: 3h
   floor:
-    remaining: 0.0398
+    remaining: 0.203
     t_floor_us: 116.4
-    t_actual_us: 121.0
+    t_actual_us: 140.0
     binding: memory
-    basis: 3*M*H*2=201.3MB @ 1730 GB/s(2_rw_2to1 实测)；实测 121.0µs
-    verdict: at_floor
+    basis: 3*M*H*2 = 201.3MB @ 1730 GB/s(rw_2to1 实测) = 116.4µs；实测 140.0µs ⇒ 1438 GB/s
+    verdict: structural
     denominator_gbs: 1730.0
-    achieved_gbs: 1664.0
+    achieved_gbs: 1438.0
   comparison:
     baseline: lightop-rmsnormadd
     baseline_role: competitor
@@ -105,11 +106,21 @@ last_verdict:
       note: 等语义 3 趟 201.3MB；两者输出互相差 1.0 ULP
   evidence:
   - path: Plugins/ops/skills/op-fused-add-rmsnorm/results/prefill-8k-vs-lightop.json
-    sha256: cf67c5a037fb771f0a96de9f645223d4d7769f4474d3a4cbbbe90043e102bc92
+    sha256: d1602dc78b33ac43b6c8e771100bcf81f1f5b50e52c75aa27e45595274c36b69
     verified_on: '2026-11-25'
   inputs: 3
   outputs: 1
   traffic_passes: 3
+  rounds: 5
+  geomean:
+    value: 0.4792
+    shapes:
+    - decode-m1
+    - decode-m32
+    - prefill-8k
+    coverage: decode-m1 / decode-m32 / prefill-8k（三个形状全部显著更快）
+    vs: lightop.RMSNormAdd 同形状；event_isolated 5 轮、base 每轮重测。逐形状 ratio：decode-m1 0.415
+      / decode-m32 0.472 / prefill-8k 0.562 ⇒ 加速 2.09x
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop.RMSNormAdd

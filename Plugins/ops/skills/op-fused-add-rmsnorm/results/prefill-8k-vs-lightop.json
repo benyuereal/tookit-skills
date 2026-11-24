@@ -24,5 +24,31 @@
   "significant": true,
   "decision": "ACCEPTED_NUMERICS_PENDING_E2E",
   "traffic": "3*M*H*2 = 201.3 MB（读 x + 读 residual + 写 y；weight 走 L2）",
-  "note": "自研寄存器驻留实现比 lightop.RMSNormAdd 快 45.1%，且精度更好（0.50 vs 1.50 ULP）。两者输出互相差 1.0 ULP —— 同一件事。"
+  "note": "自研寄存器驻留实现比 lightop.RMSNormAdd 快 45.1%，且精度更好（0.50 vs 1.50 ULP）。两者输出互相差 1.0 ULP —— 同一件事。",
+  "bandwidth": {
+    "achieved_gbs": 1438.0,
+    "denominator_gbs": 1730.0,
+    "utilization": 0.831,
+    "formula": "201.327 MB / 140.0 µs × 1000"
+  },
+  "erratum": "2026-11-25 修正：此前记 achieved=1664 GB/s / util=0.962 是口算错误。正确值 1438 GB/s / 0.831（floor.py 的 bytes_mb/t_us*1000 公式）。连带 floor.remaining 从 3.98% 改为 20.30%，verdict 从 at_floor 改为 structural。",
+  "multishape": {
+    "decode-m1": {
+      "base_us": 103.0,
+      "cand_us": 42.7,
+      "ratio": 0.415
+    },
+    "decode-m32": {
+      "base_us": 97.0,
+      "cand_us": 45.8,
+      "ratio": 0.472
+    },
+    "prefill-8k": {
+      "base_us": 300.2,
+      "cand_us": 168.8,
+      "ratio": 0.562
+    },
+    "geomean_ratio": 0.4792,
+    "speedup": 2.09
+  }
 }
