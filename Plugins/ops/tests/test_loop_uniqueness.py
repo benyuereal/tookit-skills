@@ -61,7 +61,7 @@ def _rel(p):
 
 class TestLoopUniqueness(unittest.TestCase):
     def test_budget_constants_defined_in_exactly_one_place(self):
-        """方向预算常量只允许在 op-optimize/loop.py 定义。"""
+        """方向预算常量只允许在 engine/loop.py 定义（原 op-optimize/loop.py 已迁走）。"""
         hits = []
         for p in _py_files():
             try:
@@ -72,7 +72,7 @@ class TestLoopUniqueness(unittest.TestCase):
                 hits.append((_rel(p), m.group(1)))
         owners = sorted({h[0] for h in hits})
         self.assertEqual(
-            owners, ["Plugins/ops/skills/op-optimize/loop.py"],
+            owners, ["Plugins/ops/engine/loop.py"],
             "方向预算常量出现在了非引擎文件里：%s\n"
             "判定口径必须只有一处实现，否则两个入口会给出不同结论。" % owners)
 
@@ -106,3 +106,68 @@ class TestLoopUniqueness(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestEngineMigration(unittest.TestCase):
+    """ENGINE 迁移（M2+M3）的守卫。
+
+    背景：loop.py 有 1942 行、12 个子命令，被另一个插件
+    （dcu-core/dcu-orchestrator/tasks/op-optimize.yaml）引用。
+    它已经是「调度引擎」而不是 op-optimize 这个 skill 的实现细节，
+    物理位置迁到 Plugins/ops/engine/，旧路径保留 shim。
+
+    本测试守三条：
+      A. shim 里不许有实现（行数 ≤30，且无 `def cmd_`）
+      B. 全仓只允许一份 `def cmd_run(` 的完整实现
+      C. engine 版与 shim 的 `--help` 输出必须一致（行为没变）
+    """
+
+    # parents[1] = Plugins/ops（parents[3] 是仓库根，会算错）
+    _OPS = Path(__file__).resolve().parents[1]
+    ENGINE = _OPS / "engine" / "loop.py"
+    SHIM = _OPS / "skills" / "op-optimize" / "loop.py"
+
+    def test_shim_has_no_implementation(self):
+        txt = self.SHIM.read_text(encoding="utf-8")
+        n = len(txt.splitlines())
+        self.assertLessEqual(n, 35, "shim 有 %d 行，超过 30 说明有人往里写实现" % n)
+        # 用 AST 判断有没有真的定义函数，不用字符串匹配 ——
+        # shim 的 docstring 里就写着「不许出现 def cmd_」，字符串匹配会自伤。
+        import ast
+        tree = ast.parse(txt)
+        funcs = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+        self.assertEqual(funcs, [],
+                         "shim 里定义了函数 %s —— 实现必须留在 engine/" % funcs)
+
+    def test_engine_exists_and_has_implementation(self):
+        self.assertTrue(self.ENGINE.is_file(),
+                        "engine/loop.py 不存在 —— 迁移未完成")
+        txt = self.ENGINE.read_text(encoding="utf-8")
+        self.assertIn("def cmd_run(", txt, "engine/loop.py 里没有实现")
+        self.assertGreater(len(txt.splitlines()), 500,
+                           "engine/loop.py 太短，实现可能没搬全")
+
+    def test_only_one_full_implementation(self):
+        """全仓只许有一份 `def cmd_run(`。"""
+        root = Path(__file__).resolve().parents[1]   # Plugins/ops
+        hits = []
+        for p in root.rglob("*.py"):
+            if "/tests/" in str(p):
+                continue
+            try:
+                if "def cmd_run(" in p.read_text(encoding="utf-8", errors="ignore"):
+                    hits.append(str(p))
+            except OSError:
+                continue
+        self.assertEqual(len(hits), 1,
+                         "找到 %d 份 `def cmd_run(` 实现：%s（只许一份，在 engine/）"
+                         % (len(hits), hits))
+
+    def test_shim_help_matches_engine(self):
+        """shim 的 --help stdout 必须与 engine 版逐字节相同（行为没变）。"""
+        import subprocess, sys
+        def help_of(path):
+            r = subprocess.run([sys.executable, "-I", str(path), "--help"],
+                               capture_output=True, text=True)
+            return r.stdout
+        self.assertEqual(help_of(self.SHIM), help_of(self.ENGINE),
+                         "shim 与 engine 的 --help 不一致 —— 转发没生效")
