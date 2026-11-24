@@ -1,0 +1,44 @@
+# op-fused-add-rmsnorm 候选队列
+#
+# 本卡是**校准件**：字节数完全确定（3*M*H*2B），分母没有争议。
+# 2026-11-25 实测：自研寄存器驻留实现 0.1210ms vs lightop 0.2030ms = 快 40.5%，
+# 两者输出最差差 1.0 ULP（同一件事），且自研离 fp32 参考更近。
+defaults:
+  rounds: 5
+  no_sweep: true
+  bench_args:
+  - --shape
+  - prefill-8k
+  - --base
+  - lightop-rmsnormadd
+  - --measure-mode
+  - event_isolated
+  acc_args:
+  - --shape
+  - prefill-8k
+  gpu: 7
+directions:
+- id: fusion-boundary
+  statement: 融合残差是否真的省了往返：3*M*H*2B vs 4*M*H*2B
+  status: open
+  refutes: 0
+- id: occupancy
+  statement: 寄存器驻留 vs LDS 中转：行内归约的额外代价能否压到 0
+  status: open
+  refutes: 0
+candidates:
+- id: reg-resident
+  direction: occupancy
+  status: pending
+  priority: 1
+  action_class: improve-locality
+  means: |
+    把 (x+residual) 留在寄存器（VEC*8 个 float/线程），LDS 只放 WARPS*4 字节
+    的跨 warp 归约表；读写走 16 字节向量。取代「整行读进动态 LDS 再读回」。
+  predicted_effect: -30%~-45%
+  expected_bottleneck: memory-bound
+  expect: -40%
+  expect_basis: 实测 2026-11-25：0.1210 vs 0.2030 = 快 40.5%（三轮中位，MAD<0.5%）
+  variant: fa-rms-reg
+  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape prefill-8k --variants fa-rms-reg
+refuted: []

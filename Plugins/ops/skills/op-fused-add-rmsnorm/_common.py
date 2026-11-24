@@ -11,8 +11,18 @@
 RMSNormAddDropoutBias）。库名用 libraries-registry.yaml 的 canonical id。
 """
 import torch
+from pathlib import Path
 
 VARIANTS = ("ref-heavy", "lightop-rmsnormadd", "aiter-norm")
+# 自研变体（forge 生成，落在 runs/forged/）。与 op-rmsnorm-fused 同一套机制：
+# 生成物是**每次跑的产物**，不是仓库资产，所以不进 VARIANTS 硬编码。
+FORGED_DIR = Path(__file__).resolve().parent / "runs" / "forged"
+
+
+def forged_variants():
+    if not FORGED_DIR.is_dir():
+        return []
+    return sorted(p.stem for p in FORGED_DIR.glob("*.py") if not p.name.startswith("_"))
 
 INPUT_NAMES = ("x", "residual", "weight")
 
@@ -72,6 +82,14 @@ def runner_kwargs(params):
 
 
 def get_runner(name, tilelang_root=None, **kwargs):
+    if name not in VARIANTS:
+        fp = FORGED_DIR / ("%s.py" % name)
+        if fp.is_file():
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("_forged_%s" % name, str(fp))
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return getattr(m, "run")
     if name not in VARIANTS:
         raise ValueError("未知变体 %r（可选 %s）" % (name, " / ".join(VARIANTS)))
     if name == "ref-heavy":

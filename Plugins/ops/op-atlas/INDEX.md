@@ -23,7 +23,7 @@
 | [`dequant-fp8-w4`](cards/dequant-fp8-w4.yaml) | quant | draft | — | bandwidth | 无实测：三条真入口已 import 验证，待 bench |
 | [`embedding-lookup`](cards/embedding-lookup.yaml) | memory | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`flash-attention-fwd`](cards/flash-attention-fwd.yaml) | attention | measured | — | mixed | causal 相对 non-causal 耗时比为 0.60；两条路… |
-| [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据，数字只在 ratio 里，… |
+| [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | measured | — | bandwidth | 自研寄存器驻留实现相对 lightop 快 1.82x（event_… |
 | [`fusion-add-rmsnorm-quant`](cards/fusion-add-rmsnorm-quant.yaml) | norm | measured | — | bandwidth | 未实测跨库领先；本卡只测了单实现绝对耗时，同口径对比见 vs |
 | [`fusion-rmsnorm-rope`](cards/fusion-rmsnorm-rope.yaml) | rope | measured | — | bandwidth | 融合档比单做 2 次 norm 还快 1.86x(S=2048)/1… |
 | [`fusion-rope-kv-write`](cards/fusion-rope-kv-write.yaml) | kv | measured | — | bandwidth | 真融合比同入口的 bf16 split 分支快 2.18x；选 fp… |
@@ -31,12 +31,12 @@
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | — | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | — | compute | hipBLASLt 默认调用达 498.5 TF（nominal 的… |
-| [`gemm-int8`](cards/gemm-int8.yaml) | gemm | draft | — | compute | 已降 draft：连续 3 批缺可补证据，数字只在 ratio 里，… |
+| [`gemm-int8`](cards/gemm-int8.yaml) | gemm | draft | — | compute | 已降 draft：连续 3 批缺可补证据。原 ratio=343 无… |
 | [`gemm-swiglu-epilogue`](cards/gemm-swiglu-epilogue.yaml) | gemm | draft | — | mixed | 库里无真入口，需自研 epilogue（现有仅独立 silu_mul… |
 | [`hadamard-transform`](cards/hadamard-transform.yaml) | linear-attn | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`hc-split-sinkhorn`](cards/hc-split-sinkhorn.yaml) | linear-attn | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`kv-cache-paged-write`](cards/kv-cache-paged-write.yaml) | kv | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
-| [`layernorm`](cards/layernorm.yaml) | norm | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据，数字只在 ratio 里，… |
+| [`layernorm`](cards/layernorm.yaml) | norm | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据。原 ratio=485 无… |
 | [`lm-head-with-sampling`](cards/lm-head-with-sampling.yaml) | gemm | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`mha-prefill`](cards/mha-prefill.yaml) | attention | measured | — | compute | flash_attn causal prefill 达实测峰值的 0… |
 | [`mhc-fused`](cards/mhc-fused.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
@@ -47,7 +47,7 @@
 | [`mlp-gelu-geglu`](cards/mlp-gelu-geglu.yaml) | activation | measured | — | compute | GNSilu 是 GroupNorm+SiLU 复合算子，不能当纯激… |
 | [`mlp-swiglu`](cards/mlp-swiglu.yaml) | activation | measured | — | compute | 融合快 2.26x；带宽达成率为 copy 峰值的 0.39-0.4… |
 | [`moe-align-permute`](cards/moe-align-permute.yaml) | moe | draft | — | bandwidth | ref-heavy 通过正确性门；容差为零（纯搬运）；无性能实测 |
-| [`moe-combine-reduce`](cards/moe-combine-reduce.yaml) | moe | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据，数字只在 ratio 里，… |
+| [`moe-combine-reduce`](cards/moe-combine-reduce.yaml) | moe | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据。原 ratio=780 无… |
 | [`moe-dispatch-combine`](cards/moe-dispatch-combine.yaml) | moe | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`moe-grouped-gemm-bf16`](cards/moe-grouped-gemm-bf16.yaml) | moe | measured | — | compute | grouped BF16 GEMM 达 80 TFLOPS，与 ca… |
 | [`moe-grouped-gemm`](cards/moe-grouped-gemm.yaml) | moe | draft | — | mixed | 无本算子独立实测；grouped 比稠密循环快一条来自 librar… |
@@ -60,7 +60,7 @@
 | [`mqa-logits`](cards/mqa-logits.yaml) | attention | measured | — | bandwidth | epilogue 跨 lane 归约换 ds_bpermute，逐位… |
 | [`mtp-draft`](cards/mtp-draft.yaml) | sampling | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | measured | — | bandwidth | flash_attn decode 只达峰值 0.03；同机 MLA… |
-| [`qk-norm`](cards/qk-norm.yaml) | norm | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据，数字只在 ratio 里，… |
+| [`qk-norm`](cards/qk-norm.yaml) | norm | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据。原 ratio=741 无… |
 | [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | — | bandwidth | 无实测：两条真入口已 import 验证，待 bench |
 | [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | measured | — | bandwidth | 自研寄存器驻留实现相对 lightop 快 1.12x（event_… |
 | [`rope-mla`](cards/rope-mla.yaml) | rope | measured | — | bandwidth | MLA decode 为 360 GB/s，与纯 rope 的 33… |

@@ -22,8 +22,30 @@ from opbench import bench_fn, significant  # noqa: E402
 import _common as C  # noqa: E402
 
 
-def _measure(fn, inp, rounds, warmup_ms, rep_ms):
+def _measure(fn, inp, rounds, warmup_ms, rep_ms, mode="back_to_back"):
+    """mode 决定口径，也决定结论能不能 claim。
+
+    back_to_back（默认，向后兼容）：连续调用，kernel 间可重叠 ⇒ **偏乐观**，
+        measure_mode.py 判它不可 claim。只能筛方向。
+    event_isolated：每次调用前后插 event + synchronize，杜绝重叠 ⇒ 可 claim。
+    """
     meds = []
+    if mode == "event_isolated":
+        import torch
+        def _timed():
+            e1, e2 = torch.cuda.Event(True), torch.cuda.Event(True)
+            e1.record()
+            fn(*inp[:-1])
+            e2.record()
+            torch.cuda.synchronize()
+            return e1.elapsed_time(e2)
+        for _ in range(5):
+            _timed()
+        for _ in range(rounds * 7):
+            meds.append(_timed())
+        meds.sort(); n = len(meds)
+        med = meds[n // 2] if n % 2 else 0.5 * (meds[n // 2 - 1] + meds[n // 2])
+        return med, sorted(abs(x - med) for x in meds)[n // 2]
     for _ in range(rounds):
         st = bench_fn(lambda: fn(*inp[:-1]), warmup_ms=warmup_ms, rep_ms=rep_ms, repeats=3)
         meds.append(st["median_ms"])
@@ -45,6 +67,9 @@ def main(argv=None):
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--warmup-ms", type=float, default=25.0)
     p.add_argument("--rep-ms", type=float, default=100.0)
+    p.add_argument("--measure-mode", default="back_to_back", dest="measure_mode",
+                   choices=["back_to_back", "event_isolated", "end_to_end"],
+                   help="back_to_back 不可 claim（仅筛方向）；event_isolated 可 claim")
     a = p.parse_args(argv)
 
     shape = C.load_shape(a.shape)
@@ -55,7 +80,7 @@ def main(argv=None):
     row = {"skv": 0, "variants": []}
     try:
         bmed, bmad = _measure(C.get_runner(a.base, **kw), inp,
-                              a.rounds, a.warmup_ms, a.rep_ms)
+                              a.rounds, a.warmup_ms, a.rep_ms, mode=a.measure_mode)
     except Exception as e:                       # noqa: BLE001
         print("base=%s 失败: %s: %s" % (a.base, type(e).__name__, e), file=sys.stderr)
         return 1
@@ -64,7 +89,7 @@ def main(argv=None):
     for tag in [x.strip() for x in a.variants.split(",") if x.strip()]:
         try:
             med, mad = _measure(C.get_runner(tag, **kw), inp, a.rounds,
-                                a.warmup_ms, a.rep_ms)
+                                a.warmup_ms, a.rep_ms, mode=a.measure_mode)
         except Exception as e:                   # noqa: BLE001
             print("variant=%s 跳过: %s: %s" % (tag, type(e).__name__, e), file=sys.stderr)
             continue
@@ -78,7 +103,7 @@ def main(argv=None):
 
     out = {"caliber": {"what": "op_call", "alloc": False, "state": "hot",
                        "rounds": a.rounds, "timer": "hip_event"},
-"measure_mode": "back-to-back, no per-iter sync",
+"measure_mode": a.measure_mode,
            "measure_note": ("背靠背连续调用，kernel 间可能重叠 ⇒ 偏乐观。卡片/周报口径须用端到端（含每次分配）。"
                             "本卡未做三方对账，偏乐观幅度未测定。"
       "rmsnorm-fused 实测该差为 23%（140 vs 183 µs），可作量级参考。"),

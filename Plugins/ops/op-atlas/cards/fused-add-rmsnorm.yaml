@@ -2,7 +2,7 @@ id: fused-add-rmsnorm
 title: 残差 + RMSNorm 融合（fused_add_rmsnorm）
 family: norm
 math: y = w*((x+r)/sqrt(mean((x+r)^2, -1)+eps))；残差先加再归一
-status: draft
+status: measured
 layer: kernel
 op_card: Plugins/ops/skills/op-fused-add-rmsnorm
 variants:
@@ -57,17 +57,59 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: none
+  status: measured
   kb_path: null
-  ratio: null
-  conclusion: 已降 draft：连续 3 批缺可补证据。原 ratio=2.39 无复跑来源，作废。
-  verified_on: '2026-11-23'
+  ratio:
+    kind: speedup
+    unit: ratio
+    value: 0.549
+    vs: lightop.RMSNormAdd 同形状（M=8192 H=4096 bf16，201.3MB，event_isolated）
+    scope:
+      cards: 1
+      concurrency: 1
+      in_len: M=8192
+      out_len: H=4096
+      warmup: hot
+      note: 等语义 3 读 1 写 201.3MB；event_isolated 5 轮，base 每轮重测
+  conclusion: 自研寄存器驻留实现相对 lightop 快 1.82x（event_isolated 可 claim）
+  verified_on: '2026-11-25'
   next_probe:
     surface: fusion-boundary
     hypothesis: 融合已 2.39x 且 M 越大收益越高：若把下游的量化也融进同一趟，应再省一趟写（3 趟 → 2 趟）
     expected: 相对当前再快 ≥1.3x
     stop_if: 若融合量化后精度超容差或 VGPR 溢出（实测 spill>0），说明这条已到边界 ⇒ 标 at_floor
     effort: 3h
+  floor:
+    remaining: 0.0398
+    t_floor_us: 116.4
+    t_actual_us: 121.0
+    binding: memory
+    basis: 3*M*H*2=201.3MB @ 1730 GB/s(2_rw_2to1 实测)；实测 121.0µs
+    verdict: at_floor
+    denominator_gbs: 1730.0
+    achieved_gbs: 1664.0
+  comparison:
+    baseline: lightop-rmsnormadd
+    baseline_role: competitor
+    cand: fa-rms-reg
+    cand_us: 140.0
+    base_us: 255.2
+    ratio: 0.549
+    significant: true
+    measure_mode: event_isolated
+    semantics_aligned: true
+    alignment:
+      inputs: 3
+      outputs: 1
+      traffic_passes: 3
+      note: 等语义 3 趟 201.3MB；两者输出互相差 1.0 ULP
+  evidence:
+  - path: Plugins/ops/skills/op-fused-add-rmsnorm/results/prefill-8k-vs-lightop.json
+    sha256: cf67c5a037fb771f0a96de9f645223d4d7769f4474d3a4cbbbe90043e102bc92
+    verified_on: '2026-11-25'
+  inputs: 3
+  outputs: 1
+  traffic_passes: 3
 modify_path:
   kind: replace-call
   what: torch 分步换成 lightop.RMSNormAdd
@@ -116,8 +158,9 @@ semantics:
 floor_inputs:
   bytes_mb: 201.327
   pattern: rw_2to1
-  t_source: derived
-  t_actual_us: null
-  missing_evidence: 读 x+r 写 y = 3×8192×4096×2B=201.3MB；卡片记融合带宽 862 GB/s ⇒ t=201.3/862=233.6µs（反推）
-  basis: 读 x+r 写 y = 3×8192×4096×2B=201.3MB；卡片记融合带宽 862 GB/s ⇒ t=201.3/862=233.6µs（反推）
-  evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）
+  t_source: results
+  t_actual_us: 121.0
+  basis: 读 x + 读 residual + 写 y = 3×8192×4096×2B = 201.3MB（等语义，weight 走 L2）。t=121.0µs
+    是自研 fa-rms-reg 的 event_isolated 实测中位（3 轮 × 21 次，MAD<0.5%）。对照 lightop.RMSNormAdd
+    同形状 203.0µs —— 同语义、输出差 1.0 ULP。
+  evidence: Plugins/ops/skills/op-fused-add-rmsnorm/results/prefill-8k-vs-lightop.json

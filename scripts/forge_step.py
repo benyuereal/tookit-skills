@@ -92,7 +92,7 @@ PARAM_BASIS = {
 }
 
 
-def choose_params(H, threads_pref=(256, 128, 512, 64)):
+def choose_params(H, threads_pref=(256, 128, 512, 64), write_ro=1):
     """给定 H，选一组 (THREADS, WARPS, VEC)。返回 dict 或抛 ForgeStepError。
 
     **这是起点，不是最优值。** 实测三组 VEC>=2 的极差 0.62%（噪声内），
@@ -105,14 +105,16 @@ def choose_params(H, threads_pref=(256, 128, 512, 64)):
     for t in threads_pref:
         v = expected_vec(H, t)
         if v is not None:
-            return {"THREADS": t, "WARPS": t // 64, "VEC": v}
+            return {"THREADS": t, "WARPS": t // 64, "VEC": v,
+                    "WRITE_RO": int(write_ro)}
     raise ForgeStepError(
         "H=%d 无法匹配任何 (THREADS,VEC)：需要 H == THREADS*8*VEC，"
         "THREADS∈%s、VEC≤8。**不提供兜底**——兜底会产出一个算错的变体。"
         % (H, list(threads_pref)))
 
 
-def enumerate_params(H, threads_pref=(256, 128, 512, 64), max_variants=4):
+def enumerate_params(H, threads_pref=(256, 128, 512, 64), max_variants=4,
+                     write_ro=1):
     """枚举 H 对应的**全部合法参数组合**，按实测依据排序。返回 list[dict]。
 
     为什么不是「选一个」：`choose_params` 给的是有依据的**起点**，不是最优。
@@ -132,7 +134,8 @@ def enumerate_params(H, threads_pref=(256, 128, 512, 64), max_variants=4):
         v = expected_vec(H, t)
         if v is None:
             continue
-        out.append({"THREADS": t, "WARPS": t // 64, "VEC": v})
+        out.append({"THREADS": t, "WARPS": t // 64, "VEC": v,
+                    "WRITE_RO": int(write_ro)})
     if not out:
         raise ForgeStepError(
             "H=%d 无法匹配任何 (THREADS,VEC)：需要 H == THREADS*8*VEC，"
@@ -243,7 +246,10 @@ def _lib():
     return _LIB
 
 
-def run(x, w, r, **kw):
+WRITE_RO = {write_ro}
+
+
+def run(x, residual, weight, **kw):
     M, H = x.shape
     want = {threads} * 8 * {vec}
     if H != want:
@@ -251,16 +257,22 @@ def run(x, w, r, **kw):
             "变体 {name} 是按 H=%d 编译的（THREADS*8*VEC），收到 H=%d。"
             "换形状必须重新生成——不提供运行期兜底，兜底会算错。" % (want, H))
     y = torch.empty_like(x)
-    ro = torch.empty_like(r)
-    _lib().{entry}(x.data_ptr(), r.data_ptr(), w.data_ptr(),
+    ro = torch.empty_like(residual)
+    # **C 层参数顺序固定**：fused_rms_k(x, r, w, y, ro, M, H, eps)，语义是
+    # 「先 (x+r) 再乘 w」。所以这里必须按语义映射，不能按位置透传 ——
+    # 实测踩过：卡的输入顺序是 (x, residual, weight)，直接透传会让
+    # w 收到 residual，grid 算错直接 VMFault。
+    _lib().{entry}(x.data_ptr(), residual.data_ptr(), weight.data_ptr(),
                    y.data_ptr(), ro.data_ptr(), M, H,
                    float(kw.get("eps", 1e-6)))
-    return y, ro
+    # **输出份数必须与卡声明一致**。多返回一份等于多写 25% 流量，
+    # 拿它比少写一份的实现就是「比两件不同的活」（本仓踩过两次）。
+    return (y, ro) if WRITE_RO else y
 '''
 
 
 def write_adapter(name, template, params, hip_rel, so_name,
-                  entry="fused_rms_launch", forge_dir=None):
+                  entry="fused_rms_launch", forge_dir=None, input_names=None):
     """写变体 adapter。**只在体检通过后调用**。"""
     d = Path(forge_dir or (REPO / "runs" / "forged"))
     d.mkdir(parents=True, exist_ok=True)
@@ -269,13 +281,17 @@ def write_adapter(name, template, params, hip_rel, so_name,
         name=name, template=template,
         params=json.dumps(params, ensure_ascii=False),
         hip=hip_rel, soname=so_name, entry=entry,
-        threads=params.get("THREADS"), vec=params.get("VEC")),
+        threads=params.get("THREADS"), vec=params.get("VEC"),
+        # **参数顺序必须跟卡一致**。实测踩过：本模板写死 (x, w, r)，
+        # 而 op-fused-add-rmsnorm 的输入顺序是 (x, residual, weight) ⇒
+        # w 收到 residual、r 收到 weight，grid 算错直接 VMFault。
+        write_ro=int(params.get("WRITE_RO", 1))),
         encoding="utf-8")
     return f
 
 
 def forge_variant(name, template, params, H, outdir, entry="fused_rms_launch",
-                  arch="gfx938", adapters_dir=None, card=None):
+                  arch="gfx938", adapters_dir=None, card=None, input_names=None):
     """完整一步：生成 → 编译 → 体检 → 写 adapter。
 
     体检不过就抛，**并且删掉半成品**（不留一个会被误加载的 .so）。
@@ -304,7 +320,8 @@ def forge_variant(name, template, params, H, outdir, entry="fused_rms_launch",
         adapter = write_adapter(
             name, template, params,
             hip_rel=str(hip.relative_to(REPO)) if hip.is_relative_to(REPO) else str(hip),
-            so_name=so.name, entry=entry, forge_dir=adapters_dir)
+            so_name=so.name, entry=entry, forge_dir=adapters_dir,
+            input_names=input_names)
     except Exception:
         # 半成品必须清掉：一个没通过体检的 .so 若留在 runs/forged/_kernels 里，
         # 同名变体下次会被 _common 直接加载 —— 体检就白做了。
@@ -325,8 +342,15 @@ def forge_variant(name, template, params, H, outdir, entry="fused_rms_launch",
 def selftest():
     """无 GPU 也要能跑的部分：参数选择与体检判据。"""
     # 4096 必须选实测最优档（VEC=2 优先），不是「第一个能整除」
-    assert choose_params(4096) == {"THREADS": 256, "WARPS": 4, "VEC": 2}, choose_params(4096)
-    assert choose_params(8192) == {"THREADS": 256, "WARPS": 4, "VEC": 4}
+    def _core(p):
+        return {k: p[k] for k in ("THREADS", "WARPS", "VEC")}
+    # WRITE_RO 单列断言：它是「写不写 residual_out」这个语义维度，
+    # 与 tile 参数无关。混在一起断言会让一个变了另一个也假失败。
+    assert _core(choose_params(4096)) == {"THREADS": 256, "WARPS": 4, "VEC": 2}, \
+        choose_params(4096)
+    assert _core(choose_params(8192)) == {"THREADS": 256, "WARPS": 4, "VEC": 4}
+    assert choose_params(4096, write_ro=0)["WRITE_RO"] == 0
+    assert choose_params(4096)["WRITE_RO"] == 1
     try:
         choose_params(100)
     except ForgeStepError:

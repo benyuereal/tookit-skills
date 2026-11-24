@@ -182,7 +182,7 @@
   {
    "name": "fused-add-rmsnorm",
    "path": "Plugins/ops/skills/op-fused-add-rmsnorm",
-   "status": "draft",
+   "status": "measured",
    "shapes": [
     "decode-m1",
     "decode-m32",

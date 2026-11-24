@@ -1,0 +1,20 @@
+{
+ "card": "fused-add-rmsnorm",
+ "shape": "prefill-8k",
+ "flops": null,
+ "bytes": 211106660,
+ "ai": 0.0,
+ "bound": "memory",
+ "primary_metric": "MBU",
+ "t_floor_us": 116.4,
+ "remaining": 0.0398,
+ "t_actual_us": 121.0,
+ "t_actual_mode": "event_isolated",
+ "t_floor_mode": "event_isolated",
+ "denominator_provenance": {
+  "peak_bw": "bw-ladder.yaml 2_rw_2to1 档实测 1730 GB/s"
+ },
+ "basis": "memory 地板 116.4 us（rw_2to1 档 1730 GB/s（confidence=high））；binding=memory；实测 121.0 us",
+ "calibration": "实测 1664 GB/s = rw_2to1 档的 96.2%。**不加归约折扣**：0.81 折扣会算出 118.8% 达成率（突破物理），因为 1730 是同一台机器上含归约的实测流式上限，不是纯 copy 换算。",
+ "note": "2026-11-25 首次实测：自研 fa-rms-reg 121.0µs vs lightop 203.0µs，快 40.5%，输出差 1.0 ULP。"
+}

@@ -40,7 +40,11 @@ def test_choose_params_prefers_vec2_at_4096():
     没有这条，退化完全静默。
     """
     p = F.choose_params(4096)
-    assert p == {"THREADS": 256, "WARPS": 4, "VEC": 2}, p
+    assert {k: p[k] for k in ("THREADS", "WARPS", "VEC")} == \
+        {"THREADS": 256, "WARPS": 4, "VEC": 2}, p
+    # WRITE_RO 是独立的语义维度（写不写 residual_out），默认 1。
+    # 单独断言而不是并进上面：两者混在一起时，一个变了另一个的断言也会假失败。
+    assert p["WRITE_RO"] == 1, p
 
 
 def test_choose_params_rejects_unsupported_H():

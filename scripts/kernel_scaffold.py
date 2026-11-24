@@ -79,6 +79,8 @@ PARAM_SPECS = {
                     "help": "每 CTA 线程数；必须等于 WARPS*64"},
         "VEC": {"default": 2, "min": 1, "max": 8,
                 "help": "每线程 16B 向量数；H 必须等于 THREADS*8*VEC"},
+        "WRITE_RO": {"default": 1, "min": 0, "max": 1,
+                     "help": "是否写 residual_out；1=写(两份输出) 0=不写(只有 y)"},
     },
 }
 
@@ -251,6 +253,14 @@ using bf16 = hip_bfloat16;
 #ifndef VEC
 #define VEC @VEC@
 #endif
+// 是否额外写一份 residual_out (x+r)。
+// **必须可关**：两张 rmsnorm 卡的语义不同 —— op-rmsnorm-fused 的
+// semantics.outputs 有 out + residual_out（下游残差连接要用），
+// op-fused-add-rmsnorm 只有 y。多写一份 = 多 25% 流量，
+// 拿它比少写一份的实现就是「比两件不同的活」。
+#ifndef WRITE_RO
+#define WRITE_RO @WRITE_RO@
+#endif
 
 __global__ void __launch_bounds__(THREADS) fused_rms_k(
     const bf16* __restrict__ x, const bf16* __restrict__ r,
@@ -308,7 +318,9 @@ __global__ void __launch_bounds__(THREADS) fused_rms_k(
       rp[k] = bf16(v);
       yp[k] = bf16(v * inv * static_cast<float>(wp[k]));
     }
+#if WRITE_RO
     *(uint4*)(orow + off) = rv_out;
+#endif
     *(uint4*)(yrow + off) = yv_out;
   }
 }
