@@ -166,6 +166,16 @@ class TestVariantForge(unittest.TestCase):
         with self.assertRaises(self.m.ForgeError):
             self.m.verify_patch(self.parent, {"num_warps": 8}, self.tpl)
 
+    def test_comment_only_change_is_rejected(self):
+        """源码文本含目标值、但锚点没改 —— 必须拒绝（防字符串搜的假阳性）。"""
+        fake = self.parent.replace(
+            "def run(x, w, eps=1e-6, num_warps=4):",
+            "# num_warps=8\ndef run(x, w, eps=1e-6, num_warps=4):")
+        self.assertIn("num_warps=8", fake)
+        with self.assertRaises(self.m.ForgeError) as cm:
+            self.m.verify_patch(fake, {"num_warps": 8}, self.tpl)
+        self.assertIn("锚点上实际是 4", str(cm.exception))
+
     def test_non_integer_value_rejected(self):
         with self.assertRaises(self.m.ForgeError):
             self.m.forge(self.parent, {"BLOCK": "2048"}, self.tpl, "parent")
@@ -211,6 +221,28 @@ class TestVariantForge(unittest.TestCase):
         with self.assertRaises(self.m.ForgeError) as cm:
             self.m.resolve_candidate("op-rmsnorm-fused", "bm64")
         self.assertIn("fuse-residual", str(cm.exception))
+
+    def test_matmul_style_template_forges_bm_bn_warps(self):
+        """BM/BN/BK 只在真有这些锚点的模板上才被接受。"""
+        src = (
+            "import triton\n"
+            "import triton.language as tl\n"
+            "\n"
+            "@triton.jit\n"
+            "def mm_k(A, B, C, M, N, K, BM: tl.constexpr, BN: tl.constexpr,"
+            " BK: tl.constexpr):\n"
+            "    pass\n"
+            "\n"
+            "def run(a, b, num_warps=4, num_stages=3):\n"
+            "    mm_k[(1,)](a, b, None, 0, 0, 0, 128, 128, 32,"
+            " num_warps=num_warps, num_stages=num_stages)\n")
+        tpl = self.m.Template("mm", src, self.m.discover_params(src))
+        self.assertEqual(sorted(tpl.params),
+                         ["BK", "BM", "BN", "num_stages", "num_warps"])
+        r = self.m.forge(src, {"BM": 64, "BN": 256, "warps": 8}, tpl, "mm")
+        self.assertEqual(r.effective,
+                         {"BM": 64, "BN": 256, "num_warps": 8})
+        self.assertNotIn("BLOCK", tpl.params)
 
     def test_selftest_passes(self):
         self.assertEqual(self.m.selftest(), 0)

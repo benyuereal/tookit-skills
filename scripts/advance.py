@@ -548,8 +548,13 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
             consecutive_refuted = 0
 
         # ---- replan
+        # **用实际执行的候选（chosen）比，不用 plan.top1**。
+        # 两者可能不同：gate 会按 precondition 顺延、loop.py 的门也会拒后顺延。
+        # 用 plan.top1 会导致「明明换了候选却判 CONTINUE_SAME」（实测踩过：
+        # 第 1 轮跑 triton、第 2 轮跑 tilelang，replan 却说"top1 未变"）。
         new_top = build_plan(card, ledger=read_records(card))
-        action = replan(plan, new_top, ledger=read_records(card))
+        prev = Top([chosen] if chosen else [], rejected=plan.rejected, ledger=ledger)
+        action = replan(prev, new_top, ledger=read_records(card))
         report["replan"] = action
         _advance_stage(state, "replanned")
         emit("round %d replan：%s —— %s%s"

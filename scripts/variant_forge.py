@@ -133,6 +133,9 @@ def discover_params(source):
     """
     try:
         tree = ast.parse(source)
+    except SyntaxError as e:
+        raise ForgeError("模板本身语法错误，无法定位锚点：%s" % e)
+    try:
         kernel = _kernel_def(tree)
         run = _run_def(tree)
         call = _launch_call(run, kernel.name)
@@ -648,6 +651,9 @@ def resolve_candidate(card_ref, cand_id):
         if not isinstance(spec, dict):
             raise ForgeError("候选 %s 的 forge 块必须是 dict，收到 %r"
                              % (cand_id, type(spec).__name__))
+        if not spec.get("patch"):
+            raise ForgeError("候选 %s 的 forge 块缺 patch（没有要改的参数）"
+                             % cand_id)
         return c, spec
     ids = [str(c.get("id")) for c in cands]
     raise ForgeError(
@@ -658,7 +664,7 @@ def resolve_candidate(card_ref, cand_id):
 
 
 def forge_candidate(card_ref, cand_id, dry_run=False, out=None):
-    cand, spec = resolve_candidate(card_ref, cand_id)
+    _, spec = resolve_candidate(card_ref, cand_id)
     parent = spec.get("parent") or "reduce-lastdim"
     patch = spec.get("patch")
     if isinstance(patch, str):
@@ -755,6 +761,18 @@ def selftest():
     else:
         raise AssertionError("verify_patch 竟然接受未改动的 parent")
 
+    # 只在注释里写 num_warps=8，锚点仍是 4：文本搜会放过，锚点读必须拒绝
+    fake = parent.replace("def run(x, w, eps=1e-6, num_warps=4):",
+                          "# num_warps=8\ndef run(x, w, eps=1e-6, num_warps=4):")
+    assert "num_warps=8" in fake
+    try:
+        verify_patch(fake, {"num_warps": 8}, tpl)
+    except ForgeError as e:
+        assert "锚点上实际是 4" in str(e), e
+        print("[ok] 反向：注释里含 num_warps=8 但锚点是 4 —— verify_patch 拒绝")
+    else:
+        raise AssertionError("verify_patch 只看了字符串，没看锚点")
+
     out = Path(tempfile.mkdtemp()) / "v.py"
     buf = io.StringIO()
     with redirect_stdout(buf):
@@ -765,7 +783,7 @@ def selftest():
     assert "num_warps=8" in text and "+" in text, text
     print("[ok] 反向：--dry-run 不写文件，且 diff 含被改的行")
 
-    print("\nselftest PASS（11 项，含 6 项反向）")
+    print("\nselftest PASS（12 项，含 7 项反向）")
     return 0
 
 
@@ -808,6 +826,8 @@ def main(argv=None):
             if a.out and not a.dry_run:
                 _write(a.out, res.source)
         print(render_report(res, dry_run=a.dry_run, out=a.out))
+        if not a.out and not a.dry_run:
+            print("[note] 未指定 --out：只打印 diff，未落盘")
         return 0
     except ForgeError as e:
         print("ERROR: %s" % e, file=sys.stderr)
