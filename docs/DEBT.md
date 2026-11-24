@@ -237,9 +237,19 @@ variants[0].file_hint: kernels/mhc_fused.hip
 **影响**：照卡的 `file_hint` 去读源码会对不上；`best_for` 写的
 「验证 conv1d+hadamard+norm 三者融合是否划算」也不成立。
 
-**处理建议**（未做，需业主裁决）：
-- 先把 `mhc-fused.yaml` 的 `math` / `best_for` 改成 Step-3 融合的真实语义
-- 再确认 `hc-split-sinkhorn.yaml` 是否已覆盖 conv1d+hadamard+norm
-- `kernels/mhc_fused.hip` 的实测结论（1.7x 更慢）应写进 `pros/cons`
+**处置（2026-11-24 已完成）**：
+- `mhc-fused.yaml` 的 `title` / `math` / `best_for` 已改成 Step-3 融合的真实语义
+- `cons` 补上了两条实测结论：融合净负 1.7x（流碎裂）、同 TU 编译改寄存器分配
+  （118→83 VGPRs，掉 30% 带宽）
+- `source_ref.note` 留痕说明这个 TU 是 post+proj，**不是** conv1d+hadamard+norm
 
-**当前防回退**：无。**这条还没有机器判据**，是本文件的登记项里唯一缺测试的。
+**当前防回退**：`scripts/check_card_semantics.py`
+
+```bash
+python3 -I scripts/check_card_semantics.py --selftest   # 4 项，反向 1 + 边界 2
+python3 -I scripts/check_card_semantics.py              # rc=0（修好后）
+```
+
+判据：从卡的 `math` 抽算子族关键词，去 `source_ref.path` 的标识符里找对应。
+**一个都找不到就报**。已实测：修之前它精确抓出 mhc-fused（且不是误报其余 38 张卡）。
+这是「一定会报出来」的判据，不是「一定会判对」——误报可由人一眼排除，漏报不可接受。

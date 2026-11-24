@@ -1,7 +1,8 @@
 id: mhc-fused
-title: MHC 三件融合
+title: MHC post + 下一层 proj 融合（Step-3）
 family: linear-attn
-math: conv1d + hadamard + norm 的融合链
+math: "post: y = w0*x + w1*(P @ fm.T)，读 residual[M,4,H]+x[M,H]，写新 residual[M,4,H]；
+  Step-3 融合：把 hc_post 与下一层的 proj 合成一个 kernel，省掉一次 4H 重读"
 status: draft
 layer: kernel
 op_card: null
@@ -12,21 +13,27 @@ variants:
   tier: primary
   law_ref: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
   best_for:
-  - 验证 conv1d+hadamard+norm 三者融合是否划算
+  - 验证「post + 下一层 proj」这种边界融合是否划算
   not_for:
   - 各单独算子已很优时（融合净负）
   pros:
   - 官方手写实现
   - 可对比分拆与融合
   cons:
-  - 实测有融合净负的反例，必须先量分拆版
+  - 实测融合净负 1.7x，已明确否决（RESULTS.md 2.4）。根因是流碎裂：post 半边
+    最优点在 1-token CTA，proj 半边在 128-token CTA，融合后两边都拿不到自己的最优粒度
+  - 本文件还记录了另一条：把 Step-3 编进与 proj3 同一个 TU 会改变寄存器分配
+    （118 → 83 VGPRs），让 proj3 掉 30% 带宽——是模块级编译器调度问题，不是代码问题，
+    所以这个 TU 是故意独立的
   source: references/libraries.md
   source_ref:
     path: /workspace/mhc_kernels/kernels/mhc_fused.hip
     symbol: mhc_fused_* (宏展开生成，见第 252 / 498 行的 extern "C" __global__)
     line: 252
     build_cmd: cd /workspace/mhc_kernels && ./build.sh
-    note: 融合版与分拆版都在这个 TU；注释里记着「编译进同一 TU 会改变寄存器分配」
+    note: 融合版与分拆版都在这个 TU；注释里记着「编译进同一 TU 会改变寄存器分配」。
+      2026-11-24 核对：本文件是 post+proj 的 Step-3 实验，**不是** conv1d+hadamard+norm
+      （那个在 hc-split-sinkhorn 的源里）。原 math/title 写错了算子（DEBT D8）。
   l1_exempt_reason: 融合 kernel 在 mhc_kernels 源码树的 mhc_fused.hip，非可 import 包；源码树见 source_ref
   role: best_known
 - repo: tilelang

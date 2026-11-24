@@ -40,7 +40,7 @@ def _num(rec, key):
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
 def read_records(card):
     """tag → 最新一条 run 记录；不取 min(ms)（那是「在噪声里选赢家」）。
-    只读 runs/loop/*.jsonl 顶层；noise/ 是 loop.py 的隔离区（未形成决策）。"""
+    只读顶层 *.jsonl；noise/ 是 loop.py 的隔离区（未形成决策），不读。"""
     out, d = {}, card / "runs" / "loop"
     for f in sorted(d.glob("*.jsonl")) if d.is_dir() else []:
         for ln in f.read_text(encoding="utf-8").splitlines():
@@ -62,10 +62,9 @@ def load_spec(path):
         raise SpecError("spec 必须有 baseline 与 champion（要归因的 tag）")
     abl = d.get("ablations") or []
     ids = [str(it.get("id") or "") if isinstance(it, dict) else "" for it in abl]
-    if not abl or not all(ids) or any(not str(it.get("tag") or "") for it in abl):
-        raise SpecError("ablations 必须非空，且每项同时有 id 与 tag")
-    if len(set(ids)) != len(ids):
-        raise SpecError("ablations 里 id 重复")
+    if not abl or not all(ids) or any(not str(it.get("tag") or "") for it in abl) \
+            or len(set(ids)) != len(ids):
+        raise SpecError("ablations 必须非空、id 唯一，且每项同时有 id 与 tag")
     return d
 def _not_comparable(ref, rec, mm, loop):
     """ref 与 rec 的 ms 能否直接相减；返回不可比理由（空 = 可比）。每条封一个真错：
@@ -97,8 +96,8 @@ def attribute(spec, records):
     if mm is None or loop is None or not hasattr(loop, "_significant"):
         raise SpecError("加载不到 measure_mode.py 或 loop.py 的 _significant —— "
                         "判据必须复用单一真源，缺了就不出结论")
-    tags = [spec["baseline"], spec["champion"]] + [str(a["tag"]) for a in spec["ablations"]]
-    missing = [t for t in tags if t not in records]
+    missing = [t for t in [spec["baseline"], spec["champion"]]
+               + [str(a["tag"]) for a in spec["ablations"]] if t not in records]
     if missing:
         raise SpecError("spec 引用的 tag 在 runs/loop/*.jsonl 里不存在：%s"
                         "（先用 loop.py run 测出来，不许在这里补测）" % ", ".join(missing))
@@ -119,7 +118,7 @@ def attribute(spec, records):
         cp.append("冠军显著慢于基准（%s）—— 归因没有对象" % why)
     items = []
     for a in spec["ablations"]:
-        rec = records[str(a["tag"])]
+        rec, delta = records[str(a["tag"])], 0.0
         r_ms, r_mad = _num(rec, "cand_ms"), _num(rec, "mad")
         delta = r_ms - c_ms
         ok, _r, why = sig(r_ms, r_mad, c_ms, c_mad)
@@ -158,8 +157,10 @@ def _render(rep):
            "收益 %+.5f ms（%+.2f%%）" % (rep["gain_ms"], rep["gain_pct"] or 0.0),
            "%-16s %-14s %10s %8s  %s" % ("项", "tag", "delta_ms", "share", "判定")]
     for it in rep["items"]:
+        # delta_ms > 0 = 去掉该项后更慢 = 该项有正贡献（消融的方向语义）
         v = ("not_claimable：" + it["not_claimable_reason"] if not it["claimable"]
-             else "显著" if it["significant"] else "不显著（%s）" % it["significant_why"])
+             else ("显著（去掉后%s）" % ("变慢，该项有贡献" if it["delta_ms"] > 0 else "更快，该项负贡献"))
+             if it["significant"] else "不显著（%s）" % it["significant_why"])
         out.append("%-16s %-14s %+10.5f %8s  %s" % (
             it["id"], it["tag"], it["delta_ms"], "-" if it["attribution_share"] is None
             else "%.3f" % it["attribution_share"], v))
@@ -172,7 +173,7 @@ def build_report(card, spec_path):
     rep["card"], rep["spec"] = str(card), str(spec_path)
     return rep
 def _r(tag, ms, mad=0.001, mode="event_isolated"):
-    return {"tag": tag, "base_ms": 1.0, "base_mad": 0.001, "cand_ms": ms, "mad": mad,
+    return {"tag": tag, "base_ms": 1.0, "base_mad": .001, "cand_ms": ms, "mad": mad,
             "measure_mode": mode, "shape": {"shape": "s"}}
 def _case(recs, pairs):
     """合成 jsonl + spec 写成临时卡，走完整读取路径；返回 report 或 SpecError。"""
