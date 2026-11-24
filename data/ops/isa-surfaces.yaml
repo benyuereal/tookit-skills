@@ -1,0 +1,44 @@
+version: 1
+note: ISA 级的活攻击面。与 surfaces.yaml 分开是因为：它们的 check 需要反汇编产物，而主表里大部分 surface 用 PMC/计时即可。
+discipline: 静态计数 ≠ 动态权重：ISA 回答"代码长什么样"，不回答"跑起来占多少时间"。GEMM 主循环的 load 每 K-step 都发生，epilogue 的 store 每 tile 才一次。正确顺序是 ISA 生成假设 → PMC 定级 → A/B 裁决。本文件所有 evidence 都是**上界**，expected_gain 在被 PMC 定级前仅作排序。
+surfaces:
+- id: vmem-vector-width
+  class: isa-policy
+  stage: S4
+  statement: 读/写的向量宽度是否用满（buffer_load/store 的 dwordxN）
+  precondition: 有 .co 可反汇编，或能 --save-temps 拿到 .s
+  check: dccobjdump --inputs=<X>.co --target=gfx938 --recompile >/dev/null 2>&1 && grep -oE "buffer_(load|store)_dwordx[0-9]" <X>.co.ISA | sort | uniq -c
+  precondition_check: grep -cE "buffer_(load|store)_dwordx4" <X>.ISA
+  evidence: 厂商 extop_gfx938.co 实测（2026-11-24）：buffer_load_dwordx4 × 32、buffer_store_dwordx4 × 9 —— **读写都已用满 128-bit**。**静态证据，动态占比未知**。
+  expected_gain: 上界 ≤10%（需 PMC 定级 + A/B 实测）
+  verdict: open
+- id: mls-path
+  class: isa-policy
+  stage: S4
+  statement: LDS 读走矩阵通路（ds_read_matrix_trans_format）还是标量 ds_read_b32
+  precondition: 目的是 GEMM 消费者 ⇒ kPack 必须为 1
+  check: grep -oE "ds_read_(matrix_trans_format|b[0-9]+)" <X>.ISA | sort | uniq -c
+  precondition_check: grep -c "ds_read_matrix_trans_format" <X>.ISA
+  evidence: 厂商 extop_gfx938.co 实测：ds_read_b32 × 142、matrix_trans_format × 0—— 厂商 kernel 不走 MLS。hbird 自己的 fp8 kernel 走（32 条）。**静态证据**。
+  expected_gain: 上界 ≤15%（需 PMC 定级）
+  verdict: open
+- id: lds-read-form
+  class: isa-policy
+  stage: S4
+  statement: ds_read_b128 与 ds_read_b32 的比例（LDS 读是否已向量化）
+  precondition: 有反汇编
+  check: grep -oE "ds_read_b[0-9]+" <X>.ISA | sort | uniq -c
+  precondition_check: grep -cE "ds_read_b(64|128)" <X>.ISA
+  evidence: 厂商 extop_gfx938.co：ds_read_b32 × 142，无 b64/b128 —— **LDS 读未向量化**。hbird fp8 kernel 则是 16×b128 + 32×matrix_trans，无 b32（正例基线）。**静态证据**。
+  expected_gain: 上界 ≤15%（需 PMC 定级）
+  verdict: open
+- id: epilogue-expansion
+  class: pipeline
+  stage: S4
+  statement: 收尾段是否完全展开（热循环内无 s_cbranch 回跳）
+  precondition: 有反汇编，且能区分热循环与 epilogue
+  check: grep -c "s_cbranch" <X>.ISA
+  precondition_check: grep -c "s_cbranch" <X>.ISA
+  evidence: 厂商 extop_gfx938.co：s_cbranch × 28（整个 kernel）；hbird fp8 kernel：2 条 / 1021 指令 ⇒ 已展开。反例见 isa-census：epilogue 用 `#pragma unroll 1` → 128 个累加寄存器溢出 → 388 条 buffer_store。**静态证据**。
+  expected_gain: 上界 ≤10%
+  verdict: open

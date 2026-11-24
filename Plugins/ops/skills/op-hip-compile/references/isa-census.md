@@ -29,12 +29,19 @@ H=/opt/dtk/lib/hipblaslt/library_bw_nmz/Kernels.so-000-gfx938.hsaco
 两条路，都不用自己装工具：
 
 ```bash
-# (a) 厂商已经带好了反汇编（461 MB，matmul 全家）
-D=/opt/dtk/lib/hipblaslt/library_gfx938
-grep -ohE "v_mmac[a-z0-9_]*|v_mfma[a-z0-9_]*" $D/FusedMatmulKernel_gfx938.co.ISA | sort | uniq -c | sort -rn
+# (a) 厂商 kernel 的 .co 在 library_bw_nmz/，**不在 library_gfx938/**（后者不存在）
+D=/opt/dtk/lib/hipblaslt/library_bw_nmz
+# 实测（2026-11-24）：extop_gfx938.co → 188487 B 的 .ISA，102 个 .protected 符号
+cd /tmp && /opt/dtk/llvm/bin/dccobjdump --inputs=$D/extop_gfx938.co --target=gfx938 --recompile
+grep -ohE "v_mmac[a-z0-9_]*|v_mfma[a-z0-9_]*" /tmp/extop_gfx938.co.ISA | sort | uniq -c | sort -rn
 
-# (b) 自己反汇编任意 .hsaco / .co —— **输出写到当前目录的 <file>.ISA**，不在 stdout
-cd /tmp && /opt/dtk/llvm/bin/dccobjdump --inputs=<file.hsaco> --recompile --target=gfx938
+# (b) 自己反汇编任意 .co —— **输出写到当前目录的 <file>.ISA**，不在 stdout
+#     ⚠️ 必须是 .co；传 .hsaco 会报 "not recognized"
+cd /tmp && /opt/dtk/llvm/bin/dccobjdump --inputs=<file.co> --recompile --target=gfx938
+
+# (c) 自编译 kernel 的汇编：不需要反汇编工具（hipcc 直接吐 .s）
+hipcc --save-temps --offload-arch=gfx938 --genco k.hip -o k.hsaco
+#   → k-hip-amdgcn-amd-amdhsa-gfx938.s
 ```
 
 `--recompile` 不打印到终端，只在 cwd 落 `<file>.ISA` + `<file>-kernelMetadata.metadata`。
@@ -47,7 +54,9 @@ cd /tmp && /opt/dtk/llvm/bin/dccobjdump --inputs=<file.hsaco> --recompile --targ
 | bf16 | `__builtin_hcu_mmac_f32_16x16x16_bf16_lit_lts` | 16×16×16 | `ds_read_format_tensor_a/b` | **2** | failed | 本项目 kernel 在用；micro GEMM 逐位对 fp32 参考 | verified |
 | fp8 (e4m3fn) | `__builtin_hcu_mmac_f32_16x16x32_fp8_fp8` | 16×16×**32** | `ds_read_m32x32_b8` | **1** | passed | 8192³ 达 432 TF（`gemm_fp8_channelwise`）；本项目 fp8 kernel 精度 PASS | verified |
 
-### 厂商实测（来自 `/opt/dtk/lib/hipblaslt/library_gfx938` 的反汇编，2026-11-13）
+### 厂商实测（来自 `/opt/dtk/lib/hipblaslt/library_bw_nmz` 的反汇编，2026-11-13）
+
+> ⚠️ 2026-11-24 更正：原文写的 `library_gfx938` **不存在**。实测目录为 `library_bw_nmz`（另有 library_bw / library / library_km）。
 
 | 指令 | 出现次数 | 说明 |
 |---|---:|---|
