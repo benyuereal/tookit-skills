@@ -1,0 +1,63 @@
+{
+  "source": "/workspace/mqa_opt",
+  "ingested_at": "2026-11-24T19:01:33",
+  "card": "paged-MQA-logits (grouped bf16, GLM indexer)",
+  "shape": "rows=48 ctx=32768 page=64 H=32 D=128",
+  "gpu": "BW1100 gfx938, HIP_VISIBLE_DEVICES=7",
+  "caliber": {
+    "measure": "ab.py --rows 48 --ctx 32768 --rounds 3 --iters 20",
+    "timer": "torch event, median of 3 rounds",
+    "baseline": "lightop 的 paged_mqa_logits_bf16_grouped_kernel<3>（逐字节复制）",
+    "denominator_gbs": 1870,
+    "note": "baseline 是 lightop 原 kernel 的 byte-for-byte copy，比较是诚实的"
+  },
+  "absorption": [
+    {
+      "item": "LDS swizzle 在 PMC 显示 9.6 冲突时仍只快 0.36%",
+      "absorb": true,
+      "where": "op-profiling/references/counters.md + surfaces.yaml 的 lds-read-form",
+      "why": "硬反例：PMC 计数器非零 ≠ 它是瓶颈。我们之前把 SQ_WAIT_INST_LDS/SQ_INSTS_LDS 当代理指标（D4 因 SQ_LDS_BANK_CONFLICT 采不到），这条说明**代理指标同样会误导**。",
+      "action": "在 counters.md 补：任何 PMC 归因必须配一次「修掉它」的实测，否则只是相关性"
+    },
+    {
+      "item": "timing-only 探针不能当消融项",
+      "absorb": true,
+      "where": "scripts/ablate.py（待实现 derived_from/numerically_valid）",
+      "why": "ablate.py 收到这类项时算出负 share，只报 unexplained，没拦住。已登记 D9。",
+      "action": "见 DEBT D9"
+    },
+    {
+      "item": "mqa 的 1.27x 主收益（bp 路径）",
+      "absorb": false,
+      "why": "这是别人的优化成果，我们复现了但不能当成自己的卡片数据。",
+      "action": "只进 ingest 层留证"
+    }
+  ],
+  "records": [
+    {
+      "stage": "lds_swizzle",
+      "claim_verdict": "refuted",
+      "note": "PMC 确实显示 9.6 冲突/指令（分析性根因：256B 行跨距是 0 mod 32 banks），但实测只快 0.36% —— **冲突不是本 case 的瓶颈**。这是一条漂亮的证伪：PMC 计数器指向的问题真实存在，但不等于修了就有收益。",
+      "measured_x": 1.004
+    },
+    {
+      "stage": "backpressure",
+      "claim_verdict": "conforms",
+      "note": "bp 路径（backpressure 优化）带来主要收益",
+      "measured_x": 1.266
+    },
+    {
+      "stage": "epilogue_removal",
+      "claim_verdict": "not_reverified",
+      "note": "abl_noepi 是 timing-only 探针，不产生正确结果（源码 584 行自述）。它快 40% 只说明 epilogue 耗时 40%，**不能**说明「去掉 epilogue 是个优化」。",
+      "measured_x": 1.4
+    }
+  ],
+  "summary": {
+    "claims_verified": 2,
+    "claims_conform": 1,
+    "claims_not_verified": 1,
+    "claims_refuted_of_theirs": 1,
+    "headline": "LDS swizzle 的 PMC 冲突真实存在(9.6/指令)但只快 0.36% —— 计数器非零≠瓶颈"
+  }
+}

@@ -1,0 +1,420 @@
+# 外部语料吸纳记录 schema（mhc-ingest/1）
+#
+# 为什么有这份文件：上一版 `Plugins/ops/ingest/mhc/verification.json` 是手写的散文
+# JSON —— 8 条记录里 2 条用了不同键名，`absorption` 整块是人的判断、没有任何机器
+# 判据，换一个源目录就得全部重写。本文件把「吸纳一条外部结论」拆成有名字的字段，
+# 每个字段明确回答「机器抽还是人判、从哪抽、抽不到怎么办」。
+#
+# 设计约束：不许另造一套。字段名与语义必须能映射到我们已有的两处权威结构：
+#   - 流水字段：Plugins/ops/skills/op-rmsnorm-fused/runs/loop/20261124.jsonl
+#   - 算子卡：  Plugins/ops/op-atlas/cards/mhc-fused.yaml
+# 映射见文末 field_mapping；映射不上的字段单独列在 known_gaps，不许假装有对应。
+#
+# 一句话边界：schema 只保证「写下来的东西可追溯到原文」，**不保证原文说的是真的**。
+# 是否属实仍要靠我方复跑（our_measured_value，human）。机器字段证明的是「文档确实
+# 这么写」，不是「文档写得对」。
+
+schema: mhc-ingest
+version: 1
+source_root: /workspace/mhc_kernels
+card: mhc-fused
+record_format: jsonl          # 一行一条，第一条 kind=manifest
+produced_by: scripts/ingest.py
+checked_by: scripts/ingest_check.py
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 三个问题：每条记录必须至少服务其中一个
+# ─────────────────────────────────────────────────────────────────────────────
+questions:
+  q1_claim_true:
+    ask: 这条外部结论是否属实？
+    fields: [claim_text, claimed_value, claim_unit, doc_measured_value,
+             our_measured_value, delta_pct, claim_verdict, verdict_note]
+    note: "属实与否只能由 our_measured_value 判定；没有它时 verdict 必须是 not_reverified，不许写 conforms。"
+  q2_speedup_real:
+    ask: 是否真有加速？
+    fields: [metric, baseline_desc, baseline_value, denominator_gbs,
+             significance, our_significance]
+    note: "带宽类结论没有 denominator_gbs 就没有达成率，等于没写。加速幅度要和文档自述的 run-to-run 波动比，否则 3% 的噪声会被当成加速。"
+  q3_absorbable:
+    ask: 能否拆解吸收？
+    fields: [falsified, has_control, mechanism, preconditions,
+             architecture_applicable, absorb, absorb_target, absorb_action]
+    note: "这一组**全部是人的判断**，机器只能抽到 falsified/has_control 两个信号；其余必须标 human。"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 缺失语义：两种「没写」，绝不允许混为一谈
+# ─────────────────────────────────────────────────────────────────────────────
+missing_policy:
+  machine_fields: "抽不到 → 记录写入 missing: {字段: 原因}，ingest_check 报错。不许用 0 / -1 / null 冒充。"
+  human_fields:   "人还没判 → 字段不出现，记录写入 human_pending: [字段...]，ingest_check **不算错**，但必须打印 human_pending。"
+  forbidden: "同一字段不许既出现又列在 human_pending；human 字段不许出现在 missing（那是把人的事赖给机器）。"
+  sentinel: "不设默认值、不 setdefault。缺就是缺。"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 字段定义（29 个；machine 20，human 9）
+#
+# 四件套：type / required / extract / from / if_missing
+#   extract: machine —— 正则或计算可得，脚本必须真的产出
+#   extract: human   —— 只能人判，脚本只负责占位 human_pending
+# required 的三种写法：
+#   true       所有 kind 都要
+#   false      可以没有
+#   "kind:..." 条件必填，由 ingest_check 按 kind 落实
+# ─────────────────────────────────────────────────────────────────────────────
+fields:
+
+  # ── 身份（4）──────────────────────────────────────────────────────────────
+  - name: id
+    type: string
+    required: true
+    extract: machine
+    answers: identity
+    from: "source_file 词干 + stage 生成 slug；冲突时追加行号。例：results-md-L19-m16384-total"
+    if_missing: "拒收 —— 无 id 无法去重，也就无法发现同一结论被吸两次"
+    maps: {loop: "tag", card: "variants[].file_hint"}
+
+  - name: kind
+    type: string
+    required: true
+    extract: machine
+    answers: identity
+    enum: [claim, measurement, define, caliber, manifest]
+    from: "按来源形态判定：markdown 数据表行 → measurement；结果区散文断言 → claim；#define → define；只说口径/分母的句子 → caliber；文件头计数 → manifest"
+    if_missing: "拒收 —— kind 决定哪些字段必填"
+    maps: {loop: "decision 隐含的条目类型（loop 无此维度）", card: "variants[].role"}
+
+  - name: stage
+    type: string
+    required: true
+    extract: machine
+    answers: identity
+    from: "表格行首列的 kernel/步骤名；§1 汇总行 → total；散文 → 行内最靠近的主语"
+    if_missing: "拒收 —— 不知道结论属于哪一步，就无法放进卡"
+    maps: {loop: "direction + tag", card: "variants[].file_hint"}
+
+  - name: shape
+    type: string
+    required: false
+    extract: machine
+    answers: identity
+    from: "行内 m=NNN → 'm=NNN'；#define 记录 → 'compile-time'；行内无形状则省略"
+    if_missing: "省略，不猜 —— 猜出来的形状会让后续对比挂错档"
+    maps: {loop: "shape.params / shape._name", card: "shapes[]"}
+
+  # ── 被检验的断言（4）─────────────────────────────────────────────────────
+  - name: metric
+    type: string
+    required: true
+    extract: machine
+    answers: q1_claim_true
+    enum: [bandwidth_gbs, range_gbs, latency_us, speedup_x, pct, count, outcome,
+           abs_error, define_value]
+    from: "看数字的单位列/上下文：'GB/s'→bandwidth/range；'us'→latency；'Nx'→speedup；'%'→pct；VGPR 数→count；gold 误差→abs_error；#define→define_value"
+    if_missing: "拒收 —— 没有度量口径的数字不可比"
+    maps: {loop: "base_ms/cand_ms/delta_pct 的度量选择", card: "last_verdict.ratio 的单位"}
+
+  - name: claim_text
+    type: string
+    required: true
+    extract: machine
+    answers: q1_claim_true
+    from: "原文那一行的原样文本（表格行含竖线，散文取完整一句）。这也是人与机器对账的最小单位"
+    if_missing: "拒收 —— 没有原句的结论无法复核，等于散文"
+    maps: {loop: "why", card: "variants[].pros / cons"}
+
+  - name: claimed_value
+    type: "number|list"
+    required: "kind:claim|measurement"
+    extract: machine
+    answers: q1_claim_true
+    from: "加粗/单位前的数字；区间用 list（如 [1456,1827]）。区间不是取中点"
+    if_missing: "写 missing 并给原因（例：一行含多个不同口径的数字，无单一值）；不许挑一个凑数"
+    maps: {loop: "ratio_vs_base / delta_pct", card: "last_verdict.ratio"}
+
+  - name: claim_unit
+    type: string
+    required: true
+    extract: machine
+    answers: q1_claim_true
+    enum: [gbs, us, x, pct, count, bytes, string]
+    from: "紧跟数字的单位 token"
+    if_missing: "拒收 —— 1.89 是 x 还是 us，决定结论方向"
+    maps: {loop: "caliber.what（间接）", card: "last_verdict.ratio 的单位"}
+
+  # ── 属实判定（5）：机器只做「有/没有 + 算术」，人做「算不算吻合」──────────
+  - name: doc_measured_value
+    type: "number|list"
+    required: false
+    extract: machine
+    answers: q1_claim_true
+    from: "文档自身的实测数字，单位随 metric（speedup→us；bandwidth→gbs）。仅在能从同一行/同表取到时填"
+    if_missing: "省略。不要用文档的 claim 填这一格——那就是自证"
+    maps: {loop: "cand_ms", card: "ceiling.ref"}
+
+  - name: our_measured_value
+    type: number
+    required: false
+    extract: human
+    answers: q1_claim_true
+    why_human: "必须我方在同一窗口复跑才能填；脚本不许从文档抄一个数冒充"
+    from: "我方 bench 输出（bench.py / sweep_*.py / ovl_bench.py）的同一口径数字，人填并注明命令"
+    if_missing: "标 human_pending；claim_verdict 只能是 not_reverified，不许 conforms"
+    maps: {loop: "cand_ms（我方复跑那一轮）", card: "last_verdict.ratio"}
+
+  - name: delta_pct
+    type: number
+    required: false
+    extract: machine
+    answers: q1_claim_true
+    from: "(our_measured_value - claimed_value) / claimed_value * 100；两者都有才计算"
+    if_missing: "省略（我方未跑时必然没有）；不许用 0 表示「一致」"
+    maps: {loop: "delta_pct", card: "last_verdict.ratio"}
+
+  - name: claim_verdict
+    type: string
+    required: "kind:claim|measurement"
+    extract: machine
+    answers: q1_claim_true
+    enum: [exact, conforms, partially_conforms, refuted, not_reverified, not_applicable]
+    from: "由 ours vs claim 的算术规则导出：|diff|<=1%→exact；<=5% 或落在声明区间→conforms；区间只对一界→partially_conforms；否则 refuted；ours 缺失→not_reverified；define/caliber→not_applicable"
+    if_missing: "拒收 —— 没有判定就没有吸纳"
+    maps: {loop: "decision", card: "last_verdict.status"}
+
+  - name: verdict_note
+    type: string
+    required: false
+    extract: human
+    answers: q1_claim_true
+    why_human: "「1.72x 对 1.82x 算不算吻合」取决于容忍度与用途，机器规则只能给档位，理由要人写"
+    from: "人写：差在哪、是否可接受、有无替代解释"
+    if_missing: "human_pending；若 claim_verdict=partially_conforms，ingest_check 强制要求此字段说清哪部分（沿用旧判据）"
+    maps: {loop: "why", card: "last_verdict.conclusion"}
+
+  # ── 加速是否真实（5）──────────────────────────────────────────────────────
+  - name: baseline_desc
+    type: string
+    required: "kind:claim|measurement"
+    extract: machine
+    answers: q2_speedup_real
+    from: "文档里 baseline 的实现在哪一句话/哪一行（'Baseline = ...' 或表头）"
+    if_missing: "写 missing；没有基线的「加速」不可比"
+    maps: {loop: "caliber + base_ms 的来源", card: "baseline_ref.impl"}
+
+  - name: baseline_value
+    type: number
+    required: false
+    extract: machine
+    answers: q2_speedup_real
+    from: "基线的数字，单位随 metric（speedup→us；bandwidth→gbs）"
+    if_missing: "省略 —— 文档没给基线绝对值时，加速倍率也无法独立复核"
+    maps: {loop: "base_ms", card: "baseline_ref"}
+
+  - name: denominator_gbs
+    type: number
+    required: "metric:bandwidth_gbs|range_gbs"
+    extract: machine
+    answers: q2_speedup_real
+    from: "文档声明的流式上限（本语料为 RESULTS.md 首段的 1870 GB/s）；不许用卡的理论峰值替代"
+    if_missing: "报错 —— 分母不明则达成率无意义（沿用旧判据）"
+    maps: {loop: "caliber.device 隐含的峰值（loop 无显式字段，见 known_gaps）", card: "ceiling"}
+
+  - name: significance
+    type: string
+    required: false
+    extract: machine
+    answers: q2_speedup_real
+    enum: [significant, marginal, none, unknown]
+    from: "speedup_x: >=1.03→significant，1.005~1.03→marginal，<1.005→none；其他 metric→unknown。阈值 3% 来自文档自述的 run-to-run 波动 ±3%"
+    if_missing: "省略（metric 不是 speedup 时本来就没有意义）"
+    maps: {loop: "significant", card: "—"}
+
+  - name: our_significance
+    type: string
+    required: false
+    extract: human
+    answers: q2_speedup_real
+    why_human: "我方复跑后的显著性要结合我方测量噪声（mad）判断，不是阈值套一下就行"
+    from: "人按我方 base_mad/mad 与 delta 判定"
+    if_missing: "human_pending"
+    maps: {loop: "significant（复跑后）", card: "—"}
+
+  # ── 能否拆解吸收（8）：机器只抽两个客观信号，其余全是人 ────────────────────
+  - name: falsified
+    type: boolean
+    required: false
+    extract: machine
+    answers: q3_absorbable
+    from: "行内出现 'falsified' / 'slower' / 'rejected' / 'not viable' → true；'kept' / 'found' → false"
+    if_missing: "省略（不是每条结论都是证伪）"
+    maps: {loop: "falsified", card: "variants[].cons"}
+
+  - name: has_control
+    type: boolean
+    required: false
+    extract: machine
+    answers: q3_absorbable
+    from: "同一张表里存在对照行（NOB / MB=1 control / 未融合版）→ true"
+    if_missing: "省略 —— 不知道有没有对照，就不能判断证伪的强度"
+    maps: {loop: "（loop 无 control 字段，见 known_gaps）", card: "—"}
+
+  - name: mechanism
+    type: string
+    required: false
+    extract: human
+    answers: q3_absorbable
+    why_human: "文档给的是现象（'stream fragmentation'），能不能迁移到我方算子要人判断因果链"
+    from: "人读文档 §2.4/§5 后写：为什么快/慢，触发条件是什么"
+    if_missing: "human_pending —— 没有机理的结论只能当传闻，不能进卡"
+    maps: {loop: "root_cause_signal", card: "variants[].cons"}
+
+  - name: preconditions
+    type: list
+    required: false
+    extract: human
+    answers: q3_absorbable
+    why_human: "「两半最优 CTA 粒度必须相容」这类前提只能靠人读设计段落提炼"
+    from: "人写：该结论成立需要的前置条件，逐条"
+    if_missing: "human_pending"
+    maps: {loop: "trigger_pattern", card: "modify_path.requires"}
+
+  - name: architecture_applicable
+    type: string
+    required: true
+    extract: human
+    answers: q3_absorbable
+    why_human: "**是否适用我们的架构**——这是全 schema 最不能机器化的字段。必须人判，明确标 human。"
+    from: "人判：我们的卡/形状/流水是否同构；允许 yes/no/unknown"
+    if_missing: "human_pending；不许默认 yes，也不许因为字段缺失就当作不适用"
+    enum: [yes, no, unknown]
+    maps: {loop: "（无对应，新增）", card: "variants[].not_for"}
+
+  - name: absorb
+    type: boolean
+    required: true
+    extract: human
+    answers: q3_absorbable
+    why_human: "吸纳与否是决策，不是抽取；机器无权替业主决定知识体收不收"
+    from: "人判：true 才允许写 absorb_target/action"
+    if_missing: "human_pending —— 未判状态必须显式可见，不能默认 false"
+    maps: {loop: "（无对应）", card: "是否新增/改 surfaces"}
+
+  - name: absorb_target
+    type: string
+    required: "absorb:true"
+    extract: human
+    answers: q3_absorbable
+    why_human: "落到哪张卡/哪条 surface/哪个 skill，是知识体结构决策"
+    from: "人写具体落点：skill 路径 + 字段名（如 surfaces.yaml 的 pipeline-depth）"
+    if_missing: "absorb=true 却无落点 → ingest_check 报错"
+    maps: {loop: "direction", card: "surfaces[]"}
+
+  - name: absorb_action
+    type: string
+    required: "absorb:true"
+    extract: human
+    answers: q3_absorbable
+    why_human: "具体改什么（加参数/改前置条件/加反证）要人设计"
+    from: "人写：可执行动作，一句话"
+    if_missing: "absorb=true 却无动作 → ingest_check 报错"
+    maps: {loop: "（loop 无 action 字段，见 known_gaps）", card: "modify_path.how"}
+
+  # ── 出处（3）：防编造的核心。机器字段，但只证明「原文确有这句」─────────────
+  - name: provenance.file
+    type: string
+    required: true
+    extract: machine
+    answers: identity
+    from: "相对 source_root 的路径（如 RESULTS.md / kernels/mhc_proj3.hip）。ingest_check 用它打开文件"
+    if_missing: "拒收 —— 无文件即无出处"
+    maps: {loop: "card/tag（loop 无文件行号，见 known_gaps）", card: "source_ref.path"}
+
+  - name: provenance.line
+    type: integer
+    required: true
+    extract: machine
+    answers: identity
+    from: "原文所在行号（1 起）。ingest_check 要求 quote 恰好出现在这一行"
+    if_missing: "拒收 —— 没有行号的引用等于不可定位"
+    maps: {loop: "—", card: "source_ref.line"}
+
+  - name: provenance.quote
+    type: string
+    required: true
+    extract: machine
+    answers: identity
+    from: "该行的原样文本（含 markdown 粗体/竖线，不修剪）。ingest_check 在该 file 的该 line 上做子串匹配"
+    if_missing: "拒收 —— 这是防编造的唯一硬判据：quote 必须能 grep 回原文"
+    maps: {loop: "—", card: "source_ref.note"}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 记录信封：除字段外的两个元字段
+# ─────────────────────────────────────────────────────────────────────────────
+record_contract:
+  envelope:
+    human_pending: "缺席的 human 字段名列表；必填 human 字段缺席时 ingest_check 只打印，不报错"
+    missing: "抽不到的 machine 字段 -> 原因；ingest_check 一律报错"
+  required_by_kind:
+    claim:       [metric, claim_text, claimed_value, claim_unit, baseline_desc, claim_verdict]
+    measurement: [metric, claim_text, claimed_value, claim_unit, baseline_desc, claim_verdict]
+    define:      [metric, claim_text, claimed_value, claim_unit]
+    caliber:     [metric, claim_text, claimed_value, claim_unit]
+    manifest:    [source_root, records]
+  verdict_rule: "见 claim_verdict.from；规则是**可审计的算术**，不是人的印象"
+  human_rule: "extract:human 的字段若出现，必须带人填的证据；若缺席，必须列 human_pending。两者都不做 → 报错"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 映射：本 schema 与既有两处权威结构。空缺写 null，不硬凑
+# ─────────────────────────────────────────────────────────────────────────────
+field_mapping:
+  loop_jsonl:
+    file: Plugins/ops/skills/op-rmsnorm-fused/runs/loop/20261124.jsonl
+    id: tag
+    stage: direction + tag
+    shape: shape.params / shape._name
+    metric: base_ms/cand_ms/delta_pct/ratio_vs_base 的度量选择
+    claimed_value: ratio_vs_base / delta_pct
+    doc_measured_value: cand_ms
+    our_measured_value: cand_ms（我方复跑那一轮）
+    baseline_desc: caliber + base_ms 的来源
+    baseline_value: base_ms
+    claim_verdict: decision
+    verdict_note: why
+    significance: significant
+    falsified: falsified
+    mechanism: root_cause_signal
+    preconditions: trigger_pattern
+    absorb_target: direction
+    missing_in_loop: [denominator_gbs, has_control, absorb_action, provenance.file, provenance.line, provenance.quote]
+  card_yaml:
+    file: Plugins/ops/op-atlas/cards/mhc-fused.yaml
+    stage: variants[].file_hint
+    shape: shapes[]
+    claimed_value: last_verdict.ratio
+    doc_measured_value: ceiling.ref
+    our_measured_value: last_verdict.ratio
+    baseline_desc: baseline_ref.impl
+    baseline_value: baseline_ref
+    claim_verdict: last_verdict.status
+    verdict_note: last_verdict.conclusion
+    denominator_gbs: ceiling
+    mechanism: variants[].cons
+    preconditions: modify_path.requires
+    architecture_applicable: variants[].not_for
+    absorb_target: surfaces[]
+    absorb_action: modify_path.how
+    provenance.file: source_ref.path
+    provenance.line: source_ref.line
+    provenance.quote: source_ref.note
+    missing_in_card: [has_control, significance, our_significance, falsified]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 已知缺陷（如实列出，不粉饰）
+# ─────────────────────────────────────────────────────────────────────────────
+known_gaps:
+  - "schema 只能证明「文档确实这么写」，不能证明「文档写得对」。属实与否仍靠 our_measured_value（human）。"
+  - "claim_verdict 的 exact/conforms 阈值（1%/5%）是沿用旧脚本的工程约定，不是从语料推出来的；文档换了容忍口径就会判错档。"
+  - "provenance.quote 只做单行子串匹配；跨行/换行改写过的引用会被判伪，宁可误杀不可放过。"
+  - "denominator_gbs 在 loop 流水里没有显式字段，只能从 caliber.device 反推；这是 loop 侧的缺口，不是本 schema 能补的。"
+  - "has_control / significance 只按当前语料的字面词抽（NOB、MB=1、±3%），换个语料要改正则，不是通用语义。"
+  - "architecture_applicable 的 yes/no/unknown 三档过于粗；真正决定吸收的是 mechanism + preconditions 的细节，本 schema 不量化。"

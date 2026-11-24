@@ -253,3 +253,62 @@ python3 -I scripts/check_card_semantics.py              # rc=0（修好后）
 判据：从卡的 `math` 抽算子族关键词，去 `source_ref.path` 的标识符里找对应。
 **一个都找不到就报**。已实测：修之前它精确抓出 mhc-fused（且不是误报其余 38 张卡）。
 这是「一定会报出来」的判据，不是「一定会判对」——误报可由人一眼排除，漏报不可接受。
+
+---
+
+## D9 · `ablate.py` 分不清「冠军的消融」与「基准的另一条实验线」
+
+**发现**：2026-11-24，首次在真实数据上跑 `ablate.py`（mqa_opt 的 LDS swizzle 实验）。
+
+数据（`ab.py --rows 48 --ctx 32768`，event_isolated，3 轮 20 迭代）：
+
+| variant | ms | vs group3_ref |
+|---|---|---|
+| `group3_ref` | 0.2372 | 1.000 |
+| `group3_swz` | 0.2364 | 1.004 |
+| `group3_pk` | 0.2354 | 1.008 |
+| `group3_bp` | **0.1873** | **1.266** |
+| `bp_noswz` | 0.1893 | 1.253 |
+| `bp_pk` | 0.1862 | 1.274 |
+| `abl_noepi` | 0.1694 | 1.400 |
+| `abl_noshfl` | 0.1768 | 1.342 |
+| `abl_neither` | **0.1163** | **2.040** |
+
+把它们当「冠军 `group3_bp` 的消融项」喂给 `ablate.py`，得到：
+
+```
+epilogue  delta=-0.01789  share=-0.359  负贡献
+shuffle   delta=-0.01054  share=-0.211  负贡献
+both      delta=-0.07106  share=-1.424  负贡献
+status unexplained  sum(share)=-1.96
+```
+
+**问题**：`abl_*` 是从 `group3_ref` 派生的**另一条实验线**（去掉 epilogue/shuffle
+两个功能），不是 `group3_bp` 的消融。工具按「冠军减去该项」计算，自然全为负。
+`share` 为负说明归因公式的前提不成立，但**工具没有拦住**，只报了 `unexplained`。
+
+**影响**：如果人只看 `share` 列，会得出「epilogue 有害」的错误结论 ——
+实际上 `abl_noepi` 是**完全不同的 kernel**（少了功能，也少了正确性保证）。
+
+**正确做法（未实现）**：
+1. spec 里每个消融项必须声明 `derived_from: champion | baseline`
+2. 只有 `derived_from: champion` 的项才做归因；`baseline` 派生的单独列，不参与 share
+3. `share` 出现负值时应当**直接报错**，而不是当作「负贡献」写进表 ——
+   负 share 几乎总意味着 spec 写错了，而不是「这项有害」
+
+**根因补充**：源码 `mkern_swz.hip:584` 明确写着
+
+```cpp
+// ablations (not numerically valid; timing-only diagnostics)
+m.def("abl_noepi", &run<3, true, 1>);
+```
+
+即这三个是**测量探针**，不产生正确数值。所以它们**根本不该进归因** ——
+归因的对象是「能算出正确结果、但慢一些」的版本，不是「故意算错以测某段耗时」的探针。
+
+**当前防回退**：`Plugins/ops/tests/test_ablate.py` 覆盖了正负 delta 的判定，
+但**没有覆盖 `derived_from` / `numerically_valid` 语义**（因为还没实现）。
+
+**这条债的价值**：它是「工具第一次遇到真实复杂场景就暴露设计缺口」的实例 ——
+比在合成数据上跑 100 条测试更能说明问题。同时也说明：
+**spec 的正确性没有校验器**，人和工具都可能把「探针」当「消融」。
