@@ -111,29 +111,32 @@ def disassemble(target, arch="gfx938", workdir=None):
     wd = Path(workdir or tempfile.mkdtemp())
     wd.mkdir(parents=True, exist_ok=True)
 
-    # .so 需要先抽内嵌 ELF；.co 可以直接反汇编
-    if tgt.suffix == ".so":
-        rc, out = run([dcc, "--extract-elf=all", "--inputs=%s" % tgt])
-        elfs = sorted(wd.glob("*.co")) + sorted(wd.glob("*.hsaco"))
-        if not elfs:
-            # dccobjdump 抽 ELF 会 segfault，但 .ISA 仍可能落盘
-            isas = sorted(wd.glob("*.ISA"))
-            if isas:
-                return isas[0], "从 .so 提取（dccobjdump 报错但 .ISA 完整）"
-            rc2, out2 = run([dcc, "--inputs=%s" % tgt, "--target=%s" % arch,
-                             "--recompile"])
-            isas = sorted(wd.glob("*.ISA")) or sorted(Path.cwd().glob("*.ISA"))
-            if isas:
-                return isas[0], "从 .so 直接反汇编"
-            return None, "从 .so 抽不出 ELF：%s" % out[-160:]
-        tgt = elfs[0]
-
-    # dccobjdump 把 .ISA 写到 **cwd**，不是 -o 指定处。所以在 wd 里跑。
+    # dccobjdump **不管 -o**：`--extract-elf` 和反汇编产物都落在 **cwd**。
+    # 所以凡是调它，必须先进 wd。原来是 extract-elf 在 chdir 之前跑，
+    # 于是 `ship.so-hipv4-*.gfx938.out` 被写进仓库根目录并被误提交 7 个文件
+    # （a4374b7）。这是「工具写 cwd，调用方以为是 wd」的典型事故。
     import os
     cwd0 = os.getcwd()
     try:
         os.chdir(str(wd))
-        rc, out = run([dcc, "--inputs=%s" % tgt, "--target=%s" % arch, "--recompile"])
+        # .so 需要先抽内嵌 ELF；.co 可以直接反汇编
+        if tgt.suffix == ".so":
+            rc, out = run([dcc, "--extract-elf=all", "--inputs=%s" % tgt])
+            elfs = sorted(wd.glob("*.co")) + sorted(wd.glob("*.hsaco"))
+            if not elfs:
+                # dccobjdump 抽 ELF 会 segfault，但 .ISA 仍可能落盘
+                isas = sorted(wd.glob("*.ISA"))
+                if isas:
+                    return isas[0], "从 .so 提取（dccobjdump 报错但 .ISA 完整）"
+                rc, out = run([dcc, "--inputs=%s" % tgt,
+                               "--target=%s" % arch, "--recompile"])
+            else:
+                tgt = elfs[0]
+                rc, out = run([dcc, "--inputs=%s" % tgt,
+                               "--target=%s" % arch, "--recompile"])
+        else:
+            rc, out = run([dcc, "--inputs=%s" % tgt,
+                           "--target=%s" % arch, "--recompile"])
     finally:
         os.chdir(cwd0)
     isas = sorted(wd.glob("*.ISA"))

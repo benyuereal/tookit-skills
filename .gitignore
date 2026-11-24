@@ -23,6 +23,15 @@ __pycache__/
 *.so
 *.o
 *.so.*.bak
+# dccobjdump 的产物族：它不认 -o，全写 cwd。
+# a4374b7 把 7 个 ship.so-hipv4-*.gfx938.out 误提交进了仓库根目录，
+# 所以把整族拉黑（提取的 ELF、反汇编文本、重编译中间产物）。
+# 入库前已确认 git ls-files 里没有被这些模式覆盖的合法文件。
+*.out
+*.out.*
+*.ISA
+*.co
+*.hsaco
 # ops 门禁 hook 的本地接线（用户态，install.sh 不装 .claude/）
 .claude/
 
