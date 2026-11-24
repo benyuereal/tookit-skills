@@ -61,11 +61,6 @@
 - id: fusion-boundary
   statement: 融合是否真的减少了 HBM 往返（同时警惕把并行 kernel 串成依赖链）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
-  # class 归 memory-path 而非 pipeline：这个方向的**收益来源**是少搬字节，
-  # 依赖链只是它的副作用风险（写在 statement 里）。
-  # 原先归 pipeline 导致两处配置自相矛盾：bound-to-class.yaml 把
-  # fusion-boundary 列为 memory 的 first_try，而按 class 过滤（class=pipeline）
-  # 又会在 memory-bound 卡上拒掉它——同一份配置既推荐又拒绝。
   class: memory-path
   precondition: 候选是融合改动，且原 kernel 之间本可并行
   check: 用 scripts/opbench.py bench_fn 分别量融合版与分拆版的 sum
@@ -117,15 +112,21 @@
   statement: 全局访存加 SLC/流式缓存提示（buffer_load ... slc）能否提速
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点五
   class: isa-policy
-  precondition: 该 kernel 的权重在 tile 内没有真实复用
+  precondition: 该 kernel 的权重在 tile 内没有真实复用（有复用时此结论不适用）
   check: hipcc 编两版（默认 descriptor vs -DW12SLC=1），opcheck correctness 验 bit-exact 后用 opbench 比耗时
-  evidence: 'hbird 实测：gate_up 0.868×（慢 13%）、qkv 打平、输出 bit-exact。 结论是默认 descriptor 最优 —— slc 只是花掉了 prefetch ring 本来免费的 sector。
-
-    '
-  verdict: dead_end
+  evidence: hbird-gemm w12 实测（/workspace/hbird-gemm/docs/w12/records/2026-11-sub160-wall.md:177,2533）：`-DW12SLC=1`（buffer_load ... slc）gate_up M=64/48 0.868x/0.869x，qkv 1.005x/1.010x，bit-exact。默认 descriptor
+    policy 最优，slc 反而慢 13%。
+  verdict: scoped_negative
   cost: S
   expected_gain: ≈0（已实测 -13%）
-  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep -c slc
+  precondition_check: dccobjdump --inputs=<X>.co --target=gfx938 --recompile >/dev/null 2>&1 && grep -c " slc" <X>.co.ISA
+  scope:
+    bound: compute
+    family: gemm
+    region: tile
+    platform: hbird-gemm w12 packed GEMM
+    why_scoped: hbird 实测 -13%（gate_up M=64/48 → 0.868x/0.869x，qkv 打平，bit-exact）。但那是 packed GEMM 的权重流，**权重在 tile 内没有复用**，所以 slc 只花掉了 prefetch ring 本来免费的 sector。有复用的访存模式（如 KV cache 反复读）不受此结论约束。
+    promotion_rule: 需 ≥2 个不同作用域复现为负，才可升为全局 dead_end
 - id: prefetch-depth-isa
   statement: 源码写几段预取/多少 lookahead，能否控制实际 waitcnt 深度
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点六
@@ -138,4 +139,4 @@
   verdict: dead_end
   cost: L
   expected_gain: ≈0（已实测 -1.3%）
-  precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep vmcnt
+  precondition_check: grep -oE "s_waitcnt (v|lgkm)cnt\([0-9]+\)" <X>.ISA | sort | uniq -c

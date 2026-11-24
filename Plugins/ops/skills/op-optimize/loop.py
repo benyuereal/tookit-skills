@@ -514,10 +514,13 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult,
     #   R0 背靠背   Δ/(3×MAD) = 79 倍  ← 符号是反的
     #   ledger 隔离 Δ/(3×MAD) = 1.01 倍 ← 符号是对的
     # 符号错的口径「显著性」高 78 倍，所以模式判断不能折进显著性。
-    if MM is not None:
-        _m = str((cand.get("measure_mode") if isinstance(cand, dict) else None)
-                 or record_mode or "unknown")
-        if not MM.claimable(_m):
+    if measure_mode is not None and record_mode is not None:
+        # 只有**明确声明了**模式才做这个门。record_mode=None 表示调用方
+        # 没有测量模式信息（如单元测试直调 decide）——那种情况下
+        # 按未知处理会把所有判定打成 INCONCLUSIVE，等于判据把功能关掉。
+        # 真实路径（cmd_run）总会传 ab.get("measure_mode")，缺了就是 "unknown"。
+        _m = str(record_mode)
+        if not measure_mode.claimable(_m):
             return "INCONCLUSIVE", ("测量模式=%s 不可用于主张（可筛方向）—— "
                                     "缺 measure_mode 时结论的符号都不可信" % _m)
     _verdict, _why = judge(b["median_ms"], b["mad_ms"], c["median_ms"], c["mad_ms"])
