@@ -49,8 +49,10 @@
   transform:
   - kind: code
     what: 软件预取多级缓冲（source-level）
-    legality: 实测证伪：编译器会重切 vmcnt，源码级深度不可控（isa-census §四点六）
+    legality: 实测证伪：编译器会重切 vmcnt，源码级深度不可控
     predicted_dir: 无（已判死，仅记录）
+    legality_check: vmcnt 模式在 wait-rewrite 开/关后差值 == 0
+    semantic: true
 - id: barrier-width
   statement: 每个 barrier 之间摊了多少工作；barrier 是否过密
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
@@ -66,6 +68,8 @@
     what: 加大每个 barrier 之间摊的工作量（合并循环迭代）
     legality: 需保证不改变语义；barrier 数下降但单次跨度增大
     predicted_dir: SQ_WAIT_INST_LDS/SQ_INSTS_VALU 下降 ⇒ 同步开销减少
+    legality_check: 每个 barrier 摊的工作量 > 0 且语义不变
+    semantic: true
 - id: layout-pack
   statement: 是否每一步都付一次 pack/shuffle/转置
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
@@ -98,10 +102,13 @@
   - kind: param
     what: '{tile_shape}（匹配库的调优表）'
     candidates:
-    - BM/BN 对齐到库表里的已知 tile
-    - shape 改成库表覆盖的档位
-    legality: 需查该库的 tuning table；本仓无表则标 unknown
+    - BLOCK_M 128→256
+    - BLOCK_N 128→256
+    - shape 4096→6144（对齐到库表档位）
+    legality: 需查库的 tuning table；本仓无表则标 unknown
     predicted_dir: 命中调优表 ⇒ 走厂商手调配置
+    legality_check: tile_shape 必须在库 tuning table 中（命中数 >= 1）
+    semantic: true
 - id: fusion-boundary
   statement: 融合是否真的减少了 HBM 往返（同时警惕把并行 kernel 串成依赖链）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
@@ -115,8 +122,9 @@
   transform:
   - kind: code
     what: 把相邻的 elementwise / reduction 融进同一 kernel
-    legality: 语义等价（输出份数一致）；LDS 预算够；不引入新依赖
+    legality: 输出份数必须 >= 1 且与原实现相等；LDS 增量 <= 65536 B
     predicted_dir: HBM 往返趟数 N→N-1 ⇒ 字节按比例下降
+    legality_check: outputs 数 == traffic_passes.writes（差值 == 0）
 - id: precision-drop
   statement: 能否降到 fp8/int8 且仍过契约容差
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
@@ -133,8 +141,10 @@
     candidates:
     - bf16→fp8-e4m3
     - bf16→int8
-    legality: 需过 contract 容差；fp8 需 scale 校准；本机 fp8 是 2:1 双速率
+    legality: 需过 contract 容差：max_abs <= 2.0e-3; 非 finite 数 == 0
     predicted_dir: 字节减半 或 算力翻倍（取决于 bound）
+    legality_check: contract.tolerance.max_abs <= 2.0e-3
+    semantic: true
 - id: split-k
   statement: split-K 切片数是否按 shape 单独搜过
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
@@ -166,8 +176,10 @@
   transform:
   - kind: code
     what: 把随机 gather 改成合并访问（重排索引或预取）
-    legality: 需证明重排不改变语义；额外索引内存可接受
+    legality: 语义等价：重排后索引集合必须与原来相同
     predicted_dir: DRAM 事务数下降 ⇒ 有效带宽上升
+    legality_check: 重排前后索引集合相等（集合差 == 0）
+    semantic: true
 - id: cross-lane-fold
   statement: 跨 lane 归约是否用了更长指令序列（如 shfl 而非 bpermute）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
@@ -183,8 +195,10 @@
     what: '{reduce_impl}'
     candidates:
     - __shfl_down_sync → ds_bpermute_b32
-    legality: 需 bit-exact（MQA 实测换后逐位一致）
+    legality: 'bit-exact: max_abs == 0'
     predicted_dir: 归约指令序列变短 ⇒ issue 压力减小
+    legality_check: max_abs == 0（逐位一致）
+    semantic: true
 - id: slc-policy
   statement: 全局访存加 SLC/流式缓存提示（buffer_load ... slc）能否提速
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点五
@@ -225,8 +239,10 @@
   transform:
   - kind: isa
     what: 调整 s_waitcnt 的 vmcnt/lgkmcnt 深度
-    legality: 实测证伪：编译器会重切分，源码不可控
+    legality: 实测证伪：vmcnt 模式在开/关 wait-rewrite 后完全相同（差值 == 0）
     predicted_dir: 无（已判死）
+    legality_check: vmcnt 模式差值 == 0（不可控的判据）
+    semantic: true
 - id: vmem-vector-width
   statement: 读/写的向量宽度是否用满（buffer_load/store 的 dwordxN）
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
@@ -300,5 +316,7 @@
     what: '{unroll_factor}'
     candidates:
     - 'unroll 1→full（去掉 #pragma unroll 1）'
-    legality: 累加器索引必须是编译期常量，否则 spill 到 scratch
+    legality: 累加器索引必须是编译期常量；否则 spill bytes > 0
     predicted_dir: 消除 buffer_store 溢出 ⇒ epilogue 加速
+    legality_check: vgpr_spill_bytes == 0
+    semantic: true
