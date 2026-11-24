@@ -463,6 +463,16 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
 
     b = {"median_ms": base["median_ms"], "mad_ms": base.get("mad_ms", 0.0)}
     c = {"median_ms": cand["ms"], "mad_ms": cand.get("mad", 0.0)}
+    # 显著变慢必须走拒绝分支，不能进「接受」。
+    # judge() 把 significant_regression 与 significant 分开返回就是为了这件事；
+    # _significant 适配回 bool 时会把两者都算 True —— 所以这里必须先判回归。
+    # judge(base_median, base_mad, cand_median, cand_mad) —— 参数顺序：
+    # baseline 在前。第一版传反了，导致所有「变快」都被判成 significant_regression。
+    _verdict, _why = judge(b["median_ms"], b["mad_ms"], c["median_ms"], c["mad_ms"])
+    if _verdict == "significant_regression":
+        return "REJECTED_NO_GAIN", _why
+    if _verdict == "noise":
+        return "INCONCLUSIVE", _why
     sig, ratio, why = _significant(b, c)
     tail = ("；caveat " + "；".join(warns) + " ⇒ 压力档有退化，端到端必须验") if warns else ""
     if not sig:
@@ -485,18 +495,106 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
                                  % (-cand.get("delta_pct", 0.0), maxdiff, tail))
 
 
+_V2C = {}
+
+
+def _cid_of(variant):
+    """变体名 → 候选 id 的反查。没有映射就返回 None。"""
+    return _V2C.get(variant)
+
+
+def _bn_signal(card):
+    """从 roofline.json 读 bottleneck signal（M2.5 diagnose.py 的产出位置）。
+
+    没有就返回 None —— 不许编一个。signal 是 diagnose.py 从 PMC 算出来的，
+    人写的不算。
+    """
+    p = card / "roofline.json"
+    if not p.is_file():
+        return None
+    try:
+        d = json.loads(p.read_text())
+    except (ValueError, OSError):
+        return None
+    sig = d.get("bottleneck_signal")
+    return sig if isinstance(sig, str) and sig else None
+
+
+def _falsified_of(decision):
+    """decision → falsified 三态的**唯一映射**（v4 螺栓 B1）。
+
+    true   —— 这条方向被证伪，EV 衰减因子要吃它
+    false  —— 方向有效
+    null   —— 本轮不可信（noise / 没测出结论），**不计入证伪次数**
+
+    为什么 noise 不能计入证伪：噪声过大时判「没提升」本身就是错的，
+    把它算成证伪会让 EV 的 (1 − 0.5×已证伪次数) 因子错误衰减，
+    好方向被过早判死。这是 loop.py 早先 impl-broken / direction-refuted
+    两分法的延伸：实现级失败（没做成）≠ 方向级失败（做成了但没用）。
+    """
+    if decision in ("REJECTED_NO_GAIN", "REJECTED_ACCURACY"):
+        # 显著变慢、或精度不过 —— 都是「这条路不通」的硬证据
+        return True
+    if decision in ("INCONCLUSIVE", "ERROR"):
+        return None
+    if decision in ("ACCEPTED_BITEXACT", "ACCEPTED_NUMERICS",
+                    "ACCEPTED_NUMERICS_PENDING_E2E", "ACCEPTED_NO_NUMERICS"):
+        return False
+    return None
+
+
+def judge(base_median, base_mad, cand_median, cand_mad,
+          noise_cutoff=0.05, k=3.0):
+    """**唯一的显著性与噪声判定实现**。文档和代码都指向这一个函数。
+
+    返回 (verdict, reason)。verdict ∈
+        "noise"                 噪声过大，本轮不可信（不决策，重跑）
+        "significant"           候选显著更快
+        "significant_regression"候选显著更慢 —— **比无效更强的证伪信号**
+        "insignificant"         差异在噪声内
+
+    三条设计决定，每条都有代价：
+      ① 噪声尺度用 **baseline 的 MAD**。用候选自身 MAD 会「越快越容易判显著」：
+         优化后耗时降、MAD 可能也降，3×MAD 门槛跟着变小——那是自欺。
+      ② `noise_cutoff`：baseline 的 MAD/median > 5% 直接判 noise。
+         此时任何 delta 都不可信，判了也是在噪声上做决策。
+      ③ `significant_regression` 单列出来，不许并进 significant。
+         一个让算子变慢的改动，和让算子变快的改动，在 EV 衰减里必须是两种处理。
+    """
+    if not base_median or not cand_median:
+        return "noise", "缺少数值（base=%r cand=%r）" % (base_median, cand_median)
+    base_mad = base_mad or 0.0
+    cand_mad = cand_mad or 0.0
+    rel = base_mad / base_median
+    if rel > noise_cutoff:
+        return "noise", ("baseline MAD/median=%.1f%% > %.0f%%，本轮不可信（重跑而不是决策）"
+                         % (rel * 100, noise_cutoff * 100))
+    delta = abs(cand_median - base_median)
+    thr = k * max(base_mad, cand_mad)
+    if delta <= thr:
+        return "insignificant", ("|Δ|=%.3g ≤ %.0f×max(MAD)=%.3g（噪声内）"
+                                 % (delta, k, thr))
+    if cand_median < base_median:
+        return "significant", ("显著加速 %.1f%%（|Δ|=%.3g > %.0f×MAD=%.3g）"
+                               % ((1 - cand_median / base_median) * 100, delta, k, thr))
+    return "significant_regression", ("**显著变慢 %.1f%%**（|Δ|=%.3g > %.0f×MAD=%.3g）"
+                                      "—— 该方向不仅无效且有害"
+                                      % ((cand_median / base_median - 1) * 100, delta, k, thr))
+
+
 def _significant(base, cand, k=3.0):
-    """与 scripts/opbench.py:significant 同义（这里内联，避免卡片路径依赖）。"""
+    """(significant, ratio, why) —— **委托给 judge()，不再自己算一套**。
+
+    原先这里内联了一份 3×MAD 逻辑，与 decide() 里的那份是两份独立实现。
+    两份实现意味着「文档说显著、代码说不显著」这种情况迟早发生（评审指出）。
+    现在唯一实现是 judge()，本函数只是把它适配成 (bool, ratio, why) 的旧签名。
+    """
     b, bmad = base["median_ms"], base.get("mad_ms", 0.0) or 0.0
     c, cmad = cand["median_ms"], cand.get("mad_ms", 0.0) or 0.0
     if not b or not c:
         return False, None, "缺少数值"
-    ratio = c / b
-    noise = k * max(bmad, cmad)
-    delta = abs(c - b)
-    if delta <= noise:
-        return False, ratio, "在噪声内（|Δ|=%.4g <= %.0f*MAD=%.4g）" % (delta, k, noise)
-    return ratio < 1.0, ratio, "显著：ratio=%.4f，|Δ|=%.4g > %.0f*MAD=%.4g" % (ratio, delta, k, noise)
+    verdict, why = judge(b, bmad, c, cmad, k=k)
+    return verdict in ("significant", "significant_regression"), (c / b), why
 
 
 # ---------------------------------------------------------------- 子命令
@@ -1015,6 +1113,7 @@ def cmd_run(a):
                  % ",".join(unmapped), WARN))
         return 2
     variants_arg = ",".join(vmap[t] for t in tags)
+    globals()["_V2C"] = {v: k for k, v in vmap.items()}   # 变体名 → 候选 id
     cmd = [sys.executable, str(bench),
            "--json", str(ab_json), "--rounds", str(a.rounds), *bench_args]
     if "--variants" not in bench_args:
@@ -1105,6 +1204,21 @@ def cmd_run(a):
                 # 完成判定的裁决码：run 不跑 done_when（那是 verify 的事），记 None 让
                 # 流水里字段恒在，消费方不必按记录类型分叉。
                 "done_when_rc": None,
+                # ---- 迭代链的 4 个字段（v4 §3）。少了它们，下一轮无法回读：
+                # 不知道该方向预期多少（expected_effect）、为什么试（root_cause_signal）、
+                # 按什么键检索（trigger_pattern）、算不算证伪（falsified）。
+                # declared 的键是「候选 id」，而这里 v["tag"] 是「变体名」。
+                # 所以先按 vmap 反查候选 id，否则 direction/expect 永远是 None
+                # （第一版就是这样，字段进了 record 但全是空——比没进更糟，
+                #  因为它看起来像"记录了"）。
+                **({"expected_effect": (declared.get(_cid_of(v["tag"])) or {}).get("expect"),
+                    "root_cause_signal": _bn_signal(card),
+                    "trigger_pattern": {
+                        "bound": bound,
+                        "signal": _bn_signal(card),
+                        "direction": (declared.get(_cid_of(v["tag"])) or {}).get("direction"),
+                    }}),
+                "falsified": _falsified_of(decision),
                 # ---- 主张门的三项输入（run 只记录，不拒绝）
                 "caliber": {
                     # adapter（bench/ab.py）的输出优先；它没写的才标 unstated。
