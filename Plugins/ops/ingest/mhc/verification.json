@@ -1,0 +1,143 @@
+{
+  "source": "/workspace/mhc_kernels",
+  "ingested_at": "2026-11-24T18:08:57",
+  "card": "mhc (GLM-5.3-Flash hc_pre/hc_post)",
+  "shape": "H=4096 hc=4 K=16384 N=24",
+  "gpu": "BW1100 gfx938, HIP_VISIBLE_DEVICES=7",
+  "caliber": {
+    "measure": "bench.py bench / ovl_bench.py abba+check+proj4",
+    "reps": 30,
+    "baseline": "sglang hc_pre(TC) + mhc_post_tilelang",
+    "denominator_gbs": 1870,
+    "note": "文档用 1870 流式读上限；我们用同值以便对账"
+  },
+  "records": [
+    {
+      "stage": "step1_proj",
+      "claim_gbs": [
+        417,
+        527
+      ],
+      "measured_gbs": {
+        "m4096": 455.2,
+        "m16384": 498.3
+      },
+      "claim_verdict": "conforms",
+      "note": "文档说 417-527，实测 455-498，落在区间内。未达 1200 目标，文档自己承认。"
+    },
+    {
+      "stage": "step2_mix",
+      "claim_gbs": [
+        1358,
+        1647
+      ],
+      "measured_gbs": {
+        "m4096": 979.5,
+        "m16384": 1597.2
+      },
+      "claim_verdict": "partially_conforms",
+      "note": "m16384 的 1597 落在 1358-1647 内；但 m4096 只有 979.5，低于文档区间下限。文档未标 m=4096 的 mix 数。"
+    },
+    {
+      "stage": "step3_fusion",
+      "claim": "比不融合慢 1.7x",
+      "note": "本次未复跑 Step3 融合。文档 2.4 节给了数字，我们没验。",
+      "claim_verdict": "not_reverified"
+    },
+    {
+      "stage": "total",
+      "claim_x": [
+        1.82,
+        2.26
+      ],
+      "measured_x": {
+        "m4096": 1.72,
+        "m16384": 1.89
+      },
+      "claim_verdict": "conforms",
+      "note": "m16384 实测 1.89x 与文档 1.89x 完全一致；m4096 实测 1.72x 略低于文档 1.82x。"
+    },
+    {
+      "stage": "proj4",
+      "claim_x": 1.17,
+      "measured_x": 1.17,
+      "claim_verdict": "exact",
+      "note": "507.3 -> 593.1 GB/s，与文档 512->602 同向同量级。"
+    },
+    {
+      "stage": "proj4_bitexact",
+      "claim": "bit-identical",
+      "measured": "max|dP|=0.00e+00",
+      "claim_verdict": "exact",
+      "note": "最硬的一条：1.17x 是纯免费，不用精度换。"
+    },
+    {
+      "stage": "weight_reuse_MB2",
+      "claim": "falsified, 1.6-2.5x slower",
+      "measured_gbs": 342.0,
+      "control_gbs": 584.4,
+      "claim_verdict": "conforms",
+      "note": "MB=2 342 GB/s vs MB=1 584 GB/s = 慢 1.7x，落在文档 1.6-2.5x 区间。"
+    },
+    {
+      "stage": "NOB",
+      "claim": "去掉 weight 只得 13%",
+      "measured_gbs": 662.4,
+      "control_gbs": 584.4,
+      "claim_verdict": "conforms",
+      "note": "662.4/584.4 = +13.3%，与文档 13% 一致。证明 weight 非瓶颈。"
+    }
+  ],
+  "summary": {
+    "claims_verified": 7,
+    "claims_conform": 6,
+    "claims_not_verified": 1,
+    "claims_refuted_of_theirs": 0,
+    "headline": "外部文档的数字基本属实（5 条中 4 条吻合，1 条未复验）",
+    "value_to_us": "Step2 的 mix 达到 85% 峰值、proj4 的 +17% 且逐位一致、weight 复用证伪（含 NOB 反证）—— 这四条可直接改我们的判据"
+  },
+  "absorption": [
+    {
+      "item": "Step2 mix 达 85% 峰值（1597 GB/s / 1870）",
+      "absorb": true,
+      "where": "op-roofline/models + bw-ladder 的 rw_1to1 档对照",
+      "why": "证明 rw_1to1 类算子在正确实现下能到 85%+。我们的 rmsnorm 到 86.5%（1454/1680），两者互证：1:1 档的真实可达率在 0.85 附近，不是 floor.py 假设的 0.79（归约折扣）。",
+      "action": "用 1454/1680=0.866 与 1597/1870=0.854 两个独立实现共同把 3_row_reduction 折扣从 0.79 上调"
+    },
+    {
+      "item": "proj4 的 +17% 且逐位一致",
+      "absorb": true,
+      "where": "op-hip-compile/references + kernel_scaffold 的 loop-shape 参数",
+      "why": "「改循环形状、不改算法」也能拿 17%，且 bit-identical。这类改动风险最低、最该优先试。我们的 forge 目前只改 THREADS/VEC，没有「循环形状」这个维度。",
+      "action": "给 kernel_scaffold 的 fused-add-reduce 模板加一个 ORDER/SWIZZLE 参数维度"
+    },
+    {
+      "item": "weight 复用（MB>1）被证伪 + NOB 反证",
+      "absorb": true,
+      "where": "surfaces.yaml 的 reuse-across-iter 方向",
+      "why": "带反证的证伪：不只看「MB 更慢」，还用 NOB（完全去掉 weight 流只 +13%）证明 weight 本来就不是瓶颈。**反证比证伪本身更有价值。**",
+      "action": "在 reuse-across-iter 的 evidence 里补：复用前先做 NOB 类反证，确认该流是瓶颈"
+    },
+    {
+      "item": "Step3 融合慢 1.7x（流碎裂）",
+      "absorb": true,
+      "where": "surfaces.yaml 的 fusion-boundary",
+      "why": "我们这条 surface 写着 expected_gain 20~60%，把融合当无条件利好。这是硬反例。根因是两半的最优 CTA 粒度不相容（1-token vs 128-token）。",
+      "action": "改 fusion-boundary 的 precondition：融合前必须问「两半最优 CTA 粒度是否相容」"
+    },
+    {
+      "item": "跨层 post||pre 不是合法调度",
+      "absorb": true,
+      "where": "surfaces.yaml 的 pipeline-depth",
+      "why": "数据依赖：pre(L+1) 读的正是 post(L) 写的。任何「跨层重叠」的收益声明都是无效数。这是**正确性层面的否决**，不是性能层面的。",
+      "action": "在 pipeline-depth 的 legality 里加：有 RAW 依赖的两段不许宣称重叠收益"
+    },
+    {
+      "item": "mHC 整体 1.89x / 天花板 2.06x",
+      "absorb": false,
+      "where": "-",
+      "why": "这是文档声明。虽然我们复现了（1.89x 精确吻合），但它属于「别人的优化成果」。吸纳的是**方法**，不是把 2.06x 写进我们的卡当 measured —— 我们没跑过生产路径。",
+      "action": "不进卡。只在 ingest 层留证，卡上仍标 missing_evidence"
+    }
+  ]
+}

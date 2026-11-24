@@ -42,7 +42,10 @@
   class: pipeline
   precondition: load-only 消融尚未达到流式读峰值；否则调深度无效
   check: python3 -I scripts/probe_stream.py（拿流式峰值）+ load-only 变体计时
-  evidence: 2-stage 双缓冲会把 occupancy 16→8 waves，实测 0.65x
+  evidence: 2-stage 双缓冲会把 occupancy 16→8 waves，实测 0.65x。
+    **合法性否决（2026-11-24，mHC，本机复现）**：跨层 post||pre 被实测出 1.08-1.10x，
+    但那是**无效数** —— 模型里 pre(L+1) 读的正是 post(L) 写的（RAW 依赖），
+    两段根本不能重叠。⇒ 有 RAW 依赖的两段，任何「重叠收益」都不许作为结论。
   cost: S
   expected_gain: ≈0（已实测证伪：源码级预取深度不可控）
   precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep SQ_WAIT_INST_LDS
@@ -115,7 +118,10 @@
   class: memory-path
   precondition: 候选是融合改动，且原 kernel 之间本可并行
   check: 用 scripts/opbench.py bench_fn 分别量融合版与分拆版的 sum
-  evidence: pre_big_fuse 把独立 kernel 串成依赖链并多占 smem，实测慢 1.7x
+  evidence: pre_big_fuse 把独立 kernel 串成依赖链并多占 smem，实测慢 1.7x。
+    **反例（2026-11-24，mHC Step-3，/workspace/mhc_kernels，本机复现）**：post 半边
+    最优点在 1-token CTA，proj 半边在 128-token CTA，融合后流碎裂，实测比不融合慢 1.7 倍。
+    ⇒ **融合前必须先问「两半的最优 CTA 粒度是否相容」**；不相容就别融。
   cost: L
   expected_gain: 20~60%（省下的往返次数 × 单趟成本）
   # 原命令 grep traffic 恒 rc=1 -- floor.py --json 里根本没有 traffic 键

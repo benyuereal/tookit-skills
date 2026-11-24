@@ -170,3 +170,76 @@ python3 -I -m pytest Plugins/ops/tests/test_mlp_gelu_semantics.py -v
 主变体 import_path 族别、跨形状拼接比值），并用合成反例 + 干净对照卡
 （`mlp-swiglu`）证明判据「该报错时真会报错」—— 避免 skip 变成假绿。
 卡修好后 skip 自动转 pass，无需改测试。
+
+---
+
+## D6 · 前置推理闸门若强制，会 100% 拒跑
+
+**发现**：2026-11-24。`scripts/check_means.py`（借鉴 v7.1「借 1」）能检出手工候选
+缺 `means` / `predicted_effect` / `expected_bottleneck`。
+
+但实测全仓：**11 个 pending 候选，0 个写了这三个字段**。
+
+```bash
+python3 -I scripts/check_means.py Plugins/ops/skills/op-rmsnorm-fused   # rc=1
+python3 -I scripts/check_means.py Plugins/ops/skills/op-moe-w8a8        # rc=1
+python3 -I scripts/check_means.py Plugins/ops/skills/op-sparse-mla      # rc=1
+```
+
+**风险**：如果直接把闸门接进 `loop.py run` 的注册门（rc=2），
+所有实验立刻停摆。这违反业主明确说过的「约束不能卡住能力上限」。
+
+**裁决（2026-11-24，主线程自定）**：分三档接线，不许一刀切：
+1. **warn**（当前）：只在 `advance` 报告里列出，不拦运行
+2. **per-card block**：某张卡的候选**全部**补齐后才对该卡转为强制
+3. **global block**：全仓候选都补齐后才全局强制
+
+**当前防回退**：`Plugins/ops/tests/test_check_means.py`（15 条，其中反向 7 条）
+
+---
+
+## D7 · `ablate.py::_case` 返回值类型混合
+
+`_case()` 正常时返回 `dict`，异常时**把 `SpecError` 当返回值**返回。
+调用方必须每次 `isinstance` 检查，容易漏。
+
+**影响**：主线程写独立测试时就踩了 —— 用 `pytest.raises` 断言失败，
+因为异常根本没抛出来。已在 `test_ablate.py` 里按实际契约断言并注明。
+
+**还债路径**：让 `_case` 只返回 dict，异常照常抛；selftest 改用 `pytest.raises`
+或 try/except。**这个改动会同时动 selftest 的 8 处断言**，不在本轮范围。
+
+**当前防回退**：`Plugins/ops/tests/test_ablate.py::test_missing_tag_is_spec_error_not_verdict_failure`
+按实际契约断言（`isinstance(r, SpecError)`），并在 docstring 里写明这是缺陷不是设计。
+
+---
+
+## D8 · `mhc-fused.yaml` 卡与源文件语义不符
+
+**发现**：2026-11-24，读 mHC 语料时。卡上写：
+
+```yaml
+math: conv1d + hadamard + norm 的融合链
+variants[0].file_hint: kernels/mhc_fused.hip
+```
+
+但 `mhc_fused.hip` 的头注释是：
+
+```c
+// Post + next-layer-projection fusion: the step-3 experiments.
+```
+
+即「post + 下一层 proj 的 Step-3 融合」，与 conv1d/hadamard/norm 无关。
+真对应 conv1d+hadamard+norm 的应是 `hc-split-sinkhorn.yaml`。
+
+**这是与 D5 同类的语义错配**（D5 是 MLP GeGLU vs GroupNorm+SiLU）。
+
+**影响**：照卡的 `file_hint` 去读源码会对不上；`best_for` 写的
+「验证 conv1d+hadamard+norm 三者融合是否划算」也不成立。
+
+**处理建议**（未做，需业主裁决）：
+- 先把 `mhc-fused.yaml` 的 `math` / `best_for` 改成 Step-3 融合的真实语义
+- 再确认 `hc-split-sinkhorn.yaml` 是否已覆盖 conv1d+hadamard+norm
+- `kernels/mhc_fused.hip` 的实测结论（1.7x 更慢）应写进 `pros/cons`
+
+**当前防回退**：无。**这条还没有机器判据**，是本文件的登记项里唯一缺测试的。

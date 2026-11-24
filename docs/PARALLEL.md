@@ -28,6 +28,29 @@
 
 ---
 
+## 第 3 批（17:58 起）—— 借鉴 v7.1 的两件，**必须轻薄**
+
+| agent | 写范围 | 状态 |
+|---|---|---|
+| **主线程** | `scripts/advance.py` · `scripts/forge_step.py` · `docs/PARALLEL.md` · 所有 git commit | 进行中 |
+| agent-A 前置推理闸门 | `scripts/check_means.py`（新建）· `Plugins/ops/tests/test_check_means.py`（新建）· `scripts/check_expect.py` | 派发中 |
+| agent-B 消融归因 | `scripts/ablate.py`（新建）· `Plugins/ops/tests/test_ablate.py`（新建） | 派发中 |
+
+**第 3 批不许碰**：`scripts/advance.py` · `scripts/forge_step.py` · `Plugins/ops/engine/loop.py`
+· `Plugins/ops/skills/op-optimize/references/surfaces.yaml` · `candidates.yaml` · `runs/`
+
+**主线程实测的风险（18:02）**：11 个 pending 候选里 **0 个**写了 `means` /
+`predicted_effect` / `expected_bottleneck`，直接强制闸门会 **100% 拒跑**。
+所以接线必须分级（warn → 按卡逐步转 block），不能一刀切。
+「约束不能卡住能力上限」——这是业主明确说过的。
+
+**轻薄的三条硬约束（对两个 agent 都适用）**：
+1. **不加状态机、不新建编排层**。SkillHub 的 `orchestrate.py`（881 行）/
+   `state.json`（614 行）明确不借 —— 会和我们 `advance` + `progress` 打架。
+2. **只做一件事**，脚本 ≤250 行，测试与实现同批交付。
+3. **判据沿用我们的**：3×MAD、measure_mode、三层分母。不许引入
+   `noise_threshold_pct = 2%` 这类固定阈值，也不许用 `min(ms)` 选赢家。
+
 ## 主线程独占（其他 agent 不许碰）
 
 - `Plugins/ops/op-atlas/validate.py` —— 所有校验规则的唯一实现
