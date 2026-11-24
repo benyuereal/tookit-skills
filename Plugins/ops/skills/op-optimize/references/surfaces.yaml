@@ -118,7 +118,10 @@
   evidence: pre_big_fuse 把独立 kernel 串成依赖链并多占 smem，实测慢 1.7x
   cost: L
   expected_gain: 20~60%（省下的往返次数 × 单趟成本）
-  precondition_check: python3 -I scripts/floor.py --card <card> --json | grep traffic
+  # 原命令 grep traffic 恒 rc=1 -- floor.py --json 里根本没有 traffic 键
+  # （键是 pattern/bytes_mb/binding）。这条前提检查从未真正生效，
+  # 只是没有候选走到这条路径上，所以没人发现。改成检查绑定原因是不是 memory。
+  precondition_check: 'python3 -I scripts/floor.py --card <card> --json | grep "\"binding\": \"memory\""'
   transform:
   - kind: code
     what: 把相邻的 elementwise / reduction 融进同一 kernel
@@ -134,7 +137,9 @@
   evidence: 降精度是唯一能在不改结构的前提下改变算术强度的手段
   cost: L
   expected_gain: 约 2×（fp8 相对 bf16 的理论上限比）
-  precondition_check: python3 -I scripts/efficiency.py --ridge
+  # 原命令 `efficiency.py --ridge` 不存在该参数（恒 rc=2）。
+  # 改成本机真能跑的那条：拿卡的达成数算 MFU/MBU，证明还有余量。
+  precondition_check: 'python3 -I scripts/efficiency.py --card <card> --flops-unit tflops --flops 0.001 --precision bf16 --pattern rw_1to1 --bw 1100'
   transform:
   - kind: param
     what: '{dtype: bf16→fp8/int8}'
@@ -210,7 +215,10 @@
   verdict: scoped_negative
   cost: S
   expected_gain: ≈0（已实测 -13%）
-  precondition_check: dccobjdump --inputs=<X>.co --target=gfx938 --recompile >/dev/null 2>&1 && grep -c " slc" <X>.co.ISA
+  # 原命令直接调裸 dccobjdump，且拿 <X>.co 当输入 —— 本机 dccobjdump 只认
+  # elf64-amdgpu 的 *.out，.co/.so 都被拒；且 `grep -c` 找不到时 rc=1 是正常语义
+  # （就是 0 条 slc），被当成前提失败。统一走 isa_probe（它内部处理 .hip→.out→ISA）。
+  precondition_check: 'python3 -I scripts/isa_probe.py <X>.co --json | grep -q isa'
   scope:
     bound: compute
     family: gemm

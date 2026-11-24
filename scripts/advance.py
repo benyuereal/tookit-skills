@@ -182,13 +182,37 @@ def pick_results_json(card):
 
 # ---------------------------------------------------------------- plan（简化版）
 
+def _load_candidates_via_loop(card):
+    """**复用 loop.py 的 load_candidates**，不在这里重写一份合并逻辑。
+
+    为什么要复用而不是自己读 yaml：loop.py 的 load_candidates 会把
+    runs/advance/overlay.yaml 合并进来（forge 生成的候选只能通过这条路上桌）。
+    如果 advance 自己读 candidates.yaml，会出现「overlay 写了、loop.py 认了、
+    但 plan 看不见」的三角不一致 —— 生成的变体永远排不进 top3，
+    而报错信息是「没有 pending 候选」，完全指不到真因。
+
+    loop.py 不可用时退回只读卡片（明确标注，不假装合并过）。
+    """
+    import importlib.util
+    p = ENGINE_LOOP
+    if p.is_file():
+        try:
+            spec = importlib.util.spec_from_file_location("_loop_for_plan", str(p))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod.load_candidates(Path(card)), "loop.load_candidates"
+        except Exception:                       # noqa: BLE001
+            pass
+    return _yaml(Path(card) / "candidates.yaml"), "card-only"
+
+
 def build_plan(card, ledger=None):
-    """读 candidates.yaml + surfaces.yaml，给出 top3。
+    """读候选队列（含 overlay）+ surfaces.yaml，给出 top3。
 
     排序只按 `expected_gain` 解析出的代理值（简化版，不做完整 EV）。
     只挑 pending 候选：loop.py 的登记门要求候选在队列里，plan 不越权发明候选。
     """
-    cands = _yaml(Path(card) / "candidates.yaml")
+    cands, _src = _load_candidates_via_loop(card)
     surf = {str(s["id"]): s for s in load_surfaces()}
     items = []
     for c in cands.get("candidates") or []:
@@ -215,12 +239,67 @@ def build_plan(card, ledger=None):
 
 # ---------------------------------------------------------------- gate（前提门）
 
+# 前提检查支持的全部占位符。**每加一个都必须给出落地来源**，
+# 否则它会被 shell 当成重定向（`pmc_probe.py <csv>` → `/bin/sh: Syntax error`），
+# 而报错看起来像「命令写错了」，真因是占位符没人填。
+PLACEHOLDERS = ("<card>", "<results.json>", "<csv>", "<X>")
+
+
+def _find_pmc_csv(card):
+    """在卡的 runs/ 与 /tmp 里找最近一份 PMC CSV。找不到返回 None（不猜）。"""
+    import glob
+    pats = [str(Path(card) / "runs" / "**" / "*.csv"),
+            "/tmp/pmc*/**/*.csv", "/tmp/pmc*/*.csv"]
+    cands = []
+    for pat in pats:
+        cands += glob.glob(pat, recursive=True)
+    cands = [c for c in cands if Path(c).is_file()]
+    if not cands:
+        return None
+    return max(cands, key=lambda c: Path(c).stat().st_mtime)
+
+
+def _find_co(card):
+    """找一份已编好的设备目标文件（.co / .hsaco / .so）给 ISA 类前提检查用。"""
+    import glob
+    # 本机可以反汇编的只有 .hip 源（→ --save-temps 的 *.out）与 *.out 本身。
+    # .so/.co/.hsaco 实测都被 dccobjdump 拒（"not recognized as a valid object
+    # file"）：.so 是宿主 ELF，dccobjdump 只认 elf64-amdgpu。所以优先 .hip。
+    pats = [str(Path(card) / "runs" / "**" / "*.hip"),
+            str(Path(card) / "runs" / "**" / "*gfx*.out"),
+            str(Path(card) / "runs" / "**" / "*.hsaco"),
+            str(Path(card) / "runs" / "**" / "*.co")]
+    cands = []
+    for pat in pats:
+        cands += glob.glob(pat, recursive=True)
+    cands = [c for c in cands if Path(c).is_file()]
+    return max(cands, key=lambda c: Path(c).stat().st_mtime) if cands else None
+
+
 def _subst_check(cmd, card, cid, results_rel):
     s = str(cmd).replace("<card>", cid)
     if "<results.json>" in s:
         if not results_rel:
             return None                      # 占位符无法落地 = unrunnable
         s = s.replace("<results.json>", results_rel)
+    if "<csv>" in s:
+        csv = _find_pmc_csv(card)
+        if not csv:
+            return None                      # 没有 PMC 采集 → unrunnable，不假装通过
+        s = s.replace("<csv>", csv)
+    if "<X>" in s:
+        co = _find_co(card)
+        if not co:
+            return None                      # 没有已编译产物 → unrunnable
+        # 模板里写成 `<X>.co` / `<X>.co.ISA`，**带后缀**。硬拼 stem+".co" 会拼出
+        # 不存在的路径（实测：找到的是 auto-gen1.so，拼出来是 auto-gen1.co，
+        # 报「目标不存在」——看起来像磁盘上没文件，其实是后缀拼错了）。
+        # 所以先按出现的完整后缀整体替换，再把剩下的裸 <X> 换掉。
+        real = str(co)
+        for suf in (".co.ISA", ".hsaco.ISA", ".co", ".hsaco", ".so", ".hip"):
+            s = s.replace("<X>" + suf, real if suf.endswith(".ISA")
+                          else real)
+        s = s.replace("<X>", real)
     return s
 
 
@@ -318,6 +397,187 @@ def confirm_record(card, before_len):
     return len(new) > 0, new
 
 
+# ---------------------------------------------------------------- forge（写新实现）
+
+# 「诊断 → 造变体 → 编译 → 测量」里的第二环。第一环是诊断（roofline / PMC / ISA，
+# 由 op-roofline / op-profiling 负责），第三环是本文件的 run（六道门），
+# 本段只负责**把诊断结论变成一个可测的东西**。
+#
+# 三条硬约束（都不是风格问题）：
+#   ① advance 不 import forge_step 的实现细节，只走它导出的 forge_variant()
+#      —— 造变体属于「算子知识」，不能长进编排层（ENGINE.md §一）。
+#   ② 生成物只能落 runs/。要进六道门，必须写 runs/advance/overlay.yaml
+#      （loop.py 只读合并它），**绝不改 candidates.yaml**。
+#   ③ 体检不过就不登记 —— 一个算错的变体进了队列，会把这轮方向判死。
+FORGE_OVERLAY = "overlay.yaml"
+
+
+def _load_forge():
+    """按路径加载 scripts/forge_step.py（不 import、不靠 sys.path）。"""
+    import importlib.util
+    p = REPO_ROOT / "scripts" / "forge_step.py"
+    if not p.is_file():
+        return None, "找不到 %s" % p
+    spec = importlib.util.spec_from_file_location("_forge_step", str(p))
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as e:                      # noqa: BLE001
+        return None, "加载 forge_step 失败：%s: %s" % (type(e).__name__, e)
+    return mod, None
+
+
+def write_overlay(card, entries):
+    """把生成的候选写进 runs/advance/overlay.yaml（**只新增，不覆盖**）。
+
+    loop.py 的 `load_candidates` 会合并它，并拒绝同 id 冲突。
+    这里也做一次同 id 检查：两次生成同名变体时应当停下，而不是让第二次静默赢。
+    """
+    import yaml
+    d = Path(card) / "runs" / ADVANCE_DIR
+    d.mkdir(parents=True, exist_ok=True)
+    f = d / FORGE_OVERLAY
+    cur = {"candidates": []}
+    if f.is_file():
+        cur = yaml.safe_load(f.read_text(encoding="utf-8")) or {"candidates": []}
+    have = {c.get("id") for c in cur.get("candidates") or [] if isinstance(c, dict)}
+    for e in entries:
+        if e["id"] in have:
+            raise SystemExit(
+                "overlay 已存在候选 %r。**不覆盖**：同名变体两次生成会让"
+                "「这轮到底测的是哪个实现」无法回答。" % e["id"])
+        cur.setdefault("candidates", []).append(e)
+        have.add(e["id"])
+    f.write_text(yaml.safe_dump(cur, allow_unicode=True, sort_keys=False),
+                 encoding="utf-8")
+    return f
+
+
+def _overlay_ids(card):
+    """overlay 里已登记的候选 id（用于「别再生成一遍」）。"""
+    import yaml
+    f = Path(card) / "runs" / ADVANCE_DIR / FORGE_OVERLAY
+    if not f.is_file():
+        return set()
+    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    return {c.get("id") for c in d.get("candidates") or [] if isinstance(c, dict)}
+
+
+def _shape_of(card):
+    """读**真正会被 bench 的那个形状**的 params。读不到返回 {}（不猜）。
+
+    **不能取 shapes.yaml 的第一个**。实测踩过：第一版就是这么写的，取到 `tiny`
+    （H=512），而 bench 实际跑的是 `prefill-8k`（H=4096）。生成的变体按 H=512
+    编译，跑到 bench 里直接 ValueError —— 但报错在 ab.py 里，advance 只看到
+    rc=1，看起来像「六道门拒绝了」，完全指不到真因。
+
+    正确的源有两个，按优先级：
+      1. candidates.yaml 的 defaults.bench_args 里的 `--shape <name>`
+      2. shapes.yaml 里 note 不含「不用于 bench」的第一个
+    都找不到就返回 {}，由调用方报错 —— **不猜**。
+    """
+    try:
+        import yaml
+    except ImportError:
+        return {}
+    f = Path(card) / "shapes.yaml"
+    if not f.is_file():
+        return {}
+    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+
+    wanted = None
+    cf = Path(card) / "candidates.yaml"
+    if cf.is_file():
+        try:
+            cy = yaml.safe_load(cf.read_text(encoding="utf-8")) or {}
+            args = ((cy.get("defaults") or {}).get("bench_args") or [])
+            if "--shape" in args:
+                i = args.index("--shape")
+                if i + 1 < len(args):
+                    wanted = str(args[i + 1])
+        except Exception:                       # noqa: BLE001
+            wanted = None
+
+    if wanted and isinstance(d.get(wanted), dict):
+        return dict(d[wanted].get("params") or {})
+    for v in d.values():
+        if not isinstance(v, dict) or not isinstance(v.get("params"), dict):
+            continue
+        if "不用于 bench" in str(v.get("note") or ""):
+            continue
+        return dict(v["params"])
+    return {}
+
+
+def forge_next(card, shape, direction=None, emit=print,
+               template="fused-add-reduce", forge_fn=None):
+    """当队列里没有更好的变体时，造一个新的。
+
+    返回 {"forged": bool, "id":..., "reason":..., "evidence":...}。
+    **不抛异常**（造不出来是正常结果，不该让整轮编排崩），但必须带原因。
+    """
+    if forge_fn is None:
+        mod, err = _load_forge()
+        if err:
+            return {"forged": False, "reason": err}
+        forge_fn = mod
+    # 方向必须来自 surfaces.yaml，**不许发明**。第一次实现硬编码
+    # direction="fused-kernel"，loop.py 立刻拒绝：「不在 surfaces.yaml 里，
+    # 无法判断它属于哪类攻击面」—— 门拦得对，是生成端错了。
+    # 默认取卡上第一个 open 方向；卡上没有就报错（不猜）。
+    if direction is None:
+        try:
+            import yaml
+            cy = yaml.safe_load((Path(card) / "candidates.yaml")
+                                .read_text(encoding="utf-8")) or {}
+            opens = [x.get("id") for x in (cy.get("directions") or [])
+                     if isinstance(x, dict) and str(x.get("status")) == "open"]
+        except Exception:                       # noqa: BLE001
+            opens = []
+        if not opens:
+            return {"forged": False,
+                    "reason": "卡上没有 open 方向，无法为生成变体挂方向（不猜）"}
+        direction = opens[0]
+    valid = {str(s["id"]) for s in load_surfaces()}
+    if valid and direction not in valid:
+        return {"forged": False,
+                "reason": "方向 %r 不在 surfaces.yaml（可选 %s）"
+                          % (direction, sorted(valid)[:8])}
+    H = int(shape.get("H") or 0)
+    if not H:
+        return {"forged": False, "reason": "形状里没有 H，无法定 THREADS/VEC"}
+    try:
+        params = forge_fn.choose_params(H)
+    except Exception as e:                      # noqa: BLE001
+        return {"forged": False, "reason": str(e)}
+
+    vid = "auto-%s-h%d-t%d-v%d" % (template.replace("-", "")[:8], H,
+                                   params["THREADS"], params["VEC"])
+    if vid in _overlay_ids(card):
+        return {"forged": False, "reason": "已生成过 %s（overlay 里有）" % vid,
+                "id": vid}
+    emit("  forge：队列无更好变体 → 生成 %s（%s）" % (vid, params))
+    try:
+        r = forge_fn.forge_variant(vid, template, params, H, None, card=card)
+    except Exception as e:                      # noqa: BLE001
+        return {"forged": False, "reason": "生成/体检失败：%s" % e, "id": vid}
+
+    entry = {"id": vid, "direction": direction, "status": "pending",
+             "priority": 1, "action_class": "improve-locality",
+             # expect 必须可机检（check_expect.py 拦散文）。生成变体的预期写 0：
+             # 它不是「预期能快多少」，是「还没测」。写成 -5% 会让 EV 排序把
+             # 没实测的猜想排到真结论前面。
+             "expect": "0%", "expect_basis": "生成变体，尚未实测",
+             "expect_confidence": "low",
+             "variant": vid, "forge_evidence": r}
+    try:
+        f = write_overlay(card, [entry])
+    except SystemExit as e:
+        return {"forged": False, "reason": str(e), "id": vid}
+    return {"forged": True, "id": vid, "overlay": str(f),
+            "profile": r.get("profile"), "params": params}
+
+
 # ---------------------------------------------------------------- replan（v5.1 §6.3）
 
 def ledger_cites(rejected, prev, ledger=None):
@@ -409,7 +669,7 @@ def _advance_stage(state, stage):
 # ---------------------------------------------------------------- 编排
 
 def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
-                write_state=None):
+                write_state=None, forge_mode=False, forge_module=None):
     """跑多轮。返回报告 dict。dry-run 跳过 run，且不落任何状态。"""
     card = Path(card)
     if write_state is None:
@@ -417,7 +677,8 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
     runner = runner or Runner(dry_run=dry_run)
     report = {"card": card_id(card), "dry_run": bool(dry_run), "rounds": 0,
               "status": "done", "reason": "", "gate": [], "decisions": [],
-              "replan": None, "progress_stage": "idle", "commands": runner.commands}
+              "replan": None, "forge": None, "progress_stage": "idle",
+              "commands": runner.commands}
 
     if max_rounds <= 0:
         emit("max-rounds=0：立即退出，不跑任何东西。")
@@ -457,6 +718,17 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
 
     emit("plan（简化版：按 expected_gain 排序，不做完整 EV）")
     _emit_plan(prev_top)
+    if not prev_top and forge_mode and not dry_run:
+        # 队列空了不等于没路走：这正是「写新实现」该出场的时刻。
+        # 造出来之后重排一次，让它照常过六道门 —— 不绕过任何一道。
+        fr = forge_next(card, _shape_of(card), emit=emit, forge_fn=forge_module)
+        report["forge"] = fr
+        if fr.get("forged"):
+            emit("  forge 成功：%s → 重排（生成的候选同样要过六道门）" % fr["id"])
+            prev_top = build_plan(card, ledger=read_records(card))
+            _emit_plan(prev_top)
+        else:
+            emit("  forge 未产出：%s" % fr.get("reason"))
     if not prev_top:
         emit("  没有 pending 候选 → blocked")
         state["stage"] = "blocked"
@@ -640,6 +912,8 @@ def main(argv=None):
                     help="跳过 run（无需 GPU），只验证编排逻辑")
     ap.add_argument("--json", action="store_true", help="机器可读报告")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--forge", action="store_true", dest="forge_mode",
+                    help="队列空了就造新变体（生成→编译→体检→写 overlay）")
     a = ap.parse_args(argv)
 
     if a.selftest:
@@ -650,7 +924,7 @@ def main(argv=None):
     # --json 时把人读日志关掉，避免污染机器可读输出
     emit = (lambda *args, **kw: None) if a.json else print
     report = run_advance(Path(a.card).resolve(), a.max_rounds,
-                         dry_run=a.dry_run, emit=emit)
+                         dry_run=a.dry_run, emit=emit, forge_mode=a.forge_mode)
     if a.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
@@ -659,6 +933,10 @@ def main(argv=None):
         print("rounds   %d" % report["rounds"])
         print("stage    %s" % report.get("progress_stage"))
         print("decisions %s" % (report.get("decisions") or "-"))
+        fg = report.get("forge")
+        if fg:
+            print("forge    %s（%s）" % ("是" if fg.get("forged") else "否",
+                                        fg.get("reason") or "-"))
     return 0 if report["status"] in ("done", "noop", "stopped") else 2
 
 

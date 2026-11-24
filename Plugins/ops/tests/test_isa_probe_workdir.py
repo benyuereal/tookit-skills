@@ -121,3 +121,45 @@ def test_explicit_workdir_receives_artifacts(tmp_path):
                 "workdir=%s 里没有产物 —— 反向判据失效（可能根本没跑）" % wd_td)
         finally:
             os.chdir(cwd0)
+
+
+def test_build_from_source_products_stay_in_workdir(tmp_path):
+    """`build_from_source` 也必须把 hipcc 的 --save-temps 产物关进 workdir。
+
+    事故背景：hipcc 的 --save-temps 把 `*.out` / `*.s` 写在**调用时的 cwd**。
+    不 chdir 就会在仓库根目录堆 `ship.so-*.out` —— 之前已误提交 7 个
+    （commit a4374b7），这一条守住它不再发生。
+
+    **反向**：不仅断言 cwd 干净，还要断言 workdir 里**确实有产物**。
+    只检查 cwd 的话，「成功」和「什么都没跑」无法区分。
+    """
+    if not isa_probe._which("hipcc", "/opt/dtK/bin/hipcc".replace("dtK", "dtk")):
+        pytest.skip("本机无 hipcc，判据未生效")
+
+    repo = Path(__file__).resolve().parents[3]
+    src = repo / "Plugins/ops/skills/op-rmsnorm-fused/runs/forged/auto-gen1.hip"
+    if not src.is_file():
+        src = tmp_path / "k.hip"
+        src.write_text(
+            "#include <hip/hip_runtime.h>\n"
+            "__global__ void k(float* p){ int i=threadIdx.x; p[i]=p[i]*2.f; }\n",
+            encoding="utf-8")
+
+    spawn = tmp_path / "spawn"
+    wd = tmp_path / "wd"
+    spawn.mkdir()
+    wd.mkdir()
+    cwd0 = os.getcwd()
+    try:
+        os.chdir(str(spawn))
+        isa, note = isa_probe.build_from_source(str(src), workdir=str(wd))
+    finally:
+        os.chdir(cwd0)
+
+    leaked = [p.name for p in spawn.iterdir()
+              if p.suffix in (".out", ".ISA", ".s") or ".out." in p.name]
+    assert leaked == [], "hipcc 产物泄漏到 cwd：%s" % leaked
+
+    made = [p.name for p in wd.iterdir()]
+    assert made, ("workdir 里没有任何产物 —— 编译根本没跑，或产物落到了别处"
+                  "（此时上一条断言是假绿）")

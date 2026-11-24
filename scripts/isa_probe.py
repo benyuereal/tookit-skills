@@ -105,7 +105,11 @@ def disassemble(target, arch="gfx938", workdir=None):
     dcc = find_disassembler()
     if not dcc:
         return None, "dccobjdump 不存在"
-    tgt = Path(target)
+    # **必须先 resolve()**：下面要 chdir 进 wd，相对路径会随之失效。
+    # 实测：修好 cwd 泄漏之后立刻冒出这个——chdir 到临时目录后
+    # dccobjdump 收到 "Plugins/.../x.so"，在 wd 里当然找不到，
+    # 报「No such file or directory」，看起来像磁盘上真没这个文件。
+    tgt = Path(target).resolve()
     if not tgt.is_file():
         return None, "目标不存在：%s" % target
     wd = Path(workdir or tempfile.mkdtemp())
@@ -147,21 +151,38 @@ def disassemble(target, arch="gfx938", workdir=None):
 
 
 def build_from_source(src, arch="gfx938", workdir=None):
-    """从 .hip/.cpp 编出 .co 再反汇编。返回 .ISA 路径或 None。"""
+    """从 .hip/.cpp 编到能反汇编的形态。返回 (.ISA 路径或 None, 说明)。
+
+    **本机唯一走得通的形态是 `--save-temps` 产出的 `*.out`**（elf64-amdgpu）。
+    实测排除的两种（都报 "not recognized as a valid object file"）：
+      · `hipcc --genco x -o x.co`      → dccobjdump 不认
+      · `--save-temps` 留下的 `.bc/.o` → 同上
+    所以这里只认 `.out`，不再尝试 .co/.hsaco —— 那条路本机不通，重试只是慢。
+    """
     hipcc = _which("hipcc", "/opt/dtk/bin/hipcc")
     if not hipcc:
         return None, "hipcc 不存在"
     wd = Path(workdir or tempfile.mkdtemp())
     wd.mkdir(parents=True, exist_ok=True)
-    obj = wd / (Path(src).stem + ".hsaco")
-    rc, out = run([hipcc, "--save-temps", "--offload-arch=%s" % arch,
-                   "--genco", str(src), "-o", str(obj)])
-    if rc != 0:
-        return None, "编译失败：%s" % out[-200:]
-    # hipcc --save-temps 会留下 .s 汇编
-    for s in sorted(wd.glob("*.s")):
-        return s, "hipcc --save-temps 产出的 .s"
-    return disassemble(obj, arch, wd)
+    # 编译到可执行文件只为触发 --save-temps；链接失败无所谓（我们只要 .out）
+    # 注意 cwd：hipcc 的 --save-temps 产物落在**调用时的 cwd**。
+    # 不 chdir 的话会在仓库根目录留下一堆 *.out（正是之前误提交 7 个
+    # ship.so-*.out 的同一个根因）。所以必须在 wd 里调用。
+    import os
+    src_abs = Path(src).resolve()
+    cwd0 = os.getcwd()
+    try:
+        os.chdir(str(wd))
+        rc, out = run([hipcc, "-O3", "--save-temps", "--offload-arch=%s" % arch,
+                       str(src_abs), "-o", str(wd / "a.out")], timeout=300)
+    finally:
+        os.chdir(cwd0)
+    # `--save-temps` 把 *.out 写在**源文件所在目录**，不是 cwd/wd。
+    # 只在 wd 里 glob 会漏掉它，然后误报「没产出 .out」——实际上早产出了。
+    outs = sorted(wd.glob("*gfx*.out"))
+    if not outs:
+        return None, ("没产出 *.out（rc=%d）：%s" % (rc, out[-240:]))
+    return disassemble(outs[0], arch, wd)
 
 
 def analyze(isa_text):

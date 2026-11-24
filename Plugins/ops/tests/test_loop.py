@@ -892,6 +892,35 @@ class TestNoiseRecordsNotKept(unittest.TestCase):
     且判定理由是"噪声"的记录。要么重跑，要么不写。
     """
 
+    def test_noise_is_quarantined_not_written_to_authoritative_log(self):
+        """**反向**：写入端必须真的隔离噪声记录 —— 不能只靠上面那条扫描测试。
+
+        上面的 test_no_noise_records_in_real_cards 是「事后扫描」；如果写入端
+        不拦，它只能报错，不能防止污染。这一条直接调用 append_record，
+        断言噪声记录进 noise/、非噪声记录进权威流。
+        """
+        import json
+        import tempfile
+        tmp = Path(tempfile.mkdtemp()) / "op-x"
+        tmp.mkdir(parents=True)
+
+        noisy = dict(_record(tag="noisy", decision="INCONCLUSIVE"),
+                     why="baseline MAD/median=7.8% > 5%，本轮不可信（重跑而不是决策）")
+        loop.append_record(tmp, noisy)
+        loop.append_record(tmp, _record(tag="clean", decision="REJECTED_NO_GAIN"))
+
+        auth = list((loop.db_dir(tmp)).glob("*.jsonl"))
+        got = [json.loads(l) for f in auth for l in f.read_text().splitlines() if l.strip()]
+        self.assertEqual([r["tag"] for r in got], ["clean"],
+                         "噪声记录进了权威流水：%s" % [r["tag"] for r in got])
+        self.assertTrue(any(r.get("quarantined") for r in got) is False)
+
+        noise = list((loop.db_dir(tmp) / loop.NOISE_DIR).glob("*.jsonl"))
+        self.assertEqual(len(noise), 1, "噪声记录没有被隔离留证")
+        nq = [json.loads(l) for l in noise[0].read_text().splitlines() if l.strip()]
+        self.assertEqual([r["tag"] for r in nq], ["noisy"])
+        self.assertIn("quarantined", nq[0], "隔离后必须留痕，否则看起来像丢数据")
+
     def test_no_noise_records_in_real_cards(self):
         import json
         skills = Path(__file__).resolve().parents[1] / "skills"

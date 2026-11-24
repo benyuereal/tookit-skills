@@ -112,17 +112,54 @@ def _c(s, color):
 # ---------------------------------------------------------------- 卡片读取
 
 def load_candidates(card):
+    """读卡片的候选队列。**另可合并 runs/advance/overlay.yaml**。
+
+    overlay 是「多轮编排自动生成的候选」的登记处。它解决一个真实冲突：
+      · ENGINE.md 规定 advance **不许写卡片**（写范围只到 runs/）
+      · 但本文件的登记门要求「候选必须在队列里」，否则拒绝跑
+    没有 overlay 时，自动生成的变体无法进入六道门 —— 要么绕过门（不可接受），
+    要么让 advance 去改 candidates.yaml（违反边界）。
+
+    overlay 只是**追加**，永远不能：
+      · 覆盖已存在的候选 id（重复即冲突，直接报错，不静默取其一）
+      · 改 refuted 清单（已判死的不能被 overlay 复活）
+      · 改 defaults / directions 的状态与计数
+    所以它不能让任何一条已经生效的约束失效。
+
+    每个候选会打上 `_origin: advance-overlay`，记录里看得出来源。
+    """
     p = card / "candidates.yaml"
     if not p.exists():
-        return {"defaults": {}, "directions": [], "candidates": [],
-                "refuted": [], "stalled": []}
-    import yaml
-    d = yaml.safe_load(p.read_text()) or {}
-    d.setdefault("defaults", {})
-    d.setdefault("directions", [])
-    d.setdefault("candidates", [])
-    d.setdefault("refuted", [])
-    d.setdefault("stalled", [])
+        d = {"defaults": {}, "directions": [], "candidates": [],
+             "refuted": [], "stalled": []}
+    else:
+        import yaml
+        d = yaml.safe_load(p.read_text()) or {}
+        d.setdefault("defaults", {})
+        d.setdefault("directions", [])
+        d.setdefault("candidates", [])
+        d.setdefault("refuted", [])
+        d.setdefault("stalled", [])
+    ov = card / "runs" / "advance" / "overlay.yaml"
+    if ov.is_file():
+        import yaml
+        o = yaml.safe_load(ov.read_text()) or {}
+        have = {c.get("id") for c in d["candidates"] if isinstance(c, dict)}
+        dead = {r.get("id") for r in d["refuted"] if isinstance(r, dict)}
+        for c in (o.get("candidates") or []):
+            if not isinstance(c, dict) or not c.get("id"):
+                continue
+            cid = c["id"]
+            if cid in have:
+                raise SystemExit(
+                    "overlay 冲突：候选 %r 与卡片已有候选同 id。"
+                    "overlay 只能新增，不能覆盖（否则登记的候选会被悄悄换掉）。" % cid)
+            if cid in dead:
+                raise SystemExit(
+                    "overlay 冲突：候选 %r 已在 refuted 里。"
+                    "已判死的候选不能被 overlay 复活。" % cid)
+            have.add(cid)
+            d["candidates"].append(dict(c, _origin="advance-overlay"))
     return d
 
 
@@ -403,8 +440,33 @@ def read_records(card):
     return out
 
 
+# 噪声记录（baseline MAD 超熔断线）**不是决策**，是「本轮没测出结论」。
+# 实测代价（2026-11-24）：同一份代码在四张卡上，lightop 从 197µs 漂到 220~236µs，
+# MAD 4.9~7.2% 全超 5% 熔断线。judge 正确地判了 INCONCLUSIVE，但记录照样进了
+# 权威流水 —— D4 的轮次、calibrate 的 realized_med、recall 的检索都会把它算进去。
+# 规则只有两条：**重跑，或者不写进权威流水**。这里选后者 + 隔离留证。
+NOISE_DIR = "noise"
+
+
+def is_noise_record(rec):
+    """这条记录是不是「噪声过大、未形成决策」。"""
+    if str(rec.get("decision")) != "INCONCLUSIVE":
+        return False
+    why = str(rec.get("why") or "")
+    return "本轮不可信" in why and "噪声" not in why or "MAD/median" in why
+
+
 def append_record(card, rec):
-    f = db_dir(card) / (time.strftime("%Y%m%d") + ".jsonl")
+    """写流水。噪声记录进 `runs/loop/noise/`，不进权威流（`runs/loop/*.jsonl`）。
+
+    隔离而不是丢弃：证据要留，但它不能参与 D4 轮次 / calibrate / recall 的统计。
+    """
+    d = db_dir(card)
+    if is_noise_record(rec):
+        d = d / NOISE_DIR
+        d.mkdir(parents=True, exist_ok=True)
+        rec = dict(rec, quarantined="baseline MAD 超熔断线，未形成决策（重跑或作废）")
+    f = d / (time.strftime("%Y%m%d") + ".jsonl")
     with f.open("a") as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
 

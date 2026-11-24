@@ -114,9 +114,9 @@ def _append_record(card, tag, decision):
                              "ts": "2026-01-01T00:00:00"}) + "\n")
 
 
-def _run(card, rounds=1, runner=None, dry_run=False):
+def _run(card, rounds=1, runner=None, dry_run=False, **kw):
     return adv.run_advance(card, rounds, runner=runner, dry_run=dry_run,
-                           emit=lambda *a, **k: None)
+                           emit=lambda *a, **k: None, **kw)
 
 
 # ---------------------------------------------------------------- selftest
@@ -396,3 +396,108 @@ def test_stage_is_monotonic_and_terminal_sticks():
     assert adv._advance_stage(st, "blocked")
     assert not adv._advance_stage(st, "recorded")  # 终态不再前进
     assert st["stage"] == "blocked"
+
+
+# ---------------------------------------------------------------- forge 接线
+
+class _FakeForge:
+    """替身 forge_step：只记录调用，产出由用例指定。"""
+
+    def __init__(self, fail=False):
+        self.fail = fail
+        self.calls = []
+
+    def choose_params(self, H):
+        if H != 4096:
+            raise ValueError("H=%d 不支持" % H)
+        return {"THREADS": 512, "WARPS": 8, "VEC": 1}
+
+    def forge_variant(self, name, template, params, H, outdir, card=None):
+        self.calls.append({"name": name, "params": params, "card": card})
+        if self.fail:
+            raise RuntimeError("体检不通过：private=528B > 0B")
+        return {"name": name, "so": "/x/%s.so" % name,
+                "profile": {"private": 0, "threads": 512, "vgpr": 21}}
+
+
+def _empty_queue_card(tmp_path, roofline=None):
+    """一张**没有 pending 候选**的卡 —— 这是 forge 该出场的唯一条件。"""
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "fused-kernel", "status": "open", "refutes": 0}],
+        "candidates": [],
+        "refuted": [],
+    }, roofline=roofline)
+    _write(card / "shapes.yaml",
+           "prefill-8k:\n  params:\n    M: 8192\n    H: 4096\n")
+    return card
+
+
+def test_forge_off_keeps_empty_queue_blocked(tmp_path, surfaces_file):
+    """**反向**：不开 --forge 时，空队列必须照旧 blocked，不许偷偷造变体。"""
+    card = _empty_queue_card(tmp_path)
+    fk = _FakeForge()
+    r = _run(card, rounds=2, runner=FakeRunner(), forge_mode=False,
+             forge_module=fk)
+    assert r["status"] == "blocked", r["status"]
+    assert fk.calls == [], "没开 --forge 却调用了 forge"
+
+
+def test_forge_registers_overlay_and_plan_picks_it_up(tmp_path, surfaces_file):
+    """造出来的候选必须走 overlay → build_plan 能看见 → 才可能进六道门。"""
+    card = _empty_queue_card(tmp_path)
+    fk = _FakeForge()
+    r = adv.run_advance(card, 1, runner=FakeRunner(), emit=lambda *a, **k: None,
+                        forge_mode=True, forge_module=fk)
+    assert r["forge"]["forged"] is True, r["forge"]
+    ov = card / "runs" / "advance" / "overlay.yaml"
+    assert ov.is_file(), "overlay 没落盘，loop.py 就看不到这个候选"
+    assert "auto-" in r["forge"]["id"]
+
+    import yaml
+    d = yaml.safe_load(ov.read_text())
+    e = d["candidates"][0]
+    assert e["variant"] == r["forge"]["id"]
+    assert e["status"] == "pending"
+    # expect 必须可机检；生成变体没测过，写 0% 而不是乐观值
+    assert e["expect"] == "0%"
+    assert "forge_evidence" in e, "必须留下体检证据（private/threads）"
+
+
+def test_forge_failure_does_not_register_overlay(tmp_path, surfaces_file):
+    """**反向**：体检失败时**不许**写 overlay —— 一个算错的变体进队列会判死方向。"""
+    card = _empty_queue_card(tmp_path)
+    r = adv.run_advance(card, 1, runner=FakeRunner(), emit=lambda *a, **k: None,
+                        forge_mode=True, forge_module=_FakeForge(fail=True))
+    assert r["forge"]["forged"] is False
+    assert "体检" in r["forge"]["reason"]
+    assert not (card / "runs" / "advance" / "overlay.yaml").exists()
+
+
+def test_forge_does_not_bypass_gates(tmp_path, surfaces_file):
+    """**核心反向**：生成的候选仍走 loop.py 的 run 命令，不是直接调 bench。
+
+    advance 的铁律是「实验只能经 loop.py」。forge 只是让它有东西可跑，
+    不许成为绕过六道门的第二条路。
+    """
+    card = _empty_queue_card(tmp_path)
+    rn = FakeRunner(loop_rc=2)          # 模拟 loop.py 的门拒绝
+    r = adv.run_advance(card, 1, runner=rn, emit=lambda *a, **k: None,
+                        forge_mode=True, forge_module=_FakeForge())
+    assert r["status"] == "blocked", r["status"]
+    assert rn.runs, "生成了变体却没交给 loop.py 跑"
+    assert all("advance.py" not in c and "ab.py" not in c for c in rn.commands), rn.commands
+    assert any("loop.py" in c for c in rn.commands), "实验入口必须是 loop.py"
+
+
+def test_shape_missing_H_does_not_forge(tmp_path, surfaces_file):
+    """**反向**：形状里没有 H 就必须老实说不造，不许猜一个 H。"""
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": [], "refuted": []})
+    _write(card / "shapes.yaml", "s1:\n  params:\n    M: 8192\n")
+    fk = _FakeForge()
+    r = adv.run_advance(card, 1, runner=FakeRunner(), emit=lambda *a, **k: None,
+                        forge_mode=True, forge_module=fk)
+    assert r["forge"]["forged"] is False
+    assert "H" in r["forge"]["reason"]
+    assert fk.calls == []

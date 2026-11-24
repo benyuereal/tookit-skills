@@ -40,3 +40,12 @@ MOE-MHC-HBIRD-覆盖方案.md
 *-覆盖方案.md
 HANDOFF-TO-39.md
 *-HANDOFF*.md
+
+# hipcc --save-temps 的全部中间产物（含 .out / .bc / .hipi / .s / .hipfb）。
+# 事故：isa_probe 与 dccobjdump 都不认 -o，产物落在**调用时 cwd**，
+# 于是仓库根目录被堆满（已误提交 7 个 ship.so-*.out，commit a4374b7）。
+# 这里按后缀全封死；代码侧已改为必先进 workdir。
+*.hipfb
+*-hip-amdgcn-amd-amdhsa-*
+*-host-x86_64-unknown-linux-gnu-*
+*.resolution.txt
