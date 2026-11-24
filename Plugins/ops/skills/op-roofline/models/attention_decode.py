@@ -202,8 +202,8 @@ def analyze(kv_len, batch, heads, head_dim, block_size=64,
     if grid < CU_COUNT:
         out["low_parallelism"] = True
         out["low_parallelism_note"] = (
-            "grid=%d < CU 数 %d —— 有 CU 完全空闲；调大 batch/heads 或 num_split，"
-            "否则带宽永远吃不满。" % (grid, CU_COUNT))
+            "请检查并行度：grid=%d < CU 数 %d —— 有 CU 完全空闲；"
+            "调大 batch/heads 或 num_split，否则带宽永远吃不满。" % (grid, CU_COUNT))
     else:
         out["low_parallelism"] = False
         if fill < 0.5:

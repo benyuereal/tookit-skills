@@ -81,6 +81,48 @@ class Template:
     params: dict          # 参数名 -> 校验规则（由 discover_params 实测得出）
 
 
+# 允许 forge 的参数名 → 校验规则。**不是「模板里出现的任何名字都可改」**：
+# 只有 kernel 签名里的这些 constexpr / launch 关键字才进可选集合；
+# 未登记的名字（如 H / eps，改它们不是参数化而是改语义）一律报错。
+# 具体某个模板认哪些，由 discover_params 实测 + 本表求交得出。
+REGISTRY = {
+    "BLOCK": {
+        "kind": "constexpr", "min": 16, "max": 1 << 20,
+        "power_of_two": True,
+        "help": "tl.arange(0, BLOCK) 要求 2 的幂；本模板还要求 BLOCK == 运行时 H",
+    },
+    "BM": {
+        "kind": "constexpr", "min": 16, "max": 1 << 16,
+        "power_of_two": True, "help": "tile 行数，需 2 的幂",
+    },
+    "BN": {
+        "kind": "constexpr", "min": 16, "max": 1 << 16,
+        "power_of_two": True, "help": "tile 列数，需 2 的幂",
+    },
+    "BK": {
+        "kind": "constexpr", "min": 8, "max": 1 << 12,
+        "power_of_two": True, "help": "tile K 维，需 2 的幂",
+    },
+    "num_warps": {
+        "kind": "launch_kw", "min": 1, "max": 32,
+        "power_of_two": True, "help": "Triton launch 的 warp 数；必须 2 的幂",
+    },
+    "num_stages": {
+        "kind": "launch_kw", "min": 1, "max": 8,
+        "power_of_two": False, "help": "Triton launch 的流水级数",
+    },
+}
+
+# 别名（示例命令里的 warps=4 / bm64 等）
+ALIASES = {
+    "warps": "num_warps",
+    "numwarps": "num_warps",
+    "stages": "num_stages",
+    "block": "BLOCK",
+    "bm": "BM", "bn": "BN", "bk": "BK",
+}
+
+
 def discover_params(source):
     """扫描模板，返回**实际可改**的参数集合。
 
@@ -139,73 +181,15 @@ def load_template(name):
         raise ForgeError("模板 %s 没有可 forge 的锚点（kernel 签名 / launch "
                          "关键字里没有登记的参数）" % name)
     return Template(str(name), src, params)
-    "BLOCK": {
-        "kind": "constexpr", "min": 16, "max": 1 << 20,
-        "power_of_two": True,
-        "help": "tl.arange(0, BLOCK) 要求 2 的幂；本模板还要求 BLOCK == 运行时 H",
-    },
-    "BM": {
-        "kind": "constexpr", "min": 16, "max": 1 << 16,
-        "power_of_two": True, "help": "tile 行数，需 2 的幂",
-    },
-    "BN": {
-        "kind": "constexpr", "min": 16, "max": 1 << 16,
-        "power_of_two": True, "help": "tile 列数，需 2 的幂",
-    },
-    "BK": {
-        "kind": "constexpr", "min": 8, "max": 1 << 12,
-        "power_of_two": True, "help": "tile K 维，需 2 的幂",
-    },
-    "num_warps": {
-        "kind": "launch_kw", "min": 1, "max": 32,
-        "power_of_two": True, "help": "Triton launch 的 warp 数；必须 2 的幂",
-    },
-    "num_stages": {
-        "kind": "launch_kw", "min": 1, "max": 8,
-        "power_of_two": False, "help": "Triton launch 的流水级数",
-    },
-}
-
-# 别名（示例命令里的 warps=4）
-ALIASES = {
-    "warps": "num_warps",
-    "numwarps": "num_warps",
-    "stages": "num_stages",
-    "block": "BLOCK",
-    "bm": "BM", "bn": "BN", "bk": "BK",
-}
-
-
-def load_scaffold():
-    """按文件路径加载 kernel_scaffold，不靠 sys.path / 模块名。"""
-    if not SCAFFOLD.is_file():
-        raise ForgeError("找不到模板源 %s" % SCAFFOLD)
-    spec = importlib.util.spec_from_file_location("_kernel_scaffold", str(SCAFFOLD))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def load_template(name):
-    """模板名 → Template。也接受 `.py` 路径（用于测试 / 外部模板）。"""
-    if not name:
-        raise ForgeError("缺 --parent（模板名，如 reduce-lastdim）")
-    p = Path(name)
-    if p.is_file():
-        return Template(p.stem, p.read_text(encoding="utf-8"), dict(REDUCE_PARAMS))
-    ks = load_scaffold()
-    entry = ks.TEMPLATES.get(str(name))
-    if entry is None:
-        raise ForgeError("未知模板 %r（可选 %s）" % (name, sorted(ks.TEMPLATES)))
-    src = entry.get("triton")
-    if not src:
-        raise ForgeError("模板 %s 没有 Triton 版本；HIP 侧请标 forge: manual"
-                         % (name))
-    return Template(str(name), src, dict(REDUCE_PARAMS))
 
 
 def _supported(template):
-    return ", ".join(sorted(template.params)) + "（别名 warps → num_warps）"
+    names = sorted(template.params)
+    if not names:
+        return "<无>（模板里没有登记过的可 forge 参数）"
+    extras = [k for k, v in ALIASES.items() if v in template.params]
+    s = ", ".join(names)
+    return s + ("（别名 %s）" % ", ".join(sorted(extras)) if extras else "")
 
 
 def _validate_value(name, value, spec):
@@ -428,29 +412,27 @@ def _plan_edits(src, template, patches):
                               start, end))
 
         elif spec["kind"] == "launch_kw":
-            if name != "num_warps":
-                raise ForgeError("内部错误：未实现的 launch_kw 参数 %s" % name)
-            kw = next((k for k in call.keywords if k.arg == "num_warps"), None)
+            kw = next((k for k in call.keywords if k.arg == name), None)
             if kw is None:
                 raise ForgeError(
-                    "锚点缺失：run() 的 launch 调用没有 num_warps=... —— "
-                    "改 run() 默认值不会生效，拒绝生成")
+                    "锚点缺失：run() 的 launch 调用没有 %s=... —— "
+                    "改 run() 默认值不会生效，拒绝生成" % name)
             vnode = kw.value
             if isinstance(vnode, ast.Name):
                 default = _run_default_node(run, vnode.id)
                 if default is None:
                     raise ForgeError(
-                        "锚点无效：launch 传的是 num_warps=%s，但 run() 里没有"
-                        "这个参数 —— 改默认值不会生效" % vnode.id)
+                        "锚点无效：launch 传的是 %s=%s，但 run() 里没有"
+                        "这个参数 —— 改默认值不会生效" % (name, vnode.id))
                 target = default
                 anchor = "def run() 的 %s 默认值（经 launch 关键字生效）" % vnode.id
             elif _as_int(vnode) is not None:
                 target = vnode
-                anchor = "launch 的 num_warps 字面量"
+                anchor = "launch 的 %s 字面量" % name
             else:
                 raise ForgeError(
-                    "锚点无效：launch 的 num_warps 不是简单常量或 run() 参数，"
-                    "无法保证改动能生效")
+                    "锚点无效：launch 的 %s 不是简单常量或 run() 参数，"
+                    "无法保证改动能生效" % name)
             start, end = _span(src, target)
             old = src[start:end]
             new = old if old.strip() == str(value) else str(value)
@@ -478,35 +460,45 @@ def _apply_edits(src, edits):
 
 # ---------------------------------------------------------------- 生成后校验
 
-def _effective_params(src):
-    """把锚点上的**实际值**读回来，非字面量返回 None。
+def _effective_value(src, name):
+    """单个参数在锚点上的实际值；解析不出返回 None。
 
-    这是本工具的核心验收：不是搜字符串，而是解析 AST 后顺着
-    「launch 实参 / run 默认值」把值解出来。
+    constexpr：launch 里该 kernel 参数的位置/关键字实参；
+    launch_kw：launch 关键字的值，或它引用的 run() 默认值。
     """
     tree = ast.parse(src)
     kernel = _kernel_def(tree)
     run = _run_def(tree)
     call = _launch_call(run, kernel.name)
-    eff = {}
-
-    node, _ = _call_arg(call, "BLOCK", _param_index(kernel, "BLOCK"))
-    eff["BLOCK"] = _as_int(node) if node is not None else None
-
-    kw = next((k for k in call.keywords if k.arg == "num_warps"), None)
-    val = None
-    if kw is not None:
+    kind = REGISTRY.get(name, {}).get("kind")
+    if kind == "constexpr":
+        node, _ = _call_arg(call, name, _param_index(kernel, name))
+        return _as_int(node) if node is not None else None
+    if kind == "launch_kw":
+        kw = next((k for k in call.keywords if k.arg == name), None)
+        if kw is None:
+            return None
         if _as_int(kw.value) is not None:
-            val = _as_int(kw.value)
-        elif isinstance(kw.value, ast.Name):
-            val = _as_int(_run_default_node(run, kw.value.id))
-    eff["num_warps"] = val
-    return eff
+            return _as_int(kw.value)
+        if isinstance(kw.value, ast.Name):
+            return _as_int(_run_default_node(run, kw.value.id))
+        return None
+    return None
+
+
+def _effective_params(src, names=None):
+    """把锚点上的**实际值**读回来，非字面量返回 None。
+
+    这是本工具的核心验收：不是搜字符串，而是解析 AST 后顺着
+    「launch 实参 / run 默认值」把值解出来。
+    """
+    names = list(names) if names else ["BLOCK", "num_warps"]
+    return {n: _effective_value(src, n) for n in names}
 
 
 def _effective_text(src, name):
     try:
-        v = _effective_params(src).get(name)
+        v = _effective_value(src, name)
     except ForgeError:
         return "<无法解析>"
     return "<非字面量>" if v is None else str(v)
@@ -522,7 +514,7 @@ def verify_patch(src, patches, template):
         compile(src, "<variant>", "exec")
     except SyntaxError as e:
         raise ForgeError("生成物语法错误：%s" % e)
-    eff = _effective_params(src)
+    eff = _effective_params(src, norm.keys())
     problems = []
     for name, value in norm.items():
         got = eff.get(name)
@@ -553,14 +545,14 @@ class ForgeResult:
 def forge(source, patches, template=None, parent_name="parent"):
     """核心入口：模板源码 + patch → 变体源码（带 diff 与校验）。"""
     if template is None:
-        template = Template(parent_name, source, dict(REDUCE_PARAMS))
+        template = Template(parent_name, source, discover_params(source))
     norm = normalize_patches(patches, template)
     edits = _plan_edits(source, template, norm)
     new_src = _apply_edits(source, edits)
     ast.parse(new_src)                                  # 语法闸
     effective = verify_patch(new_src, norm, template)   # 接线闸
 
-    parent_eff = _effective_params(source)
+    parent_eff = _effective_params(source, norm.keys())
     warnings = []
     noop = [n for n, v in norm.items() if parent_eff.get(n) == v]
     if noop:
