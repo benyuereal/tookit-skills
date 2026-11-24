@@ -6,6 +6,7 @@ defaults:
   - prefill-8k
   - --base
   - lightop-fused
+  gpu: 7
 directions:
 - id: fusion-boundary
   statement: 残差融合是否真的省了往返：3*M*H*2B vs 4*M*H*2B

@@ -78,6 +78,29 @@ VERIFY_TAIL_LINES = 20      # 失败时只回显输出尾部 20 行，别把整�
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
 
+def _load_measure_mode():
+    """加载 scripts/measure_mode.py —— measure_mode 的**唯一真源**。
+
+    用 importlib 按路径加载，而不是 `import measure_mode`：loop.py 平时以
+    `python3 -I .../loop.py` 运行，-I 会把脚本目录（不是仓库根）放进 sys.path，
+    直接 import 会落空。加载失败时（例如被人单独拷走）返回 None，
+    调用方把「没有真源」判成不可主张，而不是放行。
+    """
+    import importlib.util
+    p = REPO_ROOT / "scripts" / "measure_mode.py"
+    try:
+        spec = importlib.util.spec_from_file_location("_op_measure_mode", str(p))
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["_op_measure_mode"] = mod
+        spec.loader.exec_module(mod)
+        return mod
+    except (OSError, AttributeError, ImportError):
+        return None
+
+
+measure_mode = _load_measure_mode()
+
+
 def _c(s, color):
     return s if not sys.stdout.isatty() else color + s + "\033[0m"
 
@@ -444,7 +467,8 @@ def claim_gate(rec):
     return (not reasons), reasons
 
 
-def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
+def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult,
+           record_mode=None):
     """返回 (decision, why)。
 
     decision ∈ ACCEPTED_* / REJECTED_* / INCONCLUSIVE。
@@ -485,6 +509,17 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
     # _significant 适配回 bool 时会把两者都算 True —— 所以这里必须先判回归。
     # judge(base_median, base_mad, cand_median, cand_mad) —— 参数顺序：
     # baseline 在前。第一版传反了，导致所有「变快」都被判成 significant_regression。
+    # ---- P0-1 前置门：测量模式。**必须独立于 judge()**。
+    # judge() 只判噪声（MAD），判不了偏差（bias）。实测：
+    #   R0 背靠背   Δ/(3×MAD) = 79 倍  ← 符号是反的
+    #   ledger 隔离 Δ/(3×MAD) = 1.01 倍 ← 符号是对的
+    # 符号错的口径「显著性」高 78 倍，所以模式判断不能折进显著性。
+    if MM is not None:
+        _m = str((cand.get("measure_mode") if isinstance(cand, dict) else None)
+                 or record_mode or "unknown")
+        if not MM.claimable(_m):
+            return "INCONCLUSIVE", ("测量模式=%s 不可用于主张（可筛方向）—— "
+                                    "缺 measure_mode 时结论的符号都不可信" % _m)
     _verdict, _why = judge(b["median_ms"], b["mad_ms"], c["median_ms"], c["mad_ms"])
     if _verdict == "significant_regression":
         return "REJECTED_NO_GAIN", _why
@@ -1273,7 +1308,8 @@ def cmd_run(a):
         for v in run["variants"]:
             decision, why = decide(
                 {"median_ms": run["base_ms"], "mad_ms": run.get("base_mad", 0.0)},
-                v, acc.get("base"), acc.get(v["tag"]), tol, primary, stress_mult)
+                v, acc.get("base"), acc.get(v["tag"]), tol, primary, stress_mult,
+                record_mode=ab.get("measure_mode"))
             # 显著性：与 decide 内部同一判据（3×max(MAD)），只是单独取出来给主张门用
             _sig, _ratio, _why = _significant(
                 {"median_ms": run["base_ms"], "mad_ms": run.get("base_mad", 0.0)},
@@ -1308,6 +1344,9 @@ def cmd_run(a):
                 # 完成判定的裁决码：run 不跑 done_when（那是 verify 的事），记 None 让
                 # 流水里字段恒在，消费方不必按记录类型分叉。
                 "done_when_rc": None,
+                # P0-1：测量模式必填。ab.py 的值原样搬运，缺失写 "unknown"。
+                # 缺这个字段，结论的符号都不可信（R0 就是这么翻车的）。
+                "measure_mode": str(ab.get("measure_mode") or "unknown"),
                 # ---- 迭代链的 4 个字段（v4 §3）。少了它们，下一轮无法回读：
                 # 不知道该方向预期多少（expected_effect）、为什么试（root_cause_signal）、
                 # 按什么键检索（trigger_pattern）、算不算证伪（falsified）。

@@ -1,0 +1,33 @@
+version: 1
+note: 诊断终点（attribution.dominant）→ 决策起点（surfaces.yaml 的 id）。没有这张表，agent 得出"主导是 L2 miss"之后没有任何机检路径知道该试哪条面，只能自由发挥——而方向预算、refuted 拒跑、动作类约束全挂在 surface id 上。
+dominant_to_surface:
+  hbm:
+  - layout-pack
+  - fusion-boundary
+  - gather-path
+  l2-miss:
+  - layout-pack
+  - gather-path
+  lds-conflict:
+  - layout-pack
+  - lds-read-form
+  vgpr-spill:
+  - occupancy
+  - epilogue-expansion
+  issue-stall:
+  - cross-lane-fold
+  - barrier-width
+  - prefetch-depth
+  - vmem-vector-width
+unknown_states:
+  csv_missing:
+    action: 去采 PMC CSV
+    why: 还没有数据
+  counter_incomplete:
+    action: 换采集参数或换 kernel 段
+    why: 采到了但列不全
+  counter_suspect:
+    action: 放弃该计数器，换证据路径（ISA / 消融）
+    why: 已知坏：SQ_LDS_BANK_CONFLICT 恒 0 / SQ_WAVES 缺列
+escalation:
+  rule: 同卡连续 2 轮 unknown → blocked，要求换采集方式，不许再采一次
