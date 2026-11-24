@@ -33,7 +33,18 @@
         "drift_pct": -0.33,
         "drift_ok": true
       },
-      "strategy_delta_pct": -0.39
+      "strategy_delta_pct": -0.39,
+      "placement": {
+        "grid": 4194304,
+        "vgpr": 24,
+        "lds_per_cta": 36,
+        "ctas_per_cu": null,
+        "waves_per_cu": null,
+        "threads_per_cta": 512,
+        "wave_size": 64
+      },
+      "placement_source": "PMC CSV /tmp/pmc-rms2/x.csv（hipprof --pmc --pmc-type 3，HIP_VISIBLE_DEVICES=6，2026-11-24），kernel=fused_rn_add_kernel_train_fast",
+      "placement_unknown": {}
     },
     "fused-3pass-triton": {
       "clone": {
@@ -46,7 +57,22 @@
         "mad_ms": 0.0083,
         "samples": 7
       },
-      "strategy_delta_pct": 0.45
+      "strategy_delta_pct": 0.45,
+      "placement": {
+        "grid": null,
+        "vgpr": null,
+        "lds_per_cta": null,
+        "ctas_per_cu": null,
+        "waves_per_cu": null
+      },
+      "placement_source": "未采集",
+      "placement_unknown": {
+        "grid": "DSL 生成 kernel，无独立 .so，也未单独采 PMC",
+        "vgpr": "同上",
+        "lds_per_cta": "同上",
+        "ctas_per_cu": "同上",
+        "waves_per_cu": "同上"
+      }
     },
     "fused-3pass-tilelang": {
       "clone": {
@@ -59,7 +85,22 @@
         "mad_ms": 0.0006,
         "samples": 7
       },
-      "strategy_delta_pct": -3.69
+      "strategy_delta_pct": -3.69,
+      "placement": {
+        "grid": null,
+        "vgpr": null,
+        "lds_per_cta": null,
+        "ctas_per_cu": null,
+        "waves_per_cu": null
+      },
+      "placement_source": "未采集",
+      "placement_unknown": {
+        "grid": "DSL 生成 kernel，无独立 .so，也未单独采 PMC",
+        "vgpr": "同上",
+        "lds_per_cta": "同上",
+        "ctas_per_cu": "同上",
+        "waves_per_cu": "同上"
+      }
     }
   },
   "significance_clone": [

@@ -349,6 +349,42 @@ def _grid_ctas(val):
     return None
 
 
+def derive_occupancy(placement, cu=64, vgpr_budget=196608, lds_budget=65536):
+    """从 grid/vgpr/lds 推出 ctas_per_cu 与 waves_per_cu。**推导，不是猜。**
+
+    公式（与 inspect_so.py 同一口径）：
+        CTA/CU = min(vgpr_budget / (vgpr × threads_per_cta), lds_budget / lds_per_cta)
+    threads_per_cta 由 grid 与 CTA 数反推不可靠，所以调用方应显式给
+    `threads_per_cta`；不给就只推得出上界，宁可返回空也不给假值。
+    """
+    out = {}
+    vgpr = placement.get("vgpr")
+    lds = placement.get("lds_per_cta")
+    threads = placement.get("threads_per_cta")
+    if isinstance(vgpr, int) and vgpr > 0 and isinstance(threads, int) and threads > 0:
+        by_vgpr = vgpr_budget // (vgpr * threads)
+        by_lds = (lds_budget // lds) if isinstance(lds, int) and lds > 0 else None
+        cands = [x for x in (by_vgpr, by_lds) if x and x > 0]
+        if cands:
+            out["ctas_per_cu"] = min(cands)
+    if out.get("ctas_per_cu") and isinstance(placement.get("wave_size"), int):
+        threads = placement.get("threads_per_cta") or 64
+        ws = placement["wave_size"]
+        waves = out["ctas_per_cu"] * (threads // ws if ws else 1)
+        # 每 CU 的 wave 上限：gfx938 是 40 waves/CU（10 waves/EU × 4 EU）。
+        # 超过上限说明是"理论可以但硬件放不下"，不能原样报出去——
+        # 第一版算出 128 waves/CU 还当成真值，那是公式对但物理不对。
+        wave_cap = placement.get("wave_cap", 40)
+        if waves > wave_cap:
+            out["waves_per_cu"] = wave_cap
+            out["waves_per_cu_capped"] = (
+                "公式给出 %d waves/CU，超过硬件上限 %d（10 waves/EU × 4 EU），"
+                "取上限" % (waves, wave_cap))
+        else:
+            out["waves_per_cu"] = waves
+    return out
+
+
 def _require_placement(record):
     """取 placement 并逐字段校验；缺/未知/错误值一律抛错。"""
     if not isinstance(record, dict):
@@ -366,11 +402,16 @@ def _require_placement(record):
     if not isinstance(unk, dict):
         unk = {}
 
+    # ctas_per_cu / waves_per_cu 可以由 grid/vgpr/lds 用公式推出，
+    # 不需要手填——但**推导过程必须显式**，不许凭空补一个数。
+    derived = derive_occupancy(plc)
     for f in PLACEMENT_REQUIRED:
         if f not in plc:
             raise EfficiencyError(
                 "record.placement 缺 %s：放置条件不全拒绝计算"
                 "（未知请写 null + placement_unknown 原因，但仍不能算）" % f)
+        if plc[f] is None and f in derived:
+            continue                     # 可由公式推出（validate 时会回显推导值）
         v = plc[f]
         if v is None:
             reason = unk.get(f)

@@ -50,7 +50,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-PLACEMENT_FIELDS = ("grid", "ctas_per_cu", "vgpr", "lds_per_cta", "waves_per_cu")
+# 五个"结果"字段 + 两个"推导输入"。threads_per_cta 与 wave_size 不是结果，
+# 但没有它们算不出 ctas_per_cu / waves_per_cu（PMC CSV 的 wgr / wave_size 直接给），
+# 所以必须允许写进来——第一版白名单漏了它们，导致推导占用率没有合法输入。
+# 必需产出：每条 record 都要有（未知写 null + 原因）
+PLACEMENT_REQUIRED = ("grid", "ctas_per_cu", "vgpr", "lds_per_cta", "waves_per_cu")
+# 可选输入：有它们才能从公式推 ctas_per_cu / waves_per_cu（PMC CSV 的 wgr / wave_size）
+PLACEMENT_OPTIONAL = ("threads_per_cta", "wave_size")
+PLACEMENT_FIELDS = PLACEMENT_REQUIRED + PLACEMENT_OPTIONAL
 
 # 本机（BW1100 / gfx938）64 CU；只用于「每 CU 能驻多少」的合理性判断。
 CU_COUNT = 64
@@ -108,6 +115,34 @@ def _grid_ctas(val):
     return None
 
 
+def _derive_one(plc, field, cu=64, vgpr_budget=196608, lds_budget=65536,
+                wave_cap=40):
+    """从已有 placement 字段推 ctas_per_cu / waves_per_cu。推不出返回 None。
+
+    口径与 inspect_so.py / efficiency.py 一致：
+        CTAs/CU = min(VGPR 预算/(VGPR×每CTA线程), LDS 预算/LDS每CTA)
+    上限 40 waves/CU（10 waves/EU × 4 EU）。
+    """
+    vgpr = plc.get("vgpr")
+    lds = plc.get("lds_per_cta")
+    threads = plc.get("threads_per_cta")
+    if not (isinstance(vgpr, int) and vgpr > 0
+            and isinstance(threads, int) and threads > 0):
+        return None
+    by_vgpr = vgpr_budget // (vgpr * threads)
+    by_lds = (lds_budget // lds) if isinstance(lds, int) and lds > 0 else None
+    cands = [x for x in (by_vgpr, by_lds) if x and x > 0]
+    if not cands:
+        return None
+    ctas = min(cands)
+    if field == "ctas_per_cu":
+        return ctas
+    if field == "waves_per_cu":
+        ws = plc.get("wave_size") or 64
+        return min(ctas * (threads // ws), wave_cap)
+    return None
+
+
 def validate_record(rec, idx, num_cu=CU_COUNT, require_known=False):
     """校验单条 record 的 placement。
 
@@ -132,7 +167,7 @@ def validate_record(rec, idx, num_cu=CU_COUNT, require_known=False):
         probs.append(_err(
             loc + ".placement",
             "缺少 placement 块；必需字段 %s（未知写 null + placement_unknown 原因）"
-            % "/".join(PLACEMENT_FIELDS)))
+            % "/".join(PLACEMENT_REQUIRED)))
         return probs, info
 
     plc = rec["placement"]
@@ -166,7 +201,7 @@ def validate_record(rec, idx, num_cu=CU_COUNT, require_known=False):
                 "%s.placement_unknown.%s" % (loc, k),
                 "未知字段 %r；只允许 %s" % (k, ", ".join(PLACEMENT_FIELDS))))
 
-    for f in PLACEMENT_FIELDS:
+    for f in PLACEMENT_REQUIRED:
         floc = "%s.placement.%s" % (loc, f)
         if f not in plc:
             probs.append(_err(
@@ -178,10 +213,17 @@ def validate_record(rec, idx, num_cu=CU_COUNT, require_known=False):
         val = plc[f]
         if val is None:
             reason = unk.get(f)
+            # ctas_per_cu / waves_per_cu 可由 grid/vgpr/lds/threads 用公式推出。
+            # 推得出来就不算「未知」——但必须**回显推导值**，不许悄悄补一个数。
+            d = _derive_one(plc, f)
+            if d is not None:
+                info.setdefault("derived", {})[f] = d
+                continue
             if not isinstance(reason, str) or not reason.strip():
                 probs.append(_err(
                     floc,
-                    "值为 null 但 placement_unknown.%s 没给原因；"
+                    "值为 null 但 placement_unknown.%s 没给原因，"
+                    "且无法从 grid/vgpr/lds/threads_per_cta 推出；"
                     "『未知』必须带原因，否则与漏填无法区分" % f))
             else:
                 info["unknown"].append(f)
@@ -314,8 +356,20 @@ def validate_document(doc, path="<json>", num_cu=CU_COUNT, require_known=False):
 
     summary["card"] = doc.get("card")
     records = doc.get("records")
+    # 有些结果文件用 `{"impls": {tag: {...}}}` 的字典形状（如 impl-ranking.json），
+    # 它们的每条实现同样需要 placement。第一版只认 records 数组，
+    # 于是这类文件被报「缺少 records 数组」——那不是它缺字段，是校验器盲区。
+    if records is None and isinstance(doc.get("impls"), dict):
+        merged = []
+        for tag, val in doc["impls"].items():
+            if isinstance(val, dict):
+                rec = dict(val)
+                rec.setdefault("variant", tag)
+                merged.append(rec)
+        records = merged
+        summary["shape"] = "impls"
     if not isinstance(records, list):
-        probs.append(_err(str(path), "缺少 records 数组"))
+        probs.append(_err(str(path), "缺少 records 数组（或 impls 字典）"))
         return probs, summary
     if not records:
         probs.append(_err(str(path), "records 为空：没有实测记录的结果文件是空承诺"))
