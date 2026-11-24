@@ -30,4 +30,23 @@ if not _TARGET.is_file():
 print("[deprecated] skills/op-optimize/loop.py 已迁到 engine/loop.py；"
       "本 shim 保留 3 个版本", file=sys.stderr)
 
-runpy.run_path(str(_TARGET), run_name="__main__")
+# 只有在被**当作脚本执行**时才转发。
+# 测试会用 importlib 加载本模块（拿到 cmd_* 函数），那种情况下必须只做
+# 「把 engine 的名字空间倒进来」，不能执行 main()——否则 argparse 在
+# 无参数时 sys.exit(2)，pytest 直接 INTERNALERROR。
+if __name__ == "__main__":
+    runpy.run_path(str(_TARGET), run_name="__main__")
+else:
+    # 被 import（测试用）：把 engine 的名字搬进来。
+    #
+    # ⚠️ 已知局限：拷名字**不共享可变全局**。测试若改 `loop.VERIFY_TIMEOUT_S`
+    # 再调函数，改的是本模块的副本，engine 内部读不到。
+    # 这类测试应该**直接加载 engine 路径**，而不是经过 shim——
+    # 见 test_loop.py 的 LOOP_PY 已改为 engine/loop.py。
+    import importlib.util as _ilu
+
+    _spec = _ilu.spec_from_file_location("op_optimize_engine", str(_TARGET))
+    _mod = _ilu.module_from_spec(_spec)
+    sys.modules["op_optimize_engine"] = _mod
+    _spec.loader.exec_module(_mod)
+    globals().update(_mod.__dict__)

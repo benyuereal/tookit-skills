@@ -27,7 +27,9 @@ except Exception:  # pragma: no cover - 取决于环境
     HAVE_YAML = False
 
 REPO = Path(__file__).resolve().parents[3]
-LOOP_PY = REPO / "Plugins" / "ops" / "skills" / "op-optimize" / "loop.py"
+# 直接加载 engine 版。经 shim 加载会丢可变全局的共享
+# （测试改 loop.VERIFY_TIMEOUT_S 时 engine 读不到），这类测试必须直连实现。
+LOOP_PY = REPO / "Plugins" / "ops" / "engine" / "loop.py"
 
 
 def _load(name, path):

@@ -140,8 +140,16 @@ class Fixture:
         shutil.copy(HOOK, self.hook)
         opt = self.root / "Plugins" / "ops" / "skills" / "op-optimize"
         opt.mkdir(parents=True)
+        # 这个测试模拟装好的插件布局：hook 期望 <skills>/op-optimize/loop.py 存在。
+        # 实现现在在 engine/，但**装好后的布局仍需要那个路径**（shim 的作用），
+        # 所以把 shim 拷过去，而不是 engine 实现。
         shutil.copy(REPO / "Plugins" / "ops" / "skills" / "op-optimize" / "loop.py",
                     opt / "loop.py")
+        # shim 转发到 engine/loop.py，模拟布局里也要有它，否则 shim 会 sys.exit
+        eng = self.root / "Plugins" / "ops" / "engine"
+        eng.mkdir(parents=True, exist_ok=True)
+        shutil.copy(REPO / "Plugins" / "ops" / "engine" / "loop.py",
+                    eng / "loop.py")
 
         self.card = self.root / "Plugins" / "ops" / "skills" / "op-demo"
         (self.card / "bench").mkdir(parents=True)
@@ -253,12 +261,12 @@ class TestTriggers(Base):
         self.assertEqual(g.classify(self.f.bash_payload(
             "%s %s" % (sys.executable, self.f.card / "bench" / "ab.py")))[0], "run_bench")
         self.assertEqual(g.classify(self.f.bash_payload(
-            "python3 Plugins/ops/skills/op-optimize/loop.py -C x run c1"))[0], "run_bench")
+            "python3 Plugins/ops/engine/loop.py -C x run c1"))[0], "run_bench")
         self.assertEqual(g.classify(self.f.bash_payload(
             "cd Plugins && git -C . commit -m 'x'"))[0], "git_commit")
         # loop.py 的只读子命令不是 bench
         self.assertIsNone(g.classify(self.f.bash_payload(
-            "python3 Plugins/ops/skills/op-optimize/loop.py -C x status"))[0])
+            "python3 Plugins/ops/engine/loop.py -C x status"))[0])
 
 
 # ------------------------------------------------------------ ② 三次都被拦

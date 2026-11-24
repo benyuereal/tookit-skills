@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
-LOOP = REPO / "Plugins/ops/skills/op-optimize/loop.py"
+LOOP = REPO / "Plugins/ops/engine/loop.py"
 
 
 def _loop():

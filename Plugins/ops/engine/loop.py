@@ -188,7 +188,10 @@ def _bound_map():
     global BOUND_TO_CLASS
     if BOUND_TO_CLASS is not None:
         return BOUND_TO_CLASS
-    p = Path(__file__).parent / "references" / "bound-to-class.yaml"
+    # references/ 是**知识**，留在 skills/op-optimize/ 下（见 docs/ENGINE.md 模块表）；
+    # engine 只读它。原先写 Path(__file__).parent 是因为实现和知识同目录，
+    # 迁移后 engine 在 Plugins/ops/engine/，必须显式跨目录。
+    p = Path(__file__).resolve().parents[1] / "skills" / "op-optimize" / "references" / "bound-to-class.yaml"
     try:
         import yaml
         d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
@@ -200,7 +203,10 @@ def _bound_map():
 
 def _class_of(direction):
     """direction(surface id) → class。来自 class_members 的反查表。"""
-    p = Path(__file__).parent / "references" / "bound-to-class.yaml"
+    # references/ 是**知识**，留在 skills/op-optimize/ 下（见 docs/ENGINE.md 模块表）；
+    # engine 只读它。原先写 Path(__file__).parent 是因为实现和知识同目录，
+    # 迁移后 engine 在 Plugins/ops/engine/，必须显式跨目录。
+    p = Path(__file__).resolve().parents[1] / "skills" / "op-optimize" / "references" / "bound-to-class.yaml"
     try:
         import yaml
         d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}

@@ -26,7 +26,7 @@ import unittest
 from contextlib import redirect_stdout
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
-LOOP = REPO / "Plugins/ops/skills/op-optimize/loop.py"
+LOOP = REPO / "Plugins/ops/engine/loop.py"
 
 
 def _load_loop():

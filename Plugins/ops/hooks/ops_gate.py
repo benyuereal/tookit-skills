@@ -156,7 +156,10 @@ class Gate:
             p = pathlib.Path(os.path.realpath(p))
             if p.name == "opbench.py" and p.parent == self.scripts:
                 hit = True
-            elif p == self.skills / "op-optimize" / "loop.py":
+            elif p in (self.skills / "op-optimize" / "loop.py",   # shim（保留期）
+                       self.skills.parent / "engine" / "loop.py"):  # 迁后的真身
+                # 两个路径都要认：实现已迁到 engine/，但 shim 还在，
+                # 用户从任一入口调 run 都必须被 hook 拦到。
                 hit = hit or "run" in toks[i + 1:]
             else:
                 for parent in p.parents:
