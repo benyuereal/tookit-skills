@@ -74,12 +74,13 @@ last_verdict:
   conclusion: triton 融合单 kernel 冷 L2 达 1081 GB/s（util 0.63），快 6.6x
   next_probe:
     surface: none
-    none_reason: cross-lane-fold 已按批准执行并证伪：分块两趟 186~283 µs 全部更慢，num_warps 已是最优 4。归约惩罚 0.72 是这类算子的结构性上限（elementwise 1498 × 0.72 ≈ 1081），不是可优化项。
-    hypothesis: 若要再提升 ≥8%，必须换掉行内归约本身（如用双 pass 的独立 kernel），但这会多读一趟 67 MB
-    expected: 提升 <8%（已实测为负）
-    stop_if: 实测三种结构变换全部更慢且 num_warps 已最优 ⇒ 归约惩罚是结构性上限，标 at_floor，不再硬啃
-    effort: 0（已完成）
-    falsifier: 若出现能用 warp-shuffle 归约的实现（tilelang 实测 0.82 而我们 0.78），或下游融合能把流量从 268MB 降到 201MB 以下，则重新推进。
+    none_reason: 三条 memory 类攻击面已逐一实测：fusion-boundary 已在用（2读2写=268.4MB，与 lightop 等语义）；cross-lane-fold 已证伪（分块两趟 186~283µs 全更慢）；num_warps 扫参已最优 4。剩余 19.8% 落在 structural 区间，唯一未试的是「降流量」——需下游融合把 268.4MB 降到 201MB
+      以下，不在本算子范围内。⇒ 收敛于 at_floor：triton 融合单 kernel 保留（相对 torch 分步 6.6x），但未超过 lightop（慢 6.7%）
+    hypothesis: 若要再拿 ≥10%，只能减少 HBM 流量（下游融合或 in-place 写回），不能靠调参
+    expected: 提升 <8%（同族三种实现已全部落在 1108~1200 GB/s 区间）
+    stop_if: 三条 memory 类攻击面全部实测无效 ⇒ at_floor，不再硬啃
+    effort: 0（已在本轮完成验证）
+    falsifier: 若出现能在同语义下把流量降到 201MB 以下的实现（即省掉 residual_out 那份写），或 tilelang/lightop 在冷 L2 下显著超过 1200 GB/s，则重新推进
   verified_on: '2026-11-23'
   comparison:
     baseline: lightop-fused
@@ -192,8 +193,8 @@ floor_inputs:
   evidence: Plugins/ops/skills/op-rmsnorm-fused/results/impl-ranking.json
   t_actual_us: 242.2
 progress:
-  stage: S6
-  since: 2026-11-24T02:05
+  stage: S7
+  since: 2026-11-24T09:10
   blocked_by: null
   last_verdict: adopt
   rounds: 3

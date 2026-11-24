@@ -10,8 +10,8 @@ S2 基线      0 张   前置产出：last_verdict.comparison
 S3 归因      0 张   前置产出：last_verdict.bottleneck
 S4 资源画像    0 张   前置产出：last_verdict.resources
 S5 选路      0 张   前置产出：last_verdict.next_probe
-S6 实验      1 张   前置产出：last_verdict.rounds
-S7 收敛      0 张   前置产出：last_verdict.verdict
+S6 实验      0 张   前置产出：last_verdict.rounds
+S7 收敛      1 张   前置产出：last_verdict.verdict
 blocked    0 张
 
 ## 分阶段清单
@@ -40,13 +40,13 @@ blocked    0 张
 前置产出：last_verdict.next_probe
 - （无）
 
-### S6 实验（1 张）
+### S6 实验（0 张）
 前置产出：last_verdict.rounds
-- rmsnorm-fused
-
-### S7 收敛（0 张）
-前置产出：last_verdict.verdict
 - （无）
+
+### S7 收敛（1 张）
+前置产出：last_verdict.verdict
+- rmsnorm-fused
 
 ### blocked（0 张）
 - （无）
