@@ -31,10 +31,13 @@
  },
  "t_floor_us": 202.3,
  "remaining_rule": "relative_gap",
- "remaining": -0.0404,
+ "remaining": 0.1088,
  "denominator_provenance": {
   "peak_bw": "bw-ladder.yaml 1:1 档实测",
   "peak_flops": "constants.yaml bf16 achievable"
  },
- "note": "FLOPs 记 0（逐元素+行内归约，无 GEMM）；AI=0 ⇒ 必然 memory-bound"
+ "note": "原先 remaining=-0.0404 用的是背靠背口径 t_actual（194.4µs），而 t_floor(202.3µs) 是端到端可比口径——两个口径相减，符号都不可信。改用 ledger.md 的 event 隔离实测 227.0µs 重算。",
+ "t_actual_us": 227.0,
+ "t_actual_mode": "event_isolated",
+ "t_floor_mode": "event_isolated"
 }

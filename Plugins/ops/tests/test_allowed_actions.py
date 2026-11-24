@@ -91,7 +91,7 @@ class TestAllowedActions(unittest.TestCase):
         rc, out = self._run()
         self.assertNotIn("不在允许集合", out)
 
-    def test_undeclared_action_class_warns_but_does_not_block(self):
+    def test_undeclared_action_class_blocks(self):
         (self.card / "candidates.yaml").write_text(
             "directions:\n"
             "  - {id: occupancy, statement: t, status: open, refutes: 0}\n"
@@ -100,7 +100,9 @@ class TestAllowedActions(unittest.TestCase):
             "refuted: []\n", encoding="utf-8")
         (self.card / "roofline.json").write_text('{"bound":"memory"}', encoding="utf-8")
         rc, out = self._run()
-        self.assertNotEqual(rc, 2)
+        # 语义已定：未声明 action_class **拦**（不是警告后放行）。
+        # 不拦等于让"没填"绕过天花板约束。
+        self.assertEqual(rc, 2, out)
         self.assertIn("未声明 action_class", out)
 
     def test_latency_ceiling_maps_to_pipeline_actions(self):

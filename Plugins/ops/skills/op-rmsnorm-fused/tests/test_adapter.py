@@ -46,7 +46,12 @@ class TestAdapterContract(unittest.TestCase):
     def test_reference_runs_and_is_finite(self):
         inp = self.c.build_inputs(self.params, seed=0, device="cpu")
         ref = self.c.reference(*inp[:-1], params=self.params)
-        self.assertTrue(bool(ref.isfinite().all()), "参考输出含 NaN/Inf")
+        # reference() 按 semantics.outputs 返回**两份**（out, residual_out）。
+        # 测试原先按单输出写，参考改成双输出后没跟着改——这是"改了一处没改另一处"。
+        outs = ref if isinstance(ref, (tuple, list)) else (ref,)
+        for i, t in enumerate(outs):
+            self.assertTrue(bool(t.isfinite().all()),
+                            "参考输出第 %d 份含 NaN/Inf" % i)
 
     def test_build_inputs_is_deterministic(self):
         a = self.c.build_inputs(self.params, seed=7, device="cpu")

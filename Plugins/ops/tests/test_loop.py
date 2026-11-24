@@ -68,6 +68,7 @@ candidates:
     parent_surface: cross-lane-fold
     status: pending
     priority: 1
+    action_class: pipeline-depth
     hypothesis: "running max 每 32 块更新一次"
     expect: "-11%"
     evidence: "ledger 30"
@@ -75,6 +76,7 @@ candidates:
   - id: kv4
     direction: split-k
     priority: 2
+    action_class: reduce-bytes
     hypothesis: "kv 切 4 份"
     expect: "-3%"
 

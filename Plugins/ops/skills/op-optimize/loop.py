@@ -220,6 +220,23 @@ def bottleneck_problems(cands, tags=None, card=None):
     else:
         bound = str(bn.get("bound") or "")
         ev = str(bn.get("derive_evidence") or "").strip()
+    # ---- P0-3：remaining 符号门 + 同口径校验
+    # floor.py 有三处明写「负 remaining = 判据本身错了（上限估低或流量算多）」，
+    # 而 R0 的 roofline.json 里 remaining=-0.0404 照样放行进了 EV。
+    # 判据自己定义了「这是错的」，消费方却不查——那就等于没定义。
+    r = roof.get("remaining") if roof else None
+    if isinstance(r, (int, float)) and r < 0:
+        probs.append("remaining=%.4f < 0 —— floor.py 已把负值定义为「判据本身错了」"
+                     "（上限估低或流量算多），不是实现突破物理。先回去查分母，别进决策。"
+                     % r)
+    if roof:
+        m_actual = roof.get("t_actual_mode")
+        m_floor = roof.get("t_floor_mode")
+        if m_actual and m_floor and m_actual != m_floor:
+            probs.append("t_actual 与 t_floor 口径不同（%s vs %s）—— 两个不同口径的量"
+                         "相减没有意义，remaining 也不是「剩余空间」"
+                         % (m_actual, m_floor))
+
     if not bound:
         probs.append("bottleneck 缺 bound（应为 compute/memory/mixed，来自 derive.py）")
     if roof is None and not ev:
@@ -498,6 +515,42 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
 _V2C = {}
 
 
+def _check_base_role(card, defaults):
+    """P0-2：基线必须是可作性能对比的角色。
+
+    `correctness_only`（含 ref-heavy / torch-native 这类未优化参考实现）
+    可以用于验正确性，但「打赢未优化的参考实现」没有工程意义——
+    而 loop.py 原先完全不读这个字段，换张卡就可能把参考实现当基线。
+    """
+    import yaml as _y
+    vp = card / "variants.yaml"
+    if not vp.is_file():
+        return
+    try:
+        d = _y.safe_load(vp.read_text(encoding="utf-8")) or {}
+    except Exception:                                            # noqa: BLE001
+        return
+    roles = {}
+    for v in d.get("variants") or []:
+        if isinstance(v, dict):
+            tag = v.get("tag") or v.get("name") or v.get("id")
+            if tag:
+                roles[str(tag)] = str(v.get("role") or "")
+    # 基线名可能来自 defaults.base，也可能写在 bench_args 里
+    base = str(defaults.get("base") or "")
+    if not base:
+        ba = defaults.get("bench_args") or []
+        for i, a in enumerate(ba):
+            if a == "--base" and i + 1 < len(ba):
+                base = str(ba[i + 1])
+                break
+    if base and roles.get(base) == "correctness_only":
+        print(_c("拒绝跑：基线 %s 的 role=correctness_only —— 它是未优化的参考实现，"
+                 "打赢它没有工程意义。换一个 role=competitor 的实现作基线。"
+                 % base, WARN))
+        raise SystemExit(2)
+
+
 def _cid_of(variant):
     """变体名 → 候选 id 的反查。没有映射就返回 None。"""
     return _V2C.get(variant)
@@ -656,6 +709,17 @@ def cmd_enumerate(a):
     rows = []
     for s in surfaces:
         sid = str(s["id"])
+        # ---- P0-4：dead_end 不进候选推荐
+        # surfaces.yaml 里 `verdict: dead_end` 的两条（slc-policy / prefetch-depth-isa）
+        # 是**已实测证伪的死路**。bound-to-class.yaml 的注释写着
+        # 「留在映射里是为了查得到、别重试，不是推荐去试」，但代码不读 verdict，
+        # 于是它们照样出现在候选菜单里。
+        if str(s.get("verdict") or "") == "dead_end":
+            rows.append(("DEAD_END", sid, str(s.get("class") or ""),
+                         str(s.get("cost") or ""), str(s.get("law") or ""),
+                         str(s.get("statement") or ""),
+                         "已实测证伪，只进 recall 不进推荐"))
+            continue
         info = table.get(sid)
         if info and info["exhausted"]:
             state, note = "SEALED", "已证伪 %d 次，回 L1 重定约束" % info["refutes"]
@@ -854,13 +918,41 @@ def _enumerate_by_scenario(a):
     return 0
 
 
+def round_stats(recs):
+    """**轮次 ≠ 重跑次数**。
+
+    一条 round = (card, shape, direction, tag) 的**首次出现**；
+    同 key 之后的行是 rerun（重复测同一个东西，不产生新信息）。
+
+    为什么必须分开：R0 的 5 条记录是同一个 tag 重跑 5 次，不是 5 轮实验。
+    如果 DS 的 D4（≥3 轮）按 jsonl 行数算，重跑 3 次就"达标"了——
+    那是刷分，不是迭代。所以 D4 只许数 round，且每轮 verdict 必须
+    ∈ {adopt, refute, stalled} 之一。
+    """
+    seen = {}
+    rounds, reruns = [], []
+    for r in recs:
+        key = (r.get("card"), json.dumps(r.get("shape") or {}, sort_keys=True),
+               r.get("direction"), r.get("tag"))
+        if key in seen:
+            reruns.append(r)
+        else:
+            seen[key] = r
+            rounds.append(r)
+    return rounds, reruns
+
+
 def cmd_status(a):
     card, cands, recs = a.card, load_candidates(a.card), read_records(a.card)
     pend = [c for c in cands["candidates"]
             if isinstance(c, dict) and c.get("status", "pending") == "pending"]
     print("卡片      %s" % card)
-    print("候选      待做 %d / 已判死 %d / 停滞可作父代 %d / 共记录 %d 条实验"
+    _rounds, _reruns = round_stats(recs)
+    print("候选      待做 %d / 已判死 %d / 停滞可作父代 %d / 共记录 %d 条"
           % (len(pend), len(cands["refuted"]), len(cands.get("stalled") or []), len(recs)))
+    # 轮次与重跑分开报：同一 tag 反复测不算多轮（P0-6）
+    print("轮次      独立实验 %d 轮 / 重跑 %d 次（D4 只数前者）"
+          % (len(_rounds), len(_reruns)))
     table = direction_table(cands)
     if table:
         print("方向      " + " · ".join(
@@ -1067,10 +1159,22 @@ def cmd_run(a):
         undeclared = [t for t in a.tags
                       if not (declared.get(t) or {}).get("action_class")]
         if undeclared:
-            print(_c("caveat %s 未声明 action_class，天花板约束对它们不生效"
-                     "（建议补上：%s）" % (", ".join(undeclared), sorted(allowed)), WARN))
+            # **拦，不是警告**。不声明 action_class 就等于绕过了天花板约束，
+            # 而"绕过"和"没约束"在结果上无法区分——那条约束就等于不存在。
+            # 原实现只打 caveat 然后放行（测试名也写着 warns_but_does_not_block），
+            # 那是把"没填"当成"不需要填"。
+            print(_c("拒绝跑 %s：未声明 action_class，天花板约束无法生效。"
+                     "在候选里补 `action_class: <允许集合之一>`（bound=%r 允许 %s）"
+                     % (", ".join(undeclared), bound, sorted(allowed)), WARN))
+            return 2
 
+    # ---- P0-2：基线角色校验
+    # variants.yaml 里 correctness_only 的变体写着「不得用于性能对比：
+    # 它是未优化的参考实现，打赢它没有工程意义」，而 loop.py 一个字不读。
+    # R0 是靠 candidates.yaml 手写 --base lightop-fused 才躲过这条。
     d = cands["defaults"]
+    _check_base_role(card, d)
+
     bench = card / d.get("bench", "bench/ab.py")
     if not bench.exists():
         print(_c("拒绝跑：本卡没有 A/B 适配器 %s（卡片需自带 `bench/ab.py`，契约见本文件 ADAPTER_AB）。"
