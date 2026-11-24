@@ -509,9 +509,18 @@ def efficiency_from_record(record, card=None, constants_path=None,
 
 # --------------------------------------------------------------- CLI
 
-def _cli_flops_to_tflops(value):
-    """--flops：默认 TFLOPS；≥1e6 必定是 FLOP/s（无芯片有 1e6 TFLOPS），换算。"""
-    if value >= 1e6:
+def _cli_flops_to_tflops(value, unit="tflops"):
+    """--flops 的单位必须**显式给**，不许按大小猜。
+
+    第一版按「≥1e6 视为 FLOP/s」自动换算——那是在替用户猜单位。
+    `--flops 1.37e11` 本意是 137 GFLOP 总量（应除以耗时得 TFLOPS），
+    却被当成速率换算成 0.137 TFLOPS，MFU 变成 0.0005。
+    静默猜测单位正是本仓反复栽的那类错（cf. 1724 当分母、49.8 当上限）。
+    """
+    u = str(unit).lower()
+    if u not in ("tflops", "flops_per_s"):
+        raise ValueError("--flops-unit 只能是 tflops 或 flops_per_s，实得 %r" % unit)
+    if u == "flops_per_s":
         return value / 1e12, "flops_per_s"
     return value, "tflops"
 
@@ -597,6 +606,8 @@ def selftest():
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="MFU/MBU 计算器：分母必须带来源、放置条件必须实测")
+    ap.add_argument("--flops-unit", choices=("tflops", "flops_per_s"),
+                    default="tflops", help="--flops 的单位，必须显式给（默认 tflops，不按大小猜）")
     ap.add_argument("--flops", type=float,
                     help="达成的算力；TFLOPS（≥1e6 按 FLOP/s 自动换算）")
     ap.add_argument("--precision", help="算力精度：bf16 / fp8（决定分母 279 / 579.7）")
@@ -651,7 +662,11 @@ def main(argv=None):
     if a.flops is not None:
         if not a.precision:
             ap.error("--flops 需要 --precision {bf16,fp8}")
-        tflops, unit = _cli_flops_to_tflops(a.flops)
+        try:
+            tflops, unit = _cli_flops_to_tflops(a.flops, getattr(a, "flops_unit", "tflops"))
+        except ValueError as ex:
+            print("error: %s" % ex, file=sys.stderr)
+            return 2
         if unit != "tflops":
             print("note: --flops %.6g 按 FLOP/s 解释 → %.6g TFLOPS"
                   % (a.flops, tflops), file=sys.stderr)
