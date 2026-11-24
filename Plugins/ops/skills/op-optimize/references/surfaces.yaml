@@ -140,3 +140,58 @@
   cost: L
   expected_gain: ≈0（已实测 -1.3%）
   precondition_check: grep -oE "s_waitcnt (v|lgkm)cnt\([0-9]+\)" <X>.ISA | sort | uniq -c
+
+# ---- ISA 级 surface（2026-11-24 新增）
+# 详细定义在 data/ops/isa-surfaces.yaml（含实测计数与 check 命令）。
+# 这里只登记 id + class + 指向，避免两份定义。
+- id: vmem-vector-width
+  statement: 读/写的向量宽度是否用满（buffer_load/store 的 dwordxN）
+  law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
+  class: isa-policy
+  precondition: 有 .co 或内嵌 fatbin 可反汇编
+  check: python3 -I scripts/isa_probe.py <X>.co
+  evidence: 厂商 extop_gfx938.co：读 dwordx4×32、写 dwordx4×9（都已用满）。静态证据，动态占比未知。
+  expected_gain: 上界 ≤10%（需 PMC 定级 + A/B 实测）
+  precondition_check: python3 -I scripts/isa_probe.py <X>.co --json
+  cost: M
+  detail_ref: data/ops/isa-surfaces.yaml#vmem-vector-width
+  verdict: open
+
+- id: mls-path
+  statement: LDS 读走矩阵通路（ds_read_matrix_trans_format）还是标量 ds_read_b32
+  law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
+  class: isa-policy
+  precondition: 目的是 GEMM 消费者 ⇒ kPack 必须为 1
+  check: python3 -I scripts/isa_probe.py <X>.co
+  evidence: 厂商 kernel ds_read_b32×142、matrix_trans×0；hbird fp8 kernel 走 MLS（32 条）。静态证据。
+  expected_gain: 上界 ≤15%（需 PMC 定级）
+  precondition_check: python3 -I scripts/isa_probe.py <X>.co --json
+  cost: L
+  detail_ref: data/ops/isa-surfaces.yaml#mls-path
+  verdict: open
+
+- id: lds-read-form
+  statement: ds_read_b128 与 ds_read_b32 的比例（LDS 读是否已向量化）
+  law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
+  class: isa-policy
+  precondition: 有反汇编
+  check: python3 -I scripts/isa_probe.py <X>.co
+  evidence: 厂商 kernel 全 b32（142 条）；hbird fp8 是 16×b128 + 32×matrix，无 b32（正例）。静态证据。
+  expected_gain: 上界 ≤15%（需 PMC 定级）
+  precondition_check: python3 -I scripts/isa_probe.py <X>.co --json
+  cost: M
+  detail_ref: data/ops/isa-surfaces.yaml#lds-read-form
+  verdict: open
+
+- id: epilogue-expansion
+  statement: 收尾段是否完全展开（热循环内无 s_cbranch 回跳）
+  law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
+  class: pipeline
+  precondition: 有反汇编，且能区分热循环与 epilogue
+  check: python3 -I scripts/isa_probe.py <X>.co
+  evidence: 厂商 kernel s_cbranch×28；hbird fp8 只 2 条/1021 指令（已展开）。静态证据。
+  expected_gain: 上界 ≤10%
+  precondition_check: python3 -I scripts/isa_probe.py <X>.co --json
+  cost: S
+  detail_ref: data/ops/isa-surfaces.yaml#epilogue-expansion
+  verdict: open

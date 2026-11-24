@@ -7,8 +7,9 @@ dcu-core/dcu-orchestrator 的 op-optimize 工作流、dcu-perf/dcu-op-optimizati
 的 5 步闭环。三份互相矛盾，用户从任一入口进来看到不同的判定口径。
 
 收敛后的约定：
-  - 判定与状态只有一处实现：Plugins/ops/skills/op-optimize/loop.py
-  - 方向预算常量（MAX_DIRECTION_REFUTES / MAX_IMPL_FAILS）只允许在那里定义
+  - 判定与状态只有一处实现：Plugins/ops/engine/loop.py（M2/M3 迁移后）
+  - 旧路径 Plugins/ops/skills/op-optimize/loop.py 只做 shim 转发，不含实现
+  - 方向预算常量（MAX_DIRECTION_REFUTES / MAX_IMPL_FAILS）只允许在 engine 版定义
   - 其他位置只能「路由到它」，不能自己定义一套
 
 本测试守的是「不再长出第二套」，不是「一次改完」——存量违规用 KNOWN_DUPLICATES
@@ -59,6 +60,31 @@ def _rel(p):
     return str(p.relative_to(REPO))
 
 
+# shim 允许的最大行数。判据 2 与它的反向测试共用这一处常量。
+SHIM_MAX_LINES = 30
+
+
+def _shim_impl_violations(text):
+    """shim 文本里「有实现」的证据清单；空列表 = 它是纯转发壳。
+
+    只有这一处判据：正向（真实 shim 必须干净）与反向（塞进实现必须被抓到）
+    都调它，避免「校验器说通过、其实根本不会报错」。
+    用 AST 找真的函数定义，不做字符串匹配 —— shim 的 docstring 里就写着
+    「不许 def cmd_」，字符串匹配会自伤。
+    """
+    import ast
+    probs = []
+    n = len(text.splitlines())
+    if n > SHIM_MAX_LINES:
+        probs.append("行数 %d > %d" % (n, SHIM_MAX_LINES))
+    tree = ast.parse(text)
+    funcs = sorted({node.name for node in ast.walk(tree)
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))})
+    if funcs:
+        probs.append("定义了函数 %s" % funcs)
+    return probs
+
+
 class TestLoopUniqueness(unittest.TestCase):
     def test_budget_constants_defined_in_exactly_one_place(self):
         """方向预算常量只允许在 engine/loop.py 定义（原 op-optimize/loop.py 已迁走）。"""
@@ -103,9 +129,6 @@ class TestLoopUniqueness(unittest.TestCase):
             "以下冻结条目指向的文件已不存在，请从 KNOWN_DUPLICATES 删除：\n"
             + "\n".join(stale))
 
-
-if __name__ == "__main__":
-    unittest.main()
 
 class TestEngineMigration(unittest.TestCase):
     """ENGINE 迁移（M2+M3）的守卫。
