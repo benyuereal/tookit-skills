@@ -306,8 +306,32 @@ m.def("abl_noepi", &run<3, true, 1>);
 即这三个是**测量探针**，不产生正确数值。所以它们**根本不该进归因** ——
 归因的对象是「能算出正确结果、但慢一些」的版本，不是「故意算错以测某段耗时」的探针。
 
-**当前防回退**：`Plugins/ops/tests/test_ablate.py` 覆盖了正负 delta 的判定，
-但**没有覆盖 `derived_from` / `numerically_valid` 语义**（因为还没实现）。
+**处置（2026-11-24 已完成）**：`ablate.py` 现在强制 spec 声明两个字段：
+
+```yaml
+ablations:
+  - id: epilogue
+    tag: abl_noepi
+    derived_from: baseline        # champion | baseline，必填
+    numerically_valid: false      # true | false，必填
+```
+
+三类项分流：
+  · `derived_from: champion` + `numerically_valid: true` → 参与归因
+  · `derived_from: baseline` → 进「旁证」区，**不参与**（它是另一条实验线）
+  · `numerically_valid: false` → 进「旁证」区（计时探针，测的是耗时不是收益）
+  · 真消融项若 delta 为负 → **标为不可 claim 并报「负归因几乎总是 spec 写错」**，
+    不再当「负贡献」写进表
+
+真实 mqa 数据复测（spec3）：三支探针全部进旁证，归因只剩 `no_bp`（share 0.039），
+status 如实报 `unexplained`（96% 收益没归因到）。比之前全负 share 可读得多。
+
+**当前防回退**：`Plugins/ops/tests/test_ablate.py` 新增 6 条 D9 用例：
+  · 缺 derived_from / numerically_valid → 拒
+  · baseline 派生项进侧栏、不进 items
+  · 探针进侧栏
+  · **负 delta 不许产出 share**（核心）
+  · 旁证再多也不改变 sum_share
 
 **这条债的价值**：它是「工具第一次遇到真实复杂场景就暴露设计缺口」的实例 ——
 比在合成数据上跑 100 条测试更能说明问题。同时也说明：

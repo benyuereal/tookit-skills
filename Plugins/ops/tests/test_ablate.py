@@ -38,6 +38,21 @@ def rec(tag, ms, mad=0.001, mode="event_isolated", base=1.0, base_mad=0.001,
             "measure_mode": mode, "shape": {"shape": shape}}
 
 
+def _abl(id_, tag=None, derived_from="champion", numerically_valid=True):
+    """造一条消融项。D9 之后 derived_from 与 numerically_valid 是必填。"""
+    return {"id": id_, "tag": tag or id_, "derived_from": derived_from,
+            "numerically_valid": numerically_valid}
+
+
+def _write_spec(tmp_path, ablations):
+    """只写 spec，不写 jsonl —— 用于测试 load_spec 的必填校验。"""
+    import yaml
+    p = Path(tmp_path) / ("spec_%d.yaml" % abs(hash(str(ablations))))
+    p.write_text(yaml.safe_dump({"baseline": "base", "champion": "champ",
+                                 "ablations": ablations}), encoding="utf-8")
+    return p
+
+
 def make_card(tmp_path, records, *, baseline="base", champion="champ", ablations=None,
               extra=None):
     """造一张最小卡：只写 runs/loop/*.jsonl 与 spec.yaml。"""
@@ -46,7 +61,7 @@ def make_card(tmp_path, records, *, baseline="base", champion="champ", ablations
     (d / "20260101.jsonl").write_text(
         "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
     spec = {"baseline": baseline, "champion": champion,
-            "ablations": ablations or [{"id": "a", "tag": "a"}]}
+            "ablations": ablations or [_abl("a")]}
     if extra:
         spec.update(extra)
     p = tmp_path / "spec.yaml"
@@ -64,7 +79,7 @@ def run(tmp_path, records, **kw):
 
 def test_two_items_half_half_is_ok(tmp_path):
     rep = run(tmp_path, [rec("base", 1.0), rec("champ", .9), rec("a", .95), rec("b", .95)],
-              ablations=[{"id": "a", "tag": "a"}, {"id": "b", "tag": "b"}])
+              ablations=[_abl("a", "a"), _abl("b", "b")])
     assert rep["status"] == "ok"
     assert abs(rep["sum_share"] - 1.0) < 1e-9
     assert abs(rep["items"][0]["attribution_share"] - 0.5) < 1e-9
@@ -85,7 +100,7 @@ def test_all_insignificant_never_invents_a_number(tmp_path):
     """全不显著 → no_significant_attribution，且 sum_share 必须是 None（不硬凑）。"""
     rep = run(tmp_path, [rec("base", 1.0), rec("champ", .9),
                          rec("a", .9005), rec("b", .8995)],
-              ablations=[{"id": "a", "tag": "a"}, {"id": "b", "tag": "b"}])
+              ablations=[_abl("a", "a"), _abl("b", "b")])
     assert rep["status"] == "no_significant_attribution"
     assert rep["sum_share"] is None
     assert all(it["attribution_share"] is None for it in rep["items"])
@@ -100,7 +115,7 @@ def test_share_below_08_is_unexplained(tmp_path):
 def test_share_above_12_is_unexplained(tmp_path):
     """各项重叠（加总超过总收益）也是问题：归因必须满足可加性。"""
     rep = run(tmp_path, [rec("base", 1.0), rec("champ", .9), rec("a", .98), rec("c", .98)],
-              ablations=[{"id": "a", "tag": "a"}, {"id": "c", "tag": "c"}])
+              ablations=[_abl("a", "a"), _abl("c", "c")])
     assert rep["status"] == "unexplained"
     assert rep["sum_share"] > 1.2
 
@@ -132,7 +147,7 @@ def test_missing_tag_raises_spec_error(tmp_path):
     """spec 引用了没测过的 tag → SpecError（退出码 2），不许当成 0。"""
     with pytest.raises(abl.SpecError) as ei:
         run(tmp_path, [rec("base", 1.0), rec("champ", .9), rec("a", .95)],
-            ablations=[{"id": "a", "tag": "a"}, {"id": "x", "tag": "nope"}])
+            ablations=[_abl("a", "a"), _abl("x", "nope")])
     assert "不存在" in str(ei.value)
 
 
@@ -204,5 +219,92 @@ def test_cli_exit_codes(tmp_path):
 def test_cli_missing_tag_exits_2_not_1(tmp_path):
     """spec 写错必须退 2：退 1 会被读成「判据跑完了、结论无效」，实验等于白做。"""
     card, spec = make_card(tmp_path, [rec("base", 1.0), rec("champ", .9)],
-                           ablations=[{"id": "a", "tag": "nope"}])
+                           ablations=[_abl("a", "nope")])
     assert abl.main(["--card", str(card), "--spec", str(spec)]) == 2
+
+
+# ---------------------------------------------------------------- D9 分流
+
+def test_spec_requires_derived_from(tmp_path):
+    """**反向**：不声明 derived_from 直接拒。
+
+    实测背景：mqa_opt 的 abl_noepi/abl_noshfl/abl_neither 是从**基准**派生的
+    另一条实验线（去掉 epilogue/shuffle 两个功能），被当成冠军的消融喂进来，
+    算出全负 share，工具只报 unexplained 没拦住。
+    """
+    with pytest.raises(abl.SpecError) as e:
+        abl.load_spec(_write_spec(tmp_path, [{"id": "a", "tag": "a",
+                                            "numerically_valid": True}]))
+    assert "derived_from" in str(e.value)
+
+
+def test_spec_requires_numerically_valid(tmp_path):
+    """**反向**：不声明 numerically_valid 直接拒。
+
+    源码 mhc 语料自述：`ablations (not numerically valid; timing-only diagnostics)`。
+    这类探针故意算错以测某段耗时，不是消融项。
+    """
+    with pytest.raises(abl.SpecError) as e:
+        abl.load_spec(_write_spec(tmp_path, [{"id": "a", "tag": "a",
+                                            "derived_from": "champion"}]))
+    assert "numerically_valid" in str(e.value)
+
+
+def test_baseline_derived_goes_to_side_lines(tmp_path):
+    """**核心**：从基准派生的项进旁证，**不参与归因**。
+
+    反向意义：如果它进了 items，分母（冠军相对基准的收益）会被它撑爆，
+    share 变负，人会读出「这项有害」的错误结论。
+    """
+    card, spec = make_card(
+        tmp_path,
+        [rec("base", 1.0), rec("champ", .9), rec("a", .95), rec("x", .80)],
+        ablations=[_abl("a"), _abl("x", derived_from="baseline")])
+    rep = abl.build_report(card, spec)
+    assert [it["id"] for it in rep["items"]] == ["a"]
+    assert [it["id"] for it in rep["side_lines"]] == ["x"]
+    assert "不是冠军的消融" in rep["side_lines"][0]["note"]
+
+
+def test_probe_goes_to_side_lines(tmp_path):
+    """**核心**：计时探针（numerically_valid=false）进旁证，不进归因。"""
+    card, spec = make_card(
+        tmp_path,
+        [rec("base", 1.0), rec("champ", .9), rec("a", .95), rec("p", .70)],
+        ablations=[_abl("a"), _abl("p", numerically_valid=False)])
+    rep = abl.build_report(card, spec)
+    assert [it["id"] for it in rep["items"]] == ["a"]
+    assert rep["side_lines"][0]["numerically_valid"] is False
+    assert "计时探针" in rep["side_lines"][0]["note"]
+
+
+def test_negative_share_is_flagged_not_reported_as_contribution(tmp_path):
+    """**核心反向**：负 delta（去掉后更快）不许当「负贡献」写进表。
+
+    只声明了 derived_from=champion 但实测去掉后更快 —— 这说明 spec 还是写错了
+    （比如它其实是基准派生的）。工具应当把该项标为不可 claim 并给出诊断，
+    而不是输出一个负 share 让人误读。
+    """
+    card, spec = make_card(
+        tmp_path,
+        [rec("base", 1.0), rec("champ", .9), rec("a", .85)],
+        ablations=[_abl("a")])
+    rep = abl.build_report(card, spec)
+    it = rep["items"][0]
+    assert it["attribution_share"] is None, "负 delta 不该产出 share"
+    assert it["claimable"] is False
+    assert "负归因几乎总是 spec 写错" in it["not_claimable_reason"]
+
+
+def test_side_lines_do_not_affect_sum_share(tmp_path):
+    """正向：旁证再多也不改变 sum_share（它们不参与计算）。"""
+    recs = [rec("base", 1.0), rec("champ", .9), rec("a", .95), rec("b", .95)]
+    card, spec = make_card(tmp_path, recs,
+                           ablations=[_abl("a"), _abl("b")])
+    rep1 = abl.build_report(card, spec)
+    card2, spec2 = make_card(
+        tmp_path / "b",
+        recs + [rec("x", .50)],
+        ablations=[_abl("a"), _abl("b"), _abl("x", derived_from="baseline")])
+    rep2 = abl.build_report(card2, spec2)
+    assert rep1["sum_share"] == pytest.approx(rep2["sum_share"])

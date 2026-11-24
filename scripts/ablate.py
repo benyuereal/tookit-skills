@@ -65,6 +65,24 @@ def load_spec(path):
     if not abl or not all(ids) or any(not str(it.get("tag") or "") for it in abl) \
             or len(set(ids)) != len(ids):
         raise SpecError("ablations 必须非空、id 唯一，且每项同时有 id 与 tag")
+    # ---- D9：每项必须声明「从谁派生」与「数值是否有效」。
+    # 没有这两个字段时，工具无法区分：
+    #   ① 冠军去掉某项（真消融，能算对，只是慢一些）→ 可归因
+    #   ② 从基准派生的另一条实验线（完全不同 kernel）→ 不可归因
+    #   ③ 故意算错的计时探针（timing-only diagnostics）→ 绝不可归因
+    # 实测代价（2026-11-24，mqa_opt）：把 ③ 当 ① 喂进来，算出全负 share，
+    # 工具只报 unexplained 没拦住，人会读出「epilogue 有害」的错误结论。
+    for it in abl:
+        df = str(it.get("derived_from") or "")
+        if df not in ("champion", "baseline"):
+            raise SpecError(
+                "消融项 %r 必须声明 derived_from: champion|baseline（当前 %r）。"
+                "从基准派生的实验线不是冠军的消融，不能参与归因。" % (it.get("id"), df))
+        if not isinstance(it.get("numerically_valid"), bool):
+            raise SpecError(
+                "消融项 %r 必须声明 numerically_valid: true|false（当前 %r）。"
+                "故意算错的计时探针不是消融项 —— 它测的是某段耗时，不是收益。"
+                % (it.get("id"), it.get("numerically_valid")))
     return d
 def _not_comparable(ref, rec, mm, loop):
     """ref 与 rec 的 ms 能否直接相减；返回不可比理由（空 = 可比）。每条封一个真错：
@@ -116,20 +134,51 @@ def attribute(spec, records):
         cp.append("冠军相对基准不显著（%s）—— 没有可归因的收益" % why)
     elif c_ms >= b_ms:
         cp.append("冠军显著慢于基准（%s）—— 归因没有对象" % why)
-    items = []
+    items, side_lines = [], []
     for a in spec["ablations"]:
-        rec, delta = records[str(a["tag"])], 0.0
+        rec = records[str(a["tag"])]
         r_ms, r_mad = _num(rec, "cand_ms"), _num(rec, "mad")
-        delta = r_ms - c_ms
         ok, _r, why = sig(r_ms, r_mad, c_ms, c_mad)
+        df = str(a.get("derived_from"))
+
+        # ── D9 分流 ────────────────────────────────────────────────────────
+        # 只有「从冠军派生 + 数值有效」的项才是真正的消融，才参与归因。
+        # 另外两类**照样测、照样显示**，但不进 share —— 它们的 ms 有诊断价值，
+        # 只是不能当「这项贡献了多少」用。
+        if df == "baseline":
+            side_lines.append({
+                "id": str(a["id"]), "tag": str(a["tag"]), "ms": r_ms, "mad": r_mad,
+                "derived_from": "baseline",
+                "numerically_valid": bool(a.get("numerically_valid")),
+                "delta_vs_champion_ms": r_ms - c_ms,
+                "note": "从基准派生的另一条实验线，不是冠军的消融 —— 不参与归因"})
+            continue
+        if not a.get("numerically_valid"):
+            side_lines.append({
+                "id": str(a["id"]), "tag": str(a["tag"]), "ms": r_ms, "mad": r_mad,
+                "derived_from": "champion", "numerically_valid": False,
+                "delta_vs_champion_ms": r_ms - c_ms,
+                "note": "计时探针（故意算错以测某段耗时）—— 不产生正确结果，"
+                        "不可作归因项；它只说明该段代码耗时多少"})
+            continue
+
+        delta = r_ms - c_ms
         bad = cp + _not_comparable(champ, rec, mm, loop)
-        # 分母 = 冠军相对基准的总收益，不是「显著 delta 之和」：
-        # 用字面公式时 share 恒为 1，[0.8,1.2] 校验永远通过 —— 判据自废。
+        # 负 delta = 去掉这一项反而更快 ⇒ share 为负。这几乎总是 spec 写错
+        # （把探针/实验线当成了消融），而不是「这项有害」。所以直接报问题，
+        # 不许把它当「负贡献」写进表 —— 那会让人读出相反结论。
+        neg = None
+        if ok and delta < 0:
+            neg = ("去掉 %s 后比冠军还快（%+.5f ms）—— 负归因几乎总是 spec 写错："
+                   "检查 derived_from 是否应为 baseline，或 numerically_valid 是否为 false"
+                   % (a["id"], delta))
         items.append({"id": str(a["id"]), "tag": str(a["tag"]), "ms": r_ms, "mad": r_mad,
                       "measure_mode": rec.get("measure_mode"), "delta_ms": delta,
                       "significant": bool(ok), "significant_why": why,
-                      "claimable": not bad, "not_claimable_reason": "；".join(bad) or None,
-                      "attribution_share": (delta / gain) if (ok and not bad and gain) else None})
+                      "claimable": not bad and neg is None,
+                      "not_claimable_reason": "；".join(bad + ([neg] if neg else [])) or None,
+                      "attribution_share": (delta / gain) if (ok and not bad and gain
+                                                              and neg is None) else None})
     claimed = [it for it in items if it["attribution_share"] is not None]
     total = sum(it["attribution_share"] for it in claimed)
     if cp:
@@ -148,7 +197,8 @@ def attribute(spec, records):
     return {"status": status, "status_reason": reason, "baseline": side(base),
             "champion": side(champ), "champion_problems": cp, "gain_ms": gain,
             "gain_pct": (gain / b_ms * 100.0) if b_ms else None,
-            "items": items, "sum_share": total if claimed else None}
+            "items": items, "side_lines": side_lines,
+            "sum_share": total if claimed else None}
 def _render(rep):
     f = lambda l, s: "%-4s %-14s %.5f ms  MAD=%s  %s" % (
         l, s["tag"], s["ms"], "-" if s["mad"] is None else "%.5f" % s["mad"], s["measure_mode"])
@@ -164,7 +214,14 @@ def _render(rep):
         out.append("%-16s %-14s %+10.5f %8s  %s" % (
             it["id"], it["tag"], it["delta_ms"], "-" if it["attribution_share"] is None
             else "%.3f" % it["attribution_share"], v))
-    out += ["status %s —— %s" % (rep["status"], rep["status_reason"])]
+    if rep.get("side_lines"):
+        out.append("")
+        out.append("旁证（不参与归因，只作诊断）")
+        out.append("%-16s %-14s %10s  %s" % ("项", "tag", "vs 冠军", "说明"))
+        for it in rep["side_lines"]:
+            out.append("%-16s %-14s %+10.5f  %s" % (
+                it["id"], it["tag"], it["delta_vs_champion_ms"], it["note"]))
+    out += ["", "status %s —— %s" % (rep["status"], rep["status_reason"])]
     if rep["sum_share"] is not None:
         out += ["sum(share) %.3f" % rep["sum_share"]]
     return "\n".join(out)
@@ -183,8 +240,15 @@ def _case(recs, pairs):
         (c / "runs/loop").mkdir(parents=True)
         (c / "runs/loop/x.jsonl").write_text(
             "".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
+        # pairs 可以是 (id, tag) 或 (id, tag, derived_from, numerically_valid)
+        rows = []
+        for pr in pairs:
+            i, t = pr[0], pr[1]
+            rows.append({"id": i, "tag": t,
+                         "derived_from": pr[2] if len(pr) > 2 else "champion",
+                         "numerically_valid": pr[3] if len(pr) > 3 else True})
         (c / "s.yaml").write_text(yaml.safe_dump({"baseline": "base", "champion": "champ",
-            "ablations": [{"id": i, "tag": t} for i, t in pairs]}), encoding="utf-8")
+            "ablations": rows}), encoding="utf-8")
         try:
             return build_report(c, c / "s.yaml")
         except SpecError as e:
