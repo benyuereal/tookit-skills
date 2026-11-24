@@ -836,9 +836,29 @@ def cmd_queue(a):
 
 # 天花板 → 允许的动作类。这是 op-constrain 的替代：约束来自 roofline 的 verdict，
 # 不是来自一个不存在的 skill。判据：天花板决定了「哪一类改动可能有效」。
+# 单一真源（与 atlas 的 ceiling.bound 词表对齐）：
+#   atlas 卡里 26 张写 bandwidth、13 张写 mixed、13 张写 compute、1 张写 latency。
+#   loop.py 原先只认 memory/compute/latency —— 39 张卡的词不在表里，
+#   而 load_allowed_actions 对未知 bound **静默 return None（= 不拦）**，
+#   等于天花板约束在多数卡上失效。这是「薄约束在最后一步漏了」的重演。
+BOUND_ALIASES = {
+    "bandwidth": "memory",   # atlas 的写法
+    "memory": "memory",
+    "compute": "compute",
+    "latency": "latency",
+    "mixed": "mixed",
+    "launch": "launch",
+}
+
 BOUND_ACTIONS = {
     # 访存受限：只有减字节的改动有意义；调 tile/提高发射率都是白费
     "memory": {"reduce-bytes", "improve-locality", "reuse-across-iter"},
+    # 混合受限：两类都可能有意义，放行全集（由 plan.py 的 EV 排序决定）
+    "mixed": {"reduce-bytes", "improve-locality", "reuse-across-iter",
+              "reduce-flops", "raise-issue-rate", "precision-drop",
+              "pipeline-depth", "raise-concurrency"},
+    # launch 受限：融合是唯一有效手段
+    "launch": {"reduce-bytes", "raise-concurrency"},
     # 算力受限：只有减 FLOP 或提高发射率有意义；减字节没用（已经不是在等数据）
     "compute": {"reduce-flops", "raise-issue-rate", "precision-drop"},
     # 依赖链/并发受限：改流水线与驻留，不是改 tile 大小
@@ -862,11 +882,17 @@ def load_allowed_actions(card):
         return None, None
     bound = d.get("bound")
     if not bound:
-        return None, None
-    allowed = BOUND_ACTIONS.get(str(bound))
+        return None, "roofline.json 缺 bound 字段"
+    canon = BOUND_ALIASES.get(str(bound))
+    if canon is None:
+        # **fail-closed**：未知 bound 不许静默放行。
+        # 第一版 return None 让「不拦」和「拿不到」无法区分，
+        # 39 张卡的 bandwidth/mixed 因此全部绕过了天花板约束。
+        return None, "未知 bound=%r（只允许 %s）" % (bound, sorted(BOUND_ALIASES))
+    allowed = BOUND_ACTIONS.get(canon)
     if allowed is None:
-        return None, None
-    return set(allowed), str(bound)
+        return None, "bound=%r 已归一为 %r 但 BOUND_ACTIONS 里没有" % (bound, canon)
+    return set(allowed), canon
 
 
 def cmd_run(a):

@@ -104,15 +104,35 @@ def warn(code, where, msg):
     warns.append("[%s] %s: %s" % (code, where, msg))
 
 
+_YAML_CACHE = {}
+
+
 def _load_yaml(path):
+    """带缓存的 YAML 读取。
+
+    为什么要缓存：53 张卡在整轮校验里被重复解析 **1116 次**，单次 15 秒里
+    99.5% 花在这里。后果链很实在：套件跑 9 分钟 → 巡检只能 `--no-pytest`
+    → Q1 永远 None（权重 0.30 直接判零）→ 质量分死锁在 7 以下。
+
+    缓存键用 (路径, mtime, size)：文件被改过就失效，不会读到旧内容。
+    """
+    try:
+        st = path.stat()
+        key = (str(path), st.st_mtime_ns, st.st_size)
+    except OSError as e:
+        return None, "读不到 %s: %s" % (path, e)
+    if key in _YAML_CACHE:
+        return _YAML_CACHE[key]
     try:
         import yaml
     except ImportError:
         return None, "PyYAML 未安装，无法解析 %s（本校验器需要它；CI 已装）" % path
     try:
-        return yaml.safe_load(path.read_text(encoding="utf-8")), None
+        val = (yaml.safe_load(path.read_text(encoding="utf-8")), None)
     except Exception as e:                                    # noqa: BLE001
-        return None, "%s 解析失败: %s" % (path, e)
+        val = (None, "%s 解析失败: %s" % (path, e))
+    _YAML_CACHE[key] = val
+    return val
 
 
 def _truth_sources(repo):
