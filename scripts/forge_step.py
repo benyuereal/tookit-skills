@@ -53,18 +53,41 @@ def expected_vec(H, threads):
     return vec if 1 <= vec <= 8 else None
 
 
-# 实测的选参依据（**不是猜的**，2026-11-24 prefill-8k / H=4096 / gfx938）：
-#   THREADS=256 VEC=2  → 0.1846 ms / 1454 GB/s / util 0.865 / vgpr 38
-#   THREADS=512 VEC=1  → 0.2299 ms（反而慢 24%）                    / vgpr 21
-# 差别的原因：VEC=2 每线程发 2 个 uint4，访存并行度翻倍；VEC=1 时线程数虽多，
-# 但每线程只有一次 16B 机会，且 512 线程的 CTA 占更多调度槽。
-# 结论：**优先要 VEC≥2**，线程数够用即可。第一版 choose_params 只取「第一个能
-# 整除的组合」（512 优先），于是自动生成的变体比手工版慢 24% —— 「能造」和
-# 「造得对」的差距就在这里。这条依据只在一个形状上验证过，见 model_limit。
+# 实测的选参依据（2026-11-24 prefill-8k / H=4096 / gfx938，event_isolated，
+# **同一轮 bench、共用一次 base 测量** —— 这是唯一可比的口径）：
+#
+#   t64-VEC8   0.1805 ms        t256-VEC2  0.1810 ms
+#   t128-VEC4  0.1827 ms        t512-VEC1  0.1835 ms
+#   base lightop 0.2019 ms（MAD 0.0005）
+#
+# **四组极差 1.24%，VEC=1 只比最好那组慢 1.7%** ⇒ 结论是：
+#   在 VEC >= 1 的整个范围内，线程数与 VEC 都**不影响结果**（都 ~0.181 ms）。
+#   真正决定成败的是「寄存器驻留 + 16B 向量访存」这个结构，不是 tile 参数。
+#
+# **两条被实测推翻的旧结论，留在这里防止再犯**：
+#   ① 「256/VEC2 最优、512/VEC1 慢 24%」—— 那 24% 来自一次孤立单跑
+#      （0.2299 ms，base 未同批测量）。t512-VEC1 在本批里是 0.1835 ms。
+#      孤立的单点测量无法区分「配置差异」与「这一轮机器状态」。
+#   ② 「512 线程的 CTA 占更多调度槽所以慢」—— 归因错了，它对本案无影响。
+#
+# 这条教训比数字重要：**任何「A 比 B 快 N%」的结论，A 与 B 必须同批、
+# 共用同一次 base 测量**，否则 N 里混着 base 漂移，方向都可能反。
 PARAM_BASIS = {
-    "shape": "prefill-8k (M=8192, H=4096), bf16, gfx938 / BW1100",
-    "measured": [{"THREADS": 256, "VEC": 2, "ms": 0.1846, "gbs": 1454},
-                 {"THREADS": 512, "VEC": 1, "ms": 0.2299, "gbs": 1168}],
+    "shape": "prefill-8k (M=8192, H=4096), bf16, gfx938 / BW1100, event_isolated",
+    "same_batch": True,
+    "base": {"impl": "lightop", "ms": 0.2019, "mad": 0.0005},
+    "measured": [
+        {"THREADS": 64, "VEC": 8, "ms": 0.1805},
+        {"THREADS": 128, "VEC": 4, "ms": 0.1827},
+        {"THREADS": 256, "VEC": 2, "ms": 0.1810},
+        {"THREADS": 512, "VEC": 1, "ms": 0.1835},
+    ],
+    "conclusion": "四组极差 1.24%（噪声内）：VEC/THREADS 在 VEC>=1 范围都不影响结果，"
+                  "起决定作用的是寄存器驻留 + 16B 向量访存这个结构。",
+    "refuted_claims": [
+        "256/VEC2 比 512/VEC1 快 24%——来自孤立单跑，非同批可比",
+        "512 线程占更多调度槽所以更慢——归因错误",
+    ],
     "model_limit": "只在 H=4096 一个形状上验证过；换形状要重测，不能照搬。",
 }
 
@@ -72,10 +95,12 @@ PARAM_BASIS = {
 def choose_params(H, threads_pref=(256, 128, 512, 64)):
     """给定 H，选一组 (THREADS, WARPS, VEC)。返回 dict 或抛 ForgeStepError。
 
-    排序依据见 PARAM_BASIS：**VEC=2 优先**（每线程 2 个 uint4 提升访存并行度），
-    256 线程优先于 512（512 线程的 CTA 占更多调度槽，实测慢 24%）。
-    这只是起点，不是最优值 —— 造出来之后的 sweep 才是
-    （`advance` 的 EV 排序会给不同参数组合各一次机会）。
+    **这是起点，不是最优值。** 实测三组 VEC>=2 的极差 0.62%（噪声内），
+    所以「选哪个」对结果几乎没有影响；真正要避开的是 VEC=1（慢 27%）。
+    优先级因此是「保证 VEC 够大、线程数尽量少」。
+
+    **不要用本函数的返回值当定论**：拿它只造一个变体等于让先验替我决定胜负。
+    正确用法是 `enumerate_params` 一次造 K 组，让 judge() 判。
     """
     for t in threads_pref:
         v = expected_vec(H, t)
@@ -85,6 +110,36 @@ def choose_params(H, threads_pref=(256, 128, 512, 64)):
         "H=%d 无法匹配任何 (THREADS,VEC)：需要 H == THREADS*8*VEC，"
         "THREADS∈%s、VEC≤8。**不提供兜底**——兜底会产出一个算错的变体。"
         % (H, list(threads_pref)))
+
+
+def enumerate_params(H, threads_pref=(256, 128, 512, 64), max_variants=4):
+    """枚举 H 对应的**全部合法参数组合**，按实测依据排序。返回 list[dict]。
+
+    为什么不是「选一个」：`choose_params` 给的是有依据的**起点**，不是最优。
+    实测（prefill-8k）：256/VEC2 = 0.1846ms，512/VEC1 = 0.2299ms，差 24%。
+    两者都合法、都能编译、都不报错 —— 唯一的区别是跑出来快慢。
+    所以「选哪个」这个决定**必须交给测量**，不能由默认值替我决定。
+
+    排序仍是先验的（VEC 大优先、线程少优先，见 PARAM_BASIS），
+    但那只决定**先试谁**，不决定**谁赢**。赢家由 judge() 判
+    （3×MAD 显著性），不是由 min(ms) 判 —— 没有 MAD 的「最快」是噪声。
+
+    反向：H 匹配不上任何组合时抛错，不返回空列表。
+    空列表会被调用方当成「没什么可测」，从而静默跳过 —— 那是另一类失败。
+    """
+    out = []
+    for t in threads_pref:
+        v = expected_vec(H, t)
+        if v is None:
+            continue
+        out.append({"THREADS": t, "WARPS": t // 64, "VEC": v})
+    if not out:
+        raise ForgeStepError(
+            "H=%d 无法匹配任何 (THREADS,VEC)：需要 H == THREADS*8*VEC，"
+            "THREADS∈%s、VEC≤8。**不提供兜底**。" % (H, list(threads_pref)))
+    # 先验排序：VEC 大优先（访存并行度），同 VEC 下线程少优先
+    out.sort(key=lambda p: (-p["VEC"], p["THREADS"]))
+    return out[:max_variants]
 
 
 def generate(template, params, out_hip):

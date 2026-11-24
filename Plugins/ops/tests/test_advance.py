@@ -98,10 +98,19 @@ class FakeRunner:
         cmd = adv.loop_run_cmd(card, tag)
         adv._guard_no_bench(cmd)
         self.commands.append(" ".join(cmd))
-        self.runs.append(tag)
-        rc = self.loop_rc(tag) if callable(self.loop_rc) else self.loop_rc
+        tags = [tag] if isinstance(tag, str) else list(tag)
+        self.runs.extend(tags)
+        # 批量调用时任意一条被拒即整批 rc!=0（与真 loop.py 一致：
+        # 登记门会先整体校验再跑），这样顺延逻辑才有机会被触发。
+        rc = 0
+        for t in tags:
+            r = self.loop_rc(t) if callable(self.loop_rc) else self.loop_rc
+            if r != 0:
+                rc = r
+                break
         if rc == 0 and self.on_run:
-            self.on_run(card, tag)
+            for t in tags:
+                self.on_run(card, t)
         return rc, ""
 
 
@@ -403,18 +412,31 @@ def test_stage_is_monotonic_and_terminal_sticks():
 class _FakeForge:
     """替身 forge_step：只记录调用，产出由用例指定。"""
 
-    def __init__(self, fail=False):
+    class HUnsupported(ValueError):
+        pass
+
+    def __init__(self, fail=False, fail_first=False):
         self.fail = fail
+        self.fail_first = fail_first
         self.calls = []
 
     def choose_params(self, H):
         if H != 4096:
             raise ValueError("H=%d 不支持" % H)
-        return {"THREADS": 512, "WARPS": 8, "VEC": 1}
+        return {"THREADS": 256, "WARPS": 4, "VEC": 2}
+
+    def enumerate_params(self, H, max_variants=3):
+        if H != 4096:
+            raise self.HUnsupported("H=%d 不支持" % H)
+        combos = [{"THREADS": 256, "WARPS": 4, "VEC": 2},
+                  {"THREADS": 512, "WARPS": 8, "VEC": 1}]
+        return combos[:max_variants]
 
     def forge_variant(self, name, template, params, H, outdir, card=None):
         self.calls.append({"name": name, "params": params, "card": card})
         if self.fail:
+            raise RuntimeError("体检不通过：private=528B > 0B")
+        if self.fail_first and len(self.calls) == 1:
             raise RuntimeError("体检不通过：private=528B > 0B")
         return {"name": name, "so": "/x/%s.so" % name,
                 "profile": {"private": 0, "threads": 512, "vgpr": 21}}
@@ -501,3 +523,148 @@ def test_shape_missing_H_does_not_forge(tmp_path, surfaces_file):
     assert r["forge"]["forged"] is False
     assert "H" in r["forge"]["reason"]
     assert fk.calls == []
+
+
+# ---------------------------------------------------------------- sweep（一次造 K 组）
+
+def test_forge_sweep_registers_all_passing_combos(tmp_path, surfaces_file):
+    """sweep 必须把**每一组**通过体检的都登记，而不是只登记第一组。
+
+    反向意义：只登记第一组 = 让先验排序替我决定赢家。实测两组差 24%，
+    谁快只能测出来。
+    """
+    card = _empty_queue_card(tmp_path)
+    fk = _FakeForge()
+    r = adv.run_advance(card, 1, runner=FakeRunner(), emit=lambda *a, **k: None,
+                        forge_mode=True, forge_module=fk, forge_sweep=2)
+    assert r["forge"]["forged"] is True
+    assert len(r["forge"]["made"]) == 2, r["forge"]
+
+    import yaml
+    d = yaml.safe_load((card / "runs" / "advance" / "overlay.yaml").read_text())
+    assert len(d["candidates"]) == 2
+    # 同一批 sweep 的 expect 全为 0 —— 没测过的不能写成预期收益，
+    # 否则 EV 排序会把猜想排到真结论前面。
+    assert all(c["expect"] == "0%" for c in d["candidates"])
+    # priority 按先验序，但**赢家不由它决定**（由 judge）
+    assert [c["priority"] for c in d["candidates"]] == [1, 2]
+
+
+def test_forge_sweep_skips_bad_combo_but_keeps_others(tmp_path, surfaces_file):
+    """**核心**：某一组体检不过（如 VEC=8 溢出寄存器）不许拖垮整轮。
+
+    它要做的三件事：① 跳过该组 ② 记下原因 ③ **其余组照常登记**。
+    把「一组不合格」当成「整轮失败」会让 sweep 变成「最差那组的质量」。
+    """
+    card = _empty_queue_card(tmp_path)
+    fk = _FakeForge(fail_first=True)
+    r = adv.run_advance(card, 1, runner=FakeRunner(), emit=lambda *a, **k: None,
+                        forge_mode=True, forge_module=fk, forge_sweep=2)
+    assert r["forge"]["forged"] is True, r["forge"]
+    assert len(r["forge"]["made"]) == 1
+    assert len(r["forge"]["skipped"]) == 1
+    assert "体检" in r["forge"]["skipped"][0]["reason"]
+
+    import yaml
+    d = yaml.safe_load((card / "runs" / "advance" / "overlay.yaml").read_text())
+    assert len(d["candidates"]) == 1, "体检不过的组合也被登记进了队列"
+
+
+def test_forge_sweep_reason_distinguishes_failure_from_duplicate(tmp_path, surfaces_file):
+    """**反向**：全部跳过时，原因必须能区分「体检拦住了」和「已生成过」。
+
+    两者处置完全不同（前者是正确拦截，后者是重复劳动），
+    只报条数会让它们看起来一样。
+    """
+    card = _empty_queue_card(tmp_path)
+    # 先跑一次，制造「已生成过」
+    adv.run_advance(card, 1, runner=FakeRunner(), emit=lambda *a, **k: None,
+                    forge_mode=True, forge_module=_FakeForge(), forge_sweep=2)
+    # 把 overlay 里的候选标成非 pending：这样 plan 又空了，forge 才会再次触发。
+    # （第一次跑完之后队列里有候选，forge 根本不会出场 —— 这是对的，
+    #  所以必须显式构造「队列空 + overlay 有记录」这个状态。）
+    import yaml as _y
+    ov = card / "runs" / "advance" / "overlay.yaml"
+    d = _y.safe_load(ov.read_text())
+    for c in d["candidates"]:
+        c["status"] = "done"
+    ov.write_text(_y.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    fk2 = _FakeForge()
+    r = adv.run_advance(card, 1, runner=FakeRunner(), emit=lambda *a, **k: None,
+                        forge_mode=True, forge_module=fk2, forge_sweep=2)
+    assert r["forge"]["forged"] is False
+    assert "已生成过" in r["forge"]["reason"]
+    assert "体检" not in r["forge"]["reason"]
+
+
+def test_round_runs_whole_batch_not_just_top1(tmp_path, surfaces_file):
+    """**核心**：一轮必须把整个 top 批次一起交给 loop.py，不是成功一个就停。
+
+    反向意义：原来 `for cand in passed: ... if rc==0: break` 让 forge 一次
+    枚举的 K 组只测了第 1 组，sweep 完全白做。而且逐个调用会让每个变体
+    各自重测 base，base 漂移被算进变体差异 —— 批量调用只测一次 base。
+    """
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": [
+            {"id": "c1", "direction": "d1", "status": "pending", "ev": 0.9},
+            {"id": "c2", "direction": "d1", "status": "pending", "ev": 0.8},
+            {"id": "c3", "direction": "d1", "status": "pending", "ev": 0.7},
+        ],
+        "refuted": [],
+    })
+    r = FakeRunner()
+    _run(card, rounds=1, runner=r)
+
+    # 只有一次 loop.py 调用，且命令行里带全部三个 tag
+    loop_cmds = [c for c in r.commands if "loop.py" in c]
+    assert len(loop_cmds) == 1, "应当只有一次批量调用，实际 %d 次：%s" % (
+        len(loop_cmds), loop_cmds)
+    for t in ("c1", "c2", "c3"):
+        assert t in loop_cmds[0], "批量命令里缺 %s：%s" % (t, loop_cmds[0])
+
+
+def test_batch_rejection_falls_back_to_per_candidate(tmp_path, surfaces_file):
+    """批量被拒时必须逐条重试 —— 否则定位不到是哪条被门拦。"""
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": [
+            {"id": "c1", "direction": "d1", "status": "pending", "ev": 0.9},
+            {"id": "c2", "direction": "d1", "status": "pending", "ev": 0.8},
+        ],
+        "refuted": [],
+    })
+    r = FakeRunner(loop_rc=lambda tag: 2 if tag == "c1" else 0,
+                   on_run=lambda c, t: _append_record(c, t, "ACCEPTED_BITEXACT"))
+    rep = _run(card, rounds=1, runner=r)
+    loop_cmds = [c for c in r.commands if "loop.py" in c]
+    assert len(loop_cmds) >= 2, "批量失败后没有逐条重试：%s" % loop_cmds
+    assert rep["decisions"] == ["ACCEPTED_BITEXACT"], rep["decisions"]
+
+
+def test_sweep_siblings_not_truncated_by_top3(tmp_path, surfaces_file):
+    """**核心**：同一次 sweep 的兄弟变体不许被 top3 截断。
+
+    反向意义：sweep 出来的 K 组共用一次 base 测量才可比。被截断的那组
+    白生成、白编译、白占 overlay，而且会让人以为「测过了、不行」。
+    """
+    cands = [{"id": "auto-mm-h4096-t%d-v%d" % (t, v), "direction": "d1",
+              "status": "pending", "ev": 0.5, "priority": i}
+             for i, (t, v) in enumerate([(64, 8), (128, 4), (256, 2), (512, 1)])]
+    cands.append({"id": "other-thing", "direction": "d1", "status": "pending",
+                  "ev": 0.1, "priority": 9})
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": cands, "refuted": []})
+    plan = adv.build_plan(card)
+    ids = [c.id for c in plan]
+    assert len([i for i in ids if i.startswith("auto-mm-h4096")]) == 4, (
+        "sweep 兄弟被截断了：%s" % ids)
+    assert "other-thing" not in ids, "top3 之外的异方向候选不该被带进来"
+
+
+def test_sweep_key_separates_different_batches(tmp_path, surfaces_file):
+    """**反向**：不同 H 的 sweep 批次不许混在一起（H=4096 与 H=8192 不可比）。"""
+    assert adv._sweep_key("auto-mm-h4096-t64-v8") != \
+           adv._sweep_key("auto-mm-h8192-t64-v16")
+    assert adv._sweep_key("fuse-residual") is None

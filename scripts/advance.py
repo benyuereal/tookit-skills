@@ -206,6 +206,13 @@ def _load_candidates_via_loop(card):
     return _yaml(Path(card) / "candidates.yaml"), "card-only"
 
 
+def _sweep_key(cid):
+    """同一批 sweep 的变体共享同一前缀：auto-<template>-h<H>-t<N>-v<M> → 去掉末段。"""
+    import re
+    m = re.match(r"^(auto-[a-z0-9]+-h\d+)-t\d+-v\d+$", str(cid))
+    return m.group(1) if m else None
+
+
 def build_plan(card, ledger=None):
     """读候选队列（含 overlay）+ surfaces.yaml，给出 top3。
 
@@ -232,7 +239,15 @@ def build_plan(card, ledger=None):
             precondition_check=s.get("precondition_check"),
             variant=c.get("variant"), raw=c))
     items.sort(key=lambda x: (-x.ev, x.priority, x.id))
+    # top3 是「一次跑几个**不同方向**」的上限，但同一次 sweep 出来的兄弟变体
+    # 必须整组一起跑 —— 它们共用一次 base 测量才可比，被截断的那组就白生成了。
+    # 判据：id 前缀相同（auto-<template>-h<H>-）即视为同一批 sweep。
     top = items[:3]
+    seen = {_sweep_key(c.id) for c in top}
+    for c in items[3:]:
+        k = _sweep_key(c.id)
+        if k and k in seen:
+            top.append(c)
     rejected = RejectedList(items[3:], ledger=ledger)
     return Top(top, rejected=rejected, ledger=ledger)
 
@@ -345,7 +360,13 @@ def _guard_no_bench(cmd):
 
 
 def loop_run_cmd(card, tag):
-    return [sys.executable, "-I", str(ENGINE_LOOP), "-C", str(card), "run", str(tag)]
+    """tag 可以是单个 id，也可以是 id 列表（一次 bench 多变体，共用基线测量）。
+
+    **批量是刻意的**：loop.py 的多 tag 路径只测一次 base，各变体同口径可比。
+    逐个调用会让每个变体各自重测 base，base 漂移就被算进了变体差异里。
+    """
+    tags = [str(tag)] if isinstance(tag, str) else [str(t) for t in tag]
+    return [sys.executable, "-I", str(ENGINE_LOOP), "-C", str(card), "run", *tags]
 
 
 class Runner:
@@ -509,7 +530,7 @@ def _shape_of(card):
     return {}
 
 
-def forge_next(card, shape, direction=None, emit=print,
+def forge_next(card, shape, direction=None, emit=print, sweep=3,
                template="fused-add-reduce", forge_fn=None):
     """当队列里没有更好的变体时，造一个新的。
 
@@ -547,35 +568,62 @@ def forge_next(card, shape, direction=None, emit=print,
     if not H:
         return {"forged": False, "reason": "形状里没有 H，无法定 THREADS/VEC"}
     try:
-        params = forge_fn.choose_params(H)
+        # **一次枚举 K 组，不是选一组**。选一组等于让默认值替我决定胜负，
+        # 而实测两组都合法、都编译、都不报错，只差 24% 速度 —— 这种差别
+        # 只能测出来。排序只决定先试谁。
+        combos = forge_fn.enumerate_params(H, max_variants=sweep)
     except Exception as e:                      # noqa: BLE001
         return {"forged": False, "reason": str(e)}
 
-    vid = "auto-%s-h%d-t%d-v%d" % (template.replace("-", "")[:8], H,
-                                   params["THREADS"], params["VEC"])
-    if vid in _overlay_ids(card):
-        return {"forged": False, "reason": "已生成过 %s（overlay 里有）" % vid,
-                "id": vid}
-    emit("  forge：队列无更好变体 → 生成 %s（%s）" % (vid, params))
+    have = _overlay_ids(card)
+    entries, made, skipped = [], [], []
+    for params in combos:
+        vid = "auto-%s-h%d-t%d-v%d" % (template.replace("-", "")[:8], H,
+                                       params["THREADS"], params["VEC"])
+        if vid in have:
+            skipped.append({"id": vid, "reason": "已生成过"})
+            continue
+        try:
+            r = forge_fn.forge_variant(vid, template, params, H, None, card=card)
+        except Exception as e:                  # noqa: BLE001
+            # 单个组合体检不过（如 VEC=8 溢出寄存器）不是整轮失败：
+            # 记下原因继续试下一个。**但绝不把它登记进队列** ——
+            # 一个算错/溢出的变体进队列会把这轮方向判死。
+            skipped.append({"id": vid, "params": params, "reason": str(e)[:200]})
+            emit("    %s 体检不过，跳过：%s" % (vid, str(e)[:90]))
+            continue
+        emit("    %s 通过体检 %s" % (vid, r.get("profile")))
+        made.append({"id": vid, "params": params, "evidence": r})
+        entries.append({"id": vid, "direction": direction, "status": "pending",
+                        "priority": len(entries) + 1,
+                        "action_class": "improve-locality",
+                        # expect 必须可机检（check_expect.py 拦散文）。生成变体的
+                        # 预期写 0：它不是「预期能快多少」，是「还没测」。写成 -5%
+                        # 会让 EV 排序把没实测的猜想排到真结论前面。
+                        # **同一批 sweep 的候选 expect 全为 0、priority 按先验序**，
+                        # 所以谁先跑由先验决定，谁赢由 judge() 决定。
+                        "expect": "0%", "expect_basis": "生成变体，尚未实测",
+                        "expect_confidence": "low",
+                        "variant": vid, "forge_evidence": r})
+    if not entries:
+        # 汇总必须带**逐条原因**。只报「全部不合格」会让「体检拦住了」
+        # 和「已经生成过」看起来一样 —— 前者是正确拦截，后者是重复劳动，
+        # 处置完全不同。第一版就是只报条数，测试和人都分不出来。
+        fails = [x for x in skipped if "已生成过" not in str(x.get("reason"))]
+        reason = "全部组合都不合格或已生成过（%d 条跳过）" % len(skipped)
+        if fails:
+            reason += "；体检不过 %d 条：%s" % (
+                len(fails), fails[0].get("reason", "")[:120])
+        return {"forged": False, "sweep": sweep, "made": made, "skipped": skipped,
+                "reason": reason}
     try:
-        r = forge_fn.forge_variant(vid, template, params, H, None, card=card)
-    except Exception as e:                      # noqa: BLE001
-        return {"forged": False, "reason": "生成/体检失败：%s" % e, "id": vid}
-
-    entry = {"id": vid, "direction": direction, "status": "pending",
-             "priority": 1, "action_class": "improve-locality",
-             # expect 必须可机检（check_expect.py 拦散文）。生成变体的预期写 0：
-             # 它不是「预期能快多少」，是「还没测」。写成 -5% 会让 EV 排序把
-             # 没实测的猜想排到真结论前面。
-             "expect": "0%", "expect_basis": "生成变体，尚未实测",
-             "expect_confidence": "low",
-             "variant": vid, "forge_evidence": r}
-    try:
-        f = write_overlay(card, [entry])
+        f = write_overlay(card, entries)
     except SystemExit as e:
-        return {"forged": False, "reason": str(e), "id": vid}
-    return {"forged": True, "id": vid, "overlay": str(f),
-            "profile": r.get("profile"), "params": params}
+        return {"forged": False, "reason": str(e)}
+    emit("  forge：生成 %d/%d 组（%s）→ 由 judge 决定谁赢，不由默认值决定"
+         % (len(entries), sweep, ", ".join(m["id"] for m in made)))
+    return {"forged": True, "sweep": sweep, "made": made, "skipped": skipped,
+            "overlay": str(f), "id": made[0]["id"]}
 
 
 # ---------------------------------------------------------------- replan（v5.1 §6.3）
@@ -669,7 +717,8 @@ def _advance_stage(state, stage):
 # ---------------------------------------------------------------- 编排
 
 def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
-                write_state=None, forge_mode=False, forge_module=None):
+                write_state=None, forge_mode=False, forge_module=None,
+                forge_sweep=3):
     """跑多轮。返回报告 dict。dry-run 跳过 run，且不落任何状态。"""
     card = Path(card)
     if write_state is None:
@@ -721,10 +770,12 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
     if not prev_top and forge_mode and not dry_run:
         # 队列空了不等于没路走：这正是「写新实现」该出场的时刻。
         # 造出来之后重排一次，让它照常过六道门 —— 不绕过任何一道。
-        fr = forge_next(card, _shape_of(card), emit=emit, forge_fn=forge_module)
+        fr = forge_next(card, _shape_of(card), emit=emit,
+                        sweep=forge_sweep, forge_fn=forge_module)
         report["forge"] = fr
         if fr.get("forged"):
-            emit("  forge 成功：%s → 重排（生成的候选同样要过六道门）" % fr["id"])
+            emit("  forge 成功：%d 组进队列 → 重排（生成的候选同样要过六道门）"
+             % len(fr.get("made") or []))
             prev_top = build_plan(card, ledger=read_records(card))
             _emit_plan(prev_top)
         else:
@@ -769,15 +820,31 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
             emit("\nround %d run：[dry-run] 跳过，不调 loop.py（将跑 %s）"
                  % (report["rounds"], chosen.id))
         else:
-            for cand in passed:
-                rc, out = runner.loop_run(card, cand.id)
-                run_rc = rc
-                if rc == 0:
-                    chosen = cand
-                    break
-                # rc==2 是 loop.py 的门拒绝（登记/归因/预算/refuted/天花板）——
-                # advance 不重判，只顺延下一个候选。其他 rc 视为运行失败。
-                emit("  loop.py run %s → rc=%d，顺延" % (cand.id, rc))
+            # **一次把整批 top-K 交给 loop.py，不是成功一个就 break**。
+            # 原来每个候选单独 invoke，第一个成功就停 —— 于是 forge 一次枚举
+            # 出来的 K 组只测了第 1 组，sweep 白做。实测（2026-11-24）：三组
+            # 0.1790/0.1792/0.1808 ms 并排才看得出「VEC>=2 之后都收敛」，
+            # 只跑第 1 组会得出「64线程/VEC8 最优」的错误结论（差 <1%，在噪声内）。
+            # loop.py 本身支持多 tag（一次 bench 多变体、共用同一次基线测量），
+            # 这正是它比「逐个跑」更准的地方：base 只测一次，各变体同口径。
+            batch = [c.id for c in passed]
+            rc, out = runner.loop_run(card, batch)
+            run_rc = rc
+            if rc == 0:
+                # 一批都跑过了；chosen 记第一个（replan 用 top1 语义）
+                chosen = passed[0]
+            else:
+                # rc!=0 是 loop.py 的门拒绝（登记/归因/预算/refuted/天花板）——
+                # advance 不重判，只顺延逐条重试（批跑失败可能是因为某一条被拦，
+                # 单独跑能定位到具体是哪条）。
+                emit("  批量 run 失败（rc=%d），逐条重试以定位被拦的候选" % rc)
+                for cand in passed:
+                    one_rc, _ = runner.loop_run(card, [cand.id])
+                    if one_rc == 0:
+                        chosen = cand
+                        run_rc = 0
+                        break
+                    emit("  loop.py run %s → rc=%d，顺延" % (cand.id, one_rc))
             if chosen is None:
                 state["stage"] = "blocked"
                 if write_state:
@@ -914,6 +981,8 @@ def main(argv=None):
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--forge", action="store_true", dest="forge_mode",
                     help="队列空了就造新变体（生成→编译→体检→写 overlay）")
+    ap.add_argument("--sweep", type=int, default=3, dest="forge_sweep",
+                    help="forge 一次枚举几组参数（默认 3；赢家由 judge 判，不由默认值）")
     a = ap.parse_args(argv)
 
     if a.selftest:
@@ -924,7 +993,8 @@ def main(argv=None):
     # --json 时把人读日志关掉，避免污染机器可读输出
     emit = (lambda *args, **kw: None) if a.json else print
     report = run_advance(Path(a.card).resolve(), a.max_rounds,
-                         dry_run=a.dry_run, emit=emit, forge_mode=a.forge_mode)
+                         dry_run=a.dry_run, emit=emit, forge_mode=a.forge_mode,
+                         forge_sweep=a.forge_sweep)
     if a.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

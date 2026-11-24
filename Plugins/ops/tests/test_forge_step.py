@@ -53,7 +53,40 @@ def test_choose_params_rejects_unsupported_H():
 def test_param_basis_declares_its_own_limit():
     """选参依据必须自带 model_limit —— 一个形状上的结论不能当全类规律。"""
     assert "model_limit" in F.PARAM_BASIS
-    assert len(F.PARAM_BASIS["measured"]) >= 2, "至少两个实测点才能比较"
+    assert len(F.PARAM_BASIS["measured"]) >= 4, "sweep 有 4 组，依据必须是同一批实测"
+
+
+def test_param_basis_conclusion_matches_measurement():
+    """**核心**：结论必须能被同文件里的实测数据**验算**，不能是散文。
+
+    反向意义：我第一版把 27% 的差距归因成「512 线程占更多调度槽」，
+    而 sweep 显示真正变量是 VEC。如果结论只是散文，这个错误会一直躺着。
+    这里用 measured 里的数字直接算极差，结论必须与之相符。
+    """
+    ms = [m["ms"] for m in F.PARAM_BASIS["measured"]]
+    assert len(ms) >= 4, "依据必须覆盖完整 sweep，不是挑几个点"
+    # 结论说「都不影响」，那全部四组的极差就必须落在噪声内。
+    # 反过来：如果哪天又出现 24% 这种差距，这条会立刻失败，逼着重写结论。
+    spread = max(ms) / min(ms) - 1
+    assert spread < 0.05, (
+        "四组极差 %.2f%% 超出噪声 —— 「参数都不影响结果」这个结论不成立，"
+        "PARAM_BASIS 与 choose_params 都要重写" % (spread * 100))
+    assert "不影响" in F.PARAM_BASIS["conclusion"] or "噪声" in F.PARAM_BASIS["conclusion"]
+    # 被推翻的旧结论必须留痕 —— 否则下一个人会照着再犯一次
+    assert F.PARAM_BASIS.get("refuted_claims"), "缺少 refuted_claims，旧错误会被重新引入"
+
+
+def test_param_basis_is_same_batch():
+    """**核心**：依据必须声明是同批测量，且带 base。
+
+    反向意义：0.2299 ms 那次的错误根源就是「拿孤立单跑跟别的数字比」。
+    不同批 = 不同 base 漂移，差值里混着机器状态，方向都可能反。
+    """
+    assert F.PARAM_BASIS.get("same_batch") is True, (
+        "依据未声明同批测量 —— 非同批的数字不可相减")
+    assert "base" in F.PARAM_BASIS, "缺 base 测量就无法判断这轮机器状态是否正常"
+    assert F.PARAM_BASIS["base"]["mad"] / F.PARAM_BASIS["base"]["ms"] < 0.05, (
+        "base 的 MAD/median 超过 5% 熔断线，这批数据本身不可信")
 
 
 # ---------------------------------------------------------------- 体检
