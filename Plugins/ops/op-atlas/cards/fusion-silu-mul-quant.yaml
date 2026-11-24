@@ -186,6 +186,33 @@ last_verdict:
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 1038.2
+  bottleneck:
+    bound: memory
+    root_cause: silu×mul+量化融成一趟：读[M,2H]写[M,H]=704.7MB，实测 1038 GB/s（678.7µs）
+    evidence:
+    - kind: ratio
+      what: MBU = 实测带宽 / 1:1 档 achievable(1680 或对应档)
+      value: 1038 GB/s
+      reproduce: python3 -I scripts/floor.py --card fusion-silu-mul-quant --json
+    - kind: ablation
+      what: 对照同字节纯 copy 的上限（bw-ladder 2_rw_1to1 1680）
+      value: 见 bw-ladder.yaml
+      reproduce: python3 -I scripts/bw_calibrate.py
+    caliber: achieved_bw 由 perf record 的 median_us 与 traffic_passes 算出
+  resources:
+    vgpr: null
+    lds_per_cta: null
+    ctas_per_cu: null
+    waves_per_cu: null
+    achieved_bw: 1038.2
+    bw_util: 0.618
+    proxies:
+      wait_inst_lds_per_inst_lds: null
+      lds_per_mfma: null
+    source: 厂商库内置 kernel（lightop/aiter），本地无 .so、未单独采 PMC；achieved_bw 由 perf/*.json 的 median_us 算出
+    status: partial
+  rounds: 1
+  verdict: adopt
 modify_path:
   kind: replace-call
   what: silu_and_mul + per_token_quant 两段换成单个 fuse_silu_mul_fp8_quant
@@ -222,3 +249,9 @@ floor_inputs:
   t_source: results
   basis: 读 [M,2H] 8192×28672×2B=469.8MB + 写 out[M,H] 8192×14336×2B=234.9MB = 704.7MB（scale 0.03MB 忽略）；t=678.7 µs 是 aiter-fp8 的 median_us（本卡最快档）
   evidence: Plugins/ops/op-atlas/perf/fusion-silu-mul-quant.json
+progress:
+  stage: S4
+  since: 2026-11-24T09:30
+  blocked_by: null
+  last_verdict: adopt
+  rounds: 1

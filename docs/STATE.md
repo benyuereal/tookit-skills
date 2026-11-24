@@ -8,7 +8,7 @@ S0 画像      0 张   前置产出：—
 S1 天花板     0 张   前置产出：semantics, floor_inputs
 S2 基线      0 张   前置产出：last_verdict.comparison
 S3 归因      0 张   前置产出：last_verdict.bottleneck
-S4 资源画像    0 张   前置产出：last_verdict.resources
+S4 资源画像    4 张   前置产出：last_verdict.resources
 S5 选路      0 张   前置产出：last_verdict.next_probe
 S6 实验      0 张   前置产出：last_verdict.rounds
 S7 收敛      1 张   前置产出：last_verdict.verdict
@@ -32,9 +32,12 @@ blocked    0 张
 前置产出：last_verdict.bottleneck
 - （无）
 
-### S4 资源画像（0 张）
+### S4 资源画像（4 张）
 前置产出：last_verdict.resources
-- （无）
+- fusion-add-rmsnorm-quant
+- fusion-rmsnorm-rope
+- fusion-rope-kv-write
+- fusion-silu-mul-quant
 
 ### S5 选路（0 张）
 前置产出：last_verdict.next_probe
@@ -51,7 +54,7 @@ blocked    0 张
 ### blocked（0 张）
 - （无）
 
-### 未接入（52 张，未写 progress.stage）
+### 未接入（48 张，未写 progress.stage）
 - batched-gemm
 - causal-conv1d
 - chunked-scan
@@ -59,10 +62,6 @@ blocked    0 张
 - embedding-lookup
 - flash-attention-fwd
 - fused-add-rmsnorm
-- fusion-add-rmsnorm-quant
-- fusion-rmsnorm-rope
-- fusion-rope-kv-write
-- fusion-silu-mul-quant
 - gated-linear-attn
 - gemm-bf16
 - gemm-fp8

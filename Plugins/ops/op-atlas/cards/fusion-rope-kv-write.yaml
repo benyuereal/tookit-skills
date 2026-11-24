@@ -175,6 +175,33 @@ last_verdict:
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 446.6
+  bottleneck:
+    bound: memory
+    root_cause: rope+分页 KV 写融合：3读3写=50.3MB，实测 447 GB/s（112.7µs）
+    evidence:
+    - kind: ratio
+      what: MBU = 实测带宽 / 1:1 档 achievable(1680 或对应档)
+      value: 447 GB/s
+      reproduce: python3 -I scripts/floor.py --card fusion-rope-kv-write --json
+    - kind: ablation
+      what: 对照同字节纯 copy 的上限（bw-ladder 2_rw_1to1 1680）
+      value: 见 bw-ladder.yaml
+      reproduce: python3 -I scripts/bw_calibrate.py
+    caliber: achieved_bw 由 perf record 的 median_us 与 traffic_passes 算出
+  resources:
+    vgpr: null
+    lds_per_cta: null
+    ctas_per_cu: null
+    waves_per_cu: null
+    achieved_bw: 446.6
+    bw_util: 0.266
+    proxies:
+      wait_inst_lds_per_inst_lds: null
+      lds_per_mfma: null
+    source: 厂商库内置 kernel（lightop/aiter），本地无 .so、未单独采 PMC；achieved_bw 由 perf/*.json 的 median_us 算出
+    status: partial
+  rounds: 1
+  verdict: adopt
 modify_path:
   kind: replace-call
   what: rope 后再单独 scatter 写 KV 的两段换成同一个融合入口
@@ -214,3 +241,9 @@ floor_inputs:
   t_source: results
   basis: 3读3写 = 2×(q 2048×32×128×2B=16.8MB + k 4.2MB + v 4.2MB) = 50.3MB；t=112.7 µs 是 lightop-fused-fp8-cache 的 median_us；被原地写入的 k_buffer/v_buffer 未计入
   evidence: Plugins/ops/op-atlas/perf/fusion-rope-kv-write.json
+progress:
+  stage: S4
+  since: 2026-11-24T09:30
+  blocked_by: null
+  last_verdict: adopt
+  rounds: 1

@@ -179,6 +179,33 @@ last_verdict:
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 601.9
+  bottleneck:
+    bound: memory
+    root_cause: norm+rope 融合省掉 norm 输出再读一次：2读2写=67.1MB，实测 602 GB/s（111.5µs）
+    evidence:
+    - kind: ratio
+      what: MBU = 实测带宽 / 1:1 档 achievable(1680 或对应档)
+      value: 602 GB/s
+      reproduce: python3 -I scripts/floor.py --card fusion-rmsnorm-rope --json
+    - kind: ablation
+      what: 对照同字节纯 copy 的上限（bw-ladder 2_rw_1to1 1680）
+      value: 见 bw-ladder.yaml
+      reproduce: python3 -I scripts/bw_calibrate.py
+    caliber: achieved_bw 由 perf record 的 median_us 与 traffic_passes 算出
+  resources:
+    vgpr: null
+    lds_per_cta: null
+    ctas_per_cu: null
+    waves_per_cu: null
+    achieved_bw: 601.9
+    bw_util: 0.358
+    proxies:
+      wait_inst_lds_per_inst_lds: null
+      lds_per_mfma: null
+    source: 厂商库内置 kernel（lightop/aiter），本地无 .so、未单独采 PMC；achieved_bw 由 perf/*.json 的 median_us 算出
+    status: partial
+  rounds: 1
+  verdict: adopt
 modify_path:
   kind: replace-call
   what: rmsnorm 后再调 rope 两段换成 aiter.fused_qk_rmsnorm_rope
@@ -216,3 +243,9 @@ floor_inputs:
   is_reduction: true
   basis: 2读2写 = 4×2048×32×128×2B = 67.1MB；t=111.5 µs 是 prefill-2k 档的 median_us
   evidence: Plugins/ops/op-atlas/perf/fusion-rmsnorm-rope.json
+progress:
+  stage: S4
+  since: 2026-11-24T09:30
+  blocked_by: null
+  last_verdict: adopt
+  rounds: 1

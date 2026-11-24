@@ -209,6 +209,33 @@ last_verdict:
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 1049.0
+  bottleneck:
+    bound: memory
+    root_cause: 算子把 add+norm+量化融成一趟：2读2写=268.4MB，实测 1049 GB/s（255.9µs）
+    evidence:
+    - kind: ratio
+      what: MBU = 实测带宽 / 1:1 档 achievable(1680 或对应档)
+      value: 1049 GB/s
+      reproduce: python3 -I scripts/floor.py --card fusion-add-rmsnorm-quant --json
+    - kind: ablation
+      what: 对照同字节纯 copy 的上限（bw-ladder 2_rw_1to1 1680）
+      value: 见 bw-ladder.yaml
+      reproduce: python3 -I scripts/bw_calibrate.py
+    caliber: achieved_bw 由 perf record 的 median_us 与 traffic_passes 算出
+  resources:
+    vgpr: null
+    lds_per_cta: null
+    ctas_per_cu: null
+    waves_per_cu: null
+    achieved_bw: 1049.0
+    bw_util: 0.624
+    proxies:
+      wait_inst_lds_per_inst_lds: null
+      lds_per_mfma: null
+    source: 厂商库内置 kernel（lightop/aiter），本地无 .so、未单独采 PMC；achieved_bw 由 perf/*.json 的 median_us 算出
+    status: partial
+  rounds: 1
+  verdict: adopt
 modify_path:
   kind: replace-call
   what: torch 分步（x+r → rmsnorm → 动态量化）换成单个 lightop 入口
@@ -246,3 +273,9 @@ floor_inputs:
   is_reduction: true
   basis: 2读2写 = 4×8192×4096×2B = 268.4MB（perf 记录 writes=3 时代的口径；semantics 已修正为 2 写，见卡片 E36 记录）；t=255.9 µs 是 prefill-8k 最快档的 median_us
   evidence: Plugins/ops/op-atlas/perf/fusion-add-rmsnorm-quant.json
+progress:
+  stage: S4
+  since: 2026-11-24T09:30
+  blocked_by: null
+  last_verdict: adopt
+  rounds: 1
