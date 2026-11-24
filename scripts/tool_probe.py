@@ -275,6 +275,250 @@ def probe_kfd():
     return "missing", "/dev/kfd 不存在（无 GPU）"
 
 
+
+
+# ---------------------------------------------------------------- 六类扩展探测
+# 业主 2026-11-24：工具要按六类注册，目标是「充分的排查定位能力」。
+# 每一类都要有真跑证据；没有证据的一律 unverified，不许写 available。
+
+def probe_hipgdb():
+    """AMD 的 GPU 调试器叫 hipgdb，不是 rocgdb。第一版按 rocgdb 判 missing 是错的。"""
+    for c in ("/opt/dtk/bin/hipgdb", "hipgdb"):
+        if which(c) or Path(c).is_file():
+            rc, out = run([c, "--version"])
+            if rc == 0:
+                ver = out.splitlines()[0] if out else "?"
+                return "available", "%s; %s" % (c, ver[:60])
+    return "missing", "hipgdb 不在 /opt/dtk/bin 也不在 PATH"
+
+
+def probe_rocm_bandwidth_test():
+    for c in ("/opt/dtk/bin/rocm-bandwidth-test", "rocm-bandwidth-test"):
+        if which(c) or Path(c).is_file():
+            return "available", "%s exists (not run: occupies whole card ~30s)" % c
+    return "missing", "rocm-bandwidth-test not under /opt/dtk/bin"
+
+
+def probe_rocminfo():
+    c = which("rocminfo") or "/opt/dtk/bin/rocminfo"
+    if not (which(c) or Path(c).is_file()):
+        return "missing", "rocminfo absent"
+    rc, out = run([c], timeout=60)
+    if rc != 0:
+        return "degraded", "rocminfo rc=%s" % rc
+    return "available", "enumerated %d Agents" % out.count("Agent ")
+
+
+def probe_builtin_readelf_nm():
+    if not which("hipcc"):
+        return "missing", "needs hipcc to build a binary first"
+    tmp = Path(tempfile.mkdtemp())
+    src = tmp / "k.hip"
+    # 要可执行文件（带符号表），所以必须有 main
+    src.write_text('#include <hip/hip_runtime.h>\n'
+                   'extern "C" __global__ void k(float* a){a[threadIdx.x]=1.f;}\n'
+                   'int main(){float* d; hipMalloc(&d, 256*sizeof(float));\n'
+                   '  k<<<1,256>>>(d); hipDeviceSynchronize(); return 0;}\n',
+                   encoding="utf-8")
+    exe = tmp / "kexe"
+    rc, _ = run(["hipcc", "-O3", "--offload-arch=gfx938", str(src), "-o", str(exe)],
+                timeout=180)
+    if rc != 0:
+        return "degraded", "build failed, cannot verify"
+    have = {n: bool(which(n)) for n in ("readelf", "nm", "c++filt", "addr2line")}
+    missing = [k for k, v in have.items() if not v]
+    if missing:
+        return "degraded", "missing %s" % missing
+    rc2, out2 = run(["readelf", "-SW", str(exe)])
+    rc3, out3 = run(["nm", "-C", str(exe)])
+    has_text = ".text" in out2
+    has_sym = len(out3.splitlines()) > 3
+    if has_text and has_sym:
+        return "available", "readelf/nm/c++filt/addr2line all present; .text + symtab readable"
+    return "degraded", "readelf .text=%s nm sym=%s" % (has_text, has_sym)
+
+
+def probe_dccobjdump_extract():
+    tool = REPO / "Plugins/ops/skills/op-hip-compile/inspect_so.py"
+    if tool.is_file():
+        return "available", "usable via inspect_so.py wrapper (see inspect_so probe)"
+    return "missing", "inspect_so.py absent"
+
+
+def probe_hipcc_resource_usage():
+    """hipcc --resource-usage: docs claim it shows VGPR/LDS. MEASURED: unsupported."""
+    if not which("hipcc"):
+        return "missing", "hipcc not in PATH"
+    tmp = Path(tempfile.mkdtemp())
+    src = tmp / "k.hip"
+    src.write_text('#include <hip/hip_runtime.h>\n'
+                   'extern "C" __global__ void k(float* a){a[threadIdx.x]=1.f;}\n',
+                   encoding="utf-8")
+    rc, out = run(["hipcc", "-O3", "--offload-arch=gfx938", "--resource-usage",
+                   str(src), "-o", str(tmp / "k")], timeout=180)
+    if rc == 0 and ("VGPR" in out or "vgpr" in out):
+        return "available", "emits VGPR/SGPR"
+    return "missing", ("this DTK reports 'unsupported option --resource-usage' "
+                       "(the surfaces.yaml line is wrong)")
+
+
+def probe_hipcc_dumpversion():
+    p = which("hipcc")
+    if not p:
+        return "missing", "hipcc not in PATH"
+    rc, out = run([p, "-dumpversion"])
+    if rc == 0 and out.strip():
+        return "available", "hipcc %s" % out.strip().splitlines()[0][:40]
+    return "degraded", "rc=%s" % rc
+
+
+def probe_hipconfig():
+    c = which("hipconfig") or "/opt/dtk/bin/hipconfig"
+    if not (which(c) or Path(c).is_file()):
+        return "missing", "hipconfig absent"
+    rc, out = run([c, "--version"], timeout=30)
+    if rc == 0 and out.strip():
+        return "available", out.strip().splitlines()[0][:70]
+    rc2, out2 = run([c], timeout=30)
+    if out2.strip():
+        return ("available" if rc2 == 0 else "degraded"), out2.strip().splitlines()[0][:70]
+    return "degraded", "no output"
+
+
+def probe_numeric_tools():
+    try:
+        import numpy
+        np_v = numpy.__version__
+    except ImportError:
+        return "missing", "numpy absent"
+    try:
+        import torch
+        t_v = torch.__version__
+    except ImportError:
+        return "degraded", "numpy %s present, torch absent (no GPU-side diff)" % np_v
+    import numpy as np
+    a = np.array([1.0, 2.0], dtype=np.float16)
+    b = np.array([1.0009765625, 2.0], dtype=np.float16)
+    # 用 fp16 自身的 spacing 算 ULP，不用 float32 的
+    diff = np.abs(a.astype(np.float32) - b.astype(np.float32))
+    ulp = diff / np.spacing(a).astype(np.float32)
+    ok = bool(np.isclose(ulp[0], 1.0))
+    return ("available" if ok else "degraded",
+            "numpy %s / torch %s; ULP=%.2f (expect 1.00)" % (np_v[:6], t_v[:6], ulp[0]))
+
+
+def probe_nan_inf():
+    try:
+        import torch
+    except ImportError:
+        return "missing", "torch absent"
+    t = torch.tensor([1.0, float("nan"), float("inf")])
+    n = int(torch.isnan(t).sum())
+    i = int(torch.isinf(t).sum())
+    return ("available" if (n == 1 and i == 1) else "degraded",
+            "isnan=%d isinf=%d (expect 1 each)" % (n, i))
+
+
+def probe_dmesg():
+    p = which("dmesg")
+    if not p:
+        return "missing", "dmesg absent"
+    rc, out = run([p], timeout=30)
+    if rc != 0:
+        return "degraded", "dmesg rc=%s (may need privileges)" % rc
+    gpu = sum(1 for ln in out.splitlines()
+              if any(k in ln.lower() for k in ("amdgpu", "hcu", "gpu", "kfd")))
+    return "available", "%d lines, %d GPU-related" % (len(out.splitlines()), gpu)
+
+
+def probe_driver_version():
+    out = []
+    mod = Path("/sys/module/amdgpu/version")
+    if mod.is_file():
+        out.append("amdgpu %s" % mod.read_text().strip())
+    for cand in (Path("/opt/dtk/.info/version"), Path("/opt/dtk/version.txt")):
+        if cand.is_file():
+            out.append("DTK %s" % cand.read_text().strip().splitlines()[0][:40])
+            break
+    else:
+        rc, o = run(["/opt/dtk/bin/hipconfig", "--version"], timeout=30)
+        if rc == 0 and o.strip():
+            out.append(o.strip().splitlines()[0][:50])
+    if not out:
+        return "missing", "cannot read driver/DTK version"
+    return "available", "; ".join(out)
+
+
+def probe_gpu_reset():
+    p = which("hy-smi") or which("rocm-smi")
+    if not p:
+        return "missing", "no smi tool"
+    rc, out = run([p, "--showtemp"], timeout=30)
+    if rc != 0:
+        return "degraded", "%s --showtemp rc=%s" % (p, rc)
+    return "available", "can read temp/state (reset itself needs root, unverified)"
+
+
+def probe_occupancy_smi():
+    p = which("hy-smi")
+    if not p:
+        return "missing", "hy-smi absent"
+    rc, out = run([p], timeout=30)
+    if rc != 0:
+        return "degraded", "hy-smi rc=%s" % rc
+    return ("available", "HCU%% utilisation readable") if "%" in out \
+        else ("degraded", "no utilisation column")
+
+
+def probe_time_align():
+    f = REPO / "scripts/pmc.py"
+    if not f.is_file():
+        return "missing", "pmc.py absent"
+    src = f.read_text(encoding="utf-8")
+    if "BeginNs" in src and "EndNs" in src:
+        return "available", "PMC CSV carries BeginNs/EndNs, alignable with wall clock"
+    return "degraded", "pmc.py does not use BeginNs/EndNs"
+
+
+def probe_counter_probe():
+    f = REPO / "scripts/pmc_probe.py"
+    if not f.is_file():
+        return "missing", "pmc_probe.py absent"
+    rc, out = run([sys.executable, "-I", str(f), "--selftest"])
+    return ("available", "selftest passes; three-state table for any PMC CSV") \
+        if rc == 0 else ("degraded", "selftest failed")
+
+
+def probe_bounds_check():
+    if not which("hipcc"):
+        return "missing", "hipcc not in PATH"
+    tmp = Path(tempfile.mkdtemp())
+    src = tmp / "k.hip"
+    src.write_text('#include <hip/hip_runtime.h>\n'
+                   'extern "C" __global__ void k(float* a){a[threadIdx.x]=1.f;}\n',
+                   encoding="utf-8")
+    rc, out = run(["hipcc", "-O1", "-g", "--offload-arch=gfx938",
+                   "-fsanitize=address", str(src), "-o", str(tmp / "k")], timeout=180)
+    return ("available", "hipcc -fsanitize=address works") if rc == 0 \
+        else ("missing", "hipcc -fsanitize=address fails: %s"
+              % out[-100:].replace("\n", " "))
+
+
+def probe_bandwidthtest():
+    for c in ("/opt/dtk/bin/BandwidthTest", "BandwidthTest"):
+        if which(c) or Path(c).is_file():
+            return "available", "%s exists (not run: occupies whole card)" % c
+    return "missing", "BandwidthTest not under /opt/dtk/bin"
+
+
+def probe_miopendriver():
+    for c in ("/opt/dtk/bin/MIOpenDriver", "MIOpenDriver"):
+        if which(c) or Path(c).is_file():
+            return "available", "%s exists (not run)" % c
+    return "missing", "MIOpenDriver absent"
+
+
+
 TOOLS = [
     # (id, 覆盖阶段, 用途, 探测函数, 缺失时的降级路径, 补的代价)
     ("hipprof", "S3/S4", "trace + PMC 采集入口", probe_hipprof,
@@ -304,6 +548,49 @@ TOOLS = [
      "无保障：多个 bench 可能同时上卡，结论全部作废", "本机已有"),
     ("kfd", "全阶段", "GPU 存在性", probe_kfd,
      "无法跑任何实测", "硬件"),
+
+    # ---- 六类扩展（2026-11-24 业主：充分排查定位能力）
+    ("hipgdb", "S6", "GPU 调试器（AMD 叫 hipgdb，不是 rocgdb）", probe_hipgdb,
+     "只能靠 printf / 边界检查", "本机已有"),
+    ("builtin_readelf_nm", "S4/S6", "静态分析链 readelf/nm/c++filt/addr2line",
+     probe_builtin_readelf_nm,
+     "缺一环就少一步：无 nm 看不到符号，无 addr2line 无法把崩溃地址落到行",
+     "系统自带"),
+    ("dccobjdump_extract", "S4", "从 .so 抽设备 ELF（资源画像入口）",
+     probe_dccobjdump_extract, "资源画像只能靠 hipcc 中间产物", "已有"),
+    ("hipcc_resource_usage", "S4", "hipcc --resource-usage 看 VGPR/LDS",
+     probe_hipcc_resource_usage, "**改用 inspect_so.py**（本机该选项不支持）",
+     "本机不支持"),
+    ("hipcc_dumpversion", "全阶段", "编译器版本（可复现性的一部分）",
+     probe_hipcc_dumpversion, "只能记 hipcc 路径", "已有"),
+    ("hipconfig", "全阶段", "DTK/HIP 环境版本", probe_hipconfig,
+     "只能读 /opt/dtk 目录名", "已有"),
+    ("numeric_ulp", "S5/S6", "精度对拍 + ULP 计算", probe_numeric_tools,
+     "只能比 max_abs，说不出差几个 ULP", "numpy/torch 已有"),
+    ("nan_inf_scan", "S6", "NaN/Inf 扫描", probe_nan_inf,
+     "数值异常无法自动发现", "torch 已有"),
+    ("dmesg", "全阶段", "驱动/GPU 报错（崩溃、reset、掉卡）", probe_dmesg,
+     "崩溃只能靠现象猜", "需权限"),
+    ("driver_version", "全阶段", "驱动 + DTK 版本（可复现性）", probe_driver_version,
+     "版本不明 → 结论不可复现", "已有"),
+    ("gpu_reset", "S6", "GPU 状态/温度/reset 发现", probe_gpu_reset,
+     "卡住时无法判断是否掉卡", "已有（reset 需 root）"),
+    ("occupancy_smi", "S3/S4", "占用率采样（判断卡是否被别人占）", probe_occupancy_smi,
+     "无法判断卡空不空 → 测量可能被污染", "已有"),
+    ("time_align", "S3", "PMC 与墙钟时间对齐", probe_time_align,
+     "无法把计数器归因到某一次调用", "已有 BeginNs/EndNs"),
+    ("counter_probe", "S3/S4", "PMC 计数器可用性三态表", probe_counter_probe,
+     "决策树可能写了采不到的计数器", "已有"),
+    ("bounds_check", "S6", "越界/未初始化检测（sanitizer）", probe_bounds_check,
+     "越界只能靠观察崩溃", "待验证"),
+    ("rocm_bandwidth_test", "S1", "厂商标定带宽（与 bw_calibrate 交叉验证）",
+     probe_rocm_bandwidth_test, "只有我们自己的标定，无第二来源", "已有（未跑）"),
+    ("rocminfo", "全阶段", "GPU 枚举（Agent 数、架构）", probe_rocminfo,
+     "只能靠 torch 读 device_properties", "已有"),
+    ("bandwidth_test", "S1", "DTK 自带 BandwidthTest 交叉验证", probe_bandwidthtest,
+     "无第二来源", "已有（未跑）"),
+    ("miopen_driver", "S2", "厂家参考实现（conv/bn 等）", probe_miopendriver,
+     "无厂家基线可对", "已有（未跑）"),
 ]
 
 

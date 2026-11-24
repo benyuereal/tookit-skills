@@ -1,0 +1,363 @@
+# 工具注册表 —— 六类排查定位能力
+#
+# **硬规则：没有 probe 证据不许写「实测可用」（status: available）。**
+# 本文件由 scripts/gen_tool_registry.py 从 tool_probe.py 的实跑结果生成，
+# 每条 status 都对应一次真实探测，证据在 probe 字段里。
+#
+# 复跑：python3 -I scripts/tool_probe.py --write-registry
+# 校验：python3 -I scripts/gen_tool_registry.py --check
+
+version: 1
+registered_on: 2026-11-24
+machine: gfx938 / BW1100 / DTK 26.04
+generated_by: scripts/tool_probe.py
+
+tools:
+
+  # ===== ① 运行时 =====
+  # 这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？
+  - id: counter_probe
+    category: runtime
+    question: 这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？
+    command: python3 -I scripts/pmc_probe.py /tmp/pmcout/x.csv
+    probe: selftest passes; three-state table for any PMC CSV
+    status: available
+    fallback: 决策树可能写了采不到的计数器
+    cost: 已有
+    stage: S3/S4
+  - id: hipprof
+    category: runtime
+    question: 这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？
+    command: "hipprof --pmc --pmc-type 3 -o /tmp/pmcout/x python3 bench.py   # 注意：不认 `--`"
+    probe: 路径 /opt/dtk/bin/hipprof；--pmc=True；--hip-trace=True
+    status: available
+    fallback: 无替代：只能靠耗时消融（改一处看差多少）
+    cost: 外部依赖，本机已有
+    stage: S3/S4
+  - id: hipprof_pmc_csv
+    category: runtime
+    question: 这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？
+    command: "head -1 /tmp/pmcout/x.csv | tr ',' '\\n' | head -30"
+    probe: "CSV 206 列，关键列齐全；实例列如 TA_TA_BUSY[0..]"
+    status: available
+    fallback: 退化为「只有墙钟」，归因只能靠消融
+    cost: 需要空闲 GPU（约 20s）
+    stage: S3/S4
+  - id: hy_smi
+    category: runtime
+    question: 这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？
+    command: hy-smi --showclocks ; hy-smi
+    probe: hy-smi 可读（13 行）
+    status: available
+    fallback: 无法确认 sclk → 结论不可复现（本仓栽过）
+    cost: 本机已有
+    stage: S3/S4/S6
+  - id: occupancy_smi
+    category: runtime
+    question: 这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？
+    command: "hy-smi   # 看 HCU% 判断卡是否被别人占"
+    probe: "HCU%% utilisation readable"
+    status: available
+    fallback: 无法判断卡空不空 → 测量可能被污染
+    cost: 已有
+    stage: S3/S4
+  - id: time_align
+    category: runtime
+    question: 这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？
+    command: "python3 -I scripts/pmc.py /tmp/pmcout/x.csv --kernel <name> --cu 64 --json"
+    probe: PMC CSV carries BeginNs/EndNs, alignable with wall clock
+    status: available
+    fallback: 无法把计数器归因到某一次调用
+    cost: 已有 BeginNs/EndNs
+    stage: S3
+
+  # ===== ② 崩溃 =====
+  # 它为什么崩/挂，崩在哪一行？
+  - id: bounds_check
+    category: crash
+    question: 它为什么崩/挂，崩在哪一行？
+    command: hipcc -O1 -g --offload-arch=gfx938 -fsanitize=address k.hip -o k
+    probe: "hipcc -fsanitize=address fails: ux-gnu/crt1.o:(_start) dcc: error: linker command failed with exit code 1 (use -v to see invocation)"
+    status: missing
+    fallback: 越界只能靠观察崩溃
+    cost: 待验证
+    stage: S6
+  - id: dmesg
+    category: crash
+    question: 它为什么崩/挂，崩在哪一行？
+    command: "dmesg | grep -iE 'amdgpu|kfd|gpu' | tail -20"
+    probe: 16648 lines, 61 GPU-related
+    status: available
+    fallback: 崩溃只能靠现象猜
+    cost: 需权限
+    stage: 全阶段
+  - id: gpu_reset
+    category: crash
+    question: 它为什么崩/挂，崩在哪一行？
+    command: hy-smi --showtemp
+    probe: can read temp/state (reset itself needs root, unverified)
+    status: available
+    fallback: 卡住时无法判断是否掉卡
+    cost: 已有（reset 需 root）
+    stage: S6
+  - id: hipgdb
+    category: crash
+    question: 它为什么崩/挂，崩在哪一行？
+    command: /opt/dtk/bin/hipgdb --version
+    probe: /opt/dtk/bin/hipgdb; GNU gdb (GDB) 15.2
+    status: available
+    fallback: 只能靠 printf / 边界检查
+    cost: 本机已有
+    stage: S6
+  - id: rocgdb
+    category: crash
+    question: 它为什么崩/挂，崩在哪一行？
+    command: "command -v rocgdb   # 本机没有，用 hipgdb"
+    probe: 只有通用 gdb；无 ROCm 扩展（GPU 侧无 coredump 支持）
+    status: degraded
+    fallback: 靠 kernel 内的 printf / 边界检查
+    cost: 本机未验证
+    stage: S6
+
+  # ===== ③ 静态 =====
+  # 这个二进制里有什么（符号、段、资源字段）？
+  - id: builtin_readelf_nm
+    category: static
+    question: 这个二进制里有什么（符号、段、资源字段）？
+    command: "readelf -SW <exe> ; nm -C <exe> ; addr2line -e <exe> <addr>"
+    probe: readelf/nm/c++filt/addr2line all present; .text + symtab readable
+    status: available
+    fallback: 缺一环就少一步：无 nm 看不到符号，无 addr2line 无法把崩溃地址落到行
+    cost: 系统自带
+    stage: S4/S6
+  - id: dccobjdump
+    category: static
+    question: 这个二进制里有什么（符号、段、资源字段）？
+    command: "/opt/dtk/llvm/bin/dccobjdump --extract-elf=all --inputs=<so>"
+    probe: "dccobjdump 可用；--architecture 支持列表里**不**含 gfx938（已知只到 gfx928）"
+    status: degraded
+    fallback: 用 hipcc --save-temps 拿中间产物
+    cost: 本机有但 --architecture 只到 gfx928
+    stage: S4
+  - id: dccobjdump_extract
+    category: static
+    question: 这个二进制里有什么（符号、段、资源字段）？
+    command: "python3 -I Plugins/ops/skills/op-hip-compile/inspect_so.py <so>"
+    probe: usable via inspect_so.py wrapper (see inspect_so probe)
+    status: available
+    fallback: 资源画像只能靠 hipcc 中间产物
+    cost: 已有
+    stage: S4
+  - id: llvm_objdump
+    category: static
+    question: 这个二进制里有什么（符号、段、资源字段）？
+    command: "command -v llvm-objdump   # 本机没有"
+    probe: llvm-objdump 不存在（助记符级反汇编缺这一入口）
+    status: missing
+    fallback: "**放弃**：只用资源字段 + 微基准推断，不许声称改了一条指令"
+    cost: 本机无；不打算补（已知死路）
+    stage: S4
+  - id: llvm_readelf
+    category: static
+    question: 这个二进制里有什么（符号、段、资源字段）？
+    command: "/opt/dtk/llvm/bin/llvm-readelf --notes <so>-hipv4-amdgcn-amd-amdhsa--gfx938.out"
+    probe: "AOMP-16.0-45 (http://github.com/ROCm-Developer-Tools/aomp):"
+    status: available
+    fallback: 无替代：资源画像做不了 → S4 只能标 partial
+    cost: 本机已有
+    stage: S4
+
+  # ===== ④ 构建 =====
+  # 它被怎么编出来的，编译期能拿到什么？
+  - id: driver_version
+    category: build
+    question: 它被怎么编出来的，编译期能拿到什么？
+    command: cat /sys/module/amdgpu/version ; hipconfig --version
+    probe: 6.3.26113
+    status: available
+    fallback: 版本不明 → 结论不可复现
+    cost: 已有
+    stage: 全阶段
+  - id: hipcc
+    category: build
+    question: 它被怎么编出来的，编译期能拿到什么？
+    command: hipcc -shared -fPIC -O3 --offload-arch=gfx938 k.hip -o k.so
+    probe: 编译 gfx938 .so 成功（16120 B）
+    status: available
+    fallback: 只能用现成库，不能自研实现
+    cost: 本机已有
+    stage: S4/S6
+  - id: hipcc_dumpversion
+    category: build
+    question: 它被怎么编出来的，编译期能拿到什么？
+    command: hipcc -dumpversion
+    probe: hipcc 17.0.0
+    status: available
+    fallback: 只能记 hipcc 路径
+    cost: 已有
+    stage: 全阶段
+  - id: hipcc_resource_usage
+    category: build
+    question: 它被怎么编出来的，编译期能拿到什么？
+    command: "hipcc --resource-usage ...   # 本机报 unsupported"
+    probe: "this DTK reports 'unsupported option --resource-usage' (the surfaces.yaml line is wrong)"
+    status: missing
+    fallback: "**改用 inspect_so.py**（本机该选项不支持）"
+    cost: 本机不支持
+    stage: S4
+  - id: hipconfig
+    category: build
+    question: 它被怎么编出来的，编译期能拿到什么？
+    command: hipconfig --version
+    probe: 6.3.26113
+    status: available
+    fallback: 只能读 /opt/dtk 目录名
+    cost: 已有
+    stage: 全阶段
+  - id: inspect_so
+    category: build
+    question: 它被怎么编出来的，编译期能拿到什么？
+    command: "python3 -I Plugins/ops/skills/op-hip-compile/inspect_so.py <so> --json"
+    probe: 能读 VGPR/spill/LDS 并算 CTA/CU
+    status: available
+    fallback: S4 只能手工做，无法自动化
+    cost: 已有脚本，需 hipcc
+    stage: S4
+
+  # ===== ⑤ 数值 =====
+  # 数值对不对，差多少？
+  - id: nan_inf_scan
+    category: numeric
+    question: 数值对不对，差多少？
+    command: "python3 -I -c \"import torch; torch.isnan(x).sum()\""
+    probe: isnan=1 isinf=1 (expect 1 each)
+    status: available
+    fallback: 数值异常无法自动发现
+    cost: torch 已有
+    stage: S6
+  - id: numeric_ulp
+    category: numeric
+    question: 数值对不对，差多少？
+    command: "python3 -I -c \"import numpy as np; ...\"   # 见 bench 里的 compare()"
+    probe: numpy 1.25.0 / torch 2.11.0; ULP=1.00 (expect 1.00)
+    status: available
+    fallback: 只能比 max_abs，说不出差几个 ULP
+    cost: numpy/torch 已有
+    stage: S5/S6
+
+  # ===== ⑥ 环境 =====
+  # 环境是否可复现（时钟/版本/卡占用）？
+  - id: bandwidth_test
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: /opt/dtk/bin/BandwidthTest
+    probe: "/opt/dtk/bin/BandwidthTest exists (not run: occupies whole card)"
+    status: available
+    fallback: 无第二来源
+    cost: 已有（未跑）
+    stage: S1
+  - id: bw_calibrate
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: python3 -I scripts/bw_calibrate.py
+    probe: 四档齐全，sclk=1350
+    status: available
+    fallback: 用 bw-ladder 的静态值，无法重标定
+    cost: 已有，需 GPU 约 2 分钟
+    stage: S1
+  - id: compute_peak
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: python3 -I Plugins/ops/skills/op-roofline/tools/calibrate_bf16_peak.py
+    probe: bf16=279 TF，reproduce=Plugins/ops/skills/op-roofline/tools/calibrate_bf16_peak.py
+    status: available
+    fallback: 用 constants.yaml 的既定值，无法重标定
+    cost: 已有
+    stage: S1
+  - id: flock
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: "flock /tmp/opbench-gpu.lock -c '<bench>'"
+    probe: flock 可用；锁文件 /tmp/opbench-gpu.lock（已存在）
+    status: available
+    fallback: 无保障：多个 bench 可能同时上卡，结论全部作废
+    cost: 本机已有
+    stage: 全阶段
+  - id: kfd
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: "ls /dev/kfd /dev/dri/renderD*"
+    probe: "/dev/kfd 存在，renderD* 8 个"
+    status: available
+    fallback: 无法跑任何实测
+    cost: 硬件
+    stage: 全阶段
+  - id: miopen_driver
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: /opt/dtk/bin/MIOpenDriver
+    probe: /opt/dtk/bin/MIOpenDriver exists (not run)
+    status: available
+    fallback: 无厂家基线可对
+    cost: 已有（未跑）
+    stage: S2
+  - id: rocm_bandwidth_test
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: /opt/dtk/bin/rocm-bandwidth-test
+    probe: "/opt/dtk/bin/rocm-bandwidth-test exists (not run: occupies whole card ~30s)"
+    status: available
+    fallback: 只有我们自己的标定，无第二来源
+    cost: 已有（未跑）
+    stage: S1
+  - id: rocminfo
+    category: env
+    question: 环境是否可复现（时钟/版本/卡占用）？
+    command: "rocminfo | grep -c Agent"
+    probe: enumerated 16 Agents
+    status: available
+    fallback: 只能靠 torch 读 device_properties
+    cost: 已有
+    stage: 全阶段
+
+# ===== playbooks：按顺序的工具链 =====
+# 规则：chain 里的每个 id 必须在上面的 tools 里存在（gen --check 会验）。
+playbooks:
+  - id: correctness-failure
+    when: 正确性门不过（max_abs 超容差 / cosine 掉 / bit_exact 不成立）
+    chain:
+      - numeric_ulp
+      - nan_inf_scan
+      - dmesg
+      - builtin_readelf_nm
+      - hipgdb
+    why: 先定位数值本身（差几个 ULP、有无 NaN/Inf），再排除驱动报错，然后看符号/地址，最后才上调试器。顺序反了会花几小时在调试器里找一个 ULP 的问题。
+  - id: perf-below-target
+    when: 正确性过了但 remaining 大、或比基线慢
+    chain:
+      - hy_smi
+      - flock
+      - hipprof_pmc_csv
+      - counter_probe
+      - inspect_so
+      - time_align
+    why: 先确认卡没被别人占（否则数据全废），再采 PMC，用 counter_probe 确认要用的计数器真的存在，然后用 inspect_so 定驻留档，最后时间对齐把计数器归到具体调用。
+  - id: crash-or-hang
+    when: 崩、挂、或结果随机不可复现
+    chain:
+      - dmesg
+      - gpu_reset
+      - bounds_check
+      - hipgdb
+      - builtin_readelf_nm
+    why: 先看是不是掉卡（dmesg/gpu_reset），再查越界（sanitizer），然后才用 hipgdb 看栈。跳过 dmesg 会把「掉卡」误诊成「kernel 写错」。
+  - id: not-reproducible
+    when: 同一份代码两次跑结果不同，或换机器结论变了
+    chain:
+      - hy_smi
+      - driver_version
+      - hipcc_dumpversion
+      - hipconfig
+      - bw_calibrate
+      - compute_peak
+    why: 先锁时钟（sclk 档位不一致是最常见原因），再钉死版本三件套，最后确认分母有没有漂（带宽/算力峰值都要重标定）。
