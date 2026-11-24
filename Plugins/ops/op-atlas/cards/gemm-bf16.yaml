@@ -180,6 +180,29 @@ last_verdict:
     achieved_gbs: 190.8
     achieved_tf: 260.5
     precision: bf16
+  comparison:
+    baseline: F.linear（torch 高层 API）
+    baseline_role: self
+    baseline_impl: torch.nn.functional.linear
+    cand: torch.mm
+    cand_us: null
+    base_us: null
+    ratio: 1.1
+    significant: true
+    verdict: 同形状 bf16 GEMM：torch.mm 比 F.linear 跨 3 形状几何平均快 1.10x
+    semantics_aligned: true
+    alignment:
+      inputs: 2
+      outputs: 1
+      traffic_passes: 3
+      note: 两者都走 hipBLASLt；差异来自 API 路径的布局处理，不是算法
+    not_comparable_to: 不同库之间（需 rank_impls.py 交替测）
+    evidence: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/results/gemm-crossover.json
+    checked_on: '2026-11-24'
+    cand_us_note: 该对比只有比值，绝对耗时见同文件的 sweep_m_4096
+  inputs: 2
+  outputs: 1
+  traffic_passes: 3
 modify_path:
   kind: env-flag
   what: 走 hipBLASLt 的算法选择

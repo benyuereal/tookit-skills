@@ -87,6 +87,28 @@ last_verdict:
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 530.7
+  comparison:
+    baseline: torch 三步分拆（x+b → silu → 乘）
+    baseline_role: same_family
+    baseline_impl: torch split 三步
+    cand: lightop.FuseBiasSwiGLU
+    cand_us: 1517.4
+    base_us: 3426.2
+    ratio: 2.256
+    significant: true
+    verdict: 融合快 2.26x（|Δ|=1908.8 µs ≫ 3×MAD=15.8 µs）
+    semantics_aligned: true
+    alignment:
+      inputs: 1
+      outputs: 1
+      traffic_passes: 3
+      note: 融合 805.3MB vs 分步 1879.1MB；分步多一次中间态往返，**是融合本身要省的代价**，因此这组只能证明「融合省了往返」，不能当同字节性能基线。同字节对照需另找实现（当前无）
+    not_comparable_to: 无（分步是 reference 角色，不作性能基线）
+    evidence: Plugins/ops/skills/op-optimize/cases/001-swiglu-fused-vs-split/results/result.json
+    checked_on: '2026-11-24'
+  inputs: 1
+  outputs: 1
+  traffic_passes: 3
 modify_path:
   kind: replace-call
   what: 三步 torch 换成 lightop 融合

@@ -111,6 +111,28 @@ last_verdict:
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 1017.9
+  comparison:
+    baseline: L0 全拆分（手工 permute → grouped GEMM → swiglu）
+    baseline_role: same_family
+    baseline_impl: L0 split
+    cand: L1 部分融合（lightop.fuse_groupgemm_permute_quant）
+    cand_us: 201.4
+    base_us: 342.7
+    ratio: 1.701
+    significant: true
+    verdict: M/exp=16 档 L1 比 L0 快 1.70x；M/exp>64 后 L0 反超（拐点在 32~64）
+    semantics_aligned: true
+    alignment:
+      inputs: 4
+      outputs: 1
+      traffic_passes: 3
+      note: 同一条五段流水线的两种融合边界；engine 级整链，非单 kernel
+    not_comparable_to: 单 kernel 的对比（这是 engine 级）
+    evidence: Plugins/ops/skills/op-optimize/cases/002-moe-pipeline/results/stage2b-ladder.json
+    checked_on: '2026-11-24'
+  inputs: 4
+  outputs: 1
+  traffic_passes: 3
 surfaces:
 - fusion-boundary
 - layout-pack
