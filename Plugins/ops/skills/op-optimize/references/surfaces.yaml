@@ -8,6 +8,16 @@
   cost: M
   expected_gain: ≤15%（受 ISA 与硬件 wave 上限约束，超过要重新查分母）
   precondition_check: python3 -I scripts/efficiency.py --record <results.json> --index 0 | grep -E 'ctas_per_cu|waves_per_cu'
+  transform:
+  - kind: param
+    what: '{BLOCK_M, num_warps, num_stages}'
+    candidates:
+    - BLOCK_M 256→128
+    - BLOCK_M 128→64
+    - num_warps 8→4
+    - num_stages 3→2
+    legality: LDS=(BLOCK_M*BLOCK_K + BLOCK_K*BLOCK_N)*2B*stages <= 65536; VGPR<=255; grid>=64
+    predicted_dir: 降 VGPR ⇒ CTA/CU 从 1 升到 2 ⇒ 延迟隐藏改善
 - id: grid-tail
   statement: grid 是否为 CU 数的整数倍；尾波占比多少
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
@@ -18,6 +28,14 @@
   cost: S
   expected_gain: ≤5%（尾块只影响最后一波）
   precondition_check: python3 -I -c "import json,sys;d=json.load(open('<results.json>'));print(d['metrics']['grid'])" | awk '{print $1%64}'
+  transform:
+  - kind: param
+    what: '{BLOCK_M, BLOCK_N}'
+    candidates:
+    - BLOCK_M 128→96（让 grid 落在 CU 整数倍）
+    - BLOCK_N 128→64（块数翻倍，尾波变小）
+    legality: grid=ceil(M/BM)*ceil(N/BN); grid % 64 越接近 0 越好
+    predicted_dir: 尾波占比从 X% 降到 <10% ⇒ 有效算力上升
 - id: prefetch-depth
   statement: 预取/流水深度是否真的是延迟杠杆（多半不是）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q2
@@ -28,6 +46,11 @@
   cost: S
   expected_gain: ≈0（已实测证伪：源码级预取深度不可控）
   precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep SQ_WAIT_INST_LDS
+  transform:
+  - kind: code
+    what: 软件预取多级缓冲（source-level）
+    legality: 实测证伪：编译器会重切 vmcnt，源码级深度不可控（isa-census §四点六）
+    predicted_dir: 无（已判死，仅记录）
 - id: barrier-width
   statement: 每个 barrier 之间摊了多少工作；barrier 是否过密
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
@@ -38,6 +61,11 @@
   cost: M
   expected_gain: ≤8%
   precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep -E 'SQ_WAIT_INST_LDS|SQ_INSTS_VALU'
+  transform:
+  - kind: code
+    what: 加大每个 barrier 之间摊的工作量（合并循环迭代）
+    legality: 需保证不改变语义；barrier 数下降但单次跨度增大
+    predicted_dir: SQ_WAIT_INST_LDS/SQ_INSTS_VALU 下降 ⇒ 同步开销减少
 - id: layout-pack
   statement: 是否每一步都付一次 pack/shuffle/转置
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
@@ -48,6 +76,14 @@
   cost: M
   expected_gain: 15~40%（多一趟 HBM 往返就是线性收益）
   precondition_check: python3 -I scripts/floor.py --card <card> --json | grep -E 'bytes_mb|remaining'
+  transform:
+  - kind: param
+    what: '{vec_width, stride_align}'
+    candidates:
+    - vec_width 2→4（dwordx2→dwordx4）
+    - stride 对齐 64B→128B
+    legality: N % vec_width == 0; addr % (vec_width*2) == 0
+    predicted_dir: 每步搬运趟数下降 ⇒ 有效带宽上升
 - id: table-miss
   statement: 该 shape 是否落在库的调优表里（未命中往往是最大收益）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
@@ -58,6 +94,14 @@
   cost: S
   expected_gain: ≤20%
   precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep TCC_MISS
+  transform:
+  - kind: param
+    what: '{tile_shape}（匹配库的调优表）'
+    candidates:
+    - BM/BN 对齐到库表里的已知 tile
+    - shape 改成库表覆盖的档位
+    legality: 需查该库的 tuning table；本仓无表则标 unknown
+    predicted_dir: 命中调优表 ⇒ 走厂商手调配置
 - id: fusion-boundary
   statement: 融合是否真的减少了 HBM 往返（同时警惕把并行 kernel 串成依赖链）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
@@ -68,6 +112,11 @@
   cost: L
   expected_gain: 20~60%（省下的往返次数 × 单趟成本）
   precondition_check: python3 -I scripts/floor.py --card <card> --json | grep traffic
+  transform:
+  - kind: code
+    what: 把相邻的 elementwise / reduction 融进同一 kernel
+    legality: 语义等价（输出份数一致）；LDS 预算够；不引入新依赖
+    predicted_dir: HBM 往返趟数 N→N-1 ⇒ 字节按比例下降
 - id: precision-drop
   statement: 能否降到 fp8/int8 且仍过契约容差
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q4
@@ -78,6 +127,14 @@
   cost: L
   expected_gain: 约 2×（fp8 相对 bf16 的理论上限比）
   precondition_check: python3 -I scripts/efficiency.py --ridge
+  transform:
+  - kind: param
+    what: '{dtype: bf16→fp8/int8}'
+    candidates:
+    - bf16→fp8-e4m3
+    - bf16→int8
+    legality: 需过 contract 容差；fp8 需 scale 校准；本机 fp8 是 2:1 双速率
+    predicted_dir: 字节减半 或 算力翻倍（取决于 bound）
 - id: split-k
   statement: split-K 切片数是否按 shape 单独搜过
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
@@ -88,6 +145,14 @@
   cost: S
   expected_gain: 10~30%（M 小 N/K 大时才有效）
   precondition_check: python3 -I -c "print(open('<results.json>').read().count('split'))"
+  transform:
+  - kind: param
+    what: '{num_split}'
+    candidates:
+    - num_split 1→2
+    - num_split 2→4
+    legality: K % (BK*num_split) 需为 0 或允许 padding；需额外归约步
+    predicted_dir: 小 M 时并行度上升 ⇒ 占用率改善；大 M 时增加归约开销
 - id: gather-path
   statement: 数据搬运（gather/scatter）是否在关键路径且串行
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
@@ -98,6 +163,11 @@
   cost: M
   expected_gain: 20~50%（取决于随机度）
   precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep TA_FLAT_READ_WAVEFRONTS
+  transform:
+  - kind: code
+    what: 把随机 gather 改成合并访问（重排索引或预取）
+    legality: 需证明重排不改变语义；额外索引内存可接受
+    predicted_dir: DRAM 事务数下降 ⇒ 有效带宽上升
 - id: cross-lane-fold
   statement: 跨 lane 归约是否用了更长指令序列（如 shfl 而非 bpermute）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q1
@@ -108,6 +178,13 @@
   cost: S
   expected_gain: ≤8%（已实测证伪：分块两趟全更慢）
   precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep -E 'SQ_INSTS_VALU|SQ_INSTS_LDS'
+  transform:
+  - kind: param
+    what: '{reduce_impl}'
+    candidates:
+    - __shfl_down_sync → ds_bpermute_b32
+    legality: 需 bit-exact（MQA 实测换后逐位一致）
+    predicted_dir: 归约指令序列变短 ⇒ issue 压力减小
 - id: slc-policy
   statement: 全局访存加 SLC/流式缓存提示（buffer_load ... slc）能否提速
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点五
@@ -127,6 +204,11 @@
     platform: hbird-gemm w12 packed GEMM
     why_scoped: hbird 实测 -13%（gate_up M=64/48 → 0.868x/0.869x，qkv 打平，bit-exact）。但那是 packed GEMM 的权重流，**权重在 tile 内没有复用**，所以 slc 只花掉了 prefetch ring 本来免费的 sector。有复用的访存模式（如 KV cache 反复读）不受此结论约束。
     promotion_rule: 需 ≥2 个不同作用域复现为负，才可升为全局 dead_end
+  transform:
+  - kind: isa
+    what: buffer_load 加 slc 修饰符
+    legality: N % 8 == 0; 地址 16B 对齐
+    predicted_dir: 已实测：packed GEMM 权重流 -13%（作用域内负结果，见 scope）
 - id: prefetch-depth-isa
   statement: 源码写几段预取/多少 lookahead，能否控制实际 waitcnt 深度
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#四点六
@@ -140,10 +222,11 @@
   cost: L
   expected_gain: ≈0（已实测 -1.3%）
   precondition_check: grep -oE "s_waitcnt (v|lgkm)cnt\([0-9]+\)" <X>.ISA | sort | uniq -c
-
-# ---- ISA 级 surface（2026-11-24 新增）
-# 详细定义在 data/ops/isa-surfaces.yaml（含实测计数与 check 命令）。
-# 这里只登记 id + class + 指向，避免两份定义。
+  transform:
+  - kind: isa
+    what: 调整 s_waitcnt 的 vmcnt/lgkmcnt 深度
+    legality: 实测证伪：编译器会重切分，源码不可控
+    predicted_dir: 无（已判死）
 - id: vmem-vector-width
   statement: 读/写的向量宽度是否用满（buffer_load/store 的 dwordxN）
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
@@ -156,7 +239,13 @@
   cost: M
   detail_ref: data/ops/isa-surfaces.yaml#vmem-vector-width
   verdict: open
-
+  transform:
+  - kind: param
+    what: '{store_width}'
+    candidates:
+    - store dwordx2→dwordx4
+    legality: N % 8 == 0; addr 16B 对齐
+    predicted_dir: store 指令数减半 ⇒ epilogue 时间下降
 - id: mls-path
   statement: LDS 读走矩阵通路（ds_read_matrix_trans_format）还是标量 ds_read_b32
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
@@ -169,7 +258,11 @@
   cost: L
   detail_ref: data/ops/isa-surfaces.yaml#mls-path
   verdict: open
-
+  transform:
+  - kind: isa
+    what: LDS 读改用 ds_read_matrix_trans_format
+    legality: kPack 必须为 1（bf16 因 gather 向量化要求 kpack=2 会被拒）
+    predicted_dir: LDS 读指令数下降 ⇒ issue 压力减小
 - id: lds-read-form
   statement: ds_read_b128 与 ds_read_b32 的比例（LDS 读是否已向量化）
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
@@ -182,7 +275,14 @@
   cost: M
   detail_ref: data/ops/isa-surfaces.yaml#lds-read-form
   verdict: open
-
+  transform:
+  - kind: param
+    what: '{ds_read_width}'
+    candidates:
+    - ds_read_b32→b64
+    - ds_read_b64→b128
+    legality: LDS 地址 % (width/8) == 0；每线程读宽 = width/16 个 bf16
+    predicted_dir: LDS 读指令数按 (128/width) 下降 ⇒ issue 压力减小
 - id: epilogue-expansion
   statement: 收尾段是否完全展开（热循环内无 s_cbranch 回跳）
   law: Plugins/ops/skills/op-hip-compile/references/isa-census.md#一
@@ -195,3 +295,10 @@
   cost: S
   detail_ref: data/ops/isa-surfaces.yaml#epilogue-expansion
   verdict: open
+  transform:
+  - kind: param
+    what: '{unroll_factor}'
+    candidates:
+    - 'unroll 1→full（去掉 #pragma unroll 1）'
+    legality: 累加器索引必须是编译期常量，否则 spill 到 scratch
+    predicted_dir: 消除 buffer_store 溢出 ⇒ epilogue 加速
