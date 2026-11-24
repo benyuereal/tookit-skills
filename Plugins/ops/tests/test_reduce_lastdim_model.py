@@ -252,3 +252,48 @@ class TestPrediction(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestModelHonesty(unittest.TestCase):
+    """模型必须诚实交代自己的局限。
+
+    背景：三个锚点（0.811/0.723/0.660）来自**同一个形状** M=8192 H=4096。
+    用它们当档位值再回测该形状，误差必然 0% —— 那是循环论证，
+    不是「预测准」。
+
+    真正该知道的是：**换形状时它基本不预测**。
+    实测（2026-11-24）：M=1024 H=512 → 0.762；M=32768 H=2048 → 0.794；
+    M=512 H=4096 → 0.811。全部在 0.76~0.81 之间，**几乎不随形状变**。
+
+    这不是 bug，是"只按归约方式分档"这个建模选择的必然结果。
+    本测试把这一点锁住，防止有人误以为它能做跨形状预测。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("_rl", str(MODEL))
+        cls.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.m)
+
+    def test_prediction_barely_varies_with_shape(self):
+        """**反过来验证局限**：跨形状的预测几乎不变。"""
+        vals = []
+        for M, H in ((1024, 512), (32768, 2048), (512, 4096), (8192, 4096)):
+            r = self.m.analyze(M, H, reduce_impl="shfl", outputs=4)
+            vals.append(r["predicted_util"])
+        span = max(vals) - min(vals)
+        self.assertLess(span, 0.10,
+                        "跨形状预测跨度 %.3f —— 如果变多了，说明模型改进了，"
+                        "这条测试该更新（它现在锁的是「只按归约方式分档」这个已知局限）"
+                        % span)
+
+    def test_model_limit_says_only_one_shape_validated(self):
+        """输出必须明说「只在一个形状上验证过」。"""
+        r = self.m.analyze(8192, 4096, reduce_impl="shfl", outputs=4)
+        lim = r["model_limit"]
+        self.assertIn("一个形状", lim,
+                      "model_limit 必须交代只在一个形状上验证过，不能让人误以为跨形状可信")
+        self.assertIn("不能当预测即事实", lim)
+
+
+if __name__ == "__main__":
+    unittest.main()
