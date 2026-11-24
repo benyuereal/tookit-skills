@@ -2,7 +2,7 @@ id: gemm-int8
 title: INT8 GEMM（W8A8）
 family: gemm
 math: out = (A_i8 * s_a) @ (B_i8 * s_b)；acc=int32，出栈时反量化
-status: measured
+status: draft
 layer: kernel
 op_card: null
 variants:
@@ -53,20 +53,10 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: measured
+  status: none
   kb_path: null
-  ratio:
-    kind: throughput
-    unit: TFLOPS
-    value: 343.4
-    vs: INT8 算力（TFLOPS，非倍数）
-    scope:
-      cards: 1
-      in_len: M/exp=128 K=2048
-      out_len: N=1536
-      warmup: hot
-      note: E=32 grouped contiguous；MAD=0.0032 占中位数 4.3%，两次跑 343/363 TF 有 5% 波动
-  conclusion: INT8 grouped 达 343 TFLOPS、1621 GB/s；MAD 为中位数的 0.043，该形状测量不稳
+  ratio: null
+  conclusion: 已降 draft：连续 3 批缺可补证据。原 ratio=343 无复跑来源，作废。
   verified_on: '2026-11-23'
   next_probe:
     surface: none
@@ -148,6 +138,8 @@ floor_inputs:
   precision: bf16
   t_source: derived
   t_actual_us: null
-  missing_evidence: A_i8 8.4MB + B_i8 100.7MB + C_bf16 12.6MB = 121.7MB；算力绑定 2×32×128×1536×2048=25.8 GFLOPs，卡片记 343.4 TFLOPS ⇒ t=25.8e9/343.4e12=75.1µs（反推）
-  basis: A_i8 8.4MB + B_i8 100.7MB + C_bf16 12.6MB = 121.7MB；算力绑定 2×32×128×1536×2048=25.8 GFLOPs，卡片记 343.4 TFLOPS ⇒ t=25.8e9/343.4e12=75.1µs（反推）
+  missing_evidence: A_i8 8.4MB + B_i8 100.7MB + C_bf16 12.6MB = 121.7MB；算力绑定 2×32×128×1536×2048=25.8
+    GFLOPs，卡片记 343.4 TFLOPS ⇒ t=25.8e9/343.4e12=75.1µs（反推）
+  basis: A_i8 8.4MB + B_i8 100.7MB + C_bf16 12.6MB = 121.7MB；算力绑定 2×32×128×1536×2048=25.8
+    GFLOPs，卡片记 343.4 TFLOPS ⇒ t=25.8e9/343.4e12=75.1µs（反推）
   evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）

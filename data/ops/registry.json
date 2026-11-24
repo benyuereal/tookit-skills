@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "updated": "2026-10-29",
+ "updated": "2026-11-25",
  "note": "算子索引与状态机。draft -> measured -> tuned -> at_floor -> deprecated。at_floor 必须带 floor_status 与 evidence，且同一档位不得重复立项。本文件只放状态与档位，绝对耗时进 ~/.config/dcu-toolkit/kb/op-opt/。",
  "ops": [
   {
@@ -182,7 +182,7 @@
   {
    "name": "fused-add-rmsnorm",
    "path": "Plugins/ops/skills/op-fused-add-rmsnorm",
-   "status": "measured",
+   "status": "draft",
    "shapes": [
     "decode-m1",
     "decode-m32",

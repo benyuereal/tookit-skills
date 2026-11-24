@@ -2,7 +2,7 @@ id: qk-norm
 title: QK per-head 归一化
 family: norm
 math: q = rmsnorm(q,-1)*w_q；k = rmsnorm(k,-1)*w_k
-status: measured
+status: draft
 layer: kernel
 op_card: null
 variants:
@@ -22,7 +22,8 @@ variants:
   - head_dim 契约需核对
   source: references/libraries.md
   import_path: lightop.fuse_rmsnorm_rope.rms_rotary_embedding_fuse
-  signature: rms_rotary_embedding_fuse(positions, query, key, head_size, cos_sin_cache, is_neox, weight_q, weight_k, residual_q=None, residual_k=None, epsilon=1e-05)
+  signature: rms_rotary_embedding_fuse(positions, query, key, head_size, cos_sin_cache,
+    is_neox, weight_q, weight_k, residual_q=None, residual_k=None, epsilon=1e-05)
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.fuse_rmsnorm_rope"),"rms_rotary_embedding_fuse")"
   role: competitor
 - repo: aiter
@@ -41,7 +42,8 @@ variants:
   source: references/libraries.md
   import_path: aiter.fused_qk_rmsnorm_rope
   signature: fused_qk_rmsnorm_rope(q, k, cos, sin, ...)
-  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert hasattr(aiter,"fused_qk_rmsnorm_rope")"
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert
+    hasattr(aiter,"fused_qk_rmsnorm_rope")"
   role: competitor
 ceiling:
   kind: missing
@@ -53,20 +55,10 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: measured
+  status: none
   kb_path: null
-  ratio:
-    kind: throughput
-    unit: GB/s
-    value: 741
-    vs: 融合后带宽 GB/s（相对 achievable 流式峰值 1680 为 0.44）
-    scope:
-      cards: 1
-      in_len: B=8 S=2048
-      out_len: H=32 D=128
-      warmup: hot
-      note: qk-norm 与 rope 融合；同形状 rope 单独为 338 GB/s ｜ 2026-11-23 分母 1724→1680（1:1 档实测，见 bw-ladder.yaml）；value 741→见 vs
-  conclusion: qk-norm+rope 融合达 741 GB/s，是 rope 单独（338）的 2.19 倍
+  ratio: null
+  conclusion: 已降 draft：连续 3 批缺可补证据。原 ratio=741 无复跑来源，作废。
   verified_on: '2026-11-23'
   next_probe:
     surface: fusion-boundary
@@ -80,7 +72,8 @@ modify_path:
   how: 用 aiter.fused_qk_rmsnorm_rope 替代「先 norm 再 rope」两次调用
   requires: aiter 0.1.6；head_dim 与 rope 的 rot_dim 需匹配
 hard_preconditions:
-- statement: fused_qk_rmsnorm_rope 的 freqs 必须 2D [seq_len, head_dim]，与 rope_fwd 要 4D 不同
+- statement: fused_qk_rmsnorm_rope 的 freqs 必须 2D [seq_len, head_dim]，与 rope_fwd 要
+    4D 不同
   check: '传 [S, D/2] → RuntimeError: freqs must have shape [at least seq_len, head_dim]'
 - statement: freqs 宽度要 head_dim（不是 head_dim/2）
   check: 见上；同库两个入口的形状约定不一致，易踩

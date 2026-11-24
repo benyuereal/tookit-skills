@@ -2,7 +2,7 @@ id: moe-combine-reduce
 title: MoE combine：反 permute + 加权求和
 family: moe
 math: y_i = sum_k w_ik*permuted[slot_ik]；按 gate 权重加权
-status: measured
+status: draft
 layer: kernel
 op_card: null
 variants:
@@ -21,7 +21,8 @@ variants:
   - 累加顺序需固定
   source: references/libraries.md
   import_path: lightop.moe_align_sum.moe_sum
-  signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None, factor=1.0, expect_m=-1) -> None
+  signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None,
+    factor=1.0, expect_m=-1) -> None
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.moe_align_sum"),"moe_sum")"
   role: competitor
 - repo: lightop
@@ -39,7 +40,8 @@ variants:
   - lightop 有 moe_sum，不必自研
   source: references/libraries.md
   import_path: lightop.moe_align_sum.moe_sum
-  signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None, factor=1.0, expect_m=-1) -> None
+  signature: moe_sum(input, output, bias=None, expert_mask=None, num_local_tokens=None,
+    factor=1.0, expect_m=-1) -> None
   smoke_test: python3 -I -c "import importlib; assert hasattr(importlib.import_module("lightop.moe_align_sum"),"moe_sum")"
   role: competitor
 ceiling:
@@ -52,24 +54,15 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: measured
+  status: none
   kb_path: null
-  ratio:
-    kind: throughput
-    unit: GB/s
-    value: 780
-    vs: moe_sum 带宽 GB/s（相对 achievable 流式峰值 1730 为 0.45）
-    scope:
-      cards: 1
-      in_len: M=8192 K=4
-      out_len: H=4096
-      warmup: hot
-      note: bf16；加权求和（combine 的 reduce 段） ｜ 2026-11-23 分母 1724→1730（2:1 档实测，见 bw-ladder.yaml）；value 780→见 vs
-  conclusion: moe_sum 达 780 GB/s（峰值 0.45），是 combine 段的实测基线
+  ratio: null
+  conclusion: 已降 draft：连续 3 批缺可补证据。原 ratio=780 无复跑来源，作废。
   verified_on: '2026-11-23'
   next_probe:
     surface: layout-pack
-    hypothesis: moe_sum 达 780 GB/s（0.45）：若把 M=8192 K=4 的归约改成一次向量读（当前按 K 展开），应提到 0.7 以上
+    hypothesis: moe_sum 达 780 GB/s（0.45）：若把 M=8192 K=4 的归约改成一次向量读（当前按 K 展开），应提到 0.7
+      以上
     expected: ≥1200 GB/s
     stop_if: 若改向量化后不涨，说明 K=4 的归约已触及写带宽上限 ⇒ 标 at_floor
     effort: 2h
@@ -101,7 +94,8 @@ modify_path:
   requires: topk_weights 与 permuted 布局对齐
 hard_preconditions:
 - statement: lightop.moe_align_sum 是模块，真实函数是 .moe_sum(input, output, ...)
-  check: 'lightop.moe_align_sum() → TypeError: module is not callable；应 from lightop.moe_align_sum import moe_sum'
+  check: 'lightop.moe_align_sum() → TypeError: module is not callable；应 from lightop.moe_align_sum
+    import moe_sum'
 soft_preconditions:
 - 建议 hot 态
 - input 形状 [M, K, H]，output [M, H]
@@ -131,13 +125,16 @@ semantics:
     reads: 2
     writes: 1
     passes: 3
-    source: 实测 2026-11-23：lightop.moe_align_sum.moe_sum(input, output) 返回 None，输出写进调用方给的 output buffer。writes 仍按 1 份计（写的是 output）
+    source: 实测 2026-11-23：lightop.moe_align_sum.moe_sum(input, output) 返回 None，输出写进调用方给的
+      output buffer。writes 仍按 1 份计（写的是 output）
   mutates_inputs: []
 floor_inputs:
   bytes_mb: 335.544
   pattern: rw_2to1
   t_source: derived
   t_actual_us: null
-  missing_evidence: 读 K=4 份 4×8192×4096×2B=268.4MB + 写 output 8192×4096×2B=67.1MB = 335.5MB；卡片记 moe_sum 780 GB/s ⇒ t=335.5/780=430.2µs（反推）
-  basis: 读 K=4 份 4×8192×4096×2B=268.4MB + 写 output 8192×4096×2B=67.1MB = 335.5MB；卡片记 moe_sum 780 GB/s ⇒ t=335.5/780=430.2µs（反推）
+  missing_evidence: 读 K=4 份 4×8192×4096×2B=268.4MB + 写 output 8192×4096×2B=67.1MB
+    = 335.5MB；卡片记 moe_sum 780 GB/s ⇒ t=335.5/780=430.2µs（反推）
+  basis: 读 K=4 份 4×8192×4096×2B=268.4MB + 写 output 8192×4096×2B=67.1MB = 335.5MB；卡片记
+    moe_sum 780 GB/s ⇒ t=335.5/780=430.2µs（反推）
   evidence: 卡片 last_verdict.ratio（同形状实测，见 basis）

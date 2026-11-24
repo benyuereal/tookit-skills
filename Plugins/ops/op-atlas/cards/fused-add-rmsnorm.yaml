@@ -2,7 +2,7 @@ id: fused-add-rmsnorm
 title: 残差 + RMSNorm 融合（fused_add_rmsnorm）
 family: norm
 math: y = w*((x+r)/sqrt(mean((x+r)^2, -1)+eps))；残差先加再归一
-status: measured
+status: draft
 layer: kernel
 op_card: Plugins/ops/skills/op-fused-add-rmsnorm
 variants:
@@ -24,8 +24,10 @@ variants:
   - 原地写残差的变体会污染多变体对比，每个变体须喂独立副本
   source: references/libraries.md
   import_path: lightop.RMSNormAdd
-  signature: RMSNormAdd(normalized_shape:int, eps:float=1e-5, inplace:bool=False); forward(X, residual)
-  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"RMSNormAdd")"
+  signature: RMSNormAdd(normalized_shape:int, eps:float=1e-5, inplace:bool=False);
+    forward(X, residual)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert
+    hasattr(lightop,"RMSNormAdd")"
   role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
@@ -55,20 +57,10 @@ shapes:
 - decode-m32
 - prefill-8k
 last_verdict:
-  status: measured
+  status: none
   kb_path: null
-  ratio:
-    kind: speedup
-    unit: x
-    value: 2.39
-    vs: torch 分步（x+r → rms → 除）的耗时比（M=8192 档）
-    scope:
-      cards: 1
-      in_len: M=8192
-      out_len: H=4096
-      warmup: hot
-      note: bf16；M=1024 档为 1.70x，M=8192 档为 2.39x；融合带宽 862 GB/s
-  conclusion: 融合比分步快 1.70x(M=1024)/2.39x(M=8192)；M 越大收益越高
+  ratio: null
+  conclusion: 已降 draft：连续 3 批缺可补证据。原 ratio=2.39 无复跑来源，作废。
   verified_on: '2026-11-23'
   next_probe:
     surface: fusion-boundary
@@ -83,11 +75,13 @@ modify_path:
   requires: lightop 0.6.0
 hard_preconditions:
 - statement: lightop.RMSNormAdd 是 nn.Module，需 .cuda().to(bf16)；forward(X, residual)
-  check: python3 -I -c "import lightop,torch; m=lightop.RMSNormAdd(512,eps=1e-6).cuda().to(torch.bfloat16); m(torch.randn(8,512,dtype=torch.bfloat16,device='cuda'),torch.randn(8,512,dtype=torch.bfloat16,device='cuda'))"
+  check: python3 -I -c "import lightop,torch; m=lightop.RMSNormAdd(512,eps=1e-6).cuda().to(torch.bfloat16);
+    m(torch.randn(8,512,dtype=torch.bfloat16,device='cuda'),torch.randn(8,512,dtype=torch.bfloat16,device='cuda'))"
 - statement: 分步实现必须用 fp32 算 rms，否则 bf16 累加误差大
   check: 对比 fused 与 split 的 max_abs（本卡实测相对误差中位数 1.6e-3）
 - statement: lightop.RMSNormAdd 要求归一化维度 >= 64
-  check: H=4/3/5 等小维度直接报 "cols >= 64 INTERNAL ASSERT FAILED"；由 opcheck robustness 的「未见过的 shape」当类自动探到（2026-11-23）
+  check: H=4/3/5 等小维度直接报 "cols >= 64 INTERNAL ASSERT FAILED"；由 opcheck robustness
+    的「未见过的 shape」当类自动探到（2026-11-23）
 soft_preconditions:
 - 建议 hot 态
 - M 越大融合收益越高（1.70x → 2.39x），小 M 时固定开销占比高
