@@ -147,10 +147,18 @@ def _predict_util(res, grid, bm, bn):
         return 0.0, "驻留 0 CTA/CU —— 跑不起来"
     c = res["ctas_per_cu"]
     area = bm * bn
+    # **split_k 的作用是补并行度**，只在 grid 不足以填满 CU 时才有意义。
+    # grid 已经够（>= CU×4，能形成多波）时，split_k 只增加归约开销，不改预测。
+    # 实测依据：hbird 的 M=192 档 "low S is the worst thing to do, S=6 is the fill optimum"
+    # —— 说明 split 是补 fill，不是越多越好。
+    grid_deficit = max(0.0, 1.0 - grid / (CU_COUNT * 4))
     # 段 2：驻留 1 且 tile 不大 → 下限档
     if c == 1 and area <= 128 * 128:
-        u = UTIL_FLOOR + 0.10 * min(1.0, grid / (CU_COUNT * 4))
-        return u, "驻留 1 CTA/CU 且 tile ≤128×128 ⇒ 延迟藏不住（档位：下限）"
+        u = UTIL_FLOOR + 0.10 * (1.0 - grid_deficit)
+        why = "驻留 1 CTA/CU 且 tile ≤128×128 ⇒ 延迟藏不住（档位：下限）"
+        if grid_deficit > 0:
+            why += "；grid 缺口 %.0f%%，split_k 有用" % (grid_deficit * 100)
+        return u, why
     # 段 3：驻留 >=2 → 常规区间
     if c >= 2 and area < 256 * 256:
         u = (UTIL_TYPICAL - 0.05) + 0.05 * min(1.0, (c - 2) / 2.0)
@@ -177,8 +185,12 @@ def analyze(m, n, k, bm=128, bn=128, bk=64, warps=8, stages=3, split_k=1,
                        % bm) if lds_sub_rows is None else ("A 按 %d 行子块算" % lds_sub_rows)
     res["stages"] = stages
     errs, grid = _legality(m, n, k, bm, bn, bk, split_k, res)
+    grid *= split_k          # split_k 把 K 维切分，并行块数随之增加
 
-    flops = 2 * m * n * k * split_k
+    # **split_k 不改变总 FLOPs**——它只是把 K 维切给多个 CTA 并行算，
+    # 每个 CTA 算 k/split_k，总量不变。第一版乘了 split_k，
+    # 导致 floor 随 split_k 线性增大（k1=3941 / k2=7882 / k4=15764），那是错的。
+    flops = 2 * m * n * k
     bytes_ = (m * k + k * n + m * n) * dtype_bytes
     t_compute_us = flops / (PEAK_TF_BF16 * 1e12) * 1e6
     t_memory_us = bytes_ / (PEAK_BW_GBS * 1e9) * 1e6
@@ -207,6 +219,16 @@ def analyze(m, n, k, bm=128, bn=128, bk=64, warps=8, stages=3, split_k=1,
         return out
 
     util, why = _predict_util(res, grid, bm, bn)
+    # **grid 缺口是独立于 tile 的约束**：块数填不满 CU 时，再多驻留也没用。
+    # hbird 实测支持这条：M=192 档 "low S is the worst thing to do"，
+    # 因为小 segment 的 grid 填不满。这里统一乘一个折扣，
+    # 而不是在某个档位分支里局部处理（第一版就是那样，导致只有 c==1 时生效）。
+    grid_need = CU_COUNT * 4          # 4 波才谈得上充分并行
+    if grid < grid_need:
+        deficit = 1.0 - grid / grid_need
+        util = util * (1.0 - 0.5 * deficit)   # 最多打对折
+        why += "；grid=%d < %d，并行度缺口 %.0f%% ⇒ util ×%.2f" % (
+            grid, grid_need, deficit * 100, 1.0 - 0.5 * deficit)
     out["predicted_mfu"] = round(util, 3)
     out["predicted_us"] = round(t_floor_us / util, 1) if util else None
     out["predicted_reason"] = why
