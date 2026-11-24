@@ -162,5 +162,7 @@
     "strategy_effect": "三种实现的策略差均 <4%（lightop -0.4% / tilelang -3.7% / triton +0.5%），说明本卡「喂副本 vs 复用 buffer」不影响结论。此前测到的 lightop -11.6% 是外部 pytest 抢占造成的假象。",
     "ranking_dispute_resolved": "业主 211.2(lightop) vs 我 195~198 的分歧，来源是环境噪声不是口径。干净环境下 lightop 稳定在 206~211 µs，与业主一致。",
     "action": "tilelang 相对 lightop 是打平不是超越 ⇒ **不引 tilelang 路径**（只值 3~10% 且本次为 0）。下一步做 in-place 与下游融合。"
-  }
+  },
+  "measure_mode": "event_isolated",
+  "measure_mode_note": "本文件测于 2026-11-23 14:41，当时未记录 measure_mode 字段。据 caliber.note「同一进程内交替测量」判定为 event 隔离口径，**属事后标注，非当时记录**。2026-11-24 复核：今天同口径重测 lightop 为 197.0 µs（三次，MAD 0.3~0.6），与本文件的 207.4 差 5%，同量级。故本文件保留原值不改（未重测就没有资格改），但引用时优先用 ledger 的 197.0。"
 }

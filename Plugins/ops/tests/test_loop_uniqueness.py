@@ -138,10 +138,11 @@ class TestEngineMigration(unittest.TestCase):
     它已经是「调度引擎」而不是 op-optimize 这个 skill 的实现细节，
     物理位置迁到 Plugins/ops/engine/，旧路径保留 shim。
 
-    本测试守三条：
-      A. shim 里不许有实现（行数 ≤30，且无 `def cmd_`）
+    本测试守四条：
+      A. shim 里不许有实现（行数 ≤30，且 AST 里零函数定义）
       B. 全仓只允许一份 `def cmd_run(` 的完整实现
-      C. engine 版与 shim 的 `--help` 输出必须一致（行为没变）
+      C. engine 版与 shim 的 `--help` stdout 必须逐字节相同（行为没变）
+      D. 反向：往 shim 塞 `def cmd_fake()`，A 的判据必须报错
     """
 
     # parents[1] = Plugins/ops（parents[3] 是仓库根，会算错）
@@ -151,15 +152,9 @@ class TestEngineMigration(unittest.TestCase):
 
     def test_shim_has_no_implementation(self):
         txt = self.SHIM.read_text(encoding="utf-8")
-        n = len(txt.splitlines())
-        self.assertLessEqual(n, 35, "shim 有 %d 行，超过 30 说明有人往里写实现" % n)
-        # 用 AST 判断有没有真的定义函数，不用字符串匹配 ——
-        # shim 的 docstring 里就写着「不许出现 def cmd_」，字符串匹配会自伤。
-        import ast
-        tree = ast.parse(txt)
-        funcs = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
-        self.assertEqual(funcs, [],
-                         "shim 里定义了函数 %s —— 实现必须留在 engine/" % funcs)
+        self.assertEqual(_shim_impl_violations(txt), [],
+                         "shim 里出现了实现（行数上限 %d，且不许定义函数）——"
+                         "实现必须留在 engine/" % SHIM_MAX_LINES)
 
     def test_engine_exists_and_has_implementation(self):
         self.assertTrue(self.ENGINE.is_file(),
@@ -170,27 +165,48 @@ class TestEngineMigration(unittest.TestCase):
                            "engine/loop.py 太短，实现可能没搬全")
 
     def test_only_one_full_implementation(self):
-        """全仓只许有一份 `def cmd_run(`。"""
-        root = Path(__file__).resolve().parents[1]   # Plugins/ops
+        """全仓（不只 Plugins/ops）只许有一份 `def cmd_run(`。"""
         hits = []
-        for p in root.rglob("*.py"):
-            if "/tests/" in str(p):
+        for p in REPO.rglob("*.py"):
+            if ".git" in p.parts or "__pycache__" in p.parts:
+                continue
+            if "tests" in p.parts:          # 测试里的字符串是断言，不是实现
                 continue
             try:
                 if "def cmd_run(" in p.read_text(encoding="utf-8", errors="ignore"):
-                    hits.append(str(p))
+                    hits.append(_rel(p))
             except OSError:
                 continue
-        self.assertEqual(len(hits), 1,
-                         "找到 %d 份 `def cmd_run(` 实现：%s（只许一份，在 engine/）"
-                         % (len(hits), hits))
+        self.assertEqual(hits, ["Plugins/ops/engine/loop.py"],
+                         "`def cmd_run(` 的完整实现只许有一份（engine/loop.py），"
+                         "实际：%s" % hits)
 
     def test_shim_help_matches_engine(self):
-        """shim 的 --help stdout 必须与 engine 版逐字节相同（行为没变）。"""
+        """shim 的 --help stdout 必须与 engine 版逐字节相同（行为没变）。
+
+        shim 的 stderr 弃用告警不算——只比 stdout。
+        """
         import subprocess, sys
         def help_of(path):
             r = subprocess.run([sys.executable, "-I", str(path), "--help"],
                                capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0,
+                             "%s --help 退出码 %d：%s" % (path, r.returncode, r.stderr))
             return r.stdout
-        self.assertEqual(help_of(self.SHIM), help_of(self.ENGINE),
+        shim_out, engine_out = help_of(self.SHIM), help_of(self.ENGINE)
+        self.assertTrue(engine_out.strip(), "engine --help 没有输出")
+        self.assertEqual(shim_out, engine_out,
                          "shim 与 engine 的 --help 不一致 —— 转发没生效")
+
+    def test_shim_impl_check_catches_injected_function(self):
+        """反向测试：判据 2 必须真的会报错，不能是空判据。
+
+        往当前 shim 末尾塞一个 `def cmd_fake(): pass`，_shim_impl_violations
+        必须非空。这条防的是「测试写成了永远通过」。
+        """
+        injected = self.SHIM.read_text(encoding="utf-8") + "\n\ndef cmd_fake():\n    pass\n"
+        probs = _shim_impl_violations(injected)
+        self.assertTrue(probs, "塞进 `def cmd_fake()` 后判据没报错 —— 它是空判据")
+        self.assertTrue(any("cmd_fake" in p for p in probs),
+                        "报错了但没点出 cmd_fake：%s" % probs)
+

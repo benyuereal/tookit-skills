@@ -75,7 +75,7 @@ last_verdict:
   next_probe:
     surface: none
     none_reason: 三条 memory 类攻击面已逐一实测：fusion-boundary 已在用（2读2写=268.4MB，与 lightop 等语义）；cross-lane-fold 已证伪（分块两趟 186~283µs 全更慢）；num_warps 扫参已最优 4。剩余 19.8% 落在 structural 区间，唯一未试的是「降流量」——需下游融合把 268.4MB 降到 201MB
-      以下，不在本算子范围内。⇒ 收敛于 at_floor：triton 融合单 kernel 保留（相对 torch 分步 6.6x），但未超过 lightop（慢 6.7%）
+      以下，不在本算子范围内。⇒ 收敛于 at_floor：triton 融合单 kernel 保留（相对 torch 分步 6.6x），但未超过 lightop（慢约 20%，见 ledger 2026-11-24 裁决）
     hypothesis: 若要再拿 ≥10%，只能减少 HBM 流量（下游融合或 in-place 写回），不能靠调参
     expected: 提升 <8%（同族三种实现已全部落在 1108~1200 GB/s 区间）
     stop_if: 三条 memory 类攻击面全部实测无效 ⇒ at_floor，不再硬啃
