@@ -9,6 +9,9 @@ defaults:
   - --measure-mode
   - event_isolated
   gpu: 7
+  acc_args:
+  - --shape
+  - prefill-8k
 directions:
 - id: fusion-boundary
   statement: 残差融合是否真的省了往返：3*M*H*2B vs 4*M*H*2B
@@ -29,7 +32,8 @@ candidates:
   priority: 1
   action_class: reduce-bytes
   expect: -20%
-  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape tiny --variants fused-3pass-triton
+  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml"
+    --shape tiny --variants fused-3pass-triton
   note: lightop.RMSNormAdd 本身就融合残差；这条验证的是「融合前 vs 融合后」的差异
   variant: fused-3pass-triton
   expect_basis: 实测：triton 242.0µs vs lightop 197.0µs = 1.229，即慢 22.9%，取 -20% 作保守预期
@@ -40,7 +44,8 @@ candidates:
   action_class: reduce-bytes
   expect: -11%
   note: 与 fuse-residual 同一实现；本条验的是 inplace 写回路径（需先确认 mutates_inputs 语义）
-  expect_basis: 预期省一份 residual_out 写回：268.4MB → 201.3MB = -25% 流量；按 1:1 档 1680 GB/s 与当前 1363 GB/s 达成率折算，预期 -11%
+  expect_basis: 预期省一份 residual_out 写回：268.4MB → 201.3MB = -25% 流量；按 1:1 档 1680 GB/s
+    与当前 1363 GB/s 达成率折算，预期 -11%
   variant: fused-3pass-triton
 - id: hidden-non-pow2
   direction: occupancy

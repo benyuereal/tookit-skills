@@ -91,9 +91,75 @@ def resolve_shape(card, mod, arg):
     return out
 
 
+def _bf16_ulp(value):
+    """bf16 在该量级上的一个 ULP。bf16 = 1 符号 + 8 指数 + **7 位尾数**。
+
+    ULP 随量级变，所以用**绝对 max_abs 当容差是错的**：
+      值域 [0.5,1)  ULP = 2^-8 = 0.00390625
+      值域 [1,2)    ULP = 2^-7 = 0.0078125
+      值域 [2,4)    ULP = 2^-6 = 0.015625
+    实测 rmsnorm 的 max_abs=1.5625e-2 = 2^-6 —— 在 [2,4) 区间**正好 1 ULP**，
+    是完美舍入。而旧的 max_abs=2.0e-3 只够 [2,4) 的 0.13 ULP，等于要求
+    「比 bf16 能表示的还准」—— 四个变体全 FAIL（**含厂商 lightop**）就是铁证：
+    判据错，不是实现错。
+    """
+    import math
+    v = abs(float(value))
+    if v == 0.0 or not math.isfinite(v):
+        return 0.0
+    _, exp = math.frexp(v)                    # v = m * 2^exp, 0.5 <= m < 1
+    return math.ldexp(1.0, exp - 1 - 7)       # 尾数 7 位 ⇒ 指数 e 处 ULP = 2^(e-7)
+
+
 def tolerance(contract):
+    """读容差。支持两种模式：
+      mode: ulp_bound + max_ulp  → 按被测值的量级动态算绝对容差（推荐）
+      max_abs: <float>           → 旧的固定绝对容差（保留兼容）
+
+    返回 (max_abs, cosine, mode, max_ulp)。**ulp 模式下 max_abs 只是
+    「cosine 门用的名义值」，真正的判定按每个元素自己的量级做。**
+    """
     ref = (contract.get("tolerance") or {}).get("vs_fp32_ref") or {}
-    return float(ref.get("max_abs", 2.0e-3)), float(ref.get("cosine", 0.9999))
+    mode = str(ref.get("mode") or "max_abs")
+    max_ulp = float(ref.get("max_ulp") or 2.0)
+    return (float(ref.get("max_abs", 2.0e-3)), float(ref.get("cosine", 0.9999)),
+            mode, max_ulp)
+
+
+def _ulp_ok(mod, a, b, max_ulp):
+    """逐元素判 ulp：|a-b| <= max_ulp × 该元素量级的 ULP。
+
+    比「整体 max_abs <= 常数」正确的地方：同一个算子输出里既有 0.1 量级的元素、
+    也有 3.0 量级的元素，它们的 bf16 精度本来就差 32 倍。
+    用统一容差必然要么放过粗的、要么卡死细的。
+    """
+    import torch
+    # 输出可能是多份（本卡的 semantics.outputs 有 out + residual_out）。
+    # 多份时取**最差的那份** —— 一份合格掩盖不了另一份不合格。
+    if isinstance(a, (tuple, list)) or isinstance(b, (tuple, list)):
+        na = len(a) if isinstance(a, (tuple, list)) else 1
+        nb = len(b) if isinstance(b, (tuple, list)) else 1
+        if na != nb:
+            return False, float("inf")
+        pairs = list(zip(a, b))
+        worst = 0.0
+        for x, y in pairs:
+            ok_i, w_i = _ulp_ok(mod, x, y, max_ulp)
+            if not ok_i:
+                return False, w_i
+            worst = max(worst, w_i)
+        return True, worst
+    af, bf = a.float(), b.float()
+    d = (af - bf).abs()
+    # 以 |a| 与 |b| 的较大者定量级（两边都可能是舍入的一方）
+    mag = torch.maximum(af.abs(), bf.abs())
+    ulp = torch.zeros_like(mag)
+    nz = mag > 0
+    if bool(nz.any()):
+        _, exp = torch.frexp(mag[nz])
+        ulp[nz] = torch.ldexp(torch.ones_like(exp, dtype=torch.float32), exp - 8)
+    worst = float((d / ulp.clamp_min(1e-30))[nz].max()) if bool(nz.any()) else 0.0
+    return worst <= max_ulp, worst
 
 
 def invariant_modes(contract):
@@ -131,8 +197,12 @@ def _cmp(mod, a, b):
     return {"max_abs": float(d.max()), "mean_abs": float(d.mean()), "cosine": float(cos)}
 
 
-def _judge(mod, mode, a, b, max_abs, cosine):
-    """返回 (通过?, 说明)。无论哪种 mode 都给误差量级，便于分清数值问题与结构问题。"""
+def _judge(mod, mode, a, b, max_abs, cosine, tol_mode="max_abs", max_ulp=2.0):
+    """返回 (通过?, 说明)。无论哪种 mode 都给误差量级，便于分清数值问题与结构问题。
+
+    tol_mode="ulp_bound" 时按**每个元素自身量级的 ULP** 判定，
+    而不是拿一个固定绝对数去卡所有元素 —— 见 _bf16_ulp 的算术。
+    """
     import torch
     m = _cmp(mod, a, b)
     bit = bool(torch.equal(a, b))
@@ -140,6 +210,11 @@ def _judge(mod, mode, a, b, max_abs, cosine):
         m["max_abs"], m["mean_abs"], m["cosine"], "（逐位一致）" if bit else "")
     if mode == "bit_exact":
         return bit, desc
+    if tol_mode == "ulp_bound":
+        ok_ulp, worst = _ulp_ok(mod, a, b, max_ulp)
+        return (ok_ulp and m["cosine"] >= cosine), \
+            desc + " [容差 %.0f ULP，实际最差 %.2f ULP / cos %.4f]" % (
+                max_ulp, worst, cosine)
     return (m["max_abs"] <= max_abs and m["cosine"] >= cosine), \
         desc + " [容差 %.1e / %.4f]" % (max_abs, cosine)
 
@@ -160,7 +235,7 @@ def _split_arg(s):
 
 def cmd_correctness(a):
     card, contract, mod = load_card(a.contract, a.adapter)
-    max_abs, cosine = tolerance(contract)
+    max_abs, cosine, tol_mode, max_ulp = tolerance(contract)
     shape = resolve_shape(card, mod, a.shape)
     params = dict(shape.get("params") or {})
     if a.pad_ratio < 1.0:
@@ -179,7 +254,8 @@ def cmd_correctness(a):
     print("# 参考实现就绪（chunk=%d）" % a.ref_chunk)
 
     out = {"op": contract.get("op"), "shape": shape.get("shape"), "params": meta,
-           "tolerance": {"max_abs": max_abs, "cosine": cosine}, "variants": {}}
+           "tolerance": {"max_abs": max_abs, "cosine": cosine,
+                          "mode": tol_mode, "max_ulp": max_ulp}, "variants": {}}
     all_pass = True
     for v in _split_arg(a.variants):
         try:
@@ -196,11 +272,18 @@ def cmd_correctness(a):
             all_pass = False
             continue
         m = _cmp(mod, got, ref)
-        ok = m["max_abs"] <= max_abs and m["cosine"] >= cosine
+        if tol_mode == "ulp_bound":
+            ok_ulp, worst_ulp = _ulp_ok(mod, got, ref, max_ulp)
+            ok = ok_ulp and m["cosine"] >= cosine
+            m["max_ulp"] = worst_ulp
+            tol_desc = "限 %d ULP，实际最差 %.2f ULP" % (max_ulp, worst_ulp)
+        else:
+            ok = m["max_abs"] <= max_abs and m["cosine"] >= cosine
+            tol_desc = "限 %.1e" % max_abs
         all_pass &= ok
         out["variants"][v] = dict(m, status="pass" if ok else "fail", mutates_inputs=mutated)
-        print("%s %-12s max_abs=%.3e (限 %.1e)  mean_abs=%.3e  cosine=%.7f (限 %.4f)%s"
-              % ("PASS" if ok else "FAIL", v, m["max_abs"], max_abs, m["mean_abs"], m["cosine"], cosine,
+        print("%s %-16s max_abs=%.3e (%s)  cosine=%.7f (限 %.4f)%s"
+              % ("PASS" if ok else "FAIL", v, m["max_abs"], tol_desc, m["cosine"], cosine,
                  ("  [原地改输入: %s]" % ",".join(mutated)) if mutated else ""))
 
     out["verdict"] = "pass" if all_pass else "fail"
@@ -367,7 +450,7 @@ def cmd_robustness(a):
     真正的坏结果是一例都没抓到（见 --require-catch）。
     """
     card, contract, mod = load_card(a.contract, a.adapter)
-    max_abs, cosine = tolerance(contract)
+    max_abs, cosine, tol_mode, max_ulp = tolerance(contract)
     try:
         import torch
     except ImportError:
@@ -532,7 +615,7 @@ def cmd_robustness(a):
 def cmd_invariants(a):
     card, contract, mod = load_card(a.contract, a.adapter)
     modes = invariant_modes(contract)
-    max_abs, cosine = tolerance(contract)
+    max_abs, cosine, tol_mode, max_ulp = tolerance(contract)
     shape = resolve_shape(card, mod, a.shape)
     params = dict(shape.get("params") or {})
     inputs = mod.build_inputs(params, seed=a.seed, device=a.device)
@@ -583,7 +666,7 @@ def cmd_invariants(a):
             try:
                 o1 = mod.run_isolated(mod.split_runner(a.tilelang_root, params, 1), *inputs[:-1])[0]
                 o2 = mod.run_isolated(mod.split_runner(a.tilelang_root, params, 2), *inputs[:-1])[0]
-                ok, desc = _judge(mod, modes["split_invariance"], o1, o2, max_abs, cosine)
+                ok, desc = _judge(mod, modes["split_invariance"], o1, o2, max_abs, cosine, tol_mode, max_ulp)
                 res["split_invariance"] = bool(ok)
                 detail["split_invariance"] = "num_split 1 vs 2：" + desc
             except (SystemExit, RuntimeError, ValueError, OSError, ImportError) as e:

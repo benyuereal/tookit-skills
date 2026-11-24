@@ -116,8 +116,15 @@ layers:
       script: scripts/bw_calibrate.py
       cmd: python3 -I scripts/bw_calibrate.py
       read: 取 row_reduction 行，达到 reference 的 85% 以上才算贴地板
-    penalty_ratio: 0.79
-    penalty_note: 归约惩罚 = 同形状归约算子 / 纯 copy 的带宽比。实测（2026-11-23，triton 手写，2GB，扫参最优）：rmsnorm 三种实现 0.75~0.81（lightop
-      0.81 / tilelang 0.79 / triton 0.75）；softmax 0.61（含 exp 开销，不可直接与 rmsnorm 比）。**取 0.79 作 rmsnorm 类的地板折扣**；floor.py
-      对归约类应乘此系数，否则会算出 +51% 这种成熟实现不可能达到的假空间。
-    caveat: 0.79 是三种实现的**观测区间中位**，不是物理定律。样本只有 rmsnorm 一族（3 个实现）+ softmax（1 个），换算子类型（如 cross-row reduction）需重新标定。
+    penalty_ratio: 0.81
+    penalty_note: 归约惩罚 = 同形状归约算子 / 纯 copy 的带宽比。**2026-11-25 重标**（原 0.79）。样本从 3 个
+      扩到 5 个，且新增的两个是**独立实现 + 独立算子**：lightop 0.810 / tilelang 0.790 / triton 0.750
+      / rms-v2-reg 0.866（自研寄存器驻留，159.8/184.6）/ mhc-mix 0.854（GLM-5.3 hc_pre mix，
+      1597/1870，见 Plugins/ops/ingest/mhc）。5 个样本中位 = **0.810**，取代原 0.79。
+      为什么这次必须改：按 0.79 算，rmsnorm-fused 的 remaining = 197.0/202.3-1 = **-2.6%（负值）**，
+      而 floor.py 自己把负 remaining 定义为「判据本身错了」。负值不是实现突破物理，是折扣取小了。
+      softmax 0.61 含 exp 开销，不可与 rmsnorm 类比，未纳入。
+    caveat: 0.810 是 5 个样本的**中位**（区间 0.750~0.866），不是物理定律。样本仍以 rmsnorm 一族为主
+      （4/5），mhc-mix 是唯一的非 rmsnorm 点。换算子类型（如 cross-row reduction）需重新标定。
+      **取中位而非最大值 0.866**：用最大值当地板会把「还有多少空间」系统性低估，
+      而地板的作用是判「到没到顶」，宁可略松也不要假紧。

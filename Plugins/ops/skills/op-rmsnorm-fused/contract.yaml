@@ -23,9 +23,19 @@ layout_constraints:
 
 tolerance:
   vs_fp32_ref:
-    max_abs: 2.0e-3
+    # 2026-11-25 改判据：绝对容差在 bf16 输出上不可移植。
+    # bf16 只有 7 位尾数，ULP 随量级变：
+    #   [0.5,1) ULP=2^-8=0.00390625 / [1,2) 2^-7=0.0078125 / [2,4) 2^-6=0.015625
+    # 实测 max_abs=1.5625e-2 = 2^-6，在 [2,4) 区间**正好 1 ULP**（完美舍入）。
+    # 而旧的 max_abs=2.0e-3 只够 0.13 ULP —— 等于要求比 bf16 能表示的还准。
+    # 铁证：四个变体全 FAIL，**含厂商 lightop**。判据错，不是实现错。
+    mode: ulp_bound
+    max_ulp: 2
+    # max_abs 必须保留（opverify 的 REQUIRED 规则：它是 ULP 判据失效时的兜底上界）。
+    # 2 ULP 在最大量级 [2,4) 上 = 2 × 2^-6 = 3.125e-2；取此值使两种模式口径一致。
+    max_abs: 3.125e-2
     cosine: 0.99999
-    note: "bf16 输入 + fp32 累加；eps 位置不同会带来可见差异"
+    note: "bf16 输出按量级判 ULP；2 ULP 给 eps 位置差异留余量"
   variant_vs_variant:
     mode: tolerance
 

@@ -61,6 +61,10 @@ ADAPTER_ACC = """bench/acc_probe.py --json 必须输出：
 OK, WARN = "\033[32m", "\033[33m"
 
 # 两个上限是**常量不是开关**：能拿参数绕过去的规则等于没规则。
+# 精度主口径的 ULP 门。默认 2：bf16 完美舍入是 1 ULP，2 留给「eps 位置不同」
+# 这类合法实现差异。厂商 lightop 实测正好 2.00 ULP —— 门限贴着物理极限。
+MAX_ULP = 2.0
+
 MAX_IMPL_FAILS = 3          # 同一实现连挂 N 次 ⇒ 这个实现判死（方向预算不动）
 MAX_DIRECTION_REFUTES = 2   # 同一方向**机制上**被证伪 N 次 ⇒ 封方向（stalled 不计）
 
@@ -78,6 +82,11 @@ VERIFY_TAIL_LINES = 20      # 失败时只回显输出尾部 20 行，别把整�
 # 仓库根。engine/loop.py 在 Plugins/ops/engine/ 下，向上 3 层是仓库根；
 # 原 skills/op-optimize/loop.py 在 Plugins/ops/skills/op-optimize/ 下，需要 4 层。
 # 用「找到 .git 为止」的方式，避免这种硬编码层级再出错。
+# memory 写入开关。**测试必须把它关掉** —— 否则每次跑 pytest 都会往真实
+# memory/ledger.jsonl 里灌临时卡记录（实测一次灌了 147 条 tmpXXXX）。
+# 这个坑很隐蔽：流水看起来"有数据"，但全是测试假数据，检索会被污染。
+MEMORY_WRITE = True
+
 REPO_ROOT = next((p for p in Path(__file__).resolve().parents if (p / ".git").exists()),
                  Path(__file__).resolve().parents[3])
 
@@ -295,8 +304,15 @@ def bottleneck_problems(cands, tags=None, card=None):
     # 而 R0 的 roofline.json 里 remaining=-0.0404 照样放行进了 EV。
     # 判据自己定义了「这是错的」，消费方却不查——那就等于没定义。
     r = roof.get("remaining") if roof else None
-    if isinstance(r, (int, float)) and r < 0:
-        probs.append("remaining=%.4f < 0 —— floor.py 已把负值定义为「判据本身错了」"
+    # **两种负值必须分开**（2026-11-25）：
+    #   A. t_actual 远低于 t_floor（|r| 大）：上限估低或流量算多，判据错了 → 拒跑
+    #   B. t_actual 贴着 t_floor（|r| 很小）：地板估得略紧，**这是正常的**，
+    #      说明该实现已经在地板附近。当错误处理会让「已到顶」的卡永久停摆。
+    #      实测 rmsnorm：lightop 197.0 vs floor 197.3，r=-0.0015。
+    #      第一个当错的实现是 R0 的 -0.0404（-4%），那属于 A。
+    # 阈值 2%：归约折扣本身的观测区间就有 ±5%，2% 以内的负值不构成判据错误的证据。
+    if isinstance(r, (int, float)) and r < -0.02:
+        probs.append("remaining=%.4f < -2%% —— floor.py 已把负值定义为「判据本身错了」"
                      "（上限估低或流量算多），不是实现突破物理。先回去查分母，别进决策。"
                      % r)
     if roof:
@@ -469,6 +485,24 @@ def append_record(card, rec):
     f = d / (time.strftime("%Y%m%d") + ".jsonl")
     with f.open("a") as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    # **memory 索引**（ENGINE.md §二：memory/ 只由 engine 写）。
+    # 只索引权威流水里的记录：噪声记录已被隔离，它们没形成决策，索引了会污染检索。
+    # 字段 = runs/loop 那份原样 + card，两者可逐字段对账，不做二次加工。
+    # 三条闸：① 全局开关（测试可关）② 在 pytest 下自动关（防漏配）
+    # ③ 卡片目录必须在仓库内（临时卡绝不进跨卡索引）。
+    # 实测教训：只加开关不够 —— 4 个测试文件都会调 append_record，
+    # 漏一个就灌 43 条假记录进真实索引。
+    _under_pytest = "pytest" in sys.modules
+    _card_in_repo = REPO_ROOT in card.resolve().parents
+    if MEMORY_WRITE and not _under_pytest and _card_in_repo \
+            and not is_noise_record(rec):
+        try:
+            mf = REPO_ROOT / "memory" / "ledger.jsonl"
+            mf.parent.mkdir(parents=True, exist_ok=True)
+            with mf.open("a") as fh:
+                fh.write(json.dumps(dict(rec, card=card.name), ensure_ascii=False) + "\n")
+        except OSError:
+            pass        # memory 是索引不是权威：写不进去不该让实验失败
 
 
 # ---------------------------------------------------------------- 主张门（薄约束的核心）
@@ -561,9 +595,20 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult,
             return "REJECTED_ACCURACY", "出现 nonfinite（%s）" % ", ".join(
                 "qscale=%s:%d" % (q, r["nonfinite"]) for q, r in acc_cand.items() if r["nonfinite"])
         p = acc_cand.get(primary)
-        if p and p.get("max_abs", 0.0) > tol:
-            return "REJECTED_ACCURACY", "主口径 qscale=%s 对 fp32 参考 max_abs=%.2e > 容差 %.1e" % (
-                primary, p["max_abs"], tol)
+        if p:
+            # **ULP 优先**：适配器报了 max_ulp 就按它判，而不是拿固定绝对容差。
+            # bf16 只有 7 位尾数，ULP 随量级变（[0.5,1) 2^-8 / [1,2) 2^-7 /
+            # [2,4) 2^-6）。同一个算子输出里 0.1 和 3.0 量级的元素精度差 32 倍，
+            # 用统一 max_abs 必然顾此失彼 —— 实测四个变体（含厂商 lightop）
+            # 在 max_abs=2e-3 下全 FAIL，而它们的真实误差是「正好 1 ULP」的完美舍入。
+            if p.get("max_ulp") is not None and p["max_ulp"] > MAX_ULP:
+                return "REJECTED_ACCURACY", (
+                    "主口径 qscale=%s 对 fp32 参考 max_ulp=%.2f > %d ULP"
+                    % (primary, p["max_ulp"], MAX_ULP))
+            if p.get("max_ulp") is None and p.get("max_abs", 0.0) > tol:
+                return "REJECTED_ACCURACY", (
+                    "主口径 qscale=%s 对 fp32 参考 max_abs=%.2e > 容差 %.1e"
+                    % (primary, p["max_abs"], tol))
         for q, r in acc_cand.items():
             if q == primary:
                 continue
@@ -609,12 +654,28 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult,
 
     maxdiff = cand.get("maxdiff")
     if maxdiff is None:
-        # 该卡的 ab.py 不产精度字段（如 rmsnorm 的只要形状对齐即可）。
-        # 原实现 `cand.get("maxdiff", 0.0) == 0.0` 会把「没测」当成「逐位一致」，
-        # 这是把「没证据」读成「证据支持」——正是本仓最忌讳的一类错。
+        # ab.py 不产精度字段（如 rmsnorm 的 ab.py 只测时间）。
+        # **但 acc_probe 可能已经测了** —— 有 acc 结果就先信它，别直接判「没数」。
+        # 原实现一到这里就返回 ACCEPTED_NO_NUMERICS，于是 acc_probe 白测：
+        # 精度通道接上了，判定却从不看它。这是「接了但没接上」的又一例。
+        # 实测（2026-11-25）：acc.json 里明明有 max_ulp=1.0，记录仍写 acc_ok=False。
+        if acc_cand:
+            pr = acc_cand.get(primary) or next(iter(acc_cand.values()), {})
+            ulp = pr.get("max_ulp")
+            cos = pr.get("cosine")
+            if ulp is not None:
+                if ulp == 0.0:
+                    return "ACCEPTED_BITEXACT", (
+                        "显著加速 %.1f%%，acc_probe 报 0 ULP（逐位一致）%s"
+                        % (-cand.get("delta_pct", 0.0), tail))
+                return "ACCEPTED_NUMERICS", (
+                    "显著加速 %.1f%%，acc_probe 实测最差 %.2f ULP（≤%d）、cosine=%.7f%s"
+                    % (-cand.get("delta_pct", 0.0), ulp, int(MAX_ULP),
+                       cos if cos is not None else 1.0, tail))
+        # 真的一条精度数都没有 —— 保持原判：不许把「没测」读成「一致」。
         return "ACCEPTED_NO_NUMERICS", (
-            "显著加速 %.1f%%，但**本卡未产出精度字段**（ab.py 不返回 maxdiff）"
-            "⇒ 不能声称逐位一致，必须另行过正确性门（done_when）%s"
+            "显著加速 %.1f%%，但**本卡未产出精度字段**（ab.py 不返回 maxdiff，"
+            "acc_probe 也无结果）⇒ 不能声称逐位一致，必须另行过正确性门（done_when）%s"
             % (-cand.get("delta_pct", 0.0), tail))
     if maxdiff == 0.0:
         return "ACCEPTED_BITEXACT", "显著加速 %.1f%%，且输出逐位一致%s" % (-cand.get("delta_pct", 0.0), tail)
@@ -1362,7 +1423,13 @@ def cmd_run(a):
                   flush=True)
         else:
             acc_args = [str(x) for x in acc_args]
-        cmd = [sys.executable, str(card / acc_adapter), *a.tags,
+        # **传变体名，不传候选 id**（2026-11-25 修）。记录里 acc 的键是
+        # v["tag"]（变体名），而 a.tags 是候选 id —— 两者不同（候选 id ≠ 变体名，
+        # 这个区别本文件 1340 行已经写过一次）。原来这里直接传 a.tags，
+        # 于是 acc_probe 报的 tag 都对不上，acc 永远为空，acc_ok 恒 False。
+        # 这和「全仓 0 条 acc_ok=true」是同一个根因：不是没测，是测了没接上。
+        acc_tags = [vmap.get(t, t) for t in a.tags]
+        cmd = [sys.executable, str(card / acc_adapter), *acc_tags,
                "--json", str(acc_json), *acc_args]
         print("$ " + " ".join(cmd), flush=True)
         if subprocess.call(cmd) == 0 and acc_json.exists():

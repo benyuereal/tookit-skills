@@ -31,10 +31,15 @@ tolerance:
     # 这是 bf16 输出的正常舍入，不是实现错误。
     # 教训：绝对容差在 bf16 输出上不可移植——输出量级一变，同一个 max_abs
     # 就从「过」变成「不过」。用相对误差定容差。
-    max_abs: 5.0e-2
+    # 2026-11-25：统一到 ulp_bound。本卡此前的注释已经独立得出同一结论
+    # （「绝对容差在 bf16 输出上不可移植」），现在用机器判据表达它，
+    # 而不是靠 rel_median 这种要另写比较器的字段。
+    mode: ulp_bound
+    max_ulp: 2
     cosine: 0.9999
-    rel_median: 5.0e-3
-    note: "以 rel_median 为主判据；max_abs 只作上界兜底。实测 rel_median=1.6e-3"
+    max_abs: 5.0e-2        # 保留：仅作 ULP 判据失效时的兜底上界
+    rel_median: 5.0e-3     # 保留：兼容既有报告字段
+    note: "按量级判 ULP；max_abs/rel_median 仅兼容旧报告"
   variant_vs_variant:
     mode: tolerance
 

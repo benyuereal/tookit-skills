@@ -42,6 +42,10 @@ def _load(name, path):
 
 loop = _load("op_loop_under_test", LOOP_PY)
 
+# 测试**不许**往真实 memory/ 写。实测一次全量 pytest 灌了 147 条 tmpXXXX 假记录，
+# 而 memory/ledger.jsonl 是跨卡检索的索引 —— 被污染后检索结果全是测试数据。
+loop.MEMORY_WRITE = False
+
 CARD_YAML = """\
 defaults:
   bench: bench/ab.py

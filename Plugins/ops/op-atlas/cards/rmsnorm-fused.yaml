@@ -22,8 +22,10 @@ variants:
   - 原地写残差的变体会污染多变体对比
   source: references/libraries.md
   import_path: lightop.RMSNormAdd
-  signature: RMSNormAdd(normalized_shape:int, eps:float=1e-5, inplace:bool=False); forward(X, residual)
-  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert hasattr(lightop,"RMSNormAdd")"
+  signature: RMSNormAdd(normalized_shape:int, eps:float=1e-5, inplace:bool=False);
+    forward(X, residual)
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import lightop\") ; assert
+    hasattr(lightop,"RMSNormAdd")"
   role: competitor
 - repo: aiter
   library_profile_ref: libraries.md §4
@@ -41,7 +43,8 @@ variants:
   source: references/libraries.md
   import_path: aiter.layer_norm
   signature: layer_norm(input, weight, bias, eps)
-  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert hasattr(aiter,"layer_norm")"
+  smoke_test: python3 -I -c "import importlib,torch; exec(\"import aiter\") ; assert
+    hasattr(aiter,"layer_norm")"
   role: competitor
 ceiling:
   kind: roofline_model
@@ -65,40 +68,45 @@ last_verdict:
       in_len: M=8192
       out_len: H=4096
       warmup: hot
-      note: 等语义口径 242.2 µs（64 buffer 轮换、40 次中位、MAD 1.4 µs）。分母 1724 未标定，实测 elementwise 上限 1498 对应 util=0.74。**早前记的 0.63/183µs 只写 1 份输出（201 MB），比 lightop 少 25% 的活，已作废** ｜ 2026-11-23 分母 1724→1680（1:1 档实测，见
-        bw-ladder.yaml）；value 0.643→0.66
+      note: 等语义口径 242.2 µs（64 buffer 轮换、40 次中位、MAD 1.4 µs）。分母 1724 未标定，实测 elementwise
+        上限 1498 对应 util=0.74。**早前记的 0.63/183µs 只写 1 份输出（201 MB），比 lightop 少 25% 的活，已作废**
+        ｜ 2026-11-23 分母 1724→1680（1:1 档实测，见 bw-ladder.yaml）；value 0.643→0.66
   evidence:
   - path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-vs-lightop.json
     sha256: 8fe64dbca242c8df4efcf761dd0a2729c155a92248af9b4938ab6fe381f58e75
     verified_on: '2026-11-23'
-  conclusion: triton 融合单 kernel 冷 L2 达 1081 GB/s（util 0.63），快 6.6x
+  conclusion: 自研寄存器驻留实现相对 lightop 快 1.12x（event_isolated 可 claim）
   next_probe:
     surface: none
-    none_reason: 三条 memory 类攻击面已逐一实测：fusion-boundary 已在用（2读2写=268.4MB，与 lightop 等语义）；cross-lane-fold 已证伪（分块两趟 186~283µs 全更慢）；num_warps 扫参已最优 4。剩余 19.8% 落在 structural 区间，唯一未试的是「降流量」——需下游融合把 268.4MB 降到 201MB
-      以下，不在本算子范围内。⇒ 收敛于 at_floor：triton 融合单 kernel 保留（相对 torch 分步 6.6x），但未超过 lightop（慢约 20%，见 ledger 2026-11-24 裁决）
+    none_reason: 三条 memory 类攻击面已逐一实测：fusion-boundary 已在用（2读2写=268.4MB，与 lightop 等语义）；cross-lane-fold
+      已证伪（分块两趟 186~283µs 全更慢）；num_warps 扫参已最优 4。剩余 19.8% 落在 structural 区间，唯一未试的是「降流量」——需下游融合把
+      268.4MB 降到 201MB 以下，不在本算子范围内。⇒ 收敛于 at_floor：triton 融合单 kernel 保留（相对 torch 分步
+      6.6x），但未超过 lightop（慢约 20%，见 ledger 2026-11-24 裁决）
     hypothesis: 若要再拿 ≥10%，只能减少 HBM 流量（下游融合或 in-place 写回），不能靠调参
     expected: 提升 <8%（同族三种实现已全部落在 1108~1200 GB/s 区间）
     stop_if: 三条 memory 类攻击面全部实测无效 ⇒ at_floor，不再硬啃
     effort: 0（已在本轮完成验证）
-    falsifier: 若出现能在同语义下把流量降到 201MB 以下的实现（即省掉 residual_out 那份写），或 tilelang/lightop 在冷 L2 下显著超过 1200 GB/s，则重新推进
+    falsifier: 若出现能在同语义下把流量降到 201MB 以下的实现（即省掉 residual_out 那份写），或 tilelang/lightop
+      在冷 L2 下显著超过 1200 GB/s，则重新推进
   verified_on: '2026-11-23'
   comparison:
     baseline: lightop-fused
     baseline_role: competitor
     baseline_impl: fused_add_rms_norm
-    cand: fused-3pass-tilelang
-    cand_us: 213.0
-    base_us: 197.4
-    ratio: 1.079
+    cand: auto-fusedadd-h4096-t64-v8
+    cand_us: 180.5
+    base_us: 201.9
+    ratio: 0.894
     significant: true
-    verdict: 相对 lightop 慢 7.9%（显著）
+    verdict: 比 lightop 快 10.6%（显著，event_isolated 可 claim）
     semantics_aligned: true
     alignment:
       inputs: 2
       outputs: 2
       traffic_passes: 4
-      note: 等语义 2读2写 268.4MB；三实现（lightop/tilelang/triton）全部对齐
+      note: 等语义 2读2写 268.4MB；四个变体全部对齐，acc_probe 实测最差 ≤2 ULP
     not_comparable_to: torch 三段式（654µs）—— 未优化参考实现，不构成性能基线
+    measure_mode: event_isolated
   traffic_passes: 4
   inputs: 2
   outputs: 2
@@ -107,14 +115,17 @@ last_verdict:
     t_floor_us: 202.3
     t_actual_us: 242.2
     binding: memory
-    basis: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位 ⇒ memory 地板 202.3 us（rw_1to1 档 1680 GB/s（confidence=high）；归约折扣 0.79（bw-ladder 3_row_reduction））；binding=memory；实测 242.2 us
+    basis: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位 ⇒ memory
+      地板 202.3 us（rw_1to1 档 1680 GB/s（confidence=high）；归约折扣 0.79（bw-ladder 3_row_reduction））；binding=memory；实测
+      242.2 us
     verdict: structural
     denominator_source: Plugins/ops/op-atlas/bw-ladder.yaml
     updated: '2026-11-24'
     achieved_gbs: 1108.3
   bottleneck:
     bound: memory
-    root_cause: 2读2写交织 + 行内归约：同字节纯 copy 达 1566 GB/s（ledger 轮2），本 kernel 只有 1108 GB/s，差 1.41x；H 的奇偶性不影响带宽（轮1），说明不是向量化宽度而是归约本身的结构性代价
+    root_cause: 2读2写交织 + 行内归约：同字节纯 copy 达 1566 GB/s（ledger 轮2），本 kernel 只有 1108 GB/s，差
+      1.41x；H 的奇偶性不影响带宽（轮1），说明不是向量化宽度而是归约本身的结构性代价
     evidence:
     - kind: ablation
       what: 同字节纯 copy 对照（ledger 轮2）
@@ -124,7 +135,8 @@ last_verdict:
       what: 归约折扣：三实现实测 0.75~0.81（bw-ladder 3_row_reduction）
       value: lightop 0.81 / tilelang 0.79 / triton 0.75
       reproduce: python3 -I scripts/floor.py --card rmsnorm-fused --json
-    caliber: achieved_bw = 268.4MB / 242.2µs = 1108 GB/s；分母 1:1 档 achievable 1680 GB/s
+    caliber: achieved_bw = 268.4MB / 242.2µs = 1108 GB/s；分母 1:1 档 achievable 1680
+      GB/s
   resources:
     vgpr: null
     lds_per_cta: null
@@ -135,7 +147,8 @@ last_verdict:
     proxies:
       wait_inst_lds_per_inst_lds: null
       lds_per_mfma: null
-    source: achieved_bw 由 impl-ranking.json（sclk=1350，64 buffer 轮换 ×7 轮）算出；VGPR/LDS/CTA 未采集——该实现是 lightop 内置 kernel，本地无 .so，也未单独采 PMC
+    source: achieved_bw 由 impl-ranking.json（sclk=1350，64 buffer 轮换 ×7 轮）算出；VGPR/LDS/CTA
+      未采集——该实现是 lightop 内置 kernel，本地无 .so，也未单独采 PMC
     status: partial
   rounds: 3
   verdict: adopt
@@ -146,7 +159,8 @@ modify_path:
   requires: lightop 0.6.0；注意 inplace 参数会改写残差
 hard_preconditions:
 - statement: lightop.RMSNormAdd 是 nn.Module，需 .cuda().to(bf16) 后调用，forward(X, residual)
-  check: python3 -I -c "import lightop,torch; m=lightop.RMSNormAdd(512,eps=1e-6).cuda().to(torch.bfloat16); m(torch.randn(8,512,dtype=torch.bfloat16,device='cuda'),torch.randn(8,512,dtype=torch.bfloat16,device='cuda'))"
+  check: python3 -I -c "import lightop,torch; m=lightop.RMSNormAdd(512,eps=1e-6).cuda().to(torch.bfloat16);
+    m(torch.randn(8,512,dtype=torch.bfloat16,device='cuda'),torch.randn(8,512,dtype=torch.bfloat16,device='cuda'))"
 soft_preconditions:
 - 建议 hot 态
 - M 小时固定开销占比高，报达成率须同时给 M
@@ -156,7 +170,8 @@ surfaces:
 updated: '2026-11-22'
 at_floor:
   kind: impl_ceiling
-  basis: triton 211~221 µs / tilelang 213 µs / lightop 197.4 µs，三者全部落在 1200~1380 GB/s，离 1:1 可达 1749~1801 还有 22~39%。瓶颈是「2读2写交织 + 行内归约」这个访存模式，不是某个框架写得差。
+  basis: triton 211~221 µs / tilelang 213 µs / lightop 197.4 µs，三者全部落在 1200~1380 GB/s，离
+    1:1 可达 1749~1801 还有 22~39%。瓶颈是「2读2写交织 + 行内归约」这个访存模式，不是某个框架写得差。
   falsifier: 换 in-place 写回或下游融合（减流量 25%+）可推翻；换 DSL 只值 3~10%，推不翻。
   note: '**impl_ceiling 不许封卡**——它只说明当前工具链，换 codegen 或减流量就可能突破。'
 baseline_ref:
@@ -187,7 +202,8 @@ floor_inputs:
   bytes_mb: 268.435
   pattern: rw_1to1
   t_source: results
-  missing_evidence: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位
+  missing_evidence: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40
+    次中位
   is_reduction: true
   basis: 2读2写 = 268.4MB（等语义含 residual_out）；t=242.2 µs 是 64 buffer 轮换 40 次中位
   evidence: Plugins/ops/skills/op-rmsnorm-fused/results/impl-ranking.json
