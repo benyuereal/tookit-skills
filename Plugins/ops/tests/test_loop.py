@@ -876,3 +876,37 @@ class TestRealCard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestNoiseRecordsNotKept(unittest.TestCase):
+    """噪声过大的记录不该留在权威流水里。
+
+    背景（2026-11-24 实测）：同一份代码在四张卡上跑 event_isolated，
+    lightop 基准从 197µs 漂到 220~236µs，MAD 4.9~7.2% 全部超 5% 熔断线。
+    judge() 正确地判了 INCONCLUSIVE —— 但**记录本身还是写进了 runs/loop/**。
+
+    这类记录的问题不是"结论错"，是**它会污染后续统计**：
+    D4 的轮次、calibrate 的 realized_med、recall 的检索结果都会把它算进去。
+
+    判据：真实卡片的 runs/loop/*.jsonl 里，
+    不许有 `measure_mode=event_isolated` 且 `decision=INCONCLUSIVE`
+    且判定理由是"噪声"的记录。要么重跑，要么不写。
+    """
+
+    def test_no_noise_records_in_real_cards(self):
+        import json
+        skills = Path(__file__).resolve().parents[1] / "skills"
+        bad = []
+        for f in skills.rglob("runs/loop/*.jsonl"):
+            for line in f.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    r = json.loads(line)
+                except ValueError:
+                    continue
+                if (r.get("decision") == "INCONCLUSIVE"
+                        and str(r.get("measure_mode")) == "event_isolated"
+                        and "不可信" in str(r.get("why") or "")):
+                    bad.append((str(f.relative_to(skills)), r.get("ts"), r.get("why")[:50]))
+        self.assertEqual(bad, [],
+                         "以下记录是噪声过大且不可 claim 的，不该留在权威流水里：%s" % bad)

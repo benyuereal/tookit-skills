@@ -6,6 +6,8 @@ defaults:
   - prefill-8k
   - --base
   - lightop-fused
+  - --measure-mode
+  - event_isolated
   gpu: 7
 directions:
 - id: fusion-boundary
