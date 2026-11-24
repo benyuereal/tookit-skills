@@ -28,22 +28,26 @@ candidates:
   status: pending
   priority: 1
   action_class: reduce-bytes
-  expect: triton 融合 vs lightop 融合（同语义 2读2写）
+  expect: -20%
   done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape tiny --variants fused-3pass-triton
   note: lightop.RMSNormAdd 本身就融合残差；这条验证的是「融合前 vs 融合后」的差异
   variant: fused-3pass-triton
+  expect_basis: 实测：triton 242.0µs vs lightop 197.0µs = 1.229，即慢 22.9%，取 -20% 作保守预期
 - id: inplace-residual
   direction: fusion-boundary
   status: pending
   priority: 2
   action_class: reduce-bytes
-  expect: inplace=True 时省一份残差写回
+  expect: -11%
   note: 需先确认 mutates_inputs 的准确语义——若原地改写，多变体对比必须各喂副本（这条本身就是判据）
+  expect_basis: 预期省一份 residual_out 写回：268.4MB → 201.3MB = -25% 流量；按 1:1 档 1680 GB/s 与当前 1363 GB/s 达成率折算，预期 -11%
 - id: hidden-non-pow2
   direction: occupancy
   status: pending
   priority: 3
   action_class: improve-locality
-  expect: hidden 非 2 的幂时向量化宽度受限造成的损失
+  expect: -3%
   note: 用 hidden=4096 之外的形状测（如 5000）；这是「到不到地板」的分辨器
+  expect_basis: 仅影响非 2 的幂 H 的向量化宽度，hbird 实测同类问题约 3% 量级；**未在本仓实测**，标 low_confidence
+  expect_confidence: low
 refuted: []

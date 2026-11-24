@@ -265,6 +265,29 @@ def test_dry_run_writes_no_state(tmp_path, surfaces_file):
     assert not adv.progress_path(card).exists()
 
 
+def test_dry_run_ignores_stale_terminal_state(tmp_path, surfaces_file):
+    """上一次真跑留下 blocked，dry-run 不能被它卡住、也不许读它当进度。"""
+    card = make_card(tmp_path)
+    _write(adv.progress_path(card),
+           json.dumps({"card": "op-fixture", "round": 0, "stage": "blocked",
+                       "history": []}))
+    rep = _run(card, rounds=1, runner=FakeRunner(), dry_run=True)
+    assert rep["progress_stage"] == "replanned"
+    # 且不覆写磁盘状态
+    assert json.loads(adv.progress_path(card).read_text())["stage"] == "blocked"
+
+
+def test_terminal_state_resets_on_new_real_invocation(tmp_path, surfaces_file):
+    """blocked 是单次调用终态：重新真跑应从 idle 重开并推进到 replanned。"""
+    card = make_card(tmp_path)
+    _write(adv.progress_path(card),
+           json.dumps({"card": "op-fixture", "round": 0, "stage": "blocked",
+                       "history": []}))
+    r = FakeRunner(on_run=lambda c, t: _append_record(c, t, "ACCEPTED_BITEXACT"))
+    rep = _run(card, rounds=1, runner=r)
+    assert rep["progress_stage"] == "replanned"
+
+
 def test_consecutive_refuted_stops(tmp_path, surfaces_file):
     """连续 2 轮 refuted → 停。"""
     card = make_card(tmp_path)

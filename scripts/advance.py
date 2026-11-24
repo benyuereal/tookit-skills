@@ -52,10 +52,6 @@ AT_FLOOR = 0.10
 MAX_CONSECUTIVE_REFUTED = 2
 
 
-def _c(s, color=None):
-    return s
-
-
 # ---------------------------------------------------------------- 数据结构
 
 @dataclass
@@ -358,13 +354,17 @@ def replan(prev_top, new_top, ledger=None):
         return {"action": "STOP", "reason": "无可挖方向"}
     if new_top[0].ev < 0.30:
         return {"action": "STOP", "reason": "EV 塌缩到 0.3 以下"}
-    if new_top[0].ev < 0.5 * prev_top[0].ev:
+    # prev_top 为空时「掉一半」无从比（与上一轮不可比），按不塌缩处理；
+    # 直接跳过该判据而不是抛 IndexError——编排器不能因为数据稀疏就崩。
+    if prev_top and new_top[0].ev < 0.5 * prev_top[0].ev:
         return {"action": "STOP", "reason": "EV 掉了一半以上"}
-    if prev_top[0].id == new_top[0].id:
+    if prev_top and prev_top[0].id == new_top[0].id:
         return {"action": "CONTINUE_SAME", "reason": "top1 未变"}
-    if new_top[0].ev < 1.5 * new_top[1].ev:
+    # 只有 1 个候选时不存在「拉开差距」的问题（没有第二名可比）。
+    if len(new_top) >= 2 and new_top[0].ev < 1.5 * new_top[1].ev:
         return {"action": "STALLED", "reason": "没拉开差距，可能是抖动"}
-    cited = ledger_cites(new_top.rejected, prev_top[0], ledger)
+    cited = ledger_cites(new_top.rejected, prev_top[0] if prev_top else Cand("?", "", 0.0),
+                         ledger)
     return {"action": "CONTINUE_SWITCH", "reason": "换向", "cited": cited}
 
 
@@ -431,9 +431,19 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
         report.update(status="stopped", reason="at_floor", progress_stage="idle")
         return report
 
-    state = load_progress(card)
-    state["card"] = report["card"]
-    state["since"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    if dry_run:
+        # dry-run 必须是**纯函数**：不读也不写磁盘状态，否则上一次真跑留下的
+        # 终态（blocked/stopped）会让本次 stage 永远无法前进，看到的也是旧进度。
+        state = {"card": report["card"], "round": 0, "stage": "idle",
+                 "since": time.strftime("%Y-%m-%dT%H:%M:%S"), "history": []}
+    else:
+        state = load_progress(card)
+        # 终态只对**单次调用**终态：重新调用意味着「人已经处理过阻塞」，
+        # 从 idle 重开；否则 blocked 一次之后这张卡永远推不动。
+        if state.get("stage") in TERMINAL:
+            state["stage"] = "idle"
+        state["card"] = report["card"]
+        state["since"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     _advance_stage(state, "planned")
 
     ledger = read_records(card)
@@ -632,7 +642,10 @@ def main(argv=None):
     if not a.card:
         ap.error("--card 必填（或用 --selftest）")
 
-    report = run_advance(Path(a.card).resolve(), a.max_rounds, dry_run=a.dry_run)
+    # --json 时把人读日志关掉，避免污染机器可读输出
+    emit = (lambda *args, **kw: None) if a.json else print
+    report = run_advance(Path(a.card).resolve(), a.max_rounds,
+                         dry_run=a.dry_run, emit=emit)
     if a.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

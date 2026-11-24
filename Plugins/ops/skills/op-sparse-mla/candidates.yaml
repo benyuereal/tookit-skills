@@ -1,312 +1,293 @@
-# 稀疏 MLA 前向 —— 方向预算 + 候选队列 + 已判死清单（loop.py 读写）
-#
-# 纪律：
-#   - directions 是**攻击面**（一类候选）。同一方向证伪 MAX_DIRECTION_REFUTES=2 次 ⇒ 封方向，
-#     loop.py 拒绝再受理该方向的任何候选，回 op-constrain 重定约束。
-#   - candidates 里只放「还值得跑」的；必须声明 direction，否则「2 次封方向」保护不到它，
-#     loop.py run 直接拒绝。跑完由 loop.py run 记录判定，采纳后 status=adopted。
-#   - **done_when（可选，一条 shell 命令）是完成判定的唯一裁决点**：status=adopted **必须**
-#     带它。`python3 loop.py -C <本卡> verify --tag <id>` 执行该命令，**只有返回 0 才把
-#     status 改成 adopted**；否则保持原状态并回显输出尾部 20 行。模型说「跑完了/到顶了」
-#     不算数。命令在**仓库根**执行（$OPS_CARD 指向本卡目录），例：
-#       done_when: 'python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape decode-glm53 --variants hip-glm'
-#     写不出可复跑的命令 ⇒ 这条候选就还不能算完成（状态别写 adopted）。
-#   - refuted 是**已判死**的唯一落点，**why 必须写机制**，不能只写「试过，慢」。
-#     机制才能迁移到下一个算子；结论不能。kind: impl（实现判死）/ direction（方向证伪）/
-#     claim（早期的诊断类结论，不是候选）；老条目没有 kind，按 impl 读。
-#
-# ledger.md §三 是**证据叙述**（原始数值、日志路径、我推翻我自己的记录），不参与判定；
-# 只在 ledger 里存在的结论，loop.py 拦不住，等于没有。
-#
-# 本卡不再提供 tag 级文本变体实验适配器（bench/ab.py / bench/acc_probe.py / bench/variants.py
-# 已移除：15 个变体的结论在下面 refuted 里，生成器本身由 LLM 按需现写）。因此 loop.py 的
-# run 子命令对本卡**不可用**；status / queue 照常。要验证新候选，直接跑
-#   python3 bench/bench.py --shape <档> --variants <已注册变体> [--mode workset]
-#   python3 <repo>/scripts/opcheck.py correctness --contract contract.yaml --shape <档> --variants ...
-# 再把结论写回本文件（refuted 或 candidates）。
-
 defaults:
   s: 128
   topk: 2048
   nvalid: 2000
   heads: 64
-  skv: [32768, 131072, 327680]
-
+  skv:
+  - 32768
+  - 131072
+  - 327680
 directions:
-  # 历史上 27 条判死**全是实现级**：每条都是某个具体改动因为自己的机制挂掉
-  # （寄存器溢出 / LDS 超限 / 布局推断拒绝 / 就是慢），没有一条证伪了攻击面本身。
-  # 所以下面三个方向的 refutes 都是 0 —— 不是没试过，是没试死过方向。
-  - id: raise-heads-per-wave
-    statement: "抬 heads/wave 到 16（bm64）稀释「每 wave 重读整块 KV」，只被 VGPR 预算挡住"
-    status: open
-    refutes: 0
-
-  - id: bypass-tilelang-codegen
-    statement: "绕开 tilelang 的布局转换与调度：手写主循环 HIP"
-    status: open
-    refutes: 0
-
-  - id: shorten-max-chain
-    statement: "缩短 online-softmax 的 max 链（maxn N 块求一次）"
-    status: open
-    refutes: 0
-
-  - id: raise-occupancy
-    statement: "抬每 CU 驻留的 CTA 数。基线是 2（LDS 28672 决定），3 需 LDS ≤21845"
-    status: open
-    refutes: 1
-    note: "2026-11-13 新增。LDS 探针实测：1 CTA/CU 比 2 慢 67~69%，本 kernel 对驻留数极度敏感。已判死 1 条路（lds_cut_to_3cta，结构零余量）；剩下的路是 d 跨 CTA 切分（重写级）。"
-
+- id: raise-heads-per-wave
+  statement: 抬 heads/wave 到 16（bm64）稀释「每 wave 重读整块 KV」，只被 VGPR 预算挡住
+  status: open
+  refutes: 0
+- id: bypass-tilelang-codegen
+  statement: 绕开 tilelang 的布局转换与调度：手写主循环 HIP
+  status: open
+  refutes: 0
+- id: shorten-max-chain
+  statement: 缩短 online-softmax 的 max 链（maxn N 块求一次）
+  status: open
+  refutes: 0
+- id: raise-occupancy
+  statement: 抬每 CU 驻留的 CTA 数。基线是 2（LDS 28672 决定），3 需 LDS ≤21845
+  status: open
+  refutes: 1
+  note: 2026-11-13 新增。LDS 探针实测：1 CTA/CU 比 2 慢 67~69%，本 kernel 对驻留数极度敏感。已判死 1 条路（lds_cut_to_3cta，结构零余量）；剩下的路是 d 跨 CTA 切分（重写级）。
 candidates:
-  - id: mainloop_restage
-    parent: prefetch_1slice
-    direction: bypass-tilelang-codegen
-    parent_surface: cross-lane-fold
-    status: pending
-    priority: 2
-    hypothesis: >
-      沿 prefetch_1slice 留下的结构再走一步：它证明了「在 num_stages=0 的循环里
-      手工加预取 = 用循环携带依赖换重叠」。所以不要再手工搬 T.copy，
-      而是把 num_stages 从 0 打开、让编译器自己做软件流水，
-      保留它那段「切片0 索引前移」的地址算式（那是有效的部分）。
-    expect: >
-      若编译器的流水能吃掉循环携带依赖，耗时应回到基线以下；
-      若 LDS 预算挡住 num_stages>=1，则证明 handwrite_mainloop 是唯一出路。
-    why: >
-      prefetch_1slice 的失败点不在「预取」而在「谁来做预取」。
-      它把预取手工塞进循环，于是预取本身变成依赖；交给编译器则预取与计算
-      由同一套流水调度。这条候选是**从 stalled 父代再出发**的第一次实践。
-    blocked_by: >
-      未测定（2026-11-23）：本机没有 tilelang 源码树。bench/bench.py --mode config
-      需要 --tilelang-root 指向 perf/sparse_mla/sparse_mla_fwd.py，实测该路径不存在。
-      所以这条候选只完成了「从 stalled 父代再出发」的排队，**没有完成验证**。
-      不许把它的存在读成「stalled 机制已经产生收益」。
+- id: mainloop_restage
+  parent: prefetch_1slice
+  direction: bypass-tilelang-codegen
+  parent_surface: cross-lane-fold
+  status: pending
+  priority: 2
+  hypothesis: '沿 prefetch_1slice 留下的结构再走一步：它证明了「在 num_stages=0 的循环里 手工加预取 = 用循环携带依赖换重叠」。所以不要再手工搬 T.copy， 而是把 num_stages 从 0 打开、让编译器自己做软件流水， 保留它那段「切片0 索引前移」的地址算式（那是有效的部分）。
 
-  - id: maxn32
-    direction: shorten-max-chain
-    parent_surface: barrier-width
-    status: pending
-    priority: 1
-    hypothesis: "running max 不必每块更新，每 32 块求一次"
-    expect: "三个 SKV 档位一致 −11.7~−11.9%；非逐位一致"
-    evidence: "ledger §二 30"
-    note: "代码已验；进生产还差 GPQA/HumanEval 端到端一档。**2026-11-13 按 done_when 新规从 adopted 降回 pending**：它的变体由 `/tmp/alt/xform.py` 的 maxn 变换现场生成（不入库），仓库里没有任何可复跑命令能裁决这条结论 ⇒ 不满足「状态必须能被机器验证」。要重新 adopted：先把 xform 收进仓库并注册成可执行变体，再给本候选写 done_when（correctness + 端到端质量门两段）。结论本身（−11.7%、非逐位）不变，变的只是「能不能被外部裁决」。"
+    '
+  expect: '若编译器的流水能吃掉循环携带依赖，耗时应回到基线以下； 若 LDS 预算挡住 num_stages>=1，则证明 handwrite_mainloop 是唯一出路。
 
-  - id: bm64_vgpr_squeeze
-    direction: raise-heads-per-wave
-    parent_surface: occupancy
-    status: pending
-    priority: 1
-    hypothesis: "把 thr256 下的非 acc_o VGPR 从 ~190 压到 ~100，让 bm64 不再溢出"
-    why: "bm64/thr256 是唯一把 heads/wave 抬到 16 的点（LDS/MFMA 实测 1.77→1.16），只被 scratch 141 B 毁掉"
-    expect: "判据三条同时成立：scratch==0 且 heads/wave==16 且 DRAM≤500 MB"
-    evidence: "ledger §二 26 / §五"
-    note: "不是改一个参数，是要改三个地方（gather 直落 shared / 减少 A_local 副本 / 合并 acc_s 临时），属重构级"
+    '
+  why: 'prefetch_1slice 的失败点不在「预取」而在「谁来做预取」。 它把预取手工塞进循环，于是预取本身变成依赖；交给编译器则预取与计算 由同一套流水调度。这条候选是**从 stalled 父代再出发**的第一次实践。
 
-  - id: handwrite_mainloop
-    direction: bypass-tilelang-codegen
-    parent_surface: cross-lane-fold
-    status: pending
-    priority: 3
-    hypothesis: "手写主循环 HIP，绕开 tilelang 的布局转换（64 条标量 LDS）"
-    why: "所有参数面已实测否决，codegen 是剩余唯一解释（VALU/MFMA 3.11 vs fm 0.73，LDS/MFMA 1.67 vs 0.53）"
-    expect: "未知；先做一个只读 gather+GEMM 的最小骨架验证指令数能否接近 fm"
-    evidence: "ledger §二 24 / §五"
+    '
+  blocked_by: '未测定（2026-11-23）：本机没有 tilelang 源码树。bench/bench.py --mode config 需要 --tilelang-root 指向 perf/sparse_mla/sparse_mla_fwd.py，实测该路径不存在。 所以这条候选只完成了「从 stalled 父代再出发」的排队，**没有完成验证**。 不许把它的存在读成「stalled
+    机制已经产生收益」。
 
-  # —— 手写 HIP 交付物（现只留 GLM 档 dev/sparse_mla_hip_glm.hip）落地后沉淀的两条；
-  #    576 宽/H=16 的对照实现按「无对应生产模型」移除，git 历史 1.6.0 提交 2c9cf34 可取
-  #    已验证事实。绝对站位数字不进本文件（见 data/kb/README.md 条目纪律），只留相对值。
-  - id: hcu_buffer_load_gather
-    direction: bypass-tilelang-codegen
-    parent_surface: cross-lane-fold
-    status: verified
-    priority: 1
-    hypothesis: "手写 kernel 内层 KV gather 必须走 tl::hcu_buffer_load（单条向量化硬件 buffer_load_dwordx4 + buffer 描述符 + 硬件 OOB clamp），不能用标量 global load 循环"
-    why: "标量循环（8×b16 load + 8 次地址计算/16B）VALU 指令膨胀，恒定慢 ~1.35×/CTA（相对 tilelang），S=128 还落后 flash_mla 13%；换 buffer_load 后差距缩到 ~1.16×/CTA，S=128 追平。两条路径输出**位级一致**——纯速度差异，不是数值差异"
-    expect: "位级一致（已满足），-1 哨兵由硬件 OOB clamp 自动 0-fill，免分支"
-    evidence: "A/B 记录见 dev/COMPILE.md；对照源码（标量版 + scalar_ref）在 1.6.0 提交 2c9cf34，之后移除，BW1100 gfx938"
-    source: "dev/COMPILE.md（原 dev/sparse_mla_hip.hip 头注释已并入）；原语出处 tilelang core/arch/amd_buffer_addressing.hpp"
-    verified_on: "2026-10-29 / BW1100 gfx938 / DTK 6.3.26113"
-    note: "接法：include 真实 tilelang device 头（tl_templates/hcu/{common,gemm,reduce,barrier}.h，编译 -I $TILELANG_HYGON_ROOT/src）；copy.h 混入了本机 DTK 没有的 async builtins（__builtin_amdgcn_asyncmark / __builtin_amdgcn_wait_asyncmark / __builtin_amdgcn_*_buffer_load_async_lds）会编译失败，故只 vendor 了 copy.h 里两个顶层 hcu_buffer_load/hcu_buffer_store 包装（真正的 make_wave_buffer_resource + *_impl 在 common.h 已引入的 amd_buffer_addressing.hpp）"
-
-  - id: aicc_mllvm_compile
-    direction: bypass-tilelang-codegen
-    parent_surface: cross-lane-fold
-    status: verified
-    priority: 1
-    hypothesis: "手写 HIP kernel 必须用 aicc + **完整镜像对标 tilelang kernel 的编译 flag**（含 pass_configs 条件项）；hipcc 不行（不是慢，是拒收）"
-    why: "这批 flag 是 tilelang JIT 在本机（aicc 在 PATH 时）实际编译 kernel 用的那套，本 kernel 少一套就慢 ~1.12×/CTA（A/B 实测）；hipcc（后端 dcc/lld）对这批 -mllvm 项报 Unknown command line argument，必须直接调 aicc（/opt/dtk/bin/aicc）。flag 本质是给后端 LLVM 做指令调度/延迟建模/寄存器预算（mmac 延迟、LDS 延迟、768 VGPR 预算、waitcnt 时机），不改变数值（实测位级一致）。**2026-10-29 GLM 档追加：flag 列表不止 10 个无条件项——get_hcu_compile_flags 还有 pass_configs 条件项（TL_ENABLE_FAST_MATH → -mllvm=-enable-hcu-approx-func-fp-math，hcu.py:271），sparse_mla_fwd 的 @tilelang.jit 开了 FAST_MATH。首版手写构建只抄 10 个无条件项，慢 1.16×/CTA（GLM S=128/320k 0.952 vs 0.810 ms，两版输出位级一致）——规则：镜像对标 kernel 的 pass_configs，不是抄静态 flag 列表**"
-    expect: "位级一致 + 相对 hipcc/无 flag 路径快 ~1.12×/CTA；漏条件 flag 再多慢 ~1.16×/CTA"
-    evidence: "aicc vs hipcc 两版 .so A/B；4 变体同进程 A/B（GLM 档）；机器码对照 .text 11276B(漏 flag) vs 10960B(tilelang 同体)，BW1100 gfx938；flag 出处 tilelang/contrib/hcu.py get_hcu_compile_flags()（compiler != aicc 时 early-return []，即 aicc 才生效）"
-    source: "dev/COMPILE.md 与 dev/sparse_mla_hip_glm.hip 头注释「编译」段（完整命令）；op-hip-compile/derive_flags.py（可直接复算）；<tilelang-hygon>/tilelang/contrib/hcu.py get_hcu_compiler()/get_hcu_compile_flags()；perf/sparse_mla/sparse_mla_fwd.py @tilelang.jit(pass_configs=...)"
-    verified_on: "2026-10-29 / BW1100 gfx938 / DTK 6.3.26113"
-    note: "完整命令见 SKILL.md §六「手写 HIP 交付物」；少任何一个 -mllvm 项都算复现失败（含条件项）"
-
-  - id: kernel_body_bytecopy_needs_flag_mirror
-    direction: bypass-tilelang-codegen
-    parent_surface: cross-lane-fold
-    status: verified
-    priority: 2
-    hypothesis: "「kernel body 是 tilelang 生成体逐字节搬入」不等于「二进制相同」——搬入方必须逐条镜像编译 flag（含 pass_configs 条件项）+ host launch 参数，否则同体不同速"
-    why: "GLM 档实测：token 级 diff 证明 body 逐字一致（仅 sm_scale 形参 vs 常量），host grid/smem/dispatch 也与 tilelang 相同，但 shipped .so 比 tilelang 慢 13%（S=128/320k）——根因是编译时少一条 FAST_MATH 条件 flag。排查路径（可复用）：① get_kernel_source() 导出对标 kernel 源码做 token diff；② llvm-readelf --notes 读 .so 内嵌 GPU ELF 的 .text 大小/VGPR/SGPR 对照；③ 同进程 A/B 逐 flag 变体"
-    expect: "body 一致 + flag 镜像 + host 参数一致 → 同体同速（实测对齐后反超 tilelang 1~3.5%，差异来自 host 路径微差）"
-    evidence: "GLM 档 4 变体 A/B + .text/SGPR 机器码对照 + token diff，BW1100 gfx938"
-    source: "dev/sparse_mla_hip_glm.hip；kb/op-opt/sparse-mla-hip-glm-20261029.md"
-    verified_on: "2026-10-29 / BW1100 gfx938 / DTK 6.3.26113"
-
-  - id: large_s_ceiling_structure
-    direction: cross-head-kv-reuse
-    parent_surface: gather-path
-    status: verified
-    priority: 1
-    hypothesis: "H=64 档大 S（≥64）落后 flash_mla ~1.13-1.19× 且随 S 单调恶化是结构性的：计算地板 2.2× + REPLICATE_H=2（block_m 唯一可达点）+ 缺跨 head KV 复用；所有 body 内调参已穷尽，破局需重写 kernel"
-    why: "PMC 钉死：flash_mla 零 LDS bank 冲突、L1 busy 66%、DRAM 728MB（跨 head 复用生效）；本 kernel LDS 冲突 8.72M(12% 墙钟，但 swizzle 消不掉——非串行瓶颈)、VALU 1.86×。ledger §二 #2/#8/#12/#16/#18 + 2026-10-29 本轮 5 个新证伪（LDS swizzle 0% / launch_bounds 无效 / threads=512 +16% / prefetch@H64 +21% / WDRA +1.2%）"
-    expect: "小 S（≤32）split 路径领先（1.57-2.88×）；大 S 天花板 ~1.17×；要破需跨 token KV 共享或换 tiling 降 LDS/寄存器占用"
-    note: "2026-11-13 更正：本条原先写的「occupancy=1 CTA/CU（VGPR 252，等 gather 时无 CTA 切换）」是**工具常数错误**造成的（VF_LIMIT 用了非 768 模式的 65536）。实测见 candidates: lds_budget_3cta —— 基线是 **2 CTA/CU**，强制到 1 反而慢 68%。所以「缺第二个 CTA」不是本条的成因；REPLICATE_H=2 与缺跨 head 复用仍是主因。"
-    evidence: "hipprof --pmc --pmc-type 3 对照（GRBM 最小行）+ 全 S A/B（S=16..1024@320k），BW1100 gfx938"
-    source: "ledger §二 2/8/12/16/18 + kb/op-opt/sparse-mla-hip-glm-20261029.md（已证伪 5 条）"
-    verified_on: "2026-10-29 / BW1100 gfx938 / DTK 6.3.26113 / 320k pool=full"
-
-  - id: maxn32_e2e
-    direction: shorten-max-chain
-    parent_surface: barrier-width
-    status: pending
-    priority: 2
-    hypothesis: "maxn32 的精度代价在端到端评测上不可见"
-    why: "它是本轮唯一进账，但非逐位一致，判据只能是 GPQA/HumanEval 不掉分"
-    expect: "HumanEval ≥ 162/164 且 GPQA 不低于基线（同温度同采样）"
-    evidence: "ledger §五"
-
+    '
+  expect_confidence: low
+  expect_basis: 本条预期是**判据型**（多条件同时成立）或端到端指标，不是单一的"快了百分之几"。calibrate.py 无法把它折成数值比值，因此标 low —— 保留原文，不强行改成一个数（那会丢掉判据含义）。
+- id: maxn32
+  direction: shorten-max-chain
+  parent_surface: barrier-width
+  status: pending
+  priority: 1
+  hypothesis: running max 不必每块更新，每 32 块求一次
+  expect: 三个 SKV 档位一致 −11.7~−11.9%；非逐位一致
+  evidence: ledger §二 30
+  note: 代码已验；进生产还差 GPQA/HumanEval 端到端一档。**2026-11-13 按 done_when 新规从 adopted 降回 pending**：它的变体由 `/tmp/alt/xform.py` 的 maxn 变换现场生成（不入库），仓库里没有任何可复跑命令能裁决这条结论 ⇒ 不满足「状态必须能被机器验证」。要重新 adopted：先把 xform 收进仓库并注册成可执行变体，再给本候选写
+    done_when（correctness + 端到端质量门两段）。结论本身（−11.7%、非逐位）不变，变的只是「能不能被外部裁决」。
+  expect_confidence: low
+  expect_basis: 本条预期是**判据型**（多条件同时成立）或端到端指标，不是单一的"快了百分之几"。calibrate.py 无法把它折成数值比值，因此标 low —— 保留原文，不强行改成一个数（那会丢掉判据含义）。
+- id: bm64_vgpr_squeeze
+  direction: raise-heads-per-wave
+  parent_surface: occupancy
+  status: pending
+  priority: 1
+  hypothesis: 把 thr256 下的非 acc_o VGPR 从 ~190 压到 ~100，让 bm64 不再溢出
+  why: bm64/thr256 是唯一把 heads/wave 抬到 16 的点（LDS/MFMA 实测 1.77→1.16），只被 scratch 141 B 毁掉
+  expect: 判据三条同时成立：scratch==0 且 heads/wave==16 且 DRAM≤500 MB
+  evidence: ledger §二 26 / §五
+  note: 不是改一个参数，是要改三个地方（gather 直落 shared / 减少 A_local 副本 / 合并 acc_s 临时），属重构级
+  expect_confidence: low
+  expect_basis: 本条预期是**判据型**（多条件同时成立）或端到端指标，不是单一的"快了百分之几"。calibrate.py 无法把它折成数值比值，因此标 low —— 保留原文，不强行改成一个数（那会丢掉判据含义）。
+- id: handwrite_mainloop
+  direction: bypass-tilelang-codegen
+  parent_surface: cross-lane-fold
+  status: pending
+  priority: 3
+  hypothesis: 手写主循环 HIP，绕开 tilelang 的布局转换（64 条标量 LDS）
+  why: 所有参数面已实测否决，codegen 是剩余唯一解释（VALU/MFMA 3.11 vs fm 0.73，LDS/MFMA 1.67 vs 0.53）
+  expect: 未知；先做一个只读 gather+GEMM 的最小骨架验证指令数能否接近 fm
+  evidence: ledger §二 24 / §五
+  expect_confidence: low
+  expect_basis: 本条预期是**判据型**（多条件同时成立）或端到端指标，不是单一的"快了百分之几"。calibrate.py 无法把它折成数值比值，因此标 low —— 保留原文，不强行改成一个数（那会丢掉判据含义）。
+- id: hcu_buffer_load_gather
+  direction: bypass-tilelang-codegen
+  parent_surface: cross-lane-fold
+  status: verified
+  priority: 1
+  hypothesis: 手写 kernel 内层 KV gather 必须走 tl::hcu_buffer_load（单条向量化硬件 buffer_load_dwordx4 + buffer 描述符 + 硬件 OOB clamp），不能用标量 global load 循环
+  why: 标量循环（8×b16 load + 8 次地址计算/16B）VALU 指令膨胀，恒定慢 ~1.35×/CTA（相对 tilelang），S=128 还落后 flash_mla 13%；换 buffer_load 后差距缩到 ~1.16×/CTA，S=128 追平。两条路径输出**位级一致**——纯速度差异，不是数值差异
+  expect: 位级一致（已满足），-1 哨兵由硬件 OOB clamp 自动 0-fill，免分支
+  evidence: A/B 记录见 dev/COMPILE.md；对照源码（标量版 + scalar_ref）在 1.6.0 提交 2c9cf34，之后移除，BW1100 gfx938
+  source: dev/COMPILE.md（原 dev/sparse_mla_hip.hip 头注释已并入）；原语出处 tilelang core/arch/amd_buffer_addressing.hpp
+  verified_on: 2026-10-29 / BW1100 gfx938 / DTK 6.3.26113
+  note: 接法：include 真实 tilelang device 头（tl_templates/hcu/{common,gemm,reduce,barrier}.h，编译 -I $TILELANG_HYGON_ROOT/src）；copy.h 混入了本机 DTK 没有的 async builtins（__builtin_amdgcn_asyncmark / __builtin_amdgcn_wait_asyncmark
+    / __builtin_amdgcn_*_buffer_load_async_lds）会编译失败，故只 vendor 了 copy.h 里两个顶层 hcu_buffer_load/hcu_buffer_store 包装（真正的 make_wave_buffer_resource + *_impl 在 common.h 已引入的 amd_buffer_addressing.hpp）
+- id: aicc_mllvm_compile
+  direction: bypass-tilelang-codegen
+  parent_surface: cross-lane-fold
+  status: verified
+  priority: 1
+  hypothesis: 手写 HIP kernel 必须用 aicc + **完整镜像对标 tilelang kernel 的编译 flag**（含 pass_configs 条件项）；hipcc 不行（不是慢，是拒收）
+  why: 这批 flag 是 tilelang JIT 在本机（aicc 在 PATH 时）实际编译 kernel 用的那套，本 kernel 少一套就慢 ~1.12×/CTA（A/B 实测）；hipcc（后端 dcc/lld）对这批 -mllvm 项报 Unknown command line argument，必须直接调 aicc（/opt/dtk/bin/aicc）。flag 本质是给后端
+    LLVM 做指令调度/延迟建模/寄存器预算（mmac 延迟、LDS 延迟、768 VGPR 预算、waitcnt 时机），不改变数值（实测位级一致）。**2026-10-29 GLM 档追加：flag 列表不止 10 个无条件项——get_hcu_compile_flags 还有 pass_configs 条件项（TL_ENABLE_FAST_MATH → -mllvm=-enable-hcu-approx-func-fp-math，hcu.py:271），sparse_mla_fwd
+    的 @tilelang.jit 开了 FAST_MATH。首版手写构建只抄 10 个无条件项，慢 1.16×/CTA（GLM S=128/320k 0.952 vs 0.810 ms，两版输出位级一致）——规则：镜像对标 kernel 的 pass_configs，不是抄静态 flag 列表**
+  expect: 位级一致 + 相对 hipcc/无 flag 路径快 ~1.12×/CTA；漏条件 flag 再多慢 ~1.16×/CTA
+  evidence: aicc vs hipcc 两版 .so A/B；4 变体同进程 A/B（GLM 档）；机器码对照 .text 11276B(漏 flag) vs 10960B(tilelang 同体)，BW1100 gfx938；flag 出处 tilelang/contrib/hcu.py get_hcu_compile_flags()（compiler != aicc 时 early-return
+    []，即 aicc 才生效）
+  source: dev/COMPILE.md 与 dev/sparse_mla_hip_glm.hip 头注释「编译」段（完整命令）；op-hip-compile/derive_flags.py（可直接复算）；<tilelang-hygon>/tilelang/contrib/hcu.py get_hcu_compiler()/get_hcu_compile_flags()；perf/sparse_mla/sparse_mla_fwd.py
+    @tilelang.jit(pass_configs=...)
+  verified_on: 2026-10-29 / BW1100 gfx938 / DTK 6.3.26113
+  note: 完整命令见 SKILL.md §六「手写 HIP 交付物」；少任何一个 -mllvm 项都算复现失败（含条件项）
+- id: kernel_body_bytecopy_needs_flag_mirror
+  direction: bypass-tilelang-codegen
+  parent_surface: cross-lane-fold
+  status: verified
+  priority: 2
+  hypothesis: 「kernel body 是 tilelang 生成体逐字节搬入」不等于「二进制相同」——搬入方必须逐条镜像编译 flag（含 pass_configs 条件项）+ host launch 参数，否则同体不同速
+  why: GLM 档实测：token 级 diff 证明 body 逐字一致（仅 sm_scale 形参 vs 常量），host grid/smem/dispatch 也与 tilelang 相同，但 shipped .so 比 tilelang 慢 13%（S=128/320k）——根因是编译时少一条 FAST_MATH 条件 flag。排查路径（可复用）：① get_kernel_source()
+    导出对标 kernel 源码做 token diff；② llvm-readelf --notes 读 .so 内嵌 GPU ELF 的 .text 大小/VGPR/SGPR 对照；③ 同进程 A/B 逐 flag 变体
+  expect: body 一致 + flag 镜像 + host 参数一致 → 同体同速（实测对齐后反超 tilelang 1~3.5%，差异来自 host 路径微差）
+  evidence: GLM 档 4 变体 A/B + .text/SGPR 机器码对照 + token diff，BW1100 gfx938
+  source: dev/sparse_mla_hip_glm.hip；kb/op-opt/sparse-mla-hip-glm-20261029.md
+  verified_on: 2026-10-29 / BW1100 gfx938 / DTK 6.3.26113
+- id: large_s_ceiling_structure
+  direction: cross-head-kv-reuse
+  parent_surface: gather-path
+  status: verified
+  priority: 1
+  hypothesis: H=64 档大 S（≥64）落后 flash_mla ~1.13-1.19× 且随 S 单调恶化是结构性的：计算地板 2.2× + REPLICATE_H=2（block_m 唯一可达点）+ 缺跨 head KV 复用；所有 body 内调参已穷尽，破局需重写 kernel
+  why: 'PMC 钉死：flash_mla 零 LDS bank 冲突、L1 busy 66%、DRAM 728MB（跨 head 复用生效）；本 kernel LDS 冲突 8.72M(12% 墙钟，但 swizzle 消不掉——非串行瓶颈)、VALU 1.86×。ledger §二 #2/#8/#12/#16/#18 + 2026-10-29 本轮 5 个新证伪（LDS swizzle 0%
+    / launch_bounds 无效 / threads=512 +16% / prefetch@H64 +21% / WDRA +1.2%）'
+  expect: 小 S（≤32）split 路径领先（1.57-2.88×）；大 S 天花板 ~1.17×；要破需跨 token KV 共享或换 tiling 降 LDS/寄存器占用
+  note: '2026-11-13 更正：本条原先写的「occupancy=1 CTA/CU（VGPR 252，等 gather 时无 CTA 切换）」是**工具常数错误**造成的（VF_LIMIT 用了非 768 模式的 65536）。实测见 candidates: lds_budget_3cta —— 基线是 **2 CTA/CU**，强制到 1 反而慢 68%。所以「缺第二个 CTA」不是本条的成因；REPLICATE_H=2
+    与缺跨 head 复用仍是主因。'
+  evidence: hipprof --pmc --pmc-type 3 对照（GRBM 最小行）+ 全 S A/B（S=16..1024@320k），BW1100 gfx938
+  source: ledger §二 2/8/12/16/18 + kb/op-opt/sparse-mla-hip-glm-20261029.md（已证伪 5 条）
+  verified_on: 2026-10-29 / BW1100 gfx938 / DTK 6.3.26113 / 320k pool=full
+- id: maxn32_e2e
+  direction: shorten-max-chain
+  parent_surface: barrier-width
+  status: pending
+  priority: 2
+  hypothesis: maxn32 的精度代价在端到端评测上不可见
+  why: 它是本轮唯一进账，但非逐位一致，判据只能是 GPQA/HumanEval 不掉分
+  expect: HumanEval ≥ 162/164 且 GPQA 不低于基线（同温度同采样）
+  evidence: ledger §五
+  expect_confidence: low
+  expect_basis: 本条预期是**判据型**（多条件同时成立）或端到端指标，不是单一的"快了百分之几"。calibrate.py 无法把它折成数值比值，因此标 low —— 保留原文，不强行改成一个数（那会丢掉判据含义）。
 stalled:
-  # 变慢但结构变了 —— 可以当父代，方向未封（loop.py 的 stalled 落点）
-  - id: prefetch_1slice
-    kind: stalled
-    direction: bypass-tilelang-codegen
-    parent_surface: cross-lane-fold
-    ratio_vs_parent: '1.195'
-    what_changed: >
-      把 T.copy(KV_spilt0_local→shared) 提到循环体最前、切片0 的 gather 索引改成
-      min(i_i+1, vN-1)、循环前加 prologue —— 结构上多了一段跨迭代的寄存器依赖，
-      不再是纯 T.Pipelined 主体
-    why: "**预取方向彻底关闭（第 3 次独立复现）**。只预取切片 0（把 `T.copy(KV_spilt0_local→shared)` 提到循环体最前，切片0 的 gather 索引改成 `min(i_i+1, valid_NI-1)`，循环前加 prologue）——S=128 base 0.9071 → 1.0839（**+19.5%**）、S=64 0.4153 → 0.5763（**+38.8%**），输出**逐位一致**。加上此前的 3 片预取（+33%）与 2 片（+21%），与在途片数正相关但仍单调为负。**机制（推测，未单独坐实）**：`KV_spilt0_local` 变成循环携带寄存器依赖（本轮末写、下轮初读），破坏了编译器对 `T.Pipelined` 主体做软件流水/展开的能力；同时 `T.min(i_i+1, ...)` 的地址算式落在内层 `T.Parallel` 里，每元素重算一次。⇒ 不是「预取这个想法错」，而是「在 num_stages=0 的循环里手工加预取 = 用循环携带依赖换重叠，后者更贵」。要真做重叠得在编译器层面重排（即 handwrite_mainloop 的原意），而我们已论证它被 LDS/VGPR 预算卡死。"
-    on: '2026-11-13'
-    reclassified_from: refuted
-    reclassified_why: >
-      2026-11-23：本条 why 原文已写明「不是预取这个想法错，而是在这个循环结构里
-      手工加预取不划算」—— 这正是 stalled 的定义（变慢但结构变了）。
-      原先记成 refuted 会连带封掉 bypass-tilelang-codegen 方向，属于误判死。
-      改记 stalled 后，它可作为「编译器层面重排」路线的前置父代。
+- id: prefetch_1slice
+  kind: stalled
+  direction: bypass-tilelang-codegen
+  parent_surface: cross-lane-fold
+  ratio_vs_parent: '1.195'
+  what_changed: '把 T.copy(KV_spilt0_local→shared) 提到循环体最前、切片0 的 gather 索引改成 min(i_i+1, vN-1)、循环前加 prologue —— 结构上多了一段跨迭代的寄存器依赖， 不再是纯 T.Pipelined 主体
+
+    '
+  why: '**预取方向彻底关闭（第 3 次独立复现）**。只预取切片 0（把 `T.copy(KV_spilt0_local→shared)` 提到循环体最前，切片0 的 gather 索引改成 `min(i_i+1, valid_NI-1)`，循环前加 prologue）——S=128 base 0.9071 → 1.0839（**+19.5%**）、S=64 0.4153 → 0.5763（**+38.8%**），输出**逐位一致**。加上此前的
+    3 片预取（+33%）与 2 片（+21%），与在途片数正相关但仍单调为负。**机制（推测，未单独坐实）**：`KV_spilt0_local` 变成循环携带寄存器依赖（本轮末写、下轮初读），破坏了编译器对 `T.Pipelined` 主体做软件流水/展开的能力；同时 `T.min(i_i+1, ...)` 的地址算式落在内层 `T.Parallel` 里，每元素重算一次。⇒ 不是「预取这个想法错」，而是「在
+    num_stages=0 的循环里手工加预取 = 用循环携带依赖换重叠，后者更贵」。要真做重叠得在编译器层面重排（即 handwrite_mainloop 的原意），而我们已论证它被 LDS/VGPR 预算卡死。'
+  true: '2026-11-13'
+  reclassified_from: refuted
+  reclassified_why: '2026-11-23：本条 why 原文已写明「不是预取这个想法错，而是在这个循环结构里 手工加预取不划算」—— 这正是 stalled 的定义（变慢但结构变了）。 原先记成 refuted 会连带封掉 bypass-tilelang-codegen 方向，属于误判死。 改记 stalled 后，它可作为「编译器层面重排」路线的前置父代。
+
+    '
 refuted:
-  - id: gemm_is_bottleneck
-    kind: claim
-    why: "否：热工作集下同一份 kernel 的 GEMM 路径达 135~138 TF（≈55% 峰值），GEMM 只占总时间约 21%（0.067/0.327）。瓶颈是 gather 带宽，不是 GEMM 效率。"
-  - id: l2_table_wrong_scale
-    kind: claim
-    why: "否（我中途的错误结论）：当初拿 4.6 MB 的表当「L2 常驻」，那不是缓存尺度；真正进缓存（72 KB / 576 KB）时快 4.9×/3.7×。⇒「缓存常驻」必须按设备实际缓存容量取值，不能用 MB 级表想当然。"
-  - id: skv_scale
-    kind: claim
-    why: "否，SKV 8k→64k 无影响（差异在噪声内）。后面 bm64 战役的复测也印证：三档台面 0.7816→0.8004（+2.4%），涨的是 fm（+81%）。"
-  - id: precision_artifact
-    kind: claim
-    why: "否，两者精度等价（对 fp32 稠密参考 max_abs 同量级）。慢不是精度/参考实现的问题，别往这个方向查。"
-  - id: prefetch_split3_too
-    kind: claim
-    why: "慢 1.7×（输出仍逐位一致）。spilt3 原本直接从寄存器喂 MMA，搬进 shared 后多出 12 KB 的 local->shared 写 + shared 读；VGPR 217→231 未 spill，纯粹是 LDS 流水被压满 ⇒ LDS 带宽也是这条链路的共存瓶颈，不能拿它换寄存器。"
-  - id: merge
-    why: "慢 2.12×，VGPR 256 / spill 30。4 路切分是「寄存器生命周期分段」：4 个小 buffer 顺序复用同一批 VGPR，合成 1 个 [32,512] 大 buffer 后生命周期全程重叠，直接顶爆 256 硬上限。"
-  - id: kv4
-    why: "慢 1.73×，spill 10。与 merge 同一个死法（把多个 fragment 合成一个更大的）。"
-  - id: g2s
-    why: "慢 2.09×，逐位一致。gather 直写 shared 本身中性（bm32 上测过），这里同时把 split3 分片也换成独立 buffer，等价于 kv4 超集。"
-  - id: imask
-    why: "layout 推断拒绝：Fragment((32,) -> (4,), replicate: 32) 与 gather 的 [BI, D_spilt] 行映射不兼容。绕法要再垫 shared+barrier，而那 8 条读全 L1 命中，净收益≈0。"
-  - id: kpack1
-    why: "慢 28% 且算错（maxdiff 4.57e-01）。block_I=32 的 gemm2 依赖 kpack=2 的 k 打包。"
-  - id: reord
-    why: "慢 1.1%。那条 16 标量 LDS 拷贝实际是 prefetch：删掉它 gemm0 的 B 操作数变冷启动。⇒「某段指令值 7.5%」不能读成「删掉它能省 7.5%」。"
-  - id: nomax
-    why: "快 12.4% 但 logit std≈20 时 38269 个元素 nonfinite（exp2 越过 2^127）。被 maxn 支配。"
-  - id: max1
-    why: "比 maxn 慢且更不准：把 exp2 基准钉在最不准的第 0 块，std≈10 档 max_abs 是 maxn32 的 2.5×。"
-  - id: swizzle_layout
-    why: "9 种 annotate_layout 全扫，最好的 major_pack=2 是 −0.1%（噪声内），linear +13.9%。默认注入的就是那条 XOR swizzle，8.72M 次冲突不是布局可修的。"
-  - id: policy_swap
-    why: "FullRow/FullCol/Square 三档都出 NaN；FullColK 是唯一既快又对的。K 切分是这套布局的前提。"
-  - id: bm64_any
-    why: "bm64 必然溢出，与写法无关：Q_spilt0..3_shared[64]=128 VGPR + acc_o0..3[32]=128 VGPR = 256 恰好等于硬上限，还没算 KV 片段 32 + A/B 临时 40 + acc_s 16。thr512 能缓解寄存器但名义带宽塌到 198 GB/s。"
-  - id: thr128
-    why: "慢 6.7×。block_I=32 的 tile 分片被写死成 256 线程布局，降到 128 后每线程工作量翻倍，寄存器压力反而不降。"
-  - id: q_in_shared
-    why: "慢 3.0×。Q 跨全部 64 个 KV 块只读且不变，在寄存器里是一次性成本；搬进 shared 变成每次 MMA 都要读 LDS，把 VGPR 压力换成 LDS 流量，方向相反。"
-  - id: bi64
-    why: "慢 3.2~3.4×。KV_shared 的 LDS 随之翻倍，把并发和向量化一起打崩；BI=128 直接 LDS 超限。"
-  - id: bi16
-    why: "归约确实归零（纯 shfl、0 barrier），但块数翻倍 + MMA 的 n 掉到 16，净亏 27%。"
-  - id: num_stages
-    why: "ns=1 零效果（差异在噪声内）⇒ 内核里根本没有实质流水重叠，这是「计算侧慢 2.2×」的最可能方向。"
-  - id: prefetch_on_bm32
-    why: "bm16 时代快 5~6% 的预取，在 bm32 上反而慢 20%。REPLICATE_H 4→2 后 CTA 数减半、寄存器已顶到 256，在途缓冲没有第二组 CTA 兜底。⇒ 任何优化都要在 bm32 基线上重测。"
-  - id: gather_direct_shared_bm32
-    why: "中性（0.8117 vs 0.8107，噪声内），VGPR 没降。那 24 个 VGPR 本来就是短命临时，不是压力来源。"
-  - id: splitkv_larger
-    why: "S≥128 单调变差：每 CTA 工作量变小 + combine 开销。S=128 最优就是 ns=1。"
-  - id: transpose_lds
-    why: "硬件没有这条指令。gfx938/gfx942 不支持 ds_read_b64_tr_b16（gfx90a/gfx950 支持），7 种拼写与 LLVM 内建都不存在。⇒ 任何「对标 aiter PV 写法」的方案不用试。"
-  - id: single_layout_for_both_gemms
-    why: "数学上不可能：QK 要 8 个连续 d、PV 要 8 个连续 k，两者在 [k][d] 上正交，任何双射布局都无法同时成立。必有一侧付标量代价，且总量与哪一侧付无关 ⇒ 转置 tile 的净收益恒等于 0。"
-  - id: pv_register_operand
-    why: "编译期否决：LayoutInference FATAL 'Get different layout for KV_spilt3_local'。跨 lane 换布局在 tilelang 里只能走 shared，那 64 条标量 LDS 是结构强制的。"
-  - id: index_sorting_for_dram
-    why: "降级未验证。我们的 DRAM 读字节已经和 fm 相等，池缩 64× 也只快 1.05% ⇒ 排序省的是我们本来就不缺的东西。只有「排序能同时减少片上复读（LDS/TA 指令）」这一形态才值得验。"
-  - id: lds_bank_conflict
-    why: "不是区分项：厂商调优 matmul（88% MFMA 峰值）自己就有 12.6% 冲突占用率，我们 bm32 只有 9.8%。真区分项是 LDS 指令条数（3.14× fm）与非 MFMA 向量指令条数（4.25×）。"
-  - id: reduce_valu_count
-    why: "VALU 指令数是症状不是病因。删掉最大的一块（acc_o *= alpha 重缩放，每块每线程 32 条 mul）只换回 1.1%。⇒ 别以「减少指令」为目标，除非先证明它落在关键路径上。"
-  - id: remove_leading_barrier
-    why: "去掉前导 Barrier::sync() 快 2.9% 但 2.6M/4.2M 元素改变、max_rel≈1.0。它保护的是「同一 slot 被下一轮寄存器覆写」的 WAR。正解是 batch=4 合并，不是删 barrier。"
-  - id: occupancy_2cta
-    why: "做不到：bm32/thr256 显式局部数组已占 ≈168 VGPR，编译器实测 256；要到 128 以下需砍掉一半以上，且要把寄存器搬到 LDS，而 LDS 指令正是要砍的东西。"
-  # —— 2026-10-29 手写 HIP GLM 档（dev/sparse_mla_hip_glm.hip）调优穷尽的 5 条
-  - id: lds_pitch_swizzle_handhip
-    why: "手写 HIP 版上改 LDS 行 pitch（256B→280B 奇数 bank）+ GEMM2 标量 B 读改 128-bit + S_shared pitch：PMC bank 冲突 8.72M→8.72M（0 变化）、墙钟 1.000×。那 12%「等 LDS」在 gfx938 上被流水吸收，不是串行瓶颈。与旧 swizzle_layout（tilelang annotate_layout 9 种）同结论：冲突数消不掉也换不来墙钟。"
-  - id: launch_bounds_force_2cta
-    why: "手写 HIP 版 `__launch_bounds__(256,2)` 强压 VGPR 换 2 CTA/CU：aicc 忽略 minBlocks 请求，VGPR 252 纹丝不动（读 GPU ELF notes 验证），性能/输出 1.000× 一致。occupancy 墙对这套编译器只能靠 kernel 重分片破，launch_bounds 不是 lever。"
-  - id: thr512_bm32
-    why: "threads=512 + block_m=32（H=64 no-split，tilelang 直接生成）：S=128/320k 0.9425 vs 0.8102 ms（+16.4%）。M=32 摊到 8 个 wave、每 wave M=4，MFMA 吃不满——坐实 ledger #16 对 thr512 的推断（之前只和 bm64 配过）。"
-  - id: wdra_flag
-    why: "WDRA（-mllvm=-vgpr-greedy-alloc-mode=local-wave，tilelang TL_ENABLE_HCU_WDRA 的对应项）在同体 kernel 上 +1.2% 更慢（逐位一致）。mllvm 延迟模型扫描（mmac/ds-latency 全组合）也是 0%。调度 flag 对本 kernel 已是局部最优。"
-  - id: prefetch_on_h64_bm32
-    why: "prefetch 在 H=64/bm32（GLM 生产形状）上 +21.3% 更慢（逐位一致，320k 真池实测）——与旧 prefetch_on_bm32 的「慢 20%」吻合。该 lever 只对 H=16/bm16（REPLICATE_H=1）成立，H=64 档别试。"
-  - id: lds_cut_to_3cta
-    why: "想把动态 LDS 从 28672 压到 ≤21845 换 3 CTA/CU（VGPR 侧允许 3，LDS 是唯一约束）。**结构上不可达，不是调参问题**：① QK 阶段的 acc_s 必须凑齐整个 d=512 才能做 online-softmax，所以列切片 0/1/2 必须同时在 LDS（3×8192=24576），切片 3 不进 LDS（QK 直接读 KV_spilt3_local 寄存器）；② PV 阶段切片 3 复用 buf0，前提是 PV0 已经消费完切片 0——现有顺序 QK0,1,2 → (softmax) → PV0 → 写切片3→buf0 → QK3 → PV1,2,3 已经是这条约束下的最紧排布；③ 24576 + S/workspace 4096 = 28672 正好是当前值，**零余量**。压下去只有三条路：bi 32→16（已证伪，净亏 27%）、列宽 128→64（总量不变，QK 仍需整个 d 驻留）、d 跨 CTA 切分（算法改动：部分 acc_s + 跨 CTA 归约）。⇒ 当前 tiling 下 2 CTA/CU 已是上限。"
-    kind: impl
-    note: "但方向本身没死：1 CTA/CU 比 2 慢 67~69%（LDS 探针实测，见下面 lds_occupancy_probe），用 1/(1+a/n) 拟合 a≈4.25 ⇒ 若真能到 3 CTA/CU 约值 23%。要拿到它只能走「d 跨 CTA 切分」，那是重写级改动。"
-
-  - id: lds_occupancy_probe
-    why: "**这不是失败的候选，是校准数据**（放在 refuted 里是因为它不是待跑项）。把 SMLA_GLM_SHARED_BYTES 28672→40960（kernel 只读前 28672，输出逐值 bit-identical）强制成 1 CTA/CU：S=64 0.3975→0.6644 ms、S=128 0.7865→1.3276 ms，ABBA 四轮可复现 ⇒ **基线是 2 CTA/CU，且 1 CTA/CU 慢 67~69%**。这条同时证伪了旧结论「occupancy=1 CTA/CU，等 gather 时无 CTA 可切」——那是 VF_LIMIT 常数错（65536，应为 768 模式的 196608）算出来的假象。"
-    kind: claim
-
-  # —— 2026-11-13 S≥128「跨 head KV 复用（REPLICATE_H 2→1）」的方向级判定 ——
-  - id: cross_head_kv_reuse_g64
-    kind: direction
-    direction: raise-heads-per-wave
-    parent_surface: occupancy
-    why: "**在 gfx938 上不可行，且不是实现问题，是三条硬约束互斥（先算后写，没动代码）。** ① **复用维度只能是 head**：topk 索引按 (token, kv_group=1) 共享，同一 token 的 64 个 head 读同一份 2048 行 KV ⇒「一份 KV 只读一次」⇔ 一个 CTA 覆盖全部 heads ⇔ bm=64 / REPLICATE_H=1。② **寄存器按 head 数线性膨胀，且 acc_o 与 Q_spilt 同阶**：两者各需 `bm·512/thr` VGPR/线程（bm32/thr256 = 64+64 = 128，实测声明段 120、编译器 256；bm64/thr256 = 128+128 = **256，恰好等于单线程硬上限**，还没算 KV fragment ≈32 与临时量 ≈90 ⇒ 声明段 342）。R1 ⇒ 编译前即可判「必然 spill」，实测 scratch 141 B（另一 build 636 B）、DRAM 420→1724 MB（4.09×）、墙钟 +98%。③ **退到 thr512 能消 spill**（acc_o/Q 各 64，总 252、scratch 0），但同时 heads/wave = `64·bm/thr` 从 16 掉回 8（LDS/MFMA 1.16→2.19），且 768-VGPR 模式下 `VF_LIMIT/(256·thr)`=196608/131072=**1 ⇒ CTA/CU 掉到 1**（R3；1 CTA/CU 实测比 2 慢 67~69%），墙钟 +38.6%（S=128/320k，三档 SKV 一致）。**三条不等式无解**：heads/wave=16 且 m=64 ⇒ thr=256；放得下 ⇒ `2·bm·512/thr + 临时量(~128) ≤ 256` ⇒ bm ≤ 32；occupancy≥2 ⇒ `256·thr ≤ 98304` ⇒ thr ≤ 384。**没有任何 thr 同时满足。** 收益侧同样不成立：复用只把逻辑 KV 读 512→256 MiB（内存地板 311→156 µs），而实测 DRAM 348 MB 在 1724 GB/s 下只占 202 µs = 实耗 693 µs 的 **29%**（MBU 26.9%，无单元打满），且要完全串行才拿得到这 101 µs ⇒ **上界 ≈14.6%**，覆盖不了任何一条路 38.6%/98% 的代价。**LDS 不是约束**（24576+bm·bi·4：bm64=32768=50%，仍允许 2 CTA/CU）；**occupancy 在 thr256 也不会掉到 1**（VGPR 允许 3、LDS 允许 2）——杀的只有 VGPR 这一项。"
-    note: "**可迁移机制（换算子/换设备都成立）**：(a)「复用一份输入」的收益上界 = **该输入在墙钟里的占比**，不是「字节数减半」；先在 PMC 看对应单元占用率，<50% 就别指望复用换时间。(b) 要让一个 CTA 服务 N 个消费者，累加器按 N 线性膨胀；判据 = 先算 `acc_vgpr = N·输出宽·4B/(thr·4B)`，它与输入片段 VGPR 之和必须 ≤ 单线程硬上限（gfx9 = 256），否则 R1 直接否，不用编译。(c)「抬 amortization（heads-per-wave）」与「抬占用（CTA/CU）」在 thr 上反向：前者要 thr 小、后者要 thr 大，同一个 N 撑不住两边时该换算法而不是调参。**同时判死 candidates:bm64_vgpr_squeeze 的可行路径**：要压的 ~128 VGPR 几乎全是 Q_spilt，把 Q 搬出寄存器已在 bm32 上实测慢 3.0×（refuted:q_in_shared），剩下的临时量不是主项；按本轮「只追加」纪律未改该条 status，loop 侧应改判 refuted。"
-    device: "gfx938 / BW1100 / sclk 1200 MHz（测量时）/ CU=64（torch multi_processor_count 探测；constants.yaml 记 69、tilelang 头注释记 70，三者不一致，见 device_dependency）"
-    device_dependency: "**换设备必须重算**：VF_LIMIT 取决于是否开 `-support-768-vgprs`（768 模式 = 4·64·768 = 196608；非 768 = 65536）。若目标设备不在 768 模式，连基线 bm32/thr256 的 CTA/CU 都会从 2 掉到 1，本条所有相对耗时与 occupancy 论证作废、须重测。LDS 容量非 64 KB、或单线程 VGPR 上限非 256 时，②③ 的不等式要按新常数重写。**本条只承诺在 gfx938 + 768-VGPR 模式下成立；其他 gfx 未验证。** CU 数也不要用本文件的 64/69/70 任一值当判据：本声音 CU 只影响 rounds 与 per-CU 摊销，不影响 ②③ 的寄存器/占用不等式，但会影响任何绝对耗时预测。"
-    source: "derive.py sparse-mla --s 128 --h 64 --topk 2048 --d 512 --replicate-h {1,2} --bm {32,64} --thr {256,512}（复算内存地板 311.4→155.7 µs、LDS 28672→32768、thr512 时 CTA/CU=1）；kb/op-opt/sparse-mla-20261027.md §14.3 / §15.2 / §20.1；candidates.yaml:bm64_any / thr512_bm32 / q_in_shared / lds_occupancy_probe；2026-11-13 同进程 ABBA 基线复测"
-    verified_on: "2026-11-13"
-
-  - id: s128_gap_is_card_dependent
-    why: "**「S=128 落后 flash_mla 1.07×」不是通用事实，是卡 0 的现象**（2026-11-13 同进程 ABBA 四轮、组内 MAD <0.1% 的干净测量）：卡 0 fm 0.6464 ms / hip 0.6931 ms ⇒ 1.073×；卡 4 fm 0.7074 / hip 0.6927 ⇒ 0.979×；卡 6 fm 0.7140 / hip 0.6933 ⇒ 0.971×。**我们的实现三张卡一致（0.6927~0.6933，漂移 0.1%），变的是 flash_mla（0.6464~0.7140，10.5%）** ⇒ 跨实现比值不是卡不变量。S=64 无此问题（fm 0.3814~0.3836、hip 0.3507~0.3509，三卡一致）。根因未定位（CU/arch/L2 三卡完全相同：CU=64、gfx938、8 MB；疑似 KV 335 MB 池的物理页/DRAM bank 分布只影响 fm 的 713 MB 重读、不影响我们 348 MB/L2 命中 50% 的访问模式）⇒ 引用「S≥128 站位」时必须带卡号，且先确认当时卡上没有别的负载。"
-    kind: claim
-    note: "测量纪律补一条：本轮复测期间遇到外部负载（无本地进程、hy-smi HCU% 仍显示 0.0%，但 sclk 1200→1350 MHz、两实现同时慢 20~30%、比值被压平）——**hy-smi 的 HCU% 不能证明卡空闲**，判据要用「重复测量的组内 MAD」：干净时 <0.1%，被占时 >5%。"
-    device: "gfx938 / BW1100 / CU=64 / sclk 1200 MHz；三卡同一 arch、同一 L2（8 MB）、同一 CU 数"
-    device_dependency: "只在 gfx938 三张卡上各测一次，未做卡间交叉复验（同一次测量内 fm/hip 同进程交替，比值可信；绝对 ms 随负载漂移）。其他 gfx 未验证。"
-    source: "/tmp/calib_s128.py（卡 4）、/tmp/recheck128.py（卡 0、卡 6），2026-11-13"
-    verified_on: "2026-11-13"
-  - id: bf16_mls_matrix_load
-    why: "**bf16 走不了 MLS（硬件矩阵 LDS 读），这是编译期硬约束**。给 Q 的 global→shared `T.copy` 加 `prefer_instruction=\"matrix_load\"` 后编译失败：`MatrixLoad dst Gemm consumer must have kPack=1, got 2`。我们的 `kpack = min((kv_vectorized+3)//4, 2) = 2`（由 gather 向量化宽度推出，mmac_k=32），而 MLS 要求 k_pack=1；把 kpack 降到 1 等于把 gather 宽度砍半，伤访存，不划算。⇒ **MLS 只能经由 fp8 取得**（`gemm_fp8_channelwise` 用 k_pack=1 + MLS，gfx938 8192³ 432 TF vs 标量 LDS 332 TF）。这条同时说明：fp8 不只是精度/显存选项，它是解锁 MLS 的前提。"
-    kind: impl
-    note: "gfx938 / 2026-11-13 / S=128 与 S=64 均在编译期失败，未产生性能数字。脚本 /tmp/mls_bench.py。"
+- id: gemm_is_bottleneck
+  kind: claim
+  why: 否：热工作集下同一份 kernel 的 GEMM 路径达 135~138 TF（≈55% 峰值），GEMM 只占总时间约 21%（0.067/0.327）。瓶颈是 gather 带宽，不是 GEMM 效率。
+- id: l2_table_wrong_scale
+  kind: claim
+  why: 否（我中途的错误结论）：当初拿 4.6 MB 的表当「L2 常驻」，那不是缓存尺度；真正进缓存（72 KB / 576 KB）时快 4.9×/3.7×。⇒「缓存常驻」必须按设备实际缓存容量取值，不能用 MB 级表想当然。
+- id: skv_scale
+  kind: claim
+  why: 否，SKV 8k→64k 无影响（差异在噪声内）。后面 bm64 战役的复测也印证：三档台面 0.7816→0.8004（+2.4%），涨的是 fm（+81%）。
+- id: precision_artifact
+  kind: claim
+  why: 否，两者精度等价（对 fp32 稠密参考 max_abs 同量级）。慢不是精度/参考实现的问题，别往这个方向查。
+- id: prefetch_split3_too
+  kind: claim
+  why: 慢 1.7×（输出仍逐位一致）。spilt3 原本直接从寄存器喂 MMA，搬进 shared 后多出 12 KB 的 local->shared 写 + shared 读；VGPR 217→231 未 spill，纯粹是 LDS 流水被压满 ⇒ LDS 带宽也是这条链路的共存瓶颈，不能拿它换寄存器。
+- id: merge
+  why: 慢 2.12×，VGPR 256 / spill 30。4 路切分是「寄存器生命周期分段」：4 个小 buffer 顺序复用同一批 VGPR，合成 1 个 [32,512] 大 buffer 后生命周期全程重叠，直接顶爆 256 硬上限。
+- id: kv4
+  why: 慢 1.73×，spill 10。与 merge 同一个死法（把多个 fragment 合成一个更大的）。
+- id: g2s
+  why: 慢 2.09×，逐位一致。gather 直写 shared 本身中性（bm32 上测过），这里同时把 split3 分片也换成独立 buffer，等价于 kv4 超集。
+- id: imask
+  why: 'layout 推断拒绝：Fragment((32,) -> (4,), replicate: 32) 与 gather 的 [BI, D_spilt] 行映射不兼容。绕法要再垫 shared+barrier，而那 8 条读全 L1 命中，净收益≈0。'
+- id: kpack1
+  why: 慢 28% 且算错（maxdiff 4.57e-01）。block_I=32 的 gemm2 依赖 kpack=2 的 k 打包。
+- id: reord
+  why: 慢 1.1%。那条 16 标量 LDS 拷贝实际是 prefetch：删掉它 gemm0 的 B 操作数变冷启动。⇒「某段指令值 7.5%」不能读成「删掉它能省 7.5%」。
+- id: nomax
+  why: 快 12.4% 但 logit std≈20 时 38269 个元素 nonfinite（exp2 越过 2^127）。被 maxn 支配。
+- id: max1
+  why: 比 maxn 慢且更不准：把 exp2 基准钉在最不准的第 0 块，std≈10 档 max_abs 是 maxn32 的 2.5×。
+- id: swizzle_layout
+  why: 9 种 annotate_layout 全扫，最好的 major_pack=2 是 −0.1%（噪声内），linear +13.9%。默认注入的就是那条 XOR swizzle，8.72M 次冲突不是布局可修的。
+- id: policy_swap
+  why: FullRow/FullCol/Square 三档都出 NaN；FullColK 是唯一既快又对的。K 切分是这套布局的前提。
+- id: bm64_any
+  why: bm64 必然溢出，与写法无关：Q_spilt0..3_shared[64]=128 VGPR + acc_o0..3[32]=128 VGPR = 256 恰好等于硬上限，还没算 KV 片段 32 + A/B 临时 40 + acc_s 16。thr512 能缓解寄存器但名义带宽塌到 198 GB/s。
+- id: thr128
+  why: 慢 6.7×。block_I=32 的 tile 分片被写死成 256 线程布局，降到 128 后每线程工作量翻倍，寄存器压力反而不降。
+- id: q_in_shared
+  why: 慢 3.0×。Q 跨全部 64 个 KV 块只读且不变，在寄存器里是一次性成本；搬进 shared 变成每次 MMA 都要读 LDS，把 VGPR 压力换成 LDS 流量，方向相反。
+- id: bi64
+  why: 慢 3.2~3.4×。KV_shared 的 LDS 随之翻倍，把并发和向量化一起打崩；BI=128 直接 LDS 超限。
+- id: bi16
+  why: 归约确实归零（纯 shfl、0 barrier），但块数翻倍 + MMA 的 n 掉到 16，净亏 27%。
+- id: num_stages
+  why: ns=1 零效果（差异在噪声内）⇒ 内核里根本没有实质流水重叠，这是「计算侧慢 2.2×」的最可能方向。
+- id: prefetch_on_bm32
+  why: bm16 时代快 5~6% 的预取，在 bm32 上反而慢 20%。REPLICATE_H 4→2 后 CTA 数减半、寄存器已顶到 256，在途缓冲没有第二组 CTA 兜底。⇒ 任何优化都要在 bm32 基线上重测。
+- id: gather_direct_shared_bm32
+  why: 中性（0.8117 vs 0.8107，噪声内），VGPR 没降。那 24 个 VGPR 本来就是短命临时，不是压力来源。
+- id: splitkv_larger
+  why: S≥128 单调变差：每 CTA 工作量变小 + combine 开销。S=128 最优就是 ns=1。
+- id: transpose_lds
+  why: 硬件没有这条指令。gfx938/gfx942 不支持 ds_read_b64_tr_b16（gfx90a/gfx950 支持），7 种拼写与 LLVM 内建都不存在。⇒ 任何「对标 aiter PV 写法」的方案不用试。
+- id: single_layout_for_both_gemms
+  why: 数学上不可能：QK 要 8 个连续 d、PV 要 8 个连续 k，两者在 [k][d] 上正交，任何双射布局都无法同时成立。必有一侧付标量代价，且总量与哪一侧付无关 ⇒ 转置 tile 的净收益恒等于 0。
+- id: pv_register_operand
+  why: 编译期否决：LayoutInference FATAL 'Get different layout for KV_spilt3_local'。跨 lane 换布局在 tilelang 里只能走 shared，那 64 条标量 LDS 是结构强制的。
+- id: index_sorting_for_dram
+  why: 降级未验证。我们的 DRAM 读字节已经和 fm 相等，池缩 64× 也只快 1.05% ⇒ 排序省的是我们本来就不缺的东西。只有「排序能同时减少片上复读（LDS/TA 指令）」这一形态才值得验。
+- id: lds_bank_conflict
+  why: 不是区分项：厂商调优 matmul（88% MFMA 峰值）自己就有 12.6% 冲突占用率，我们 bm32 只有 9.8%。真区分项是 LDS 指令条数（3.14× fm）与非 MFMA 向量指令条数（4.25×）。
+- id: reduce_valu_count
+  why: VALU 指令数是症状不是病因。删掉最大的一块（acc_o *= alpha 重缩放，每块每线程 32 条 mul）只换回 1.1%。⇒ 别以「减少指令」为目标，除非先证明它落在关键路径上。
+- id: remove_leading_barrier
+  why: 去掉前导 Barrier::sync() 快 2.9% 但 2.6M/4.2M 元素改变、max_rel≈1.0。它保护的是「同一 slot 被下一轮寄存器覆写」的 WAR。正解是 batch=4 合并，不是删 barrier。
+- id: occupancy_2cta
+  why: 做不到：bm32/thr256 显式局部数组已占 ≈168 VGPR，编译器实测 256；要到 128 以下需砍掉一半以上，且要把寄存器搬到 LDS，而 LDS 指令正是要砍的东西。
+- id: lds_pitch_swizzle_handhip
+  why: 手写 HIP 版上改 LDS 行 pitch（256B→280B 奇数 bank）+ GEMM2 标量 B 读改 128-bit + S_shared pitch：PMC bank 冲突 8.72M→8.72M（0 变化）、墙钟 1.000×。那 12%「等 LDS」在 gfx938 上被流水吸收，不是串行瓶颈。与旧 swizzle_layout（tilelang annotate_layout
+    9 种）同结论：冲突数消不掉也换不来墙钟。
+- id: launch_bounds_force_2cta
+  why: 手写 HIP 版 `__launch_bounds__(256,2)` 强压 VGPR 换 2 CTA/CU：aicc 忽略 minBlocks 请求，VGPR 252 纹丝不动（读 GPU ELF notes 验证），性能/输出 1.000× 一致。occupancy 墙对这套编译器只能靠 kernel 重分片破，launch_bounds 不是 lever。
+- id: thr512_bm32
+  why: 'threads=512 + block_m=32（H=64 no-split，tilelang 直接生成）：S=128/320k 0.9425 vs 0.8102 ms（+16.4%）。M=32 摊到 8 个 wave、每 wave M=4，MFMA 吃不满——坐实 ledger #16 对 thr512 的推断（之前只和 bm64 配过）。'
+- id: wdra_flag
+  why: WDRA（-mllvm=-vgpr-greedy-alloc-mode=local-wave，tilelang TL_ENABLE_HCU_WDRA 的对应项）在同体 kernel 上 +1.2% 更慢（逐位一致）。mllvm 延迟模型扫描（mmac/ds-latency 全组合）也是 0%。调度 flag 对本 kernel 已是局部最优。
+- id: prefetch_on_h64_bm32
+  why: prefetch 在 H=64/bm32（GLM 生产形状）上 +21.3% 更慢（逐位一致，320k 真池实测）——与旧 prefetch_on_bm32 的「慢 20%」吻合。该 lever 只对 H=16/bm16（REPLICATE_H=1）成立，H=64 档别试。
+- id: lds_cut_to_3cta
+  why: 想把动态 LDS 从 28672 压到 ≤21845 换 3 CTA/CU（VGPR 侧允许 3，LDS 是唯一约束）。**结构上不可达，不是调参问题**：① QK 阶段的 acc_s 必须凑齐整个 d=512 才能做 online-softmax，所以列切片 0/1/2 必须同时在 LDS（3×8192=24576），切片 3 不进 LDS（QK 直接读 KV_spilt3_local
+    寄存器）；② PV 阶段切片 3 复用 buf0，前提是 PV0 已经消费完切片 0——现有顺序 QK0,1,2 → (softmax) → PV0 → 写切片3→buf0 → QK3 → PV1,2,3 已经是这条约束下的最紧排布；③ 24576 + S/workspace 4096 = 28672 正好是当前值，**零余量**。压下去只有三条路：bi 32→16（已证伪，净亏 27%）、列宽
+    128→64（总量不变，QK 仍需整个 d 驻留）、d 跨 CTA 切分（算法改动：部分 acc_s + 跨 CTA 归约）。⇒ 当前 tiling 下 2 CTA/CU 已是上限。
+  kind: impl
+  note: 但方向本身没死：1 CTA/CU 比 2 慢 67~69%（LDS 探针实测，见下面 lds_occupancy_probe），用 1/(1+a/n) 拟合 a≈4.25 ⇒ 若真能到 3 CTA/CU 约值 23%。要拿到它只能走「d 跨 CTA 切分」，那是重写级改动。
+- id: lds_occupancy_probe
+  why: '**这不是失败的候选，是校准数据**（放在 refuted 里是因为它不是待跑项）。把 SMLA_GLM_SHARED_BYTES 28672→40960（kernel 只读前 28672，输出逐值 bit-identical）强制成 1 CTA/CU：S=64 0.3975→0.6644 ms、S=128 0.7865→1.3276 ms，ABBA 四轮可复现 ⇒ **基线是 2 CTA/CU，且
+    1 CTA/CU 慢 67~69%**。这条同时证伪了旧结论「occupancy=1 CTA/CU，等 gather 时无 CTA 可切」——那是 VF_LIMIT 常数错（65536，应为 768 模式的 196608）算出来的假象。'
+  kind: claim
+- id: cross_head_kv_reuse_g64
+  kind: direction
+  direction: raise-heads-per-wave
+  parent_surface: occupancy
+  why: '**在 gfx938 上不可行，且不是实现问题，是三条硬约束互斥（先算后写，没动代码）。** ① **复用维度只能是 head**：topk 索引按 (token, kv_group=1) 共享，同一 token 的 64 个 head 读同一份 2048 行 KV ⇒「一份 KV 只读一次」⇔ 一个 CTA 覆盖全部 heads ⇔ bm=64 / REPLICATE_H=1。② **寄存器按
+    head 数线性膨胀，且 acc_o 与 Q_spilt 同阶**：两者各需 `bm·512/thr` VGPR/线程（bm32/thr256 = 64+64 = 128，实测声明段 120、编译器 256；bm64/thr256 = 128+128 = **256，恰好等于单线程硬上限**，还没算 KV fragment ≈32 与临时量 ≈90 ⇒ 声明段 342）。R1 ⇒ 编译前即可判「必然
+    spill」，实测 scratch 141 B（另一 build 636 B）、DRAM 420→1724 MB（4.09×）、墙钟 +98%。③ **退到 thr512 能消 spill**（acc_o/Q 各 64，总 252、scratch 0），但同时 heads/wave = `64·bm/thr` 从 16 掉回 8（LDS/MFMA 1.16→2.19），且 768-VGPR 模式下
+    `VF_LIMIT/(256·thr)`=196608/131072=**1 ⇒ CTA/CU 掉到 1**（R3；1 CTA/CU 实测比 2 慢 67~69%），墙钟 +38.6%（S=128/320k，三档 SKV 一致）。**三条不等式无解**：heads/wave=16 且 m=64 ⇒ thr=256；放得下 ⇒ `2·bm·512/thr + 临时量(~128) ≤ 256` ⇒
+    bm ≤ 32；occupancy≥2 ⇒ `256·thr ≤ 98304` ⇒ thr ≤ 384。**没有任何 thr 同时满足。** 收益侧同样不成立：复用只把逻辑 KV 读 512→256 MiB（内存地板 311→156 µs），而实测 DRAM 348 MB 在 1724 GB/s 下只占 202 µs = 实耗 693 µs 的 **29%**（MBU 26.9%，无单元打满），且要完全串行才拿得到这
+    101 µs ⇒ **上界 ≈14.6%**，覆盖不了任何一条路 38.6%/98% 的代价。**LDS 不是约束**（24576+bm·bi·4：bm64=32768=50%，仍允许 2 CTA/CU）；**occupancy 在 thr256 也不会掉到 1**（VGPR 允许 3、LDS 允许 2）——杀的只有 VGPR 这一项。'
+  note: '**可迁移机制（换算子/换设备都成立）**：(a)「复用一份输入」的收益上界 = **该输入在墙钟里的占比**，不是「字节数减半」；先在 PMC 看对应单元占用率，<50% 就别指望复用换时间。(b) 要让一个 CTA 服务 N 个消费者，累加器按 N 线性膨胀；判据 = 先算 `acc_vgpr = N·输出宽·4B/(thr·4B)`，它与输入片段 VGPR 之和必须 ≤ 单线程硬上限（gfx9
+    = 256），否则 R1 直接否，不用编译。(c)「抬 amortization（heads-per-wave）」与「抬占用（CTA/CU）」在 thr 上反向：前者要 thr 小、后者要 thr 大，同一个 N 撑不住两边时该换算法而不是调参。**同时判死 candidates:bm64_vgpr_squeeze 的可行路径**：要压的 ~128 VGPR 几乎全是 Q_spilt，把 Q
+    搬出寄存器已在 bm32 上实测慢 3.0×（refuted:q_in_shared），剩下的临时量不是主项；按本轮「只追加」纪律未改该条 status，loop 侧应改判 refuted。'
+  device: gfx938 / BW1100 / sclk 1200 MHz（测量时）/ CU=64（torch multi_processor_count 探测；constants.yaml 记 69、tilelang 头注释记 70，三者不一致，见 device_dependency）
+  device_dependency: '**换设备必须重算**：VF_LIMIT 取决于是否开 `-support-768-vgprs`（768 模式 = 4·64·768 = 196608；非 768 = 65536）。若目标设备不在 768 模式，连基线 bm32/thr256 的 CTA/CU 都会从 2 掉到 1，本条所有相对耗时与 occupancy 论证作废、须重测。LDS 容量非 64
+    KB、或单线程 VGPR 上限非 256 时，②③ 的不等式要按新常数重写。**本条只承诺在 gfx938 + 768-VGPR 模式下成立；其他 gfx 未验证。** CU 数也不要用本文件的 64/69/70 任一值当判据：本声音 CU 只影响 rounds 与 per-CU 摊销，不影响 ②③ 的寄存器/占用不等式，但会影响任何绝对耗时预测。'
+  source: derive.py sparse-mla --s 128 --h 64 --topk 2048 --d 512 --replicate-h {1,2} --bm {32,64} --thr {256,512}（复算内存地板 311.4→155.7 µs、LDS 28672→32768、thr512 时 CTA/CU=1）；kb/op-opt/sparse-mla-20261027.md
+    §14.3 / §15.2 / §20.1；candidates.yaml:bm64_any / thr512_bm32 / q_in_shared / lds_occupancy_probe；2026-11-13 同进程 ABBA 基线复测
+  verified_on: '2026-11-13'
+- id: s128_gap_is_card_dependent
+  why: '**「S=128 落后 flash_mla 1.07×」不是通用事实，是卡 0 的现象**（2026-11-13 同进程 ABBA 四轮、组内 MAD <0.1% 的干净测量）：卡 0 fm 0.6464 ms / hip 0.6931 ms ⇒ 1.073×；卡 4 fm 0.7074 / hip 0.6927 ⇒ 0.979×；卡 6 fm 0.7140 / hip 0.6933
+    ⇒ 0.971×。**我们的实现三张卡一致（0.6927~0.6933，漂移 0.1%），变的是 flash_mla（0.6464~0.7140，10.5%）** ⇒ 跨实现比值不是卡不变量。S=64 无此问题（fm 0.3814~0.3836、hip 0.3507~0.3509，三卡一致）。根因未定位（CU/arch/L2 三卡完全相同：CU=64、gfx938、8 MB；疑似 KV 335
+    MB 池的物理页/DRAM bank 分布只影响 fm 的 713 MB 重读、不影响我们 348 MB/L2 命中 50% 的访问模式）⇒ 引用「S≥128 站位」时必须带卡号，且先确认当时卡上没有别的负载。'
+  kind: claim
+  note: 测量纪律补一条：本轮复测期间遇到外部负载（无本地进程、hy-smi HCU% 仍显示 0.0%，但 sclk 1200→1350 MHz、两实现同时慢 20~30%、比值被压平）——**hy-smi 的 HCU% 不能证明卡空闲**，判据要用「重复测量的组内 MAD」：干净时 <0.1%，被占时 >5%。
+  device: gfx938 / BW1100 / CU=64 / sclk 1200 MHz；三卡同一 arch、同一 L2（8 MB）、同一 CU 数
+  device_dependency: 只在 gfx938 三张卡上各测一次，未做卡间交叉复验（同一次测量内 fm/hip 同进程交替，比值可信；绝对 ms 随负载漂移）。其他 gfx 未验证。
+  source: /tmp/calib_s128.py（卡 4）、/tmp/recheck128.py（卡 0、卡 6），2026-11-13
+  verified_on: '2026-11-13'
+- id: bf16_mls_matrix_load
+  why: '**bf16 走不了 MLS（硬件矩阵 LDS 读），这是编译期硬约束**。给 Q 的 global→shared `T.copy` 加 `prefer_instruction="matrix_load"` 后编译失败：`MatrixLoad dst Gemm consumer must have kPack=1, got 2`。我们的 `kpack = min((kv_vectorized+3)//4,
+    2) = 2`（由 gather 向量化宽度推出，mmac_k=32），而 MLS 要求 k_pack=1；把 kpack 降到 1 等于把 gather 宽度砍半，伤访存，不划算。⇒ **MLS 只能经由 fp8 取得**（`gemm_fp8_channelwise` 用 k_pack=1 + MLS，gfx938 8192³ 432 TF vs 标量 LDS 332 TF）。这条同时说明：fp8
+    不只是精度/显存选项，它是解锁 MLS 的前提。'
+  kind: impl
+  note: gfx938 / 2026-11-13 / S=128 与 S=64 均在编译期失败，未产生性能数字。脚本 /tmp/mls_bench.py。
