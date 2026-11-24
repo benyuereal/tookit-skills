@@ -12,9 +12,37 @@
 诚实性约定：没有后端就抛，不返回假实现。
 """
 import torch
+from pathlib import Path
 
 VARIANTS = ("ref-heavy", "lightop-fused", "torch-native",
             "fused-3pass-triton", "fused-3pass-tilelang")
+
+# ---- 生成变体的动态注册（v6 C6 的「写新实现」入口）
+# advance.py 调 variant_forge 生成变体后写进 runs/forged/，这里按需加载。
+# **不硬编码进 VARIANTS**：生成物是每次跑的产物，不是仓库资产。
+FORGED_DIR = Path(__file__).resolve().parent / "runs" / "forged"
+
+
+def forged_variants():
+    """已生成的变体名（来自 runs/forged/*.py）。"""
+    if not FORGED_DIR.is_dir():
+        return []
+    return sorted(p.stem for p in FORGED_DIR.glob("*.py") if not p.name.startswith("_"))
+
+
+def _load_forged(name):
+    """加载一个生成变体。它必须是 `def run(x, w, r, **kw) -> (y, residual_out)`。"""
+    import importlib.util
+    p = FORGED_DIR / ("%s.py" % name)
+    if not p.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("_forged_%s" % name, str(p))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    fn = getattr(m, "run", None)
+    if not callable(fn):
+        raise ValueError("生成变体 %s 没有 run(x, w, r, **kw)" % name)
+    return fn
 
 
 def _lightop_version():
@@ -209,6 +237,10 @@ def _lightop_fused_runner(x, w, r, **kw):
 
 
 def get_runner(name, tilelang_root=None, **kwargs):
+    if name not in VARIANTS:
+        fn = _load_forged(name)
+        if fn is not None:
+            return fn
     if name not in VARIANTS:
         raise ValueError("未知变体 %r（可选 %s）" % (name, " / ".join(VARIANTS)))
     if name == "ref-heavy":

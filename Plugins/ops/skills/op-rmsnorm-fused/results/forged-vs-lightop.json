@@ -1,0 +1,46 @@
+{
+  "caliber": {
+    "what": "op_call",
+    "alloc": false,
+    "state": "hot",
+    "rounds": 3,
+    "timer": "hip_event"
+  },
+  "measure_mode": "event_isolated",
+  "measure_note": "back_to_back：偏乐观（kernel 间可重叠），不可 claim。event_isolated：每次 sync，可 claim。卡片/周报口径必须用端到端（每次 empty_like）：2026-11-23 实测 183.0 µs / 1081 GB/s / util 0.63。纯 kernel（event 隔离）172.5 µs。",
+  "shape": {
+    "params": {
+      "M": 8192,
+      "H": 4096
+    },
+    "note": "prefill：字节数主导，最接近纯带宽地板",
+    "_name": "prefill-8k",
+    "shape": "prefill-8k"
+  },
+  "runs": [
+    {
+      "skv": 0,
+      "variants": [
+        {
+          "tag": "rms-v2-reg",
+          "ms": 0.18464000523090363,
+          "mad": 0.0006389915943145752,
+          "delta_pct": -8.702531377428269,
+          "significant": true,
+          "why": "显著：ratio=0.9130，|Δ|=0.0176 > 3.0*MAD=0.00192001",
+          "maxdiff": null,
+          "rel": null
+        }
+      ],
+      "base_ms": 0.2022400051355362,
+      "base_mad": 0.0006400048732757568
+    }
+  ],
+  "provenance": {
+    "what": "自研 HIP 实现（寄存器驻留）vs 厂商 lightop.fused_add_rms_norm",
+    "kernel_src": "results/forged-rms-v2-reg.hip（runs/forged 里是它的运行副本，runs/ 不入库）",
+    "build": "hipcc -O3 --offload-arch=gfx938 -fPIC -shared -DVEC=2 -DTHREADS=256 -DWARPS=4",
+    "key_finding": "本实现 184.6µs 低于 floor.py 给出的 t_floor=202.3µs（1:1 档 ÷ 归约折扣 0.79）。这不是实现突破了物理，是**归约折扣 0.79 偏保守**：寄存器驻留把归约的额外代价压到 159.8/184.6 = 0.866，而不是 0.79。floor 的该常数需要按本记录重标。",
+    "design": "(x+r) 留寄存器（VEC*8 个 float/线程），LDS 只放 WARPS*4 字节的跨 warp 归约表；16 字节向量读写；VEC/THREADS/WARPS 必须编译期固化（运行期传会让寄存器数组溢出到 private）"
+  }
+}
