@@ -59,9 +59,14 @@
   expected_gain: ≤20%
   precondition_check: python3 -I scripts/pmc_probe.py <csv> | grep TCC_MISS
 - id: fusion-boundary
-  statement: 融合是否把本可并行的 kernel 串成了依赖链
+  statement: 融合是否真的减少了 HBM 往返（同时警惕把并行 kernel 串成依赖链）
   law: Plugins/ops/skills/op-roofline/references/pipeline.md#Q3
-  class: pipeline
+  # class 归 memory-path 而非 pipeline：这个方向的**收益来源**是少搬字节，
+  # 依赖链只是它的副作用风险（写在 statement 里）。
+  # 原先归 pipeline 导致两处配置自相矛盾：bound-to-class.yaml 把
+  # fusion-boundary 列为 memory 的 first_try，而按 class 过滤（class=pipeline）
+  # 又会在 memory-bound 卡上拒掉它——同一份配置既推荐又拒绝。
+  class: memory-path
   precondition: 候选是融合改动，且原 kernel 之间本可并行
   check: 用 scripts/opbench.py bench_fn 分别量融合版与分拆版的 sum
   evidence: pre_big_fuse 把独立 kernel 串成依赖链并多占 smem，实测慢 1.7x

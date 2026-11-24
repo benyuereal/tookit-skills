@@ -544,6 +544,12 @@ def cmd_invariants(a):
     base, mutated = mod.run_isolated(run, *inputs[:-1])
     if mutated:
         print("# 注意：%s 原地改写了输入 %s；下面每次调用都喂独立副本" % (a.variant, ",".join(mutated)))
+        # **必须重建输入**：run_isolated 内部虽然克隆了，但这里再往下还会多次
+        # 直接引用 inputs（determinism / 不变量 / 精度对比），而 inputs 里
+        # 已经被原地写过一次。原实现只在第一行注释里说"每次都喂副本"，
+        # 代码却没重建——实测导致 lightop 被判 max_abs=3.1e-2（假失败）。
+        inputs = mod.build_inputs(params, seed=a.seed, device=a.device)
+        base, mutated = mod.run_isolated(run, *inputs[:-1])
 
     # 1) determinism
     same, bad_i = True, None

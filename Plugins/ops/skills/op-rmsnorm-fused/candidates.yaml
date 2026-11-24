@@ -1,58 +1,45 @@
-# 融合 RMSNorm —— 方向预算 + 候选队列 + 已判死清单（loop.py 读写）
-#
-# 纪律同 op-sparse-mla/candidates.yaml：
-#   - directions 是攻击面；同方向证伪 2 次即封
-#   - candidates 必须声明 direction
-#   - refuted 的 why 必须写**机制**，不能写「试过，慢」
-#   - 本卡有 bench/ab.py，loop.py run 可用
-
 defaults:
-  s: 8
-  shape: decode-m32
   rounds: 5
-
-# 攻击面按 scenarios.yaml 的 bandwidth-bound 场景优先序取前几条。
-# 本算子是最典型的 memory-bound，所以 fusion-boundary 排第一。
+  bench_args:
+  - --shape
+  - prefill-8k
+  - --base
+  - lightop-fused
 directions:
-  - id: fusion-boundary
-    statement: "残差融合是否真的省了往返：3*M*H*2B vs 4*M*H*2B"
-    status: open
-    refutes: 0
-
-  - id: layout-pack
-    statement: "端到端读写了几遍：是否有多余的中间张量导致多一趟 HBM"
-    status: open
-    refutes: 0
-
-  - id: occupancy
-    statement: "小 M 时 grid 是否填不满 CU；norm 的 CTA 数是否够"
-    status: open
-    refutes: 0
-
+- id: fusion-boundary
+  statement: 残差融合是否真的省了往返：3*M*H*2B vs 4*M*H*2B
+  status: open
+  refutes: 0
+- id: layout-pack
+  statement: 端到端读写了几遍：是否有多余的中间张量导致多一趟 HBM
+  status: open
+  refutes: 0
+- id: occupancy
+  statement: 小 M 时 grid 是否填不满 CU；norm 的 CTA 数是否够
+  status: open
+  refutes: 0
 candidates:
-  - id: fuse-residual
-    direction: fusion-boundary
-    status: pending
-    priority: 1
-    action_class: reduce-bytes
-    expect: "省一次 HBM 往返（4→3 遍）"
-    done_when: 'python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape tiny --variants lightop-rmsnormadd'
-    note: "lightop.RMSNormAdd 本身就融合残差；这条验证的是「融合前 vs 融合后」的差异"
-
-  - id: inplace-residual
-    direction: fusion-boundary
-    status: pending
-    priority: 2
-    action_class: reduce-bytes
-    expect: "inplace=True 时省一份残差写回"
-    note: "需先确认 mutates_inputs 的准确语义——若原地改写，多变体对比必须各喂副本（这条本身就是判据）"
-
-  - id: hidden-non-pow2
-    direction: occupancy
-    status: pending
-    priority: 3
-    action_class: improve-locality
-    expect: "hidden 非 2 的幂时向量化宽度受限造成的损失"
-    note: "用 hidden=4096 之外的形状测（如 5000）；这是「到不到地板」的分辨器"
-
+- id: fuse-residual
+  direction: fusion-boundary
+  status: pending
+  priority: 1
+  action_class: reduce-bytes
+  expect: triton 融合 vs lightop 融合（同语义 2读2写）
+  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape tiny --variants lightop-fused,fused-3pass-triton
+  note: lightop.RMSNormAdd 本身就融合残差；这条验证的是「融合前 vs 融合后」的差异
+  variant: fused-3pass-triton
+- id: inplace-residual
+  direction: fusion-boundary
+  status: pending
+  priority: 2
+  action_class: reduce-bytes
+  expect: inplace=True 时省一份残差写回
+  note: 需先确认 mutates_inputs 的准确语义——若原地改写，多变体对比必须各喂副本（这条本身就是判据）
+- id: hidden-non-pow2
+  direction: occupancy
+  status: pending
+  priority: 3
+  action_class: improve-locality
+  expect: hidden 非 2 的幂时向量化宽度受限造成的损失
+  note: 用 hidden=4096 之外的形状测（如 5000）；这是「到不到地板」的分辨器
 refuted: []

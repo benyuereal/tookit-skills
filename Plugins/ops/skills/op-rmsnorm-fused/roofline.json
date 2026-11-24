@@ -1,0 +1,40 @@
+{
+ "card": "rmsnorm-fused",
+ "shape": "prefill-8k",
+ "flops": 0,
+ "bytes": 268435456,
+ "ai": 0.0,
+ "ridge": {
+  "value": 161.27,
+  "peak_flops": {
+   "id": "compute.bf16_gemm_peak_tf",
+   "value": 279.0,
+   "date": "2026-11-23",
+   "caliber": "achievable"
+  },
+  "peak_bw": {
+   "id": "bw-ladder.layers.2_rw_1to1.achievable",
+   "value": 1680.0,
+   "date": "2026-11-23",
+   "caliber": "achievable"
+  }
+ },
+ "bound": "memory",
+ "primary_metric": "MBU",
+ "floors": {
+  "t_compute_us": 0.0,
+  "t_memory_us": 202.3,
+  "launch_us": 40.5,
+  "launch_model": {
+   "grid_blocks": 8192
+  }
+ },
+ "t_floor_us": 202.3,
+ "remaining_rule": "relative_gap",
+ "remaining": -0.0404,
+ "denominator_provenance": {
+  "peak_bw": "bw-ladder.yaml 1:1 档实测",
+  "peak_flops": "constants.yaml bf16 achievable"
+ },
+ "note": "FLOPs 记 0（逐元素+行内归约，无 GEMM）；AI=0 ⇒ 必然 memory-bound"
+}

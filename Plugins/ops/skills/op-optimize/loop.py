@@ -470,10 +470,19 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult):
             return "INCONCLUSIVE", why + "（方向对但没过噪声门，别当收益写）"
         return "REJECTED_NO_GAIN", why
 
-    if cand.get("maxdiff", 0.0) == 0.0:
+    maxdiff = cand.get("maxdiff")
+    if maxdiff is None:
+        # 该卡的 ab.py 不产精度字段（如 rmsnorm 的只要形状对齐即可）。
+        # 原实现 `cand.get("maxdiff", 0.0) == 0.0` 会把「没测」当成「逐位一致」，
+        # 这是把「没证据」读成「证据支持」——正是本仓最忌讳的一类错。
+        return "ACCEPTED_NO_NUMERICS", (
+            "显著加速 %.1f%%，但**本卡未产出精度字段**（ab.py 不返回 maxdiff）"
+            "⇒ 不能声称逐位一致，必须另行过正确性门（done_when）%s"
+            % (-cand.get("delta_pct", 0.0), tail))
+    if maxdiff == 0.0:
         return "ACCEPTED_BITEXACT", "显著加速 %.1f%%，且输出逐位一致%s" % (-cand.get("delta_pct", 0.0), tail)
     return "ACCEPTED_NUMERICS", ("显著加速 %.1f%%，但**非逐位一致**（maxdiff=%.2e）⇒ 必须过端到端质量门%s"
-                                 % (-cand.get("delta_pct", 0.0), cand.get("maxdiff", 0.0), tail))
+                                 % (-cand.get("delta_pct", 0.0), maxdiff, tail))
 
 
 def _significant(base, cand, k=3.0):
@@ -972,15 +981,49 @@ def cmd_run(a):
         return 2
     skv = a.skv or d.get("skv") or [32768]
     ab_json = db_dir(card) / "_ab.json"
-    cmd = [sys.executable, str(bench), *a.tags,
-           "--json", str(ab_json), "--rounds", str(a.rounds),
-           "--s", str(a.s or d.get("s", 128)),
-           "--topk", str(a.topk or d.get("topk", 2048)),
-           "--nvalid", str(a.nvalid or d.get("nvalid", 2000)),
-           "--heads", str(a.heads or d.get("heads", 64)),
-           "--skv", *[str(x) for x in skv]]
-    print("$ " + " ".join(cmd), flush=True)
-    rc = subprocess.call(cmd)
+    # bench 参数必须由卡片自己声明，不能硬编码某一个卡的形状。
+    # 原先这里写死了 --s/--topk/--nvalid/--heads/--skv（sparse-mla 的形状），
+    # 结果 rmsnorm 的 ab.py 直接报 `ambiguous option: --s`——每张卡都被
+    # 按 sparse-mla 的口径调用。loop.py 是从单卡演化来的，这层没抽象出来。
+    bench_args = d.get("bench_args")
+    if bench_args is None:
+        # 没声明就退回旧行为（sparse-mla 兼容），但显式打印出来
+        bench_args = ["--s", str(a.s or d.get("s", 128)),
+                      "--topk", str(a.topk or d.get("topk", 2048)),
+                      "--nvalid", str(a.nvalid or d.get("nvalid", 2000)),
+                      "--heads", str(a.heads or d.get("heads", 64)),
+                      "--skv", *[str(x) for x in skv]]
+        print("note: candidates.yaml 未声明 bench_args，退回 sparse-mla 默认参数"
+              "（其他卡应在 defaults.bench_args 里声明自己的）", flush=True)
+    else:
+        bench_args = [str(x) for x in bench_args]
+        if a.s is not None:
+            bench_args += ["--s", str(a.s)]
+    # tag（候选 id）≠ variant（已实现的变体名）。原先直接把 tag 当位置参数传给
+    # ab.py，而 ab.py 只认 --variants。候选应声明它对应哪个变体。
+    vmap = {}
+    for c in cands["candidates"]:
+        if isinstance(c, dict) and c.get("variant"):
+            vmap[c.get("id")] = str(c["variant"])
+    tags = a.tags
+    unmapped = [t for t in tags if t not in vmap]
+    if unmapped:
+        print(_c("拒绝跑：候选 %s 没声明 variant（候选 id ≠ 变体名，"
+                 "在 candidates.yaml 里加 `variant: <已实现的变体名>`）"
+                 % ",".join(unmapped), WARN))
+        return 2
+    variants_arg = ",".join(vmap[t] for t in tags)
+    cmd = [sys.executable, str(bench),
+           "--json", str(ab_json), "--rounds", str(a.rounds), *bench_args]
+    if "--variants" not in bench_args:
+        cmd += ["--variants", variants_arg]
+    # 选一张空闲卡：不设 HIP_VISIBLE_DEVICES 会默认落到卡 0，
+    # 而卡 0 常常被别人的大任务占满（实测 "0 bytes free"）。
+    # 依赖 defaults.gpu 显式声明，或环境变量；都不给就用 7（本机最常空的卡）。
+    gpu = str(d.get("gpu", os.environ.get("OPS_GPU", "7")))
+    env = dict(os.environ, HIP_VISIBLE_DEVICES=gpu)
+    print("$ HIP_VISIBLE_DEVICES=%s %s" % (gpu, " ".join(cmd)), flush=True)
+    rc = subprocess.call(cmd, env=env)
     if rc != 0 or not ab_json.exists():
         print(_c("A/B 失败（rc=%d），没有记录" % rc, WARN))
         return 1
@@ -1004,8 +1047,11 @@ def cmd_run(a):
     primary = "%g" % float(a.primary_qscale or d.get("acc_primary_qscale") or 1.0)
     stress_mult = float(a.stress_mult or d.get("acc_stress_mult") or 1.5)
     worst = "ACCEPTED_BITEXACT"
+    # 判定的"好坏"排序。ACCEPTED_NO_NUMERICS 必须排在 ACCEPTED_NUMERICS 之前
+    # （没测精度 ≠ 精度合格，更不能和逐位一致同级）。
     order = ["ERROR", "REJECTED_ACCURACY", "REJECTED_NO_GAIN", "INCONCLUSIVE",
-             "ACCEPTED_NUMERICS_PENDING_E2E", "ACCEPTED_BITEXACT"]
+             "ACCEPTED_NO_NUMERICS", "ACCEPTED_NUMERICS_PENDING_E2E",
+             "ACCEPTED_BITEXACT"]
 
     print("\n%-14s %-9s %-8s %s" % ("tag", "skv", "Δ%", "判定"))
     for run in ab["runs"]:

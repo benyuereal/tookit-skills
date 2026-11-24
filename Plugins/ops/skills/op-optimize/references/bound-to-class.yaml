@@ -44,11 +44,11 @@ bound_to_class:
 # class 到 surfaces.yaml 里 id 的对照（改 surfaces.yaml 的 class 字段时要同步这里）
 class_members:
   residency: [occupancy, grid-tail, split-k]
-  pipeline: [prefetch-depth, barrier-width, fusion-boundary, cross-lane-fold]
+  pipeline: [prefetch-depth, barrier-width, cross-lane-fold]
   layout: [layout-pack]
   tier: [table-miss]
   precision: [precision-drop]
-  memory-path: [gather-path]
+  memory-path: [gather-path, fusion-boundary]
   # isa-policy：两条都是已证伪的死路（slc 负收益 / 源码控制不了 waitcnt 深度）。
   # 留在映射里是为了「查得到、别重试」，不是推荐去试。
   isa-policy: [slc-policy, prefetch-depth-isa]

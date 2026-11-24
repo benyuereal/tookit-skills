@@ -71,7 +71,15 @@ def reference(x, weight, residual, params=None, chunk=None):
     eps = 1e-6
     xf = x.float() + residual.float()          # 先融合残差
     rms = torch.sqrt(xf.pow(2).mean(dim=-1, keepdim=True) + eps)
-    return (xf / rms) * weight.float()
+    y = (xf / rms) * weight.float()
+    # **必须返回两份**：semantics.outputs = ['out (M,H)', 'residual_out (M,H)']。
+    # 原先只返回 y，导致 opcheck 报「输出份数不一致 2 vs 1」——
+    # 这是当初「我们只写一份输出、拿 201MB 比 lightop 的 268MB」同一个错，
+    # 只是发生在 reference 侧。参考实现少一份输出，等于基线少干 1/3 的活。
+    # 返回与候选**同 dtype**：参考内部用 fp32 算，但输出必须 bf16。
+    # 第一版直接返回 fp32 的 xf，导致 max_abs 1.7e-2（正好是 bf16 量化量级），
+    # lightop 和 triton 双双"精度不合格"——那是参考的错，不是实现的错。
+    return y.to(x.dtype), xf.to(residual.dtype)
 
 
 def runner_kwargs(params):
