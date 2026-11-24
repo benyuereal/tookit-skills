@@ -25,19 +25,52 @@
     elementwise-binary   silu×mul / add 类
     matmul               GEMM 类（只给 naive + 提示，不试图替代 hipBLASLt）
 
+参数化（--params）
+------------------
+reduce-lastdim 的 HIP 骨架接受 3 个 tile 参数，缺省即默认值：
+
+    BLOCK_ROWS  1   1~8    每 CTA 处理几行（真改 grid 与 LDS）
+    WARPS       4   1~16   warp 数；threads = WARPS*64
+    THREADS     256 64~1024 线程数；**必须等于 WARPS*64**
+
+宏会真的进编译：`BLOCK_ROWS` 改 grid 与每行 LDS 槽位，`WARPS` 改 warp 归约表，
+`THREADS` 经 `__launch_bounds__(THREADS)` 进 kernel metadata（这是编译产物里
+可回读的硬证据；只改 host 侧 `const int threads` 不会改 metadata）。
+
 用法
 ----
     python3 -I scripts/kernel_scaffold.py --template reduce-lastdim --lang hip --out /tmp/k.hip
     python3 -I scripts/kernel_scaffold.py --template reduce-lastdim --lang triton --out /tmp/k.py
     python3 -I scripts/kernel_scaffold.py --template reduce-lastdim --lang hip --out /tmp/k.hip --build
+    python3 -I scripts/kernel_scaffold.py --template reduce-lastdim --lang hip \
+        --params BLOCK_ROWS=1,WARPS=4,THREADS=256 --out /tmp/k.hip --build --json
     python3 -I scripts/kernel_scaffold.py --list
     python3 -I scripts/kernel_scaffold.py --selftest
 """
 import argparse
+import json
+import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+INSPECT_SO = REPO / "Plugins/ops/skills/op-hip-compile/inspect_so.py"
+
+# ---------------------------------------------------------------- 参数规范
+
+# 每个模板支持的 tile 参数、默认值、范围。范围不是装饰：越界必须在生成前报错。
+PARAM_SPECS = {
+    "reduce-lastdim": {
+        "BLOCK_ROWS": {"default": 1, "min": 1, "max": 8,
+                       "help": "每 CTA 处理几行（改 grid 与每行 LDS 槽位）"},
+        "WARPS": {"default": 4, "min": 1, "max": 16,
+                  "help": "warp 数；threads = WARPS*64"},
+        "THREADS": {"default": 256, "min": 64, "max": 1024,
+                    "help": "每 CTA 线程数；必须等于 WARPS*64"},
+    },
+}
 
 # ---------------------------------------------------------------- HIP 模板
 
@@ -46,19 +79,19 @@ HIP_REDUCE = r'''// 由 kernel_scaffold.py 生成 —— 行内归约（RMSNorm 
 // 已做对的（不要改坏）：
 //   - 每行一个 block，整行读进 LDS 后做归约（避免两趟 HBM）
 //   - 用 float 累加，避免 bf16 精度损失
-//   - 写出用 vector 化提示（见下）
+//   - 归约走 warp shuffle，跨 warp 只过静态 LDS 的 warp_part 表
 //
 // **这是起点，不是最优解。** 已知可改的地方（agent 要自己判断哪个值得改）：
-//   1. LDS 用量：当前 = 行长 × 4 bytes。若行长大，考虑分块 + 在线归约
+//   1. LDS 用量：动态 = 行长 × 4 × BLOCK_ROWS。行长大时要分块 + 在线归约
 //   2. VGPR：当前每线程持 1~2 个元素。若用向量化（float4），VGPR 会涨但指令数会降
-//   3. 归约：当前是 LDS + barrier 的朴素树归约，可换 warp shuffle 或 ds_bpermute
+//   3. 归约：跨 warp 现在是 LDS + barrier，可换 ds_bpermute 省掉一次屏障
 //   4. 向量宽度：读用 `__hip_bfloat16` 单元素，可改成 float4 一次读 4 个
-//   5. 驻留：当前 block=256 threads，LDS=R*4。用 inspect_so.py 算 CTA/CU 再定
+//   5. 驻留：threads=THREADS，动态 LDS=R*4*BLOCK_ROWS。用 inspect_so.py 算 CTA/CU 再定
 //
 // 编译：
 //   hipcc -O3 --offload-arch=gfx938 k.hip -o k
 // 看资源：
-//   python3 -I scripts/isa_probe.py k  --json
+//   python3 -I Plugins/ops/skills/op-hip-compile/inspect_so.py k --json
 #include <hip/hip_runtime.h>
 #include <hip/hip_bfloat16.h>
 #include <cstdio>
@@ -67,44 +100,66 @@ HIP_REDUCE = r'''// 由 kernel_scaffold.py 生成 —— 行内归约（RMSNorm 
 
 using bf16 = hip_bfloat16;   // 本机头文件提供 operator float()，无 __bfloat162float
 
-// RMSNorm(x) * weight —— 单行
-__global__ void rmsnorm_kernel(const bf16* __restrict__ x,
-                               const bf16* __restrict__ w,
-                               bf16* __restrict__ y,
-                               int M, int H, float eps) {
-  extern __shared__ float sdata[];          // 行长 H 个 float
+// ---- tile 参数（由 --params 写入；改这里 = 改 kernel 结构） ----
+#define BLOCK_ROWS @BLOCK_ROWS@
+#define WARPS @WARPS@
+#define THREADS @THREADS@
 
-  const int row = blockIdx.x;
-  const int tid = threadIdx.x;
-  const int nthreads = blockDim.x;
+// RMSNorm(x) * weight —— 每 CTA 处理 BLOCK_ROWS 行
+__global__ void __launch_bounds__(THREADS) rmsnorm_kernel(
+    const bf16* __restrict__ x,
+    const bf16* __restrict__ w,
+    bf16* __restrict__ y,
+    int M, int H, float eps) {
+  extern __shared__ float sdata[];          // BLOCK_ROWS × 行长 H 个 float
+  // 静态 LDS：跨 warp 归约表；每行归一化因子复用 warp_part[r][0]。
+  // 大小恰为 BLOCK_ROWS*WARPS*4 字节 —— 会进 kernel metadata，可被 inspect_so 回读。
+  __shared__ float warp_part[BLOCK_ROWS][WARPS];
 
-  const bf16* xr = x + (size_t)row * H;
-  bf16* yr = y + (size_t)row * H;
+  const int lane = threadIdx.x & 63;
+  const int warp = threadIdx.x >> 6;
+  const int row0 = blockIdx.x * BLOCK_ROWS;
 
-  // 1) 读进 LDS 并累加平方
-  float local = 0.f;
-  for (int i = tid; i < H; i += nthreads) {
-    const float v = static_cast<float>(xr[i]);
-    sdata[i] = v;
-    local += v * v;
-  }
+  // 1) 逐行读进 LDS 并归约平方和
+  for (int r = 0; r < BLOCK_ROWS; ++r) {
+    const int row = row0 + r;
+    if (row >= M) break;
+    float* s = sdata + (size_t)r * H;
+    const bf16* xr = x + (size_t)row * H;
 
-  // 2) block 级归约（朴素树；**可换成 warp shuffle**）
-  sdata[tid] = local;
-  __syncthreads();
-  for (int s = nthreads / 2; s > 0; s >>= 1) {
-    if (tid < s) sdata[tid] += sdata[tid + s];
+    float local = 0.f;
+    for (int i = threadIdx.x; i < H; i += THREADS) {
+      const float v = static_cast<float>(xr[i]);
+      s[i] = v;
+      local += v * v;
+    }
+
+    // 2) 归约：warp 内 shuffle → 每 warp 一份 → warp0 汇总（表长 = WARPS）
+    #pragma unroll
+    for (int o = 32; o > 0; o >>= 1) local += __shfl_down(local, o);
+    if (lane == 0) warp_part[r][warp] = local;
+    __syncthreads();
+    if (warp == 0) {
+      float v = (lane < WARPS) ? warp_part[r][lane] : 0.f;
+      #pragma unroll
+      for (int o = 32; o > 0; o >>= 1) v += __shfl_down(v, o);
+      if (lane == 0) warp_part[r][0] = sqrtf(v / (float)H + eps);
+    }
     __syncthreads();
   }
-  const float rms = sqrtf(sdata[0] / (float)H + eps);
-  __syncthreads();                          // sdata 还要复用（下面从 LDS 读回）
 
-  // 3) 从 LDS 读回并写 y
-  //    注意：这里读的是 **LDS**，不是再读一遍 HBM —— 这是本骨架最重要的设计
-  for (int i = tid; i < H; i += nthreads) {
-    const float v = sdata[i];
-    const float wv = static_cast<float>(w[i]);
-    yr[i] = bf16(v / rms * wv);
+  // 3) 从 LDS 读回并写 y（不再读一遍 HBM —— 本骨架最重要的设计）
+  for (int r = 0; r < BLOCK_ROWS; ++r) {
+    const int row = row0 + r;
+    if (row >= M) break;
+    const float* s = sdata + (size_t)r * H;
+    bf16* yr = y + (size_t)row * H;
+    const float inv = 1.f / warp_part[r][0];
+    for (int i = threadIdx.x; i < H; i += THREADS) {
+      const float v = s[i];
+      const float wv = static_cast<float>(w[i]);
+      yr[i] = bf16(v * inv * wv);
+    }
   }
 }
 
@@ -120,12 +175,14 @@ int main(int argc, char** argv) {
   hipMemset(dx, 0, (size_t)M * H * sizeof(bf16));
   hipMemset(dw, 0, (size_t)H * sizeof(bf16));
 
-  const int threads = 256;
-  const size_t shmem = (size_t)H * sizeof(float);
+  // 参数化的启动配置：BLOCK_ROWS 改 grid，THREADS 进 launch
+  const int threads = THREADS;
+  const size_t shmem = (size_t)H * sizeof(float) * BLOCK_ROWS;
+  const dim3 grid((M + BLOCK_ROWS - 1) / BLOCK_ROWS);
 
   // 预热 + 计时
   for (int i = 0; i < 5; i++)
-    rmsnorm_kernel<<<M, threads, shmem>>>(dx, dw, dy, M, H, 1e-6f);
+    rmsnorm_kernel<<<grid, threads, shmem>>>(dx, dw, dy, M, H, 1e-6f);
   hipDeviceSynchronize();
 
   hipEvent_t e1, e2;
@@ -133,14 +190,15 @@ int main(int argc, char** argv) {
   float best = 1e30f;
   for (int i = 0; i < 21; i++) {
     hipEventRecord(e1);
-    rmsnorm_kernel<<<M, threads, shmem>>>(dx, dw, dy, M, H, 1e-6f);
+    rmsnorm_kernel<<<grid, threads, shmem>>>(dx, dw, dy, M, H, 1e-6f);
     hipEventRecord(e2);
     hipEventSynchronize(e2);
     float ms; hipEventElapsedTime(&ms, e1, e2);
     if (ms < best) best = ms;
   }
   const double bytes = (double)M * H * 2 * sizeof(bf16);   // 1读1写
-  printf("median_ms=%.4f  GB/s=%.0f\n", best, bytes / (best * 1e-3) / 1e9);
+  printf("median_ms=%.4f  GB/s=%.0f  grid=%d threads=%d shmem=%zu\n",
+         best, bytes / (best * 1e-3) / 1e9, (int)grid.x, threads, shmem);
   return 0;
 }
 '''
@@ -210,7 +268,78 @@ TEMPLATES = {
 LANGS = ("hip", "triton")
 
 
-def generate(template, lang):
+class ParamError(ValueError):
+    """参数解析/校验失败。带上可读的中文原因，供 CLI 与测试断言。"""
+
+
+# ---------------------------------------------------------------- 参数解析
+
+def supported_params(template):
+    """返回该模板支持的参数名集合（有序）。不认识的模板返回空集。"""
+    return tuple(PARAM_SPECS.get(str(template), {}).keys())
+
+
+def defaults(template):
+    spec = PARAM_SPECS.get(str(template), {})
+    return {k: v["default"] for k, v in spec.items()}
+
+
+def parse_params(template, text):
+    """把 `A=1,B=2` 解析成完整参数 dict（缺省用默认值）。
+
+    反向要求（都抛 ParamError，不静默吞）：
+      - 未知参数名 → 报错并列出支持集合
+      - 非整数 / 越界 → 报错
+      - THREADS != WARPS*64 → 报错
+    空串 / None 表示「全默认」，返回默认值，不报错。
+    """
+    spec = PARAM_SPECS.get(str(template))
+    if spec is None:
+        raise ParamError("模板 %r 不支持 --params（可选 %s）"
+                         % (template, sorted(PARAM_SPECS)))
+    vals = defaults(template)
+    text = (text or "").strip()
+    if not text:
+        return vals
+    for item in text.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ParamError("参数片段 %r 不是 KEY=VALUE 形式" % item)
+        name, raw = item.split("=", 1)
+        name, raw = name.strip(), raw.strip()
+        if name not in spec:
+            raise ParamError("模板 %s 不认识参数 %r；支持 %s"
+                             % (template, name, ", ".join(sorted(spec))))
+        try:
+            v = int(raw)
+        except ValueError:
+            raise ParamError("%s 必须是整数，收到 %r" % (name, raw))
+        s = spec[name]
+        if v < s["min"] or v > s["max"]:
+            raise ParamError("%s=%d 越界：允许 %d~%d（%s）"
+                             % (name, v, s["min"], s["max"], s["help"]))
+        vals[name] = v
+    if "WARPS" in spec and "THREADS" in spec:
+        want = vals["WARPS"] * 64
+        if vals["THREADS"] != want:
+            raise ParamError("THREADS=%d 必须等于 WARPS*64=%d（WARPS=%d）"
+                             % (vals["THREADS"], want, vals["WARPS"]))
+    return vals
+
+
+# ---------------------------------------------------------------- 生成
+
+_PLACEHOLDER = re.compile(r"@([A-Z_]+)@")
+
+
+def generate(template, lang, params=None):
+    """生成骨架源码。
+
+    params: dict 或 `A=1,B=2` 字符串。None = 全默认（与 v6 之前的行为一致）。
+    返回 (src, err)；err 为 None 表示成功。
+    """
     t = TEMPLATES.get(str(template))
     if not t:
         return None, "未知模板 %r（可选 %s）" % (template, sorted(TEMPLATES))
@@ -219,17 +348,98 @@ def generate(template, lang):
     src = t.get(lang)
     if not src:
         return None, "模板 %s 没有 %s 版本" % (template, lang)
+    if params is not None and template not in PARAM_SPECS:
+        return None, "模板 %r 不支持 --params" % template
+    try:
+        vals = resolve_params(template, params)
+    except ParamError as e:
+        return None, str(e)
+    if vals:
+        src = _PLACEHOLDER.sub(
+            lambda m: str(vals[m.group(1)]) if m.group(1) in vals else m.group(0),
+            src)
     return src, None
 
 
+def resolve_params(template, params):
+    """dict / 字符串 / None → 完整参数 dict。dict 里缺的键补默认值。"""
+    if params is None:
+        vals = defaults(template)
+    elif isinstance(params, str):
+        vals = parse_params(template, params)
+    elif isinstance(params, dict):
+        vals = defaults(template)
+        for k, v in params.items():
+            if k not in vals:
+                raise ParamError("模板 %s 不认识参数 %r；支持 %s"
+                                 % (template, k, ", ".join(sorted(vals))))
+            vals[k] = v
+        vals = parse_params(
+            template, ",".join("%s=%s" % (k, v) for k, v in vals.items()))
+    else:
+        raise ParamError("params 必须是 dict / str / None，收到 %r"
+                         % (params,))
+    return vals
+
+
+# ---------------------------------------------------------------- 编译
+
 def build(path, arch="gfx938"):
-    """编译并返回 (ok, 输出)。这是「编译→诊断闭环」的第一步。"""
+    """编译并返回 (ok, 输出, 产物路径)。这是「编译→诊断闭环」的第一步。"""
     hipcc = "hipcc"
     out = Path(path).with_suffix("")
     p = subprocess.run([hipcc, "-O3", "--offload-arch=%s" % arch, str(path),
                         "-o", str(out)], capture_output=True, text=True, timeout=300)
     return p.returncode == 0, ((p.stdout or "") + (p.stderr or ""))[:1500], out
 
+
+def inspect_binary(binary, threads=None, lds=None):
+    """用 inspect_so.py 读编译产物的资源画像；失败返回 (None, 原因)。
+
+    口径（重要）：
+      - `threads` 来自 kernel metadata 的 max_flat_workgroup_size，
+        由 `__launch_bounds__(THREADS)` 决定 —— 改 host 侧变量不会改它。
+      - `lds` 默认取 metadata 里的 group_segment_fixed_size（**静态** LDS）。
+        动态 `extern __shared__` 不进 metadata，要用 lds= 显式传。
+    """
+    if not INSPECT_SO.is_file():
+        return None, "找不到 %s" % INSPECT_SO
+    cmd = [sys.executable, "-I", str(INSPECT_SO), str(binary), "--json"]
+    if threads is not None:
+        cmd += ["--threads", str(threads)]
+    if lds is not None:
+        cmd += ["--lds", str(lds)]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    if p.returncode != 0:
+        return None, (p.stderr or p.stdout or "")[:800]
+    try:
+        data = json.loads(p.stdout)
+    except ValueError:
+        return None, "inspect_so 输出不是 JSON：%s" % p.stdout[:400]
+    kernels = data.get("kernels") or []
+    if not kernels:
+        return None, "产物里没有 kernel metadata"
+    k = kernels[0]
+    return {"compiled": True,
+            "vgpr": k.get("vgpr", 0),
+            "lds": k.get("lds_used", k.get("lds_fixed", 0)),
+            "threads": k.get("threads", 0),
+            "sgpr": k.get("sgpr", 0),
+            "kernel": k.get("name", "")}, None
+
+
+def build_and_inspect(path, arch="gfx938"):
+    """编译 + 回读资源。返回结果 dict（含 compiled / vgpr / lds / threads 或 error）。"""
+    ok, msg, exe = build(path, arch=arch)
+    if not ok:
+        return {"compiled": False, "error": msg.strip()[:800]}
+    prof, err = inspect_binary(exe)
+    if err:
+        return {"compiled": True, "error": err}
+    return prof
+
+
+# ---------------------------------------------------------------- 自检
 
 def selftest():
     # 1) 两个模板都能生成
@@ -239,7 +449,7 @@ def selftest():
             assert src and not err, err
     print("[ok] reduce-lastdim 的 hip / triton 版本都能生成")
 
-    # 2) HIP 版必须能编译
+    # 2) 默认参数生成的 HIP 版必须能编译
     src, _ = generate("reduce-lastdim", "hip")
     d = Path(tempfile.mkdtemp())
     f = d / "k.hip"
@@ -264,7 +474,36 @@ def selftest():
     assert err
     print("[ok] 未知模板报错：%s" % err[:30])
 
-    print("\nselftest PASS（5 项，含真编译 + 真跑）")
+    # 6) 参数真的进了编译产物：4 组参数 → threads 各等于 WARPS*64
+    combos = [(1, 4, 256), (4, 4, 256), (1, 8, 512), (2, 2, 128)]
+    profs = []
+    for br, w, t in combos:
+        s, e = generate("reduce-lastdim", "hip",
+                        {"BLOCK_ROWS": br, "WARPS": w, "THREADS": t})
+        assert s and not e, e
+        ff = d / ("p_%d_%d_%d.hip" % (br, w, t))
+        ff.write_text(s, encoding="utf-8")
+        prof = build_and_inspect(ff)
+        assert prof.get("compiled"), prof
+        assert prof["threads"] == w * 64, (
+            "参数没进编译产物：期望 threads=%d，读到 %s（%r）"
+            % (w * 64, prof.get("threads"), (br, w, t)))
+        profs.append((br, w, t, prof))
+    vgprs = {p["vgpr"] for _, _, _, p in profs}
+    ldss = {p["lds"] for _, _, _, p in profs}
+    assert len(vgprs) > 1 or len(ldss) > 1, (
+        "4 组参数编译后资源完全相同（vgpr=%s lds=%s），参数没生效"
+        % (vgprs, ldss))
+    for br, w, t, p in profs:
+        print("[ok] BR=%d W=%d T=%d → vgpr=%d lds=%d threads=%d"
+              % (br, w, t, p["vgpr"], p["lds"], p["threads"]))
+
+    # 7) 反向：THREADS != WARPS*64 必须报错
+    _, e = generate("reduce-lastdim", "hip", "WARPS=4,THREADS=128")
+    assert e and "THREADS" in e, e
+    print("[ok] THREADS != WARPS*64 报错：%s" % e[:50])
+
+    print("\nselftest PASS（7 项，含真编译 + 真跑 + 参数进产物验证）")
     return 0
 
 
@@ -272,8 +511,14 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="生成可编译的 kernel 骨架")
     ap.add_argument("--template", default="reduce-lastdim")
     ap.add_argument("--lang", default="hip", choices=LANGS)
+    ap.add_argument("--params",
+                    help="tile 参数，逗号分隔，如 BLOCK_ROWS=1,WARPS=4,THREADS=256"
+                         "（缺省项用默认值）")
     ap.add_argument("--out")
     ap.add_argument("--build", action="store_true")
+    ap.add_argument("--json", action="store_true",
+                    help="与 --build 合用：输出编译+资源 JSON")
+    ap.add_argument("--arch", default="gfx938")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args(argv)
@@ -283,19 +528,36 @@ def main(argv=None):
         for k, v in TEMPLATES.items():
             print("%-18s %-10s %s" % (k, "/".join(LANGS), v["note"]))
         return 0
-    src, err = generate(a.template, a.lang)
+    src, err = generate(a.template, a.lang, a.params)
     if err:
         print("ERROR: %s" % err, file=sys.stderr)
         return 2
     out = Path(a.out or ("/tmp/k.%s" % ("hip" if a.lang == "hip" else "py")))
     out.write_text(src, encoding="utf-8")
-    print("已生成 %s（%d 行）" % (out, len(src.splitlines())))
+    if not a.json:
+        print("已生成 %s（%d 行）" % (out, len(src.splitlines())))
     if a.build:
-        ok, msg, exe = build(out)
-        print("编译 %s" % ("成功 → %s" % exe if ok else "失败"))
-        if not ok:
-            print(msg)
+        prof = build_and_inspect(out, arch=a.arch)
+        if a.json:
+            print(json.dumps(prof, ensure_ascii=False))
+        else:
+            if prof.get("compiled"):
+                print("编译 成功 → %s" % out.with_suffix(""))
+                if "error" in prof:
+                    print("资源回读失败：%s" % prof["error"])
+            else:
+                print("编译 失败")
+                print(prof.get("error", ""))
+        if not prof.get("compiled"):
             return 1
+        if "error" in prof and a.json:
+            # 编译成功但资源读不到，仍算失败（验收要求可回读）
+            return 1
+    elif a.json:
+        # 没编译时也输出一个明确结构，避免下游把空输出当成功
+        print(json.dumps({"compiled": False,
+                          "error": "--json 需要配合 --build"}, ensure_ascii=False))
+        return 2
     return 0
 
 
