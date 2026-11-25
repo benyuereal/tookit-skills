@@ -1,0 +1,70 @@
+# op-fusion-rmsnorm-rope 契约
+#
+# 状态 draft：门已定义；缺的是本机可跑的候选实现（见 candidates.yaml）。
+# 本文件是**唯一**的形状/精度/语义真相，bench 与 reference 都从这里读。
+
+op: fusion-rmsnorm-rope
+version: 1
+math: "q_out = rope(rmsnorm(q) * w_q)；k_out = rope(rmsnorm(k) * w_k)"
+
+shapes:
+  q: [B, S, H, D]
+  k: [B, S, H_kv, D]
+  w_q: [D]
+  w_k: [D]
+  cos_sin_cache: [max_pos, D]
+  positions: [B, S]
+  q_out: [B, S, H, D]
+  k_out: [B, S, H_kv, D]
+
+dtypes:
+  q: bfloat16
+  k: bfloat16
+  w_q: bfloat16
+  w_k: bfloat16
+  cos_sin_cache: float32
+  positions: int64
+  acc: float32
+  out: bfloat16
+
+layout_constraints:
+  - q 与 k 最后一维 D 必须是 2 的倍数（rope 成对处理）
+  - cos_sin_cache 是 [max_pos, D]，按 position 取整行
+  - q 与 q_out 可以是同一块内存（原地），k 同理
+
+# ── 语义不变量（参考实现必须满足，否则对比无意义）──────────────
+invariants:
+  eps_position: "eps 在 sqrt 内：1/sqrt(mean(x^2) + eps)"
+  eps_value: 1.0e-6
+  rope_style: "interleaved：偶数下标配 -sin，奇数下标配 sin"
+  rope_theta: 10000.0
+  norm_scope: "沿最后一维 D 归一化，per-(b,s,h)"
+  weight_scope: "w_q 作用于 q 的每个头；w_k 同理"
+
+# ── 等语义口径（跨实现比较前必须对齐）──────────────────────────
+traffic:
+  reads: 2
+  writes: 2
+  note: |
+    读 q + 读 k（权重与 cache 是小表，不计入主流量）；
+    写 q_out + k_out。
+    融合省掉的是「norm 输出先落盘再读回来加 rope」那一趟中间态往返。
+    未融合的基线是 3 读 3 写（2 个中间态各多一次读写）。
+
+# ── 参考实现 ────────────────────────────────────────────────
+reference:
+  entry: reference
+  module: _common.py
+  note: |
+    用 torch 逐条实现上式，fp32 累加。
+    **刻意不用 torch 的 fused 实现** —— 那是被测对象之一，
+    拿它当 oracle 会掩盖它的误差。
+
+inputs_order: [q, k, w_q, w_k, cos_sin_cache, positions]
+outputs_order: [q_out, k_out]
+
+tolerance:
+  max_rel: 2.0e-2
+  note: "bf16 有 7 位尾数，[2,4) 区间 1 ULP = 0.015625；2% 是 5 个 ULP，够宽松"
+
+status: draft

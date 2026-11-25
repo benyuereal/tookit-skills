@@ -1,0 +1,26 @@
+{
+  "op": "fusion-rmsnorm-rope",
+  "family": "rope",
+  "status": "estimated",
+  "note": "**估算值，未经实测标定。** 用 bw-ladder 的 1:1 档 1680 GB/s 做分母。",
+  "peak_gbs": 1680.0,
+  "peak_source": "bw-ladder.yaml rw_1to1 档实测（非标称 1100）",
+  "traffic": {
+    "fused": {
+      "reads": 2,
+      "writes": 2,
+      "note": "读 q+k，写 q_out+k_out；权重与 cache 是小表"
+    },
+    "unfused": {
+      "reads": 3,
+      "writes": 3,
+      "note": "norm 与 rope 之间多一次中间态往返"
+    }
+  },
+  "bound": "memory",
+  "bound_reason": "逐元素 + 行内归约，算术强度极低，必然访存受限",
+  "unknowns": [
+    "decode 小 M 时固定开销占比，可能实际是 latency-bound",
+    "cos_sin_cache 的读取是否命中 L2（小表，应当命中）"
+  ]
+}

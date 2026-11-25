@@ -1,0 +1,30 @@
+# op-fusion-rmsnorm-rope 候选实现
+#
+# **状态：只有 reference，没有可竞速的候选。**
+# 这张卡当前只能验正确性，不能出性能结论。
+
+- id: ref-heavy
+  what: 纯 torch 参考实现（fp32）
+  status: done
+  why: 正确性锚点。**不能用来做性能对比** —— 它不是竞品。
+
+- id: torch-unfused
+  what: torch 分步实现（norm 一趟 + rope 一趟）
+  status: todo
+  why: |
+    这是**未融合基线**，用来量化「融合省了多少」。
+    需要两趟访存，恰是融合要消除的中间态往返。
+    实现后可用作对照组。
+
+- id: lightop-fused
+  what: lightop 的融合实现（若存在）
+  status: blocked
+  blocker: |
+    需先核对 lightop 是否提供 rmsnorm+rope 融合算子。
+    核对方式：import lightop; [x for x in dir(lightop) if "rope" in x.lower()]
+    **不要假设存在，也不要凭名字猜签名。**
+
+# 本卡当前的能力边界：
+#   ✅ 能验正确性（有 reference）
+#   ❌ 不能出性能结论（无竞品候选，comparison 必须为 null）
+#   ❌ 不能算 S 项（三形状都没有可跑的候选）
