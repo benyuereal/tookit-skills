@@ -1,6 +1,6 @@
 ---
 name: op-fused-add-rmsnorm
-description: "残差 + RMSNorm 融合（fused_add_rmsnorm）。decode/prefill 逐层必经的 memory-bound 算子，字节数完全确定，是整个引擎里最适合校准带宽判据的载体。现成实现：lightop.RMSNormAdd（同族 RMSNormAddDropout / RMSNormAddDropoutBias）。触发场景：norm 层占用可观的 step 时间、要判断 norm 是否已到带宽地板、残差是否原地写、需要引入最简单的 memory-bound 参照物。不适用：LayerNorm 的均值中心化语义需改判据；MoE 的 SwiGLU 走 op-mlp-swiglu；QK-norm 走 op-qk-norm。"
+description: "残差 + RMSNorm 融合（fused_add_rmsnorm）。decode/prefill 逐层必经的 memory-bound 算子，字节数完全确定，是整个引擎里最适合校准带宽判据的载体。现成实现：lightop.RMSNormAdd（同族 RMSNormAddDropout / RMSNormAddDropoutBias）。触发场景：norm 层占用可观的 step 时间、要判断 norm 是否已到带宽地板、残差是否原地写、需要引入最简单的 memory-bound 参照物。不适用：LayerNorm 的均值中心化语义需改判据；MoE 的 SwiGLU 走 op-mlp-swiglu；QK-norm 走 op-qk-norm。闭环：本卡只给知识与形状/流量事实，做优化必须走 op-optimize 的 loop.py，不要手搓单次测量。"
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
@@ -8,6 +8,15 @@ kind: card
 ---
 
 # 残差 + RMSNorm 融合
+
+## 闭环（必读）
+
+本卡只提供该算子的形状、字节数与既有事实，**不承担实验流程**。
+做优化请回到入口 skill `op-optimize`，实验只经：
+
+    python3 -I <skill根>/Plugins/ops/engine/loop.py -C <卡目录> run <tag>
+
+单次手测的数字不能当结论提交（判 invalid:no_loop_evidence）。该用 HIP 还是 Triton 由 `scripts/lang_select.py` 按 roofline 判，不要凭习惯选。
 
 ## 一、这段算什么
 

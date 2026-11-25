@@ -45,7 +45,7 @@
 | 故障排查 / 精度 / crash / hang | dcu-vmfault-coredump、debug-cuda-crash、debug-distributed-hang、dcu-vllm-precision、dcu-train-precision | troubleshooting |
 | 工程实践 / CI / 代码规范 / cookbook | ci-workflow-guide、env-var-conventions、cookbook-*、model-pr-* | engineering |
 | **算子优化（做优化、跑实验、写候选）** | **`op-optimize`（唯一入口，见下）** | ops |
-| 算子卡查询 / 某算子有几种实现 / 哪个档位用哪个 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8、op-moe-align-permute、op-moe-topk-gating | ops |
+| 算子卡查询 / 某算子有几种实现 / 哪个档位用哪个 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8、op-moe-align-permute、op-moe-topk-gating（先取卡内事实 → 再回 op-optimize 跑闭环，卡不替代入口） | ops |
 | 契约与门禁 / 计时口径 / PMC 归因 / 天花板推算 | op-contract、op-bench、op-gate、op-profiling、op-roofline | ops |
 | HIP 编译调优 / 手写 HIP 慢但数值对 | op-hip-compile | ops |
 | 全量路由索引 | dcu-skill-router（dcu-core） | core |
@@ -56,6 +56,7 @@
 
 ```
 op-optimize（入口：定口径 → 复现基线 → 定位瓶颈 → 列候选 → 单实验 → 记账）
+   ├─ 这个算子有现成卡吗？  → 先读 op-<算子名> 卡取形状/流量事实，再回本循环执行
    ├─ 该用什么语言？        → scripts/lang_select.py（读 roofline 数字，不靠习惯）
    ├─ 天花板/地板在哪？      → op-roofline / scripts/floor.py
    ├─ PMC 怎么归因？        → op-profiling
