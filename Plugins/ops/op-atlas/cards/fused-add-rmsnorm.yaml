@@ -56,6 +56,39 @@ shapes:
 - decode-m1
 - decode-m32
 - prefill-8k
+attribution:
+  tool: hipprof --pmc --pmc-type 3
+  collected_on: '2026-11-25'
+  kernel: _Z14fused_rms_mr_kPK12hip_bfloat16S1_S1_PS_S2_iif
+  shape: prefill-8k (M=8192, H=4096)
+  counters:
+    GRBM_COUNT: 187385
+    SQ_INSTS_VALU: 6070272
+    SQ_INSTS_LDS: 253952
+    SQ_INSTS_VMEM_RD: 196608
+    SQ_INSTS_VMEM_WR: 65536
+    SQ_LDS_BANK_CONFLICT: 0
+    TCC_HIT: 203255
+    TCC_MISS: 2097304
+    TA_TA_BUSY: 10371617
+    TCP_TCP_TA_DATA_STALL_CYCLES: 3670544
+  geometry:
+    arch_vgpr: 52
+    sgpr: 32
+    scr: 0
+    lds: 32
+  diagnosis: |
+    **访存受限，不是计算受限。** 依据是实测计数，不是推断：
+    - TCC_MISS(2,097,304) / (TCC_HIT+TCC_MISS) = 91.2% 未命中
+      -> 数据基本全部来自 DRAM，符合流式访存预期
+    - SQ_LDS_BANK_CONFLICT = 0
+      -> 无 LDS bank 冲突，共享内存不是瓶颈
+    - arch_vgpr = 52, scr = 0
+      -> 无溢出（对比 hw_kb/private_spill_trap 的 528B 案例）
+    - TA_TA_BUSY / GRBM_COUNT = 55.4
+      -> TA 单元持续繁忙，与"访存受限"一致
+    结论：优化方向只能是减少访存趟数（融合下游量化，3 趟 -> 2 趟），
+    不能靠调 occupancy 或消 bank 冲突。这与 next_probe.surface=fusion-boundary 一致。
 last_verdict:
   status: measured
   kb_path: null
