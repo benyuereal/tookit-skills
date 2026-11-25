@@ -1,0 +1,66 @@
+# op-gemm-bf16 契约
+#
+# 状态 draft：门已定义；缺的是可跑的候选实现（见 candidates.yaml）。
+# **这张卡的重点不是「比厂商快」，是「搞清该用哪个库、上限多少」。**
+
+op: gemm-bf16
+version: 1
+math: "out = A @ B；A/B bf16，累加 fp32，输出 bf16"
+
+shapes:
+  A: [M, K]
+  B: [K, N]
+  out: [M, N]
+
+dtypes:
+  A: bfloat16
+  B: bfloat16
+  acc: float32
+  out: bfloat16
+
+layout_constraints:
+  - A 是 [M,K] row-major；B 是 [K,N] row-major（不是 [N,K] 再转置）
+  - 若底层库要求其它布局，adapter 内部转，**不要改变契约**
+
+invariants:
+  accumulate_dtype: "fp32 累加，不能中途降到 bf16"
+  output_dtype: bfloat16
+  bias: "本卡不含 bias（含 bias 是另一个算子）"
+  no_activation: "不含任何激活函数"
+
+traffic:
+  reads: 2
+  writes: 1
+  note: |
+    理论上 3 趟：读 A(M*K*2) + 读 B(K*N*2) + 写 C(M*N*2)。
+    **但 GEMM 的实际 DRAM 流量强烈依赖分块与 cache 命中**，
+    大形状下 B 可能整块驻留 L2 —— 此时实测流量远小于理论值。
+    拿「最少字节 / 实测时间」算出的带宽会**超过**峰值，
+    见到这种数字要立刻想到口径问题，不要当成优化成果。
+
+reference:
+  entry: reference
+  module: _common.py
+  note: |
+    **刻意用 fp32 的 A@B，不用 torch.mm 的 bf16 路径** ——
+    bf16 是受测精度之一，拿它当 oracle 会掩盖误差。
+
+inputs_order: [A, B]
+outputs_order: [out]
+
+tolerance:
+  max_rel: 5.0e-3
+  note: "bf16 累加 fp32，K 很大时误差累积；5e-3 是 8192 量级下的合理值"
+
+# ── 这张卡的特殊性：它是「选型」题不是「优化」题 ──────────────
+card_kind: selection
+selection_note: |
+  本卡的目标不是写一个比厂商快的 GEMM —— 那不可能。
+  目标是回答：**在给定形状下，该用哪个库？它的上限是多少？**
+
+  因此 comparison 的正确形态是「库 A vs 库 B」，
+  而不是「自研 vs 厂商」。
+  历史上这张卡的 comparison 是 baseline_role=self（F.linear vs torch.mm），
+  两个都是 torch 路径，B 项因此只得 8 分 —— **那个评分是对的**。
+
+status: draft

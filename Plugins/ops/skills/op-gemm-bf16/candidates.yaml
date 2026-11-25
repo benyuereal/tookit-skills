@@ -1,0 +1,38 @@
+# op-gemm-bf16 候选实现
+#
+# **状态：有 2 个能跑的变体（ref-fp32 / torch-mm），但都不是竞品。**
+
+- id: ref-fp32
+  what: torch fp32 的 A@B
+  status: done
+  why: 正确性锚点。fp32 精度，**不是竞品**，不能用来算 B 项。
+
+- id: torch-mm
+  what: torch.mm（bf16 输入，走 hipBLASLt 后端）
+  status: done
+  why: |
+    这是**框架默认路径**，多数场景下就是最优解。
+    但它不是「厂商库」的最优形态 —— 它取决于 hipBLASLt 的启发式选择。
+
+- id: hipblaslt-tuned
+  what: 直接调 hipBLASLt 并扫参数（而非走 torch 的默认启发式）
+  status: todo
+  why: |
+    **这才是本卡真正该做的对比。** torch.mm 走的是 hipBLASLt 的默认
+    启发式，手工扫 `layout` / `algo` 可能再快 5-15%。
+    历史记录里 hipBLASLt 达 498.5 TF（gemm-fp8 卡），但 bf16 没测过。
+
+- id: lightop-gemm
+  what: lightop.gemm
+  status: todo
+  why: 已确认 lightop 有 gemm 符号，但**签名与性能都未测**。
+
+- id: deepgemm
+  what: deepgemm-das 的 bf16 路径
+  status: blocked
+  blocker: 仓库已 clone（/workspace/deepgemm-das），但未构建。
+
+# 为什么 B 项只有 8 分（历史记录 baseline_role=self）：
+#   卡片的 comparison 是 F.linear vs torch.mm，**两个都是 torch 路径**，
+#   没有厂商库参与。那个评分是对的，不是判据的问题。
+#   要提 B 项，必须真的接上 lightop / hipBLASLt 直调 / deepgemm。

@@ -1,0 +1,30 @@
+# op-gemm-bf16 形状档位
+# 覆盖 M 方向三档。K/N 固定为 4096（典型 FFN 中间维）。
+
+decode-m1:
+  params:
+    M: 1
+    K: 4096
+    N: 4096
+  note: "单 token decode（GEMV 极限）：完全 memory-bound，K*N 的 B 矩阵要整个读一遍"
+
+decode-m32:
+  params:
+    M: 32
+    K: 4096
+    N: 4096
+  note: "小 batch decode"
+
+prefill-8k:
+  params:
+    M: 8192
+    K: 4096
+    N: 4096
+  note: "prefill：compute-bound，接近 GEMM 的算力上限"
+
+tiny:
+  params:
+    M: 8
+    K: 256
+    N: 256
+  note: "只做正确性门自检"

@@ -1,0 +1,27 @@
+{
+  "op": "gemm-bf16",
+  "family": "gemm",
+  "status": "estimated",
+  "bound_by_regime": {
+    "decode-m1": {
+      "bound": "memory",
+      "reason": "M=1 时是 GEMV，算术强度 M=1，必访存受限"
+    },
+    "decode-m32": {
+      "bound": "mixed",
+      "reason": "M=32 处于带宽与算力的过渡区"
+    },
+    "prefill-8k": {
+      "bound": "compute",
+      "reason": "M=8192 时算术强度极高，受 MMA 吞吐限制"
+    }
+  },
+  "peak_gbs": 1680.0,
+  "peak_tflops_bf16": 60.0,
+  "peak_note": "**两个峰值都未实测标定**，ratio 仅供参考",
+  "unknowns": [
+    "gfx938 的 bf16 稠密算力实际值",
+    "hipBLASLt 在 M=1 时是否退化成 GEMV 专用 kernel",
+    "B 矩阵是否驻留 L2（K*N*2 = 32MB > 8MB L2，应当不驻留）"
+  ]
+}
