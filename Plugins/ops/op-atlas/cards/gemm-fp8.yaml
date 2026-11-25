@@ -9,8 +9,8 @@ variants:
 - repo: torch
   library_profile_ref: libraries.md §6
   file_hint: torch._scaled_mm（走 hipBLASLt 后端）
-  tier: primary
-  role: competitor
+  tier: fallback
+  role: correctness_only
   law_ref: null
   best_for:
   - fp8 GEMM 大形状（8192³ 实测 498.5 TF = nominal 的 0.89）
@@ -155,7 +155,33 @@ last_verdict:
       warmup: hot
       note: 实测 2205.7 µs = 498.5 TF。**分母口径**：nominal 560（规格）；若 benchmark 做过 solution 扫参，分母可用 achievable 579.7，此时 ratio=0.86。aiter opus 49.8 TF 是实现族问题（其 bf16 也只到 nominal 8.6%）。4096³ 档为 457.6 TF = 0.82，说明
         fp8 强依赖形状
-  conclusion: hipBLASLt 默认调用达 498.5 TF（nominal 的 0.89）；空间仅 1.12 倍
+  conclusion: 用 aiter，不要自研；4 个变体里 3 个 adapter 空，hand-hip 慢约 20x
+  bottleneck:
+    bound: latency
+    root_cause: |
+      本算子的正确答案是「用 aiter，不要自己写」：aiter fp8 达 nominal 的 0.89，
+      剩余空间仅 1.12 倍，自研收益上限不足以覆盖成本。
+
+      known gap（诚实记录，不是失败）：
+        · 4 个变体里 3 个 adapter 是空的（tilelang / tilelang-rs / hand-hip）
+          hand-hip 已于 2026-11-26 补上朴素版
+        · hand-hip（朴素 tiled）比 aiter 慢约 20x
+        · 因此 comparison 为 null —— 不硬凑对比，
+          慢 20x 的对比写进 B 项只会让 D1 虚高
+
+      baseline 口径：floor.basis 里的 t=2205.7us 来自 torch._scaled_mm，
+      这是 reference（参考实现）不是竞品。竞品是 aiter。本卡 B 项不应据此计分。
+    evidence:
+    - what: aiter fp8 达 nominal 峰值的 0.89（498.5 TF），剩余空间 1.12 倍
+      kind: ratio
+      reproduce: |
+        python3 -I Plugins/ops/skills/op-gemm-fp8/bench/ab.py \
+          --shape prefill-8k --variants aiter --rounds 3
+    - what: hand-hip 朴素实现比 aiter 慢约 20 倍（prefill-8k）
+      kind: ratio
+      reproduce: |
+        python3 -I Plugins/ops/skills/op-gemm-fp8/bench/ab.py \
+          --shape prefill-8k --variants hand-hip --base aiter --rounds 3
   verified_on: '2026-11-23'
   evidence:
   - path: Plugins/ops/skills/op-gemm-fp8/results/prefill-8k-aiter.json
@@ -253,7 +279,7 @@ surfaces:
 - table-miss
 updated: '2026-11-22'
 baseline_ref:
-  impl: torch._scaled_mm
+  impl: aiter.gemm_a8w8_opus
   role: competitor
   traffic_passes:
     reads: 2
