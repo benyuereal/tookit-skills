@@ -91,11 +91,52 @@ def _aiter_runner(A, B, **kw):
     return out.to(torch.bfloat16) if out.dtype != torch.bfloat16 else out
 
 
+_HIP_LIB = {}
+
+
+def _hand_hip_runner(A, B, **kw):
+    """手写 HIP fp8 GEMM。**当前是朴素 tiled 实现，不是优化版。**
+
+    存在的理由：另外三个变体（tilelang / tilelang-rs / hand-hip 本身）
+    的 adapter 都是空的，只有 aiter 能跑，凑不成 A/B 对比，
+    导致 B（对比）和 R（轮次）两项无法推进。
+
+    先有一个能跑、能对数的实现，才能谈优化。当前这个必然比 aiter 慢，
+    这是预期的 —— 它的价值是给出「朴素实现到厂商库差多少」这个基线。
+    """
+    import ctypes
+    from pathlib import Path
+    k = Path(__file__).resolve().parent / "kernels"
+    so = k / "gemm_fp8.so"
+    if not so.is_file():
+        raise RuntimeError(
+            "缺 %s —— 先编译：cd %s && hipcc -O3 --offload-arch=gfx938 "
+            "-fPIC -shared -o gemm_fp8.so gemm_fp8.hip" % (so, k))
+    if "lib" not in _HIP_LIB:
+        lib = ctypes.CDLL(str(so))
+        fn = lib.gemm_fp8_launch
+        fn.argtypes = [ctypes.c_void_p] * 3 + [ctypes.c_int] * 3
+        fn.restype = None
+        _HIP_LIB["lib"] = fn
+    fn = _HIP_LIB["lib"]
+
+    M, K = A.shape
+    N = B.shape[1]
+    # kernel 吃 uint8 承载的 fp8、吐 float
+    A8 = A.to(torch.float8_e4m3fn).view(torch.uint8).contiguous()
+    B8 = B.to(torch.float8_e4m3fn).view(torch.uint8).contiguous()
+    C = torch.empty((M, N), dtype=torch.float32, device=A.device)
+    fn(A8.data_ptr(), B8.data_ptr(), C.data_ptr(), M, N, K)
+    return C
+
+
 def get_runner(name, tilelang_root=None, **kwargs):
     if name not in VARIANTS:
         raise ValueError("未知变体 %r（可选 %s）" % (name, " / ".join(VARIANTS)))
     if name == "aiter":
         return _aiter_runner
+    if name == "hand-hip":
+        return _hand_hip_runner
     raise RuntimeError(
         "变体 %r 的 adapter 尚未实现（**注意：aiter 实际已安装**，此前「需先安装」的措辞是错的）。原措辞：需先安装 TileLang(hcu) / aiter 的 FP8 GEMM 后端"
         "（见 variants.yaml 的 source 字段）。adapter 已就绪，缺的是后端——"
