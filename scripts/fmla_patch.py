@@ -40,25 +40,28 @@ DERIVED_SUFFIX = "_hip.h"
 PATCHES = [
     (
         "csrc/api/dense_decode.h",
-        "    if ((num_heads_q < 64 && num_heads_k == 1) || num_heads_k > 1 || arch.is_gfx928()) {\n"
-        "        params.tile_scheduler_metadata_ptr = (DecodingSchedMeta*)tile_scheduler_metadata->data_ptr();\n"
-        "        params.num_sm_parts = num_sm_parts;\n"
-        "        params.num_splits_ptr = num_splits->data_ptr<int>();",
-
-        "    // **这两个字段两个分支都必须赋值**（D14）。\n"
-        "    // fp8 主 kernel 第一件事就解引用 tile_scheduler_metadata_ptr\n"
-        "    // （flash_fwd_mla_kernel_fp8_hip.h:2615），而原来只在 if 分支赋值。\n"
-        "    // H >= 64 走 else → 指针是残留值 → VMFault，报错无任何指向性。\n"
         "    params.tile_scheduler_metadata_ptr = (DecodingSchedMeta*)tile_scheduler_metadata->data_ptr();\n"
         "    params.num_sm_parts = num_sm_parts;\n"
-        "    params.num_splits_ptr = num_splits->data_ptr<int>();\n"
-        "    if ((num_heads_q < 64 && num_heads_k == 1) || num_heads_k > 1 || arch.is_gfx928()) {",
-        "未初始化指针（H>=64 崩溃的根因）",
+        "    params.num_splits_ptr = num_splits->data_ptr<int>();",
+
+        "    // **D18**：不要把 optional 的解引用搬到 if 外面。\n"
+        "    // H>=64 且调用方没传 metadata 时它是空的，-> 会 SIGSEGV（gdb: this=0x2）。\n"
+        "    // params 是未清零的局部结构体，\"不赋值\"= 保留栈上垃圾值，不是 nullptr。\n"
+        "    // 另外 KU_CHECK_* 对空 optional 一律返回 true，拦不住。\n"
+        "    params.tile_scheduler_metadata_ptr = nullptr;\n"
+        "    params.num_splits_ptr = nullptr;\n"
+        "    params.num_sm_parts = num_sm_parts;\n"
+        "    if (tile_scheduler_metadata.has_value()) {\n"
+        "        params.tile_scheduler_metadata_ptr = (DecodingSchedMeta*)tile_scheduler_metadata->data_ptr();\n"
+        "    }\n"
+        "    if (num_splits.has_value()) {\n"
+        "        params.num_splits_ptr = num_splits->data_ptr<int>();\n"
+        "    }",
+        "空 optional 解引用（H>=64 崩溃根因）",
     ),
     (
-        # 注意：这里把「旧锚点」写成永远不会匹配的占位，
-        # 是因为这个补丁**已经手工打过且格式变了**（带逗号+续行）。
-        # 保留一条记录，让 --check 仍能确认「512 没被回退」。
+        # 这个补丁已手工打过且格式带逗号+续行，锚点写占位符，
+        # 保留一条记录让 --check 仍能确认「512 没被回退」。
         "csrc/extension/flash_fwd_mla_kernel_fp8.h",
         "____never_matches____",
         "    static_assert(Headdim == 576 || Headdim == 512,\n"
