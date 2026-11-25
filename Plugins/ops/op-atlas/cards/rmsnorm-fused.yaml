@@ -75,6 +75,26 @@ last_verdict:
   - path: Plugins/ops/skills/op-rmsnorm-fused/results/prefill-8k-vs-lightop.json
     sha256: 8fe64dbca242c8df4efcf761dd0a2729c155a92248af9b4938ab6fe381f58e75
     verified_on: '2026-11-23'
+  geomean:
+    value: 1.4496
+    shapes:
+    - decode-m1 (M=1)
+    - decode-m32 (M=32)
+    - prefill-8k (M=8192)
+    coverage: |
+      三形状实测（event_isolated，3 轮，全部 |Δ|>3MAD 显著）：
+        decode-m1   0.0488ms  1.6944x  （慢 69%）
+        decode-m32  0.0493ms  2.0131x  （慢 101%）
+        prefill-8k  0.1789ms  0.8930x  （快 10.7%）
+      geomean = 1.4496。
+    vs: |
+      **整体比 lightop 慢 45%。** 只有 prefill-8k 这一个档位占优。
+      另两种自研变体在 decode 上同样劣于 lightop：
+        fused-hip-reg      @decode-m1  1.8741x
+        fused-3pass-triton @decode-m1  3.5400x
+      说明这不是变体选错，是融合实现在小 batch 下的固有劣势
+      （固定开销摊不开，lightop 的 kernel 启动/调度更轻）。
+      **本卡当前不满足「比厂商库快」的目标，S 项不予 claim。**
   conclusion: 自研寄存器驻留实现相对 lightop 快 1.12x（event_isolated 可 claim）
   next_probe:
     surface: none
