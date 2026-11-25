@@ -39,7 +39,10 @@ import time
 # 不占带宽。第一版按 CLAUDE.md 的「used < 30GB」判，把可用的卡全判死了。
 MAX_UTIL = 10.0              # 使用率上限（%）
 # 真正要确认的是「能分配」：分配失败说明卡真的满了
-PROBE_MB = 512
+# 512MB 探针在 143GB 卡上探不出「只剩 512MB」这种情况。
+# 2026-11-26 实测：HCU[0] 使用率 0%、可分配 512MB，但真实负载要 6.6GB 时直接 OOM。
+# 提到 2GB —— 够大到能探出「快满了」，又不至于自己占太多。
+PROBE_MB = 2048
 SETTLE_SECONDS = 2.0
 
 
@@ -104,7 +107,10 @@ def check(card=None, settle=SETTLE_SECONDS):
             continue
         ok, why = is_clean(first[c])
         if ok:
-            ok2, _ = can_alloc(c)
+            # **真正分配一次**。2026-11-26 00:55 实测：HCU[0] 使用率 0%，
+            # 但显存已被别的容器占满，分配直接 OOM。
+            # 「使用率 0%」不等于「能用」—— 缓存驻留不占算力但占地址空间。
+            ok2, why2 = can_alloc(c)
             if ok2:
                 ok_first.append(c)
     if not ok_first:

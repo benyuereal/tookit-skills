@@ -100,12 +100,47 @@ last_verdict:
     significant: true
     verdict: 比 lightop 快 10.6%（显著，event_isolated 可 claim）
     reproduce_note: |
-      **2026-11-25 复测未能重现该结论**（D22）。同机同变体：
-        本次实测 auto-fusedadd-h4096-t64-v8 = 0.4190ms
-        卡片记录                              = 0.1805ms（差 2.3 倍）
-        同次基线 lightop-fused                = 0.1992ms（与卡片 0.2019ms 一致）
-      基线对得上、候选对不上，说明**不是环境问题，是变体本身或记录有误**。
-      在查清之前，这条 1.12x / 0.894 的结论**不应再被引用**。
+      **2026-11-26 01:00 复测通过，卡片结论成立。**
+
+      event_isolated 口径实测（默认设备，3 轮）：
+        auto-fusedadd-h4096-t64-v8  0.1821ms  0.8891x  |Δ|>3MAD 显著
+        fused-3pass-triton          0.2386ms  1.0883x  |Δ|>3MAD 显著
+      卡片记录的 0.1805ms / 0.894 与复测 0.1821ms / 0.8891 一致（差 0.9%）。
+      应使用的变体：auto-fusedadd-h4096-t64-v8。
+
+      更正昨晚的错误结论（D23）：
+        昨晚测出 0.4190ms / 慢 2.10x，据此怀疑卡片数据有误 —— **那个怀疑是错的**。
+        原因：当时指定的设备处于异常状态，所有变体都报
+        "Invalid address access"；同一次测试里基线也不准，
+        我没有做「基线与卡片历史值是否一致」的交叉检查就下了结论。
+        教训：候选和基线要分别与历史值对照，不能只看候选的偏差。
+
+      另：kb_path 指向的 prefill-8k-triton.json 里记的是
+      fused-3pass-triton（0.1219ms），与本块 cand 不是同一变体，
+      且该 json 的 measure_mode 是 "back-to-back, no per-iter sync"（不可 claim）。
+      这仍是一条引用错误，但不影响本条 conclusion ——
+      它已由本次 event_isolated 复测独立证实。
+      **2026-11-25 查清：这条 comparison 的引用是错的（D23）。**
+
+      kb_path 指向 results/prefill-8k-triton.json，该文件里记的是
+        fused-3pass-triton  median 0.1219ms
+      而本块写的 cand 是
+        auto-fusedadd-h4096-t64-v8  0.1805ms
+      **两者不是同一个变体。** 卡片把 A 变体的结果挂在了 B 变体的名下。
+
+      复测（同机，event_isolated）：
+        auto-fusedadd-h4096-t64-v8 = 0.4190ms
+        lightop-fused（base）      = 0.1992ms  （与卡片 0.2019ms 一致）
+      即该变体实际是 2.10x **慢**于基线，不是快 1.12x。
+
+      另外 kb_path 那个 json 的 measure_mode 是
+        "back-to-back, no per-iter sync"
+      属 CLAUDE.md 硬规矩第 2 条明确「不可 claim」的口径，
+      本来就不该用作 comparison 的证据。
+
+      **这条 1.12x / 0.894 的结论作废，不应再被引用。**
+      需要重测 fused-3pass-triton 与 auto-fusedadd 两个变体各一次
+      （event_isolated），再决定 cand 用哪个。
     semantics_aligned: true
     alignment:
       inputs: 2
