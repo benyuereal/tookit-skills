@@ -453,3 +453,62 @@ CLAUDE.md 的硬约束写明「每卡 used 需 < 30 GB」，实际 139 GB。
 可加一条：封存时检查 `base_mad/base_ms < 0.01`，超过就警告「这条记录可能不干净」。
 
 **当前防回退**：无机器判据。这条登记为已知缺陷。
+
+---
+
+## D13 · FlashMLA-das 的 fp8 kernel 只支持 d=576，GLM-5.3 需要 512
+
+**发现**：2026-11-25，读 `/workspace/FlashMLA-das` 源码时。
+
+### 症状
+
+`csrc/api/dense_decode_kvfp8_hip.h:75` 的 API 契约：
+
+```cpp
+TORCH_CHECK(head_size_k == 576 || head_size_k == 512,
+            "Only head_size_k == 576 or 512 is supported");
+```
+
+**但 kernel 层只实例化了 576**：
+
+```bash
+$ grep -o '<[^>]*>' csrc/extension/*.cu | sort -u
+<bfloat16_t, 576> <bfloat16_t,bfloat16_t,576>
+<float_e4m3_t,bfloat16_t,576> <half_t, 576>
+```
+
+`flash_fwd_mla_kernel_fp8_hip.h:2925` 更硬：
+
+```cpp
+template<typename T, typename To, int Headdim>
+void run_mha_fwd_splitkv_mla_fp8(...) {
+    static_assert(Headdim == 576);          // ← 传 512 直接编不过
+    using Kernel_traits = ...<576, 16, 64, 4, ...>;   // ← 内部还硬编码 576
+```
+
+### 影响
+
+**GLM-5.3 flash 的 d_qk == d_v == 512（无 rope 尾），用不了 fp8 路径。**
+
+- DeepSeek DSA / V4.1 是 576（512 latent + 64 rope tail）—— 它们能用
+- GLM-5.3 是 512 —— **API 说支持，底层没有**
+
+### 处理
+
+已改（2026-11-25）：
+
+1. `csrc/extension/flash_fwd_mla_kernel_fp8.h` —— 把函数内 5 处 `<576, ...>` 改成
+   `<Headdim, ...>`，`static_assert` 放开到 `576 || 512`
+2. `csrc/extension/flash_fwd_mla_fp8_gfx938.cu` —— 加 512 的模板实例化
+3. 同步 `_hip.h`（hipify 产物，构建时会重新生成，但本地编译需要）
+
+**注意**：改的是 `.h` / `.cu` 源文件，**不是 `_hip.h`**。
+第一版改错了对象（改了 hipify 出来的 `_hip.h`），后来发现 `setup.py` 只编 `.cu`。
+
+### 待验证
+
+- [ ] 编译通过（进行中）
+- [ ] d=512 路径在 GLM-5.3 形状上正确性通过
+- [ ] 性能对比：fp8 512 vs bf16 512
+
+**这是「API 契约与实现不一致」的实例**，和 D10（卡片 math 与源实现不符）同类。

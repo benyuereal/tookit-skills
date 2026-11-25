@@ -34,8 +34,12 @@ import subprocess
 import sys
 import time
 
-MAX_USED_MB = 30 * 1024      # CLAUDE.md：每卡 used < 30 GB
+# **显存占用不是判据**。实测（2026-11-25）：8 张卡各占 123GB，
+# 但使用率 0%、能正常分配 2GB、跑出来 MAD 0.4% —— 那是别的容器的缓存驻留，
+# 不占带宽。第一版按 CLAUDE.md 的「used < 30GB」判，把可用的卡全判死了。
 MAX_UTIL = 10.0              # 使用率上限（%）
+# 真正要确认的是「能分配」：分配失败说明卡真的满了
+PROBE_MB = 512
 SETTLE_SECONDS = 2.0
 
 
@@ -64,16 +68,28 @@ def read_state():
 
 
 def is_clean(st):
-    """单次采样是否干净。**缺字段按不干净处理** —— 不知道就不能说没事。"""
-    used = st.get("used_mb")
+    """单次采样是否干净。**缺字段按不干净处理** —— 不知道就不能说没事。
+
+    判据只有「使用率」—— 显存占用不作为判据（见 MAX_UTIL 上方注释）。
+    """
     util = st.get("util")
-    if used is None or util is None:
-        return False, "读不到 used/util"
-    if used > MAX_USED_MB:
-        return False, "显存 %d MB > %d MB" % (used, MAX_USED_MB // 1024 / 1024 * 1024)
+    if util is None:
+        return False, "读不到使用率"
     if util > MAX_UTIL:
         return False, "使用率 %.1f%% > %.0f%%" % (util, MAX_UTIL)
-    return True, "干净（%d MB, %.1f%%）" % (used, util)
+    return True, "空闲（%.1f%%）" % util
+
+
+def can_alloc(device):
+    """真正分配一块显存验证。**这才是「能不能跑」的判据。**"""
+    try:
+        import torch
+        x = torch.empty(PROBE_MB * 1024 * 256, dtype=torch.uint8,
+                        device="cuda:%d" % device)
+        del x
+        return True, "可分配 %dMB" % PROBE_MB
+    except Exception as e:                                   # noqa: BLE001
+        return False, "分配失败：%s" % str(e)[:60]
 
 
 def check(card=None, settle=SETTLE_SECONDS):
@@ -88,11 +104,12 @@ def check(card=None, settle=SETTLE_SECONDS):
             continue
         ok, why = is_clean(first[c])
         if ok:
-            ok_first.append(c)
+            ok2, _ = can_alloc(c)
+            if ok2:
+                ok_first.append(c)
     if not ok_first:
-        worst = ", ".join("HCU%d=%sMB/%s%%" % (
-            c, first[c].get("used_mb", "?"), first[c].get("util", "?"))
-            for c in cands if c in first)
+        worst = ", ".join("HCU%d=%s%%" % (c, first[c].get("util", "?"))
+                          for c in cands if c in first)
         return -1, False, "没有干净卡（%s）" % worst
     if settle > 0:
         time.sleep(settle)
@@ -114,8 +131,8 @@ def selftest():
     print("[ok] 正向：5GB / 0%% 判干净")
 
     ok, why = is_clean({"used_mb": 139 * 1024, "util": 0.0})
-    assert not ok and "显存" in why, why
-    print("[ok] 反向：139GB（D12 实测值）判不干净")
+    assert ok, "显存占用高但空闲，应当判可用 —— 实测踩过这个误判：" + why
+    print("[ok] 反向：显存占 139GB 但使用率 0%% 判**可用**（实测踩过的误判）")
 
     ok, why = is_clean({"used_mb": 5 * 1024, "util": 96.9})
     assert not ok and "使用率" in why, why
