@@ -117,3 +117,27 @@ flock /tmp/opbench-gpu.lock -c "<bench 命令>"
 
 **GPU**：三张 agent 都不许跑 bench；需要 GPU 的由主线程串行执行
 （`flock /tmp/opbench-gpu.lock`）。
+
+---
+
+## 第 4 批（2026-11-25 13:00 起）—— v8 修订版：自演化闭环
+
+**本批目标**：补齐「自主迭代能力」。依据 `updates/.../AGENT-SKILL-ROADMAP-v8.md`。
+
+| agent | 写范围 | 状态 |
+|---|---|---|
+| **主线程** | `scripts/advance.py` · `scripts/self_evolve.py`（新建）· `docs/PARALLEL.md` · 所有 git commit | 进行中 |
+| agent-E 课程化 | `curriculum.yaml`（新建）· `scripts/check_curriculum.py`（新建）· `Plugins/ops/tests/test_curriculum.py`（新建） | 待派发 |
+| agent-F 机制沉淀 | `hw_kb/hip/gfx938/*.md`（新增条目）· `hw_kb/README.md` | 待派发 |
+| agent-G PMC 采集 | `Plugins/ops/skills/op-fused-add-rmsnorm/**`（只读+results）· `scripts/pmc_collect.py`（新建） | 待派发 |
+
+**第 4 批不许碰**：
+- `Plugins/ops/engine/loop.py`（1,955 行，0 次故障，不动）
+- `Plugins/ops/op-atlas/cards/*.yaml`（主线程在改 fused-add-rmsnorm）
+- `data/ops/registry.json`（card_sync 独占）
+- `scripts/ablate.py` · `scripts/check_means.py`（第 3 批的产物）
+
+**GPU 互斥**：agent-G 要跑 bench，必须 `flock /tmp/opbench-gpu.lock`。
+agent-E/F 纯文档+代码，不碰 GPU，可任意并行。
+
+**写范围重叠 = 立刻停止并报告。**

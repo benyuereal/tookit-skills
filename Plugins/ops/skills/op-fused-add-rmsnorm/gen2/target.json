@@ -1,0 +1,11 @@
+{
+ "next_gen": 2,
+ "reference": "Plugins/ops/skills/op-fused-add-rmsnorm/reference/sealed/gen1",
+ "reference_variant": "fa-rms-reg",
+ "base_ms": 0.14000000059604645,
+ "target_ms": 0.1333333339009966,
+ "step": 1.05,
+ "noise_floor": 0.015,
+ "stop_if": "增益 < noise_floor 或 连续 2 轮无 ACCEPTED",
+ "created": "2026-11-25T18:31:09"
+}

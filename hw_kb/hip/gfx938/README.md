@@ -12,12 +12,19 @@
 | [`vec16_uint4`](vec16_uint4.md) | ✅ | 16B 向量访存是上 1000 GB/s 的必要条件 |
 | [`warp_reduce_shfl`](warp_reduce_shfl.md) | ✅ | shuffle + 静态 LDS 表，屏障从 8 次降到 2 次 |
 | [`lds_bank_swizzle`](lds_bank_swizzle.md) | ❌ **refuted** | 解决了真问题（9.6 冲突/指令）但**只快 0.36%** |
+| [`mls_requires_kpack1`](mls_requires_kpack1.md) | ✅ | bf16 的 k_pack=2 与 MLS 互斥；MLS 只挂一边会**静默算错** |
+| [`slc_cache_hint`](slc_cache_hint.md) | ❌ **refuted** | slc 提示慢 13%；但「纯 load」比 descriptor 慢 18% —— 三者关系是重点 |
 
-## 待收录（有实测但还没整理）
+## 待收录（有线索但缺独立实测）
 
-- `sto_global_cache_modifier` —— `.cs` / `.cg` 在 DCU 上的实际效果（`_common.py` 注释说 `.cs` 不支持）
-- `grid_tail_discard` —— 小 M 时 grid 填不满 64 CU 的处理
-- `multi_row_cta` —— 多行/CTA 的收益与 vgpr 压力的平衡点
+| 候选 | 缺什么证据 |
+|---|---|
+| `grid_tail_occupancy` | 小 M 时 grid 填不满 64 CU 的实测数字（只有推理，没测过） |
+| `prefetch_depth_isa` | `s_waitcnt` 深度与实测耗时的对应关系 |
+| `epilogue_overlap` | 尾部展开与下一轮计算重叠的实际收益 |
+
+**没有独立实测的不写进来** —— 这是本库的纪律。
+「看起来该有用」不足以进 hw_kb，那和猜测没有区别。
 
 ## 平台差异（写 documento 前必看）
 

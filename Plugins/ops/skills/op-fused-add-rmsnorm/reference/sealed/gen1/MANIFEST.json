@@ -1,0 +1,46 @@
+{
+ "gen": 1,
+ "sealed_at": "2026-11-25T18:30:46",
+ "variant": "fa-rms-reg",
+ "files": {
+  "source": {
+   "name": "fa-rms-reg.hip",
+   "sha256": "699eaae984001638008da9c4314afe19a024d71afc6ae98173cdc4391cf93d9d"
+  }
+ },
+ "evidence": {
+  "sha256": "699eaae984001638008da9c4314afe19a024d71afc6ae98173cdc4391cf93d9d",
+  "measured_ms": 0.14000000059604645,
+  "base_ms": 0.25519999861717224,
+  "ratio": 0.5485893470009836,
+  "measure_mode": "event_isolated",
+  "acc_ok": true,
+  "acc": {
+   "1": {
+    "tag": "fa-rms-reg",
+    "max_abs": 0.015617847442626953,
+    "mean_abs": 0.0011219772277399898,
+    "cosine": 0.9999985694885254,
+    "max_ulp": 0.500030517578125,
+    "nonfinite": 0
+   }
+  },
+  "rounds": null,
+  "source_record": "20261125.jsonl",
+  "ts": "2026-11-25T03:38:59",
+  "shape": {
+   "params": {
+    "M": 8192,
+    "H": 4096
+   },
+   "note": "prefill：字节数主导，最接近纯带宽地板",
+   "_name": "prefill-8k",
+   "shape": "prefill-8k"
+  }
+ },
+ "noise_floor": {
+  "value": 0.015,
+  "basis": "样本 2 条不足 3，退回最小值"
+ },
+ "notes": []
+}

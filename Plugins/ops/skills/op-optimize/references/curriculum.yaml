@@ -1,0 +1,87 @@
+# curriculum.yaml —— 17 条 surface 的依赖分层（课程）
+#
+# ## 为什么需要它
+#
+# `surfaces.yaml` 是**平铺的 17 条**：每条有 transform（怎么改）、
+# precondition_check（能不能做）、expected_gain（上界）。**但没有先后顺序。**
+#
+# agent 拿到 17 条不知道该先做哪个。实测代价：`norm-act-swiglu` 上
+# 先扫了 BLOCK_ROWS 1/2/4 三轮才发现 2 行最优 —— 如果先定架构
+# （1 行/CTA 归约延迟藏不住 → 必须多行），一轮就到。
+#
+# ForgeKernel 的做法：把「最容易搞错、后来最难改」的决策放在 M0 并**冻结**，
+# M1..Mk 只在这个结构内调参。它的 27 个算子证明**顺序比选项更重要**。
+#
+# ## 分层的唯一判据
+#
+# **改了它要不要重写整个 kernel？**
+#   M0 要     → 架构层，定了就冻结
+#   M1/M2/M3 不要 → 在同一结构内替换某个实现细节
+#
+# ## 怎么用
+#
+# `advance.py` 列候选时，M0 层没跑完不许进 M1（由 check_curriculum.py 检查
+# 静态一致性；运行时顺序由 advance 的 tier 字段控制）。
+#
+# 这里的分层是**先验**，不是绝对。如果某个算子的 M0 已经在卡上定过了
+# （如布局由上游决定），可以在卡的 candidates.yaml 里声明跳过。
+
+version: 1
+updated: 2026-11-25
+
+layers:
+
+  M0:
+    name: 架构层
+    rule: 改了要重写整个 kernel —— 定了就冻结
+    why_frozen: >
+      这些决策决定了后续所有 workload 的形态：寄存器预算决定能放几路
+      prefetch，布局决定访存能不能向量化，切分决定归约走不走 LDS。
+      在它们没定之前调 M1 的参数，等于在错的结构上调参。
+    gate: |
+      通过条件（三条同时）：
+      ① 正确性门通过（opverify 的 correctness + invariants）
+      ② 达到该结构的预测地板（roofline 的 t_floor × 1.15 以内）
+      ③ 资源画像自洽（private=0，vgpr ≤ 目标占用率的预算）
+    surfaces:
+      - occupancy          # tile 大小 / warp 数 / 每线程元素数 / 寄存器预算
+      - layout-pack        # 数据布局（决定后续所有访存形态）
+      - fusion-boundary    # kernel 切分（融合几件事、中间张量落不落 HBM）
+      - split-k            # 并行切分方式（按行/按列/按 K 维）
+      - gather-path        # 访存路径选择（直接 gather vs 重排后连续访存）
+
+  M1:
+    name: 访存层
+    rule: 在 M0 结构内换访存形态 —— 不改变 kernel 骨架
+    why_after_m0: >
+      向量宽度、读形态、路径策略都是「同一个结构内的不同实现」。
+      在 M0 定下之前选它们，可能选了一个 M0 根本用不上的策略。
+    surfaces:
+      - vmem-vector-width  # 每线程搬几个字节（uint4=16B vs 标量）
+      - lds-read-form      # LDS 读形态（bank 布局、swizzle、broadcast）
+      - mls-path           # matrix-load-store 路径（是否走专用指令）
+      - epilogue-expansion # 尾部展开（把写回与下一轮计算重叠）
+
+  M2:
+    name: 调度层
+    rule: 时序与同步的微观调整 —— 不改访存形态
+    why_after_m1: >
+      预取深度取决于单次访存的延迟与宽度（M1 定了才知道），
+      屏障宽度取决于 warp 分工（M0 定了才知道）。
+    surfaces:
+      - prefetch-depth     # 预取深度（几路在飞）
+      - prefetch-depth-isa # 预取深度的 ISA 级控制（s_waitcnt 类）
+      - barrier-width      # 屏障宽度（warp 内 shuffle vs 全 CTA barrier）
+      - cross-lane-fold    # 跨 lane 折叠（把同一 wave 内的工作合并）
+      - slc-policy         # L2/slc 缓存策略（.cs / .cg / 默认）
+
+  M3:
+    name: 收尾层
+    rule: 边界与精度的取舍 —— 收益小但常常是最后的几 %
+    why_last: >
+      这些改动的收益依赖前面的结构。同样是「缩小 grid」，
+      在 M0 未定影子下的收益和定之后完全不同。
+    surfaces:
+      - grid-tail          # grid 填不满 CU 时的尾部处理
+      - table-miss         # 查找表命中率（LUT 类算子）
+      - precision-drop     # 精度降级（fp32 累加 vs bf16 累加）
