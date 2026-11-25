@@ -15,7 +15,7 @@ import torch
 from pathlib import Path
 
 VARIANTS = ("ref-heavy", "lightop-fused", "torch-native",
-            "fused-3pass-triton", "fused-3pass-tilelang")
+            "fused-3pass-triton", "fused-3pass-tilelang", "fused-hip-reg")
 
 # ---- 生成变体的动态注册（v6 C6 的「写新实现」入口）
 # advance.py 调 variant_forge 生成变体后写进 runs/forged/，这里按需加载。
@@ -219,6 +219,48 @@ def _tilelang_runner(x, w, r, **kw):
     return y, ro
 
 
+# ---------------------------------------------------------------- 手写 HIP
+# 入库位置：kernels/fused_add_rmsnorm_reg.hip（不再放 runs/forged，那目录会被清）
+_HIP_CACHE = {}
+
+
+def _hip_reg_runner(x, w, r, **kw):
+    """寄存器驻留的融合残差 RMSNorm（手写 HIP，比 lightop 快 10.6%）。
+
+    配置固定为 t64-VEC8（四组 sweep 里最快那组，同批 base 0.2019ms）。
+    H 必须 = 64*8*8 = 4096；换形状要重新生成 kernel。
+    """
+    import ctypes
+    from pathlib import Path
+    H = x.shape[1]
+    if "lib" not in _HIP_CACHE:
+        k = Path(__file__).resolve().parent / "kernels"
+        import sys as _s
+        _s.path.insert(0, str(k))
+        from load import load_kernel, read_defines
+        src = k / "fused_add_rmsnorm_reg.hip"
+        d = read_defines(src)
+        # 期望的 H 由 kernel 源码里的宏算出，**不硬编码 4096**。
+        # 硬编码的话，改了源码里的 #define 而 Python 侧不知道，
+        # 检查会放过一个会越界的配置（不报错，只算错）。
+        want = d["THREADS"] * 8 * d["VEC"]
+        _HIP_CACHE["lib"] = load_kernel(src, entry="fused_rms_launch")
+        _HIP_CACHE["want"] = want
+        _HIP_CACHE["cfg"] = d
+    want = _HIP_CACHE["want"]
+    if H != want:
+        raise ValueError(
+            "fused-hip-reg 是按 H=%d 编译的（%s），收到 H=%d。"
+            "换形状必须重新生成 —— 不提供运行期兜底，兜底会算错。"
+            % (want, _HIP_CACHE["cfg"], H))
+    fn = _HIP_CACHE["lib"]
+    y = torch.empty_like(x)
+    ro = torch.empty_like(r)
+    fn(x.data_ptr(), r.data_ptr(), w.data_ptr(), y.data_ptr(), ro.data_ptr(),
+       x.shape[0], H, float(kw.get("eps", 1e-6)))
+    return y, ro
+
+
 def _lightop_fused_runner(x, w, r, **kw):
     """lightop 的 fused_add_rms_norm：**原地改写 x 与 residual**。
 
@@ -253,6 +295,8 @@ def get_runner(name, tilelang_root=None, **kwargs):
         return _lightop_fused_runner
     if name == "fused-3pass-tilelang":
         return _tilelang_runner
+    if name == "fused-hip-reg":
+        return _hip_reg_runner
     raise RuntimeError(
         "变体 %r 的 adapter 尚未实现。" 
         "**注意：lightop %s 已安装且可用**（import lightop 成功），"

@@ -336,3 +336,69 @@ status 如实报 `unexplained`（96% 收益没归因到）。比之前全负 sha
 **这条债的价值**：它是「工具第一次遇到真实复杂场景就暴露设计缺口」的实例 ——
 比在合成数据上跑 100 条测试更能说明问题。同时也说明：
 **spec 的正确性没有校验器**，人和工具都可能把「探针」当「消融」。
+
+---
+
+## D10 · `moe-align-permute` 卡与 lightop 的算子不是同一个
+
+**发现**：2026-11-25，做第 3 张卡时。
+
+卡片 `math`：`dst = permute(src, slot_map)` —— 描述的是**搬运数据**。
+`_common.py` 的 reference 也确实返回 `(permuted[total_slots, H], slot_map[M, K])`。
+
+但卡上挂的 `import_path: lightop.moe_align_block_size` 实测返回：
+
+```python
+out = lightop.moe_align_block_size(idx, block_size=128, num_experts=128)
+# (sorted_ids:int32[81792], expert_ids:int32[639], num_tokens_post_pad:int32[1])
+```
+
+**只算索引，一个字节数据都不搬**。
+
+所以这两者不可直接比较：
+  · 我们的 reference：读 x[M,H] + 写 permuted[total_slots,H] —— 访存主导
+  · lightop：只读 topk_idx[M,K] + 写索引 —— 纯计算/小数据
+
+拿它们比加速比，等于比两件不同的活（本仓最贵的一类错，已出现 5 次）。
+
+**这是 D5/D8 之后第三次「卡片语义与源实现不符」。**
+
+**处理选项**（需裁决）：
+- **A. 改卡的 math**：把它定义成「算索引」(`sorted_ids`/`expert_ids`/`diagnostics`)，
+  reference 相应改为只算索引。优点：与 lightop 对齐、可比。
+  缺点：丢掉「permute 数据」这个更接近生产的部分。
+- **B. 保留 math，换 baseline**：找一个真做 permute 的实现当对手
+  （如 `lightop.groupgemm_permute` 或 aiter 的 permute 族），
+  `moe_align_block_size` 作为「索引部分」的参照，不参与加速比。
+- **C. 拆成两张卡**：`moe-align-index`（对齐算索引）+ `moe-permute-data`（搬数据）。
+
+**本卡当前状态**：draft，ratio=null，无可复跑证据。**在裁决前不动它。**
+
+**当前防回退**：无机器判据。若要防，可在 `check_card_semantics.py` 里加一条：
+「卡的 variants 里 import_path 的返回结构必须与 reference 的输出数量/类型一致」——
+但这需要真的调用库函数，成本较高。
+
+---
+
+## D11 · 单位换算算错过三次
+
+**发现**：2026-11-25。三次都发生在人读数字时，不在代码里：
+
+| 次 | 错法 | 错值 | 真值 |
+|---|---|---|---|
+| 1 | 把 121µs 的带宽安到 140µs 上 | 1664 GB/s | 1438 |
+| 2 | `MB/ms × 1000` 当成 GB/s | 419576 | 420 |
+| 3 | 同上，在 permute 卡上再犯一次 | 同上 | 同上 |
+
+**根因**：`MB / ms` 本身就等于 `GB/s`（1 MB/ms = 1000 MB/s = 1 GB/s），
+再乘 1000 就大了三个数量级。而 `floor.py` 里的公式是 `bytes_mb / t_us * 1000`
+（注意是 **µs** 不是 ms），两个公式长得像、单位不同 —— 混用必然出错。
+
+**处理**：
+- `floor.py` 的注释里补一句单位说明
+- 任何手算带宽前，先写一行量纲检查（如 `assert 100 < gbs < 3000`）
+- 本文登记为「人读数字比代码更容易错」的实例：
+  代码里的公式三年没出错，手算三次全错
+
+**当前防回退**：无机器判据（人读数字无法机检）。
+但可加一条：`floor.py` 输出 achievable 时做**物理上限校验**（> 2500 GB/s 就报警）。

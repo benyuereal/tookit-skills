@@ -62,8 +62,11 @@ class TestAdapterContract(unittest.TestCase):
             self.assertTrue(bool((ref == got).all()), "ref-heavy 与 reference 不一致")
 
     def test_get_runner_refuses_without_backend(self):
+        # lightop-align 已在 2026-11-25 实现（groupgemm_permute 已验证等语义）。
+        # 仍未实现的是 aiter-permute —— 它的 permute 族签名未核对。
+        IMPLEMENTED = {"ref-heavy", "lightop-align"}
         for name in self.c.VARIANTS:
-            if name == "ref-heavy":
+            if name in IMPLEMENTED:
                 continue
             with self.assertRaises(RuntimeError):
                 self.c.get_runner(name)

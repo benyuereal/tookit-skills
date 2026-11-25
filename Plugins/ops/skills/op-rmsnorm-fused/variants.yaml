@@ -19,7 +19,8 @@ variants:
     - out
     mutates: []
     traffic_passes: 3
-    note: fp32 参考：2读(x,r)+1读(w,忽略)+1写。**只输出 out，没有 residual_out ⇒ 与 lightop/我们的融合实现不可比**。它只能当正确性 oracle，不能当性能基线。
+    note: fp32 参考：2读(x,r)+1读(w,忽略)+1写。**只输出 out，没有 residual_out ⇒ 与 lightop/我们的融合实现不可比**。它只能当正确性
+      oracle，不能当性能基线。
     not_comparable_to:
     - lightop-fused
     - fused-3pass-triton
@@ -28,7 +29,8 @@ variants:
 - name: lightop-fused
   source: lightop 0.6.0 的 fused_add_rms_norm（已实测可用，非此前误报的「未安装」）
   status: candidate
-  measured: 等语义 197.0 us / 1363 GB/s（2读2写 268MB @ M=8192）；2026-11-24 四源复核（ledger §D 裁决：227.0 作废）
+  measured: 等语义 197.0 us / 1363 GB/s（2读2写 268MB @ M=8192）；2026-11-24 四源复核（ledger §D
+    裁决：227.0 作废）
   applies_to:
   - decode-m1
   - decode-m32
@@ -117,6 +119,34 @@ variants:
     - residual_out
     mutates: []
     traffic_passes: 4
-  measured: 213.0 µs / 1260 GB/s（等语义 2读2写 268MB）；比 triton 快 3.6%，慢于 lightop 的 197.4 µs
+  measured: 213.0 µs / 1260 GB/s（等语义 2读2写 268MB）；比 triton 快 3.6%，慢于 lightop 的 197.4
+    µs
   note: 换 DSL 只值 3.6%，不是解药。见 ledger 的结构性结论。
   role: best_known
+- name: fused-hip-reg
+  source: kernels/fused_add_rmsnorm_reg.hip（kernel_scaffold.py 生成，已入库）
+  status: candidate
+  role: best_known
+  measured: 四组 sweep 同批实测（base lightop 0.2019ms，MAD 0.0005）：t64-VEC8 0.1805 / t256-VEC2
+    0.1810 / t128-VEC4 0.1827 / t512-VEC1 0.1835 ms ⇒ 极差 1.24%（噪声内）
+  applies_to:
+  - prefill-8k
+  constraints:
+  - (x+r) 必须留寄存器，不落 LDS —— 这是比厂商快的全部原因
+  - 16 字节向量读写（uint4 = 8 个 bf16）
+  - VEC/THREADS/WARPS 必须编译期固化（-D 传，运行期传会让寄存器数组溢出到私有内存）
+  - H 必须等于 THREADS*8*VEC；换形状要重新生成
+  mutates_inputs: false
+  semantics:
+    inputs:
+    - x
+    - residual
+    - weight
+    outputs:
+    - out
+    - residual_out
+    mutates: []
+    traffic_passes: 4
+    note: 2读2写 268.4MB；与 lightop 等语义
+  note: '**这是本仓在 rmsnorm 上最快的实现**（比 lightop 快 10.6%）。加载方式见 kernels/load.py（20 行，含
+    private>0 的硬检查）。此前藏在 runs/forged/（gitignore）里，agent 看不到 —— 2026-11-25 挪出。'

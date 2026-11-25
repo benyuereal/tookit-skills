@@ -484,6 +484,42 @@ def _overlay_ids(card):
     return {c.get("id") for c in d.get("candidates") or [] if isinstance(c, dict)}
 
 
+def _route_language(card, emit=print, selector=None):
+    """按 roofline 的场景签名决定「先试哪个语言」。**不猜，读不到就说读不到。**
+
+    为什么必须有这一步：`lang_select.py` 里写着「rmsnorm: HIP 197µs vs
+    triton 242µs，triton 慢 23%」，判据和数据都齐 —— 但没有任何调用方。
+    结果是路线选择这个影响最大的决定，反而交给了 agent 的习惯。
+
+    返回 {"rule":..., "langs":[...], "action":...} 或 None（无 roofline 时不猜）。
+    """
+    import importlib.util
+    p = REPO_ROOT / "scripts" / "lang_select.py"
+    if not p.is_file():
+        return None
+    try:
+        spec = importlib.util.spec_from_file_location("_lang_select_for_adv", str(p))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        selector = mod
+    except Exception as e:                       # noqa: BLE001
+        emit("  路线：加载 lang_select 失败（%s）—— 跳过，不猜" % e)
+        return None
+    roof = read_roofline(card)
+    if not roof:
+        emit("  路线：无 roofline.json —— 不猜语言，先补 roofline")
+        return None
+    r = selector.route_scenario(roof, roof.get("bound"))
+    if not r:
+        return None
+    sig = r.get("signature") or {}
+    emit("  场景签名：%s" % sig)
+    emit("  路线：%s" % r.get("action"))
+    if r.get("langs"):
+        emit("  语言优先：%s" % " > ".join(r["langs"]))
+    return r
+
+
 def _shape_of(card):
     """读**真正会被 bench 的那个形状**的 params。读不到返回 {}（不猜）。
 
@@ -726,7 +762,7 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
     runner = runner or Runner(dry_run=dry_run)
     report = {"card": card_id(card), "dry_run": bool(dry_run), "rounds": 0,
               "status": "done", "reason": "", "gate": [], "decisions": [],
-              "replan": None, "forge": None, "progress_stage": "idle",
+              "replan": None, "forge": None, "route": None, "progress_stage": "idle",
               "commands": runner.commands}
 
     if max_rounds <= 0:
@@ -764,6 +800,14 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
         for i, c in enumerate(top, 1):
             emit("  top%d  %-22s direction=%-18s ev=%.3f  gain=%r"
                  % (i, c.id, c.direction, c.ev, (c.surface or {}).get("expected_gain")))
+
+    # **列候选前先定实现路线**。这一步此前完全缺失：lang_select.py 早就能
+    # 从 roofline 的数字判出「该先试 HIP 还是 Triton」，但没有任何代码调用它，
+    # 于是 agent 按习惯从 Triton 起手（opbench 三臂对照实测：三臂都没写过 HIP）。
+    # 放在 plan 之前而不是之后：路线决定「用什么写」，候选决定「改哪里」，
+    # 前者是后者的前提。
+    route = _route_language(card, emit=emit)
+    report["route"] = route
 
     emit("plan（简化版：按 expected_gain 排序，不做完整 EV）")
     _emit_plan(prev_top)

@@ -73,6 +73,43 @@ kind: tool
 按可信度排序：实测证据 > 结构推理 > 外部经验；另有本项目实测的反直觉清单、隔离单变量手法、判死写法。
 全部细节见 [`references/candidates.md`](references/candidates.md)。
 
+### 5.1 实现路线必须先分流（不要默认从 Triton 起步）
+
+> 依据：opbench 三臂对照（2026-11-25）——裸 CC / 本 skill / SkillHub **三臂都没写过一行 HIP**，
+> 而本仓 `op-rmsnorm-fused/runs/forged/` 下已有 4 个实测更快的现成 HIP kernel。
+> 缺的不是能力，是**没有任何一条规则说「什么时候该考虑 HIP」**。
+
+按这个顺序排除，**不要跳步**：
+
+| 步 | 判据 | 动作 |
+|---|---|---|
+| 1 | 现成库实现已达 **>90%** 地板带宽/算力 | 用它。别写 kernel |
+| 2 | 未达 90%，且 roofline 显示 **>1.2×** 空间 | **先评估手写 HIP**，再考虑 Triton |
+| 3 | Triton 已试且未达标 | 走 `op-hip-compile` 调编译选项 |
+| 4 | 被 launch 地板支配（`launch_us / t_actual > 0.30`） | 别优化 kernel，做融合/减 launch |
+
+**为什么 2 排在 Triton 前面**：Triton 的优势是快速迭代，劣势是寄存器/向量化控制不如手写。
+访存受限的 elementwise/归约类算子，手写 HIP 通常能多拿 15~25% 带宽
+（本仓实测：rmsnorm 类 2 个算子上都是 40%+ 差距）。
+
+**必须排除的反例**（写了也白写）：
+- 纯 GEMM / 纯 attention：库实现已接近硬件上限
+- 被 launch 地板支配的小算子：瓶颈不在 kernel 内部
+
+**机器判据**（写在 `candidates.yaml` 里即可被 `check_means.py` 看到）：
+
+```yaml
+- id: hand-hip-vec
+  direction: occupancy
+  action_class: improve-locality     # 落在允许集合里才不会被 loop.py 拒跑
+  means: 手写 HIP：中间结果留寄存器 + 16B 向量访存，不落 LDS
+  predicted_effect: -20%~-40%
+  expected_bottleneck: memory-bound
+```
+
+判据：当 `utilization < 0.90` 且 `remaining > 0.20` 时，**候选列表里必须有至少一条
+`action_class: improve-locality` 且 `means` 提到寄存器/向量化的条目**，否则说明路线分流漏了。
+
 ## 六、变体怎么生成（不手改生产文件）
 
 用**文本变换**从生产源码生成变体（锚点替换，不落盘到手改副本），不要 fork 一份手改。每条替换锚点先 `assert src.count(anchor) == N`（同一个 kernel 常有 2~4 个 body，只改到一个会静默算错）；改完打印 diff 摘要（「变体没编进去」和「变体没效果」在计时上长得一样）；锚点用 `%` 不要用 `%%`；失败的替换报错退出，不跳过（跳过会产出「看起来跑了但没改」的变体）。

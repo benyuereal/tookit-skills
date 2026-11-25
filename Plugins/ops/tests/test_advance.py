@@ -668,3 +668,59 @@ def test_sweep_key_separates_different_batches(tmp_path, surfaces_file):
     assert adv._sweep_key("auto-mm-h4096-t64-v8") != \
            adv._sweep_key("auto-mm-h8192-t64-v16")
     assert adv._sweep_key("fuse-residual") is None
+
+
+# ---------------------------------------------------------------- 语言路线路由
+
+def test_route_runs_before_plan(tmp_path, surfaces_file):
+    """**核心**：语言路线必须在 plan 之前判定。
+
+    顺序即语义：路线回答「用什么写」，候选回答「改哪里」，前者是后者的前提。
+    反过来（先列候选再问语言）就等于「已经决定怎么写，再补个理由」。
+    """
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": [{"id": "c1", "direction": "d1", "status": "pending",
+                        "ev": 0.8}], "refuted": []},
+        roofline={"bound": "memory", "t_floor_us": 116.4, "t_actual_us": 140.0,
+                  "remaining": 0.203})
+    seen = []
+    adv.run_advance(card, 1, runner=FakeRunner(), dry_run=True,
+                    emit=lambda s, *a, **k: seen.append(str(s)))
+    joined = "\n".join(seen)
+    assert "路线" in joined, "没有输出语言路线：\n%s" % joined
+    i_route = next(i for i, s in enumerate(seen) if "路线" in s)
+    i_plan = next(i for i, s in enumerate(seen) if "plan（简化版" in s)
+    assert i_route < i_plan, "路线出现在 plan 之后了：route@%d plan@%d" % (i_route, i_plan)
+
+
+def test_route_picks_hip_when_gap_is_large(tmp_path, surfaces_file):
+    """**核心**：访存受限 + 差距大 ⇒ 路由必须给 HIP，不是 Triton。"""
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": [], "refuted": []},
+        roofline={"bound": "memory", "t_floor_us": 116.4, "t_actual_us": 140.0,
+                  "remaining": 0.203})
+    r = adv._route_language(card, emit=lambda *a, **k: None)
+    assert r and r["langs"][0] == "hip", r
+
+
+def test_route_declines_without_roofline(tmp_path, surfaces_file):
+    """**反向**：没有 roofline 就不猜语言 —— 不默认给 Triton。"""
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": [], "refuted": []})
+    assert adv._route_language(card, emit=lambda *a, **k: None) is None
+
+
+def test_route_is_recorded_in_report(tmp_path, surfaces_file):
+    """路线结论必须落进报告，否则事后无法回答「当时为什么选了这个语言」。"""
+    card = make_card(tmp_path, candidates={
+        "directions": [{"id": "d1", "status": "open", "refutes": 0}],
+        "candidates": [], "refuted": []},
+        roofline={"bound": "memory", "t_floor_us": 116.4, "t_actual_us": 140.0,
+                  "remaining": 0.203})   # 必须 > AT_FLOOR(0.10)，否则提前退出
+    rep = adv.run_advance(card, 1, runner=FakeRunner(), dry_run=True,
+                          emit=lambda *a, **k: None)
+    assert rep.get("route"), "报告里没有 route 字段"
+    assert rep["route"]["rule"] == "memory-bound-large-gap", rep["route"]

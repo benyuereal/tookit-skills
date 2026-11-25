@@ -228,9 +228,98 @@ def main(argv=None):
     langs = load_langs()
     meas = measured(a.card, a.shape)
     bound, _ = bound_of(a.card, a.shape)
+
+    # **场景路由**：先按 roofline 的四个数判「该先试哪个语言」，
+    # 而不是无脑从 Triton 起手。判据在 lang-candidates.yaml 的 routing.rules。
+    roof = _roofline(a.card)
+    route = route_scenario(roof, bound)
+    if route and not a.json:
+        print("场景签名：%s" % route["signature"])
+        print("→ 建议路线：%s" % route["action"])
+        if route["langs"]:
+            print("  语言优先：%s" % " > ".join(route["langs"]))
+        print()
+
     rows = rank(langs, meas, bound, a.shape)
+    if route and route["langs"]:
+        # 路由给的语言排前面；**只在都没有实测时生效** ——
+        # 有实测就按实测排，实测永远压过先验。
+        if not meas:
+            order = {l: i for i, l in enumerate(route["langs"])}
+            rows.sort(key=lambda r: (order.get(r["id"], 99), r.get("ms") or 1e9))
     show(rows, a.card, a.shape, bound, baseline_note(rows), a.json)
     return 0
+
+
+def _roofline(card_id):
+    """读卡的 roofline.json（诊断产物）。没有就返回 None —— 不猜。"""
+    for d in (SKILLS if "SKILLS" in globals() else Path("Plugins/ops/skills")).glob(
+            "op-%s" % card_id):
+        f = d / "roofline.json"
+        if f.is_file():
+            try:
+                return json.loads(f.read_text(encoding="utf-8"))
+            except ValueError:
+                return None
+    return None
+
+
+def route_scenario(roof, bound):
+    """按 routing.rules 判场景。返回 {"signature":..., "action":..., "langs":[...]}。
+
+    优先级：launch-bound > compute-near-ceiling > memory-large-gap >
+            memory-near-ceiling > reduce-dense > calibration。
+    规则按 yaml 里的顺序**第一条命中即停** —— 顺序即优先级，不靠权重打分。
+    """
+    if not roof:
+        return None
+    t_f, t_a = roof.get("t_floor_us"), roof.get("t_actual_us")
+    util = (t_f / t_a) if (t_f and t_a) else None
+    rem = roof.get("remaining")
+    launch_frac = None
+    ls = roof.get("launch_us")
+    if ls and t_a:
+        launch_frac = float(ls) / t_a
+    sig = {"bound": bound or roof.get("bound"), "utilization": util,
+           "remaining": rem, "launch_fraction": launch_frac,
+           "ai": roof.get("ai")}
+    rules = _routing_rules()
+    for r in rules:
+        if _rule_hit(r["id"], sig):
+            return {"signature": {k: (round(v, 3) if isinstance(v, float) else v)
+                                  for k, v in sig.items() if v is not None},
+                    "rule": r["id"], "action": r["action"], "langs": r["langs"]}
+    return {"signature": {k: (round(v, 3) if isinstance(v, float) else v)
+                          for k, v in sig.items() if v is not None},
+            "rule": None, "action": "无规则命中 —— 先补齐 roofline 再选语言", "langs": []}
+
+
+def _rule_hit(rule_id, sig):
+    """每条规则的判据。**与 yaml 里的 when 文案一一对应**，改一处必须改两处。"""
+    u, rem, b = sig.get("utilization"), sig.get("remaining"), sig.get("bound")
+    lf = sig.get("launch_fraction")
+    if rule_id == "launch-bound":
+        return lf is not None and lf > 0.30
+    if rule_id == "compute-bound-near-ceiling":
+        return b == "compute" and u is not None and u > 0.85
+    if rule_id == "memory-bound-large-gap":
+        return b == "memory" and u is not None and u < 0.90 \
+            and rem is not None and rem > 0.20
+    if rule_id == "memory-bound-near-ceiling":
+        return b == "memory" and u is not None and u >= 0.90
+    if rule_id == "reduce-dense":
+        return bool(sig.get("is_reduction")) and b == "memory" \
+            and u is not None and u < 0.85
+    return False
+
+
+def _routing_rules():
+    import yaml
+    p = REPO / "data/ops/lang-candidates.yaml"
+    if not p.is_file():
+        return []
+    d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    return (d.get("routing") or {}).get("rules") or []
 
 
 if __name__ == "__main__":
