@@ -150,7 +150,7 @@
     },
     {
       "name": "ops",
-      "description": "算子卡域 — 一算子一目录（op-*）：contract.yaml 机器可读契约 + variants.yaml 实现变体矩阵 + shapes/ 形状档位 + bench/ 微基准 + tests/ 正确性与不变量 + ledger.md 结论台账；配 op-contract / op-bench / op-gate 三篇方法论。回答「这个算子是什么、有哪几种实现、哪个档位用哪个、判据是什么、上次结论是什么」",
+      "description": "算子优化引擎 —— **入口是 op-optimize**。做算子性能优化、跑 A/B 实验、写候选队列、多轮自动迭代、新算子从零建卡，都从这里进。内含：op-optimize（唯一入口）/ op-roofline（天花板推算）/ lang_select（按场景判该用 HIP 还是 Triton）/ advance（多轮编排）/ op_bootstrap（新算子建卡）/ op-hip-compile（编译调优）/ op-contract·op-bench·op-gate（契约与门禁）/ 7 个已实测的算子卡。回答「这个算子能优化到什么程度、该用什么语言写、这一轮改动算不算通过」。完整用法：Plugins/ops/skills/op-optimize/SKILL.md 与 docs/HOW-TO-USE.md",
       "category": "kernel-dev",
       "source": "./Plugins/ops",
       "version": "1.6.0",
@@ -160,11 +160,13 @@
       ],
       "tags": [
         "operator",
-        "contract",
+        "optimize",
+        "roofline",
         "benchmark",
         "gate",
-        "registry",
-        "ledger"
+        "hip",
+        "kernel",
+        "iteration"
       ]
     }
   ]
