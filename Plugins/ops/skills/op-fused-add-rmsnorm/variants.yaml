@@ -40,3 +40,25 @@ variants:
   - 不融合残差，字节数比融合版多一次往返
   mutates_inputs: false
   role: competitor
+- name: fa-rms-mr2
+  source: kernels/fa-rms-reg-mr.hip (r2=BLOCK_ROWS)
+  status: candidate
+  role: candidate
+  measured: 待测（gen2 候选）
+  applies_to:
+  - prefill-8k
+  constraints:
+  - H = THREADS*8*VEC = 4096
+  - WRITE_RO=0（本卡单输出）
+  mutates_inputs: false
+- name: fa-rms-mr4
+  source: kernels/fa-rms-reg-mr.hip (r4=BLOCK_ROWS)
+  status: candidate
+  role: candidate
+  measured: 待测（gen2 候选）
+  applies_to:
+  - prefill-8k
+  constraints:
+  - H = THREADS*8*VEC = 4096
+  - WRITE_RO=0（本卡单输出）
+  mutates_inputs: false

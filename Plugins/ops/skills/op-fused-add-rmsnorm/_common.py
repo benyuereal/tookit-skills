@@ -17,6 +17,15 @@ VARIANTS = ("ref-heavy", "lightop-rmsnormadd", "aiter-norm")
 # 自研变体（forge 生成，落在 runs/forged/）。与 op-rmsnorm-fused 同一套机制：
 # 生成物是**每次跑的产物**，不是仓库资产，所以不进 VARIANTS 硬编码。
 FORGED_DIR = Path(__file__).resolve().parent / "runs" / "forged"
+# 正式入库的 kernel（不进 runs/，runs 会被清）
+KERNEL_DIR = Path(__file__).resolve().parent / "kernels"
+
+# 手写 HIP 变体 → (so 文件名, ctypes 入口名)
+HIP_VARIANTS = {
+    "fa-rms-mr2": ("mr2.so", "fused_rms_mr_launch"),
+    "fa-rms-mr4": ("mr4.so", "fused_rms_mr_launch"),
+}
+_HIP_LIB = {}
 
 
 def forged_variants():
@@ -81,6 +90,39 @@ def runner_kwargs(params):
     return {"M": M, "H": H}
 
 
+def _hip_runner(name, kwargs):
+    """手写 HIP 变体（多行/CTA）。**H 必须等于编译时的 THREADS*8*VEC。**"""
+    import ctypes
+    so, entry = HIP_VARIANTS[name]
+    path = KERNEL_DIR / so
+    if not path.is_file():
+        raise RuntimeError(
+            "缺 %s —— 先编译：cd kernels && hipcc -O3 --offload-arch=gfx938 "
+            "-fPIC -shared -DBLOCK_ROWS=%s -DWRITE_RO=0 -o %s fa-rms-reg-mr.hip"
+            % (path, name[-1], so))
+    if name not in _HIP_LIB:
+        lib = ctypes.CDLL(str(path))
+        fn = getattr(lib, entry)
+        fn.argtypes = [ctypes.c_void_p] * 5 + [ctypes.c_int, ctypes.c_int,
+                                               ctypes.c_float]
+        fn.restype = None
+        _HIP_LIB[name] = fn
+
+    def _run(x, r, w, **kw):
+        H = x.shape[1]
+        if H != 4096:
+            raise ValueError(
+                "%s 按 H=4096 编译（THREADS=256 × 8 × VEC=2），收到 H=%d。"
+                "换形状必须重新生成。" % (name, H))
+        y = torch.empty_like(x)
+        ro = torch.empty_like(r)
+        _HIP_LIB[name](x.data_ptr(), r.data_ptr(), w.data_ptr(),
+                       y.data_ptr(), ro.data_ptr(), x.shape[0], H,
+                       float(kw.get("eps", EPS)))
+        return y
+    return _run
+
+
 def get_runner(name, tilelang_root=None, **kwargs):
     if name not in VARIANTS:
         fp = FORGED_DIR / ("%s.py" % name)
@@ -90,8 +132,13 @@ def get_runner(name, tilelang_root=None, **kwargs):
             m = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(m)
             return getattr(m, "run")
+    # **手写 HIP 变体要在 VARIANTS 检查之前**：它们不在 VARIANTS 元组里，
+    # 放在后面会被「未知变体」拦住（实测踩过）。
+    if name in HIP_VARIANTS:
+        return _hip_runner(name, kwargs)
     if name not in VARIANTS:
-        raise ValueError("未知变体 %r（可选 %s）" % (name, " / ".join(VARIANTS)))
+        raise ValueError("未知变体 %r（可选 %s / %s）"
+                         % (name, " / ".join(VARIANTS), " / ".join(HIP_VARIANTS)))
     if name == "ref-heavy":
         def _ref(x, r, w, **kw):
             return reference(x, r, w, params=kw)

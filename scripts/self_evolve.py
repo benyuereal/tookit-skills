@@ -58,6 +58,9 @@ NOISE_FLOOR_MIN = 0.015
 DEFAULT_STEP = 1.05
 # 只有 ratio 低于它才算「值得晋升」。0.98 意味着至少快 2%
 SEAL_RATIO = 0.98
+# 基线相对 MAD 的上限。超过说明测的时候机器不干净（D12：卡被占满时
+# MAD 从 0.3% 涨到 19%），拿这种记录当基线等于在噪声上滚。
+MAX_CLEAN_MAD = 0.01
 
 
 # ---------------------------------------------------------------- 记录读取
@@ -119,7 +122,7 @@ def best_accepted(records):
     claimable = ("event_isolated", "end_to_end")
     cands, why = [], {
         "not_accepted": 0, "not_significant": 0, "bad_mode": 0,
-        "ratio_too_high": 0, "acc_failed": 0}
+        "ratio_too_high": 0, "acc_failed": 0, "noisy_record": 0}
     for r in records:
         if not str(r.get("decision", "")).startswith("ACCEPTED"):
             why["not_accepted"] += 1
@@ -138,6 +141,14 @@ def best_accepted(records):
         if r.get("acc_ok") is False:
             why["acc_failed"] += 1
             continue
+        # **记录本身要干净**：base_mad/base_ms 超过 1% 说明测的时候机器不干净
+        # （D12 实测：卡被占满时 MAD 从 0.3% 涨到 19%）。拿这种记录当基线，
+        # 后面整条链都在噪声上滚。
+        b, m = r.get("base_ms"), r.get("base_mad")
+        if isinstance(b, (int, float)) and b > 0 and isinstance(m, (int, float)):
+            if m / b > MAX_CLEAN_MAD:
+                why["noisy_record"] += 1
+                continue
         cands.append(r)
     if not cands:
         return None, why
@@ -447,6 +458,13 @@ def selftest():
     assert r is None and why["acc_failed"] == 1, (r, why)
     print("[ok] 反向：acc_ok=False 的不许当基线（拿错的当参照是最坏的）")
 
+    # ④b 反向：**机器不干净时测的记录不许当基线**
+    #     D12 实测：卡被占满时 base MAD 从 0.3% 涨到 19%，
+    #     三个变体全判 INCONCLUSIVE。拿这种记录封存，后面整条链都在噪声上滚。
+    r, why = best_accepted([R(base_mad=0.03, base_ms=1.0)])
+    assert r is None and why["noisy_record"] == 1, (r, why)
+    print("[ok] 反向：基线 MAD 30% 的不许晋升（机器不干净，D12 实测）")
+
     # ⑤ 正向：合格的能被选中，且取最好的那条
     r, _ = best_accepted([R(ratio_vs_base=0.95), R(ratio_vs_base=0.80)])
     assert r is not None and abs(_ratio_of(r) - 0.80) < 1e-9, r
@@ -487,7 +505,7 @@ def selftest():
     assert stop, why
     print("[ok] 反向：没有确认最优 ⇒ 停（否则会无限跑）")
 
-    print("\nselftest PASS（10 项）")
+    print("\nselftest PASS（11 项）")
     return 0
 
 
