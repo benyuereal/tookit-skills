@@ -85,6 +85,62 @@ def test_entry_skill_description_covers_new_operator():
     assert "lang_select" in desc, "description 没提语言选型"
 
 
+CARDS = REPO / "Plugins/ops/op-atlas/cards"
+
+
+def _all_cards():
+    """返回 (路径, yaml 文本) 列表。"""
+    out = []
+    for p in sorted(CARDS.glob("*.yaml")):
+        out.append((p, p.read_text(encoding="utf-8")))
+    return out
+
+
+def test_all_cards_have_only_allowed_top_level_fields():
+    """每张卡的顶层字段必须在白名单内。
+
+    **为什么这条测试必须存在**（2026-11-26 加）：
+
+    同一个错误犯了 3 次，每次都让树红一阵：
+      ① rmsnorm-fused 加 comparison_note      → E6
+      ② 5 张降级卡加 downgrade_reason          → E6
+      ③ fused-add-rmsnorm 加 attribution       → E6
+
+    `scripts/check_schema_fields.py` 早就写好了、判得也对，
+    问题在于它需要手动传 `--field`，**而没人会在加字段前想起它**。
+    validate.py 也会报 E6，但那次是先提交、后发现问题。
+
+    工具判得对 ≠ 流程会拦住。这条测试把「跑一次全卡检查」
+    变成 pytest 的固定项，不依赖谁记得。
+    """
+    sys.path.insert(0, str(REPO / "scripts"))
+    try:
+        from check_schema_fields import check_top_level  # noqa: F401
+    except ImportError:
+        check_top_level = None
+
+    # 白名单以 validate.py 的 ALLOWED_TOP 为准 —— 那里是唯一真相
+    val = (REPO / "Plugins/ops/op-atlas/validate.py").read_text(encoding="utf-8")
+    m = re.search(r"ALLOWED_TOP\s*=\s*\{(.+?)\}", val, re.S)
+    assert m, "validate.py 里找不到 ALLOWED_TOP"
+    allowed = set(re.findall(r'"([^"]+)"', m.group(1)))
+    assert allowed, "ALLOWED_TOP 解析为空 —— 正则失效了，不是卡的问题"
+
+    import yaml
+    bad = {}
+    for p, _ in _all_cards():
+        d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        extra = set(d) - allowed
+        if extra:
+            bad[p.name] = sorted(extra)
+    assert not bad, (
+        "以下卡有未知顶层字段（会触发 E6）。\n"
+        "合法白名单：%s\n"
+        "违规：%s\n"
+        "修法：归因/说明类内容放进 last_verdict.bottleneck 或 "
+        "last_verdict.evidence，不要新增顶层字段。" % (sorted(allowed), bad))
+
+
 @pytest.mark.parametrize("cmd", [
     ["python3", "-I", "scripts/card_sync.py", "--check"],
     ["python3", "-I", "scripts/check_schema_fields.py", "--selftest"],
