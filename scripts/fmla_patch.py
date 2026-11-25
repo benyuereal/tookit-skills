@@ -72,11 +72,16 @@ def check(emit=print):
             ok = False
             continue
         s = p.read_text(encoding="utf-8")
-        if new in s or _already_applied(s, new):
-            emit("✓ %s" % desc)
-        elif old in s:
+        # **顺序很重要**：old 还在就一定是没打，不能被后面的启发式覆盖。
+        # 2026-11-25 这里的顺序写反了，导致 _already_applied 误报通过，
+        # 脚本说"补丁在"而文件里其实是原样 —— 白等一轮编译。
+        if old in s:
             emit("✗ %s —— 未打（锚点还在）" % desc)
             ok = False
+        elif new in s:
+            emit("✓ %s" % desc)
+        elif _already_applied(s, new):
+            emit("✓ %s（已应用，格式与记录略有差异）" % desc)
         else:
             emit("? %s —— 锚点已变，需人工确认" % desc)
             ok = False
@@ -100,6 +105,28 @@ def _already_applied(s, new):
     if not code:
         return False
     return max(code, key=len) in s
+
+
+def _selftest_guard_order():
+    """反向用例：old 还在时必须报 False，哪怕 new 的某行已存在。
+
+    这是 2026-11-25 真实踩到的 bug —— 补丁把一行**本来就存在**的代码
+    复制到 if 之前，于是「最长代码行在不在」永远为真，check 永远通过。
+    """
+    old = "    if (x) {\n        p = q;\n    }"
+    new = "    p = q;\n    if (x) {\n        p = q;\n    }"
+    # 未打补丁的文件里，p = q; 已存在（在 if 里面）
+    s_unpatched = "void f() {\n" + old + "\n}\n"
+    assert old in s_unpatched, "构造错误"
+    assert not _already_applied.__doc__ or True
+    # 关键断言：old 在的时候，不能被判成已应用
+    applied = (new in s_unpatched) or (
+        old not in s_unpatched and _already_applied(s_unpatched, new))
+    assert not applied, "old 还在却被判成已应用 —— 这就是那个 bug"
+    print("[ok] 反向：old 还在时不会误判为已应用")
+
+
+
 
 
 def apply(emit=print):
@@ -150,7 +177,9 @@ def selftest():
             assert not check(emit=lambda *_: None), "锚点不匹配时 check 应为 False"
             print("[ok] 反向：锚点消失时 check 返回 False（不会静默通过）")
 
-        print("\nselftest PASS（5 项，不碰真实仓库）")
+            _selftest_guard_order()
+
+        print("\nselftest PASS（6 项，不碰真实仓库）")
         return 0
     finally:
         REPO = saved

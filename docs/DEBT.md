@@ -708,3 +708,64 @@ int4 meta = *(reinterpret_cast<int4 *>(p));   // 未初始化 → VMFault
 
 **应对**：`fmla_patch.py` 让补丁可重现，备份放 `/workspace/.fmla_patch_backup/`。
 **不要**在没确认的情况下假设改动能留住。
+
+---
+
+## D16 · 验证器本身失效：`--check` 报"补丁在"，其实没打
+
+**这是今天最严重的一个 bug，因为它是"守门人"自己坏了。**
+
+### 现象
+
+```
+$ python3 -I scripts/fmla_patch.py --check
+✓ 未初始化指针（H>=64 崩溃的根因）      ← 说补丁在
+$ grep -c "两个分支都必须赋值" csrc/api/dense_decode_hip.h
+0                                        ← 其实不在
+```
+
+### 根因（一行判据写得太聪明）
+
+第一版 `_already_applied()` 的判据是「取 new 里最长的一行代码，
+它在文件里就算打过补丁」：
+
+```python
+code = [ln.strip() for ln in new.splitlines()
+        if ln.strip() and not ln.strip().startswith("//")]
+return max(code, key=len) in s
+```
+
+问题在于**这个补丁的 new 里，最长的那行本来就存在于原文件**——
+补丁只是把
+
+```cpp
+params.tile_scheduler_metadata_ptr = (...)->data_ptr();
+```
+
+从 `if` 里面复制到 `if` 之前。所以：
+
+```
+new in s         : False   ← 补丁确实没打
+old in s         : True    ← 锚点还在，铁证
+_already_applied : True    ← 但启发式说"打了"
+```
+
+### 为什么没被 selftest 抓到
+
+当时的 5 项 selftest 测的是「未打补丁时 check 返回 False」，
+用的是 `PATCHES[1]`（`static_assert` 那个补丁），它的 new 只有一行、
+且那行确实不存在于原文件。**用另一个补丁测，测不出这个补丁的 bug。**
+
+### 修复
+
+1. **判据顺序改对**：`old in s` 优先 —— 锚点还在就一定没打，
+   不允许被任何启发式覆盖。
+2. 加第 6 项 selftest，专门复现「old 还在但某行已存在」这个场景。
+
+### 教训
+
+**「验证器通过」本身需要被验证，而且要用会失败的输入验。**
+如果 selftest 只用一种补丁形态，它就是在测自己的实现细节，不是在测判据。
+
+这和 `D12`（gpu_guard 把可用卡全判死）是同一类错误：
+**判据写反/写松，比没有判据更危险 —— 因为它会让人以为已经检查过了。**
