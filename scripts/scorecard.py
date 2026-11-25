@@ -125,15 +125,39 @@ def depth_scores():
     return json.loads(p.stdout)
 
 
+# **决策词表**（ledger_rounds 只认这些）。改这个集合要同步改测试。
+DECISION_WORDS = ("adopt", "refute", "stalled", "采纳", "证伪", "卡住")
+DECISION_RE = r"(?i)\b(adopt|refute|stalled)\b|采纳|证伪|卡住"
+
+
 def ledger_rounds(cid):
-    """ledger 轮次与决策。**没有 adopt/refute/stalled 的轮次不算轮次**。"""
+    """ledger 轮次与决策。**没有决策词的轮次不算轮次**。
+
+    ## 每轮必须写一个决策词（2026-11-26）
+
+    判据是「轮标题数」与「决策词数」取小。写了 5 个 `### 轮 N` 但通篇用
+    「决定」「结论」这类词，计数会是 **0** —— 因为判据只认：
+
+        adopt / refute / stalled / 采纳 / 证伪 / 卡住
+
+    实测踩过：`fused-add-rmsnorm` 和 `norm-act-swiglu` 都写了 5 轮，
+    决策词 0 个，D4 一直是 0 而不是 3。**判据存在但没人知道要写什么词**，
+    和第 7 次「两处记账」是同一族问题 —— 判据不写在使用者看得到的地方。
+
+    写法建议（每轮结论那一行）：
+
+        **结论**（adopt）：这个方向采纳了，因为……
+        **结论**（refute）：这个方向证伪了，因为……
+        **结论**（stalled）：卡在这里，因为……
+        **结论**（无决策·基线）：只是测量，不做决策 —— 不计入轮次
+    """
     for name in ("ledger.md", "LEDGER.md"):
         p = SKILLS / ("op-%s" % cid) / name
         if not p.is_file():
             continue
         s = p.read_text(encoding="utf-8")
         heads = len(re.findall(r"(?m)^#{2,4}\s*(?:轮|Round|R)\s*\d", s))
-        acts = len(re.findall(r"(?i)\b(adopt|refute|stalled)\b|采纳|证伪|卡住", s))
+        acts = len(re.findall(DECISION_RE, s))   # 用常量，避免两处漂移
         # 轮次口头计数 + 有决策词 才算「真轮次」；二者取小，防止只刷标题
         return min(heads, acts) if heads else 0
     return 0

@@ -176,3 +176,29 @@ def test_no_card_claims_full_shape_score_while_slower():
             stacklevel=1)
     # 不 assert，避免把口径问题变成阻塞项 —— 但会出现在 pytest -W 输出里
     assert True
+
+
+def test_decision_wordlist_documented_where_people_look():
+    """ledger 决策词表必须真的能匹配它列出来的词。
+
+    2026-11-26 实测踩过：两张 99 分的卡写了 5 轮，但用「决定/结论」，
+    而判据只认 adopt/refute/stalled/采纳/证伪/卡住，导致 D4 一直是 0。
+    **判据存在但没人知道要写什么词。**
+
+    这条测试守两件事：
+      ① DECISION_WORDS 里每个词都能被 DECISION_RE 匹配（否则词表是假的）
+      ② 词表与正则不漂移（改一个忘另一个会红）
+    """
+    sys.path.insert(0, str(REPO / "scripts"))
+    import re
+
+    from scorecard import DECISION_RE, DECISION_WORDS
+
+    for w in DECISION_WORDS:
+        assert re.search(DECISION_RE, w), (
+            "词表里的 %r 匹配不上判据正则 %s —— 词表是假的" % (w, DECISION_RE))
+
+    # 反向：不该被匹配的常见写法
+    for w in ("决定", "结论", "完成", "TODO"):
+        assert not re.search(DECISION_RE, w), (
+            "%r 被误判成决策词，会虚增轮次" % w)
