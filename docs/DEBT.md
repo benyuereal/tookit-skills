@@ -512,3 +512,71 @@ void run_mha_fwd_splitkv_mla_fp8(...) {
 - [ ] 性能对比：fp8 512 vs bf16 512
 
 **这是「API 契约与实现不一致」的实例**，和 D10（卡片 math 与源实现不符）同类。
+
+---
+
+## D14 · FlashMLA fp8 的 d=512 编译通过但运行 VMFault（D13 的后续）
+
+**状态**：🔴 **未解决**。已定位到 3 个层次，修了 2 个，第 3 个没找到。
+
+### 已修的（两个真实 bug）
+
+**① kernel 名字硬编码** —— `flash_fwd_mla_kernel_fp8_hip.h:2892`
+
+```cpp
+std::string kernel_name = params.is_causal ?
+    "_ZN5flash..._qkvfp8ILi576ELi16E...Lb1E..." :   // ← 写死 ILi576E
+    "...";
+status = hipModuleGetFunction(&flash_mla_func, mod, kernel_name.c_str());
+status = hipModuleLaunchKernel(flash_mla_func, ...);   // ← 返回值没检查
+```
+
+512 的 kernel 编译出来了，但按 576 的名字查不到句柄。返回值没检查，
+拿 `nullptr` 去 launch → 崩在 AQL 层，只看到垃圾 `grid.z = 3000719448`。
+
+修：名字按 `Kernel_traits::kHeadDim` 动态拼 + 加空句柄检查。
+
+**② 模板参数名** —— 那个作用域里没有 `Headdim`，只有 `Kernel_traits`。
+错误用 `Kernel_traits::kHeadDim`。
+
+### 未解决的（第 3 层）
+
+修完上面两个后，**512 仍然 VMFault**，但错误形态变了：
+
+```
+>>>>>>>> KERNEL VMFault !!!! <<<<<<
+```
+
+不再是垃圾 grid（说明句柄对了），是 kernel 内部越界。
+
+### 已排除
+
+| 假设 | 排除方式 |
+|---|---|
+| 模板没实例化 | `nm -D` 有 44 个 `ILi512E` 符号 |
+| `kHeadDimV <= kHeadDim` 不满足 | 512 <= 512 ✓ |
+| stride 按 576 算 | `params.q_row_stride = q.stride(-3)` 是动态的 |
+| smem 布局写死 | `SmemLayoutQ/O` 由 `kHeadDim`/`kHeadDimV` 模板化 |
+| asm 特化路径的问题 | `FLASH_MLA_ENABLE_ASM=0` 也崩 |
+| 512 与 576 的平台差异 | 576 同参数跑通（`out (1,32,64,512)`） |
+
+### 下一步（有具体方向）
+
+`group_segment_size: 65536` = **LDS 用满 64KB**。512 时 smem 布局
+（`SharedStorageMLAFloat8`）可能超出。查 `SharedStorage` 的 `sizeof`：
+
+```cpp
+// 一行诊断：在启动前打印
+printf("smem_size=%d, cap=65536\n", (int)sizeof(SharedStorage));
+```
+
+如果超了，要做的是**减 smem**（如减 `kBlockN` 从 64 到 32）。
+
+### 教训
+
+**「编译通过 + API 文档说支持」不等于「能跑」。**
+这个 fp8 kernel 的 512 支持是半截图：模板参数化了、实例化加了、
+API check 写了，但查表那一步漏了，而且错误检查也没有。
+第一个错误（崩溃）完全没有指向性 —— 只看到垃圾 grid 值。
+
+**判断一段「已支持某形状」的代码能不能信，必须真跑一次。**
