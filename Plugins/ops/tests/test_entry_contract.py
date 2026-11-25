@@ -151,3 +151,28 @@ def test_documented_commands_actually_run(cmd):
                        timeout=120)
     assert p.returncode == 0, "%s 失败：\n%s\n%s" % (cmd, p.stdout[-400:],
                                                      p.stderr[-400:])
+
+
+def test_no_card_claims_full_shape_score_while_slower():
+    """S 项满分（覆盖 3+ 形状）的卡，geomean 不应该 >= 1。
+
+    **这条测试故意用 xfail 语义的宽松判据**（只警告不失败）：
+    改 shape_score 是口径变更，会让所有历史分数不可比，需单独决策。
+    但问题必须可见 —— 否则「十张满卡」的目标数字会虚高，
+    而每张卡单独看都是"合规"的。
+
+    2026-11-26 实测命中 2 张：
+      gemm-bf16      geomean=1.10
+      rmsnorm-fused  geomean=1.4496
+    """
+    sys.path.insert(0, str(REPO / "scripts"))
+    from check_s_direction import scan
+    hits = scan()
+    if hits:
+        import warnings
+        warnings.warn(
+            "以下卡 S 满分但整体没变快（geomean>=1）：%s"
+            % ", ".join("%s=%.2f" % (c, v) for c, v, _ in hits),
+            stacklevel=1)
+    # 不 assert，避免把口径问题变成阻塞项 —— 但会出现在 pytest -W 输出里
+    assert True
