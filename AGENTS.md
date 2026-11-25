@@ -44,8 +44,33 @@
 | CUDA→HIP 移植 / kernel 开发 / Triton | dcu-cuda-hip-port、dcu-kernel-dev、dcu-triton-kernels、dcu-kernelwiki | operators |
 | 故障排查 / 精度 / crash / hang | dcu-vmfault-coredump、debug-cuda-crash、debug-distributed-hang、dcu-vllm-precision、dcu-train-precision | troubleshooting |
 | 工程实践 / CI / 代码规范 / cookbook | ci-workflow-guide、env-var-conventions、cookbook-*、model-pr-* | engineering |
-| 算子卡 / 某算子有哪几种实现 / 哪个档位用哪个 / kernel 改动算不算通过 / 怎么持续推进一轮优化 / **先算出预测再写代码** / 选哪个算子库、流水线怎么排 / 手写 HIP 慢但数值对 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8、op-contract、op-bench、op-profiling、op-gate、op-optimize、op-stack-design、op-roofline、op-hip-compile | ops |
+| **算子优化（做优化、跑实验、写候选）** | **`op-optimize`（唯一入口，见下）** | ops |
+| 算子卡查询 / 某算子有几种实现 / 哪个档位用哪个 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8、op-moe-align-permute、op-moe-topk-gating | ops |
+| 契约与门禁 / 计时口径 / PMC 归因 / 天花板推算 | op-contract、op-bench、op-gate、op-profiling、op-roofline | ops |
+| HIP 编译调优 / 手写 HIP 慢但数值对 | op-hip-compile | ops |
 | 全量路由索引 | dcu-skill-router（dcu-core） | core |
+
+### 算子优化怎么起手（唯一入口）
+
+**做算子优化只需记一个名字：`op-optimize`。** 其它 op-* 都是它内部会调的零件。
+
+```
+op-optimize（入口：定口径 → 复现基线 → 定位瓶颈 → 列候选 → 单实验 → 记账）
+   ├─ 该用什么语言？        → scripts/lang_select.py（读 roofline 数字，不靠习惯）
+   ├─ 天花板/地板在哪？      → op-roofline / scripts/floor.py
+   ├─ PMC 怎么归因？        → op-profiling
+   ├─ 手写 HIP 怎么编译调优？ → op-hip-compile
+   ├─ 新算子从零建卡        → scripts/op_bootstrap.py
+   └─ 多轮自动推进          → scripts/advance.py
+```
+
+**三条硬规矩**（跳过就等于绕过门禁）：
+1. 实验只经 `Plugins/ops/engine/loop.py run`，不直接调 `bench/ab.py`
+2. 任何「快了多少」必须同批 base 测量 + `measure_mode=event_isolated`
+3. 新卡登记用 `scripts/card_sync.py`，别手工补 5 个位置
+
+**给人看的完整用法**：`docs/HOW-TO-USE.md`
+**给评测方看的**：`docs/OPBENCH-USAGE.md`
 
 > 完整路由表见仓库根 `SKILL.md`（包级总入口）与 `dcu-skill-router`。
 

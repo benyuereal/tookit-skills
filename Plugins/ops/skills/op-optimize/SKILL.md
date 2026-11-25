@@ -1,6 +1,6 @@
 ---
 name: op-optimize
-description: "算子优化的搜索循环：队列 → 单个实验 → 机器判定 → 落盘记账。把「猜一个改动、手搓代码、跑一次、自己看着数字说快了」换成可复现、可中断、单模型也能跑完的闭环。配套 loop.py：拒绝重跑已证伪项、判定由脚本算不由模型说、状态落盘不占上下文。触发场景：开始优化一个算子 kernel、手上有很多候选改动要排序、写 candidates.yaml 候选清单（direction/priority）怕被 loop.py 拒跑、优化做了一半被中断要接着干、要把一轮优化收口成交付件。不适用：单次量法的口径走 op-bench；四闸四档判定走 op-gate。"
+description: "算子优化的搜索循环：队列 → 单个实验 → 机器判定 → 落盘记账。把「猜一个改动、手搓代码、跑一次、自己看着数字说快了」换成可复现、可中断、单模型也能跑完的闭环。配套 loop.py：拒绝重跑已证伪项、判定由脚本算不由模型说、状态落盘不占上下文。触发场景：开始优化一个算子 kernel、手上有很多候选改动要排序、写 candidates.yaml 候选清单（direction/priority）怕被 loop.py 拒跑、优化做了一半被中断要接着干、要把一轮优化收口成交付件。不适用：单次量法的口径走 op-bench；四闸四档判定走 op-gate。触发场景补充：**新算子第一次做优化**（先 scripts/op_bootstrap.py 建卡，再补 reference、跑一次基线，四步缺一不可）；**不确定该用 HIP 还是 Triton**（跑 scripts/lang_select.py，它按 roofline 数字判，不要默认 Triton）；**多轮自动推进**（scripts/advance.py --forge，队列空了自己造变体）；**新卡登记漏位置**（scripts/card_sync.py 一个入口管 5 处）。完整用法见 docs/HOW-TO-USE.md。"
 version: 1.0.1
 author: DCU Toolkit Contributors
 license: MIT
