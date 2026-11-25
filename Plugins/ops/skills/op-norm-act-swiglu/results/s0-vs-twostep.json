@@ -1,0 +1,36 @@
+{
+  "card": "op-norm-act-swiglu",
+  "shape": "s0 (M=8192 H=4096 I=2048)",
+  "ts": "2026-11-25T11:12:54",
+  "gpu": "BW1100 gfx938, HIP_VISIBLE_DEVICES=7",
+  "caliber": {
+    "mode": "event_isolated",
+    "rounds": 5,
+    "base_rere_measured": true,
+    "timer": "torch event, median"
+  },
+  "results": {
+    "two-step": {
+      "ms": 0.305,
+      "traffic_mb": 369.1
+    },
+    "fused-hip-mr2": {
+      "ms": 0.1496,
+      "traffic_mb": 167.78,
+      "ulp_vs_ref": 1.0
+    }
+  },
+  "delta_pct": -50.9,
+  "ratio": 0.494,
+  "significant": true,
+  "decision": "ACCEPTED_NUMERICS_PENDING_E2E",
+  "traffic_note": "基线 4H(读x,r+写x,r) + 1.5H(读h+写out) = 5.5H = 369.1 MB；融合 2H+0.5H = 167.8 MB",
+  "config_note": "BLOCK_ROWS=2 实测最优（单行 148.0us / 2行 140.5 / 4行 153.3，4行因 vgpr=84 退化）",
+  "multishape": {
+    "M=13312": {
+      "ms": 0.21552,
+      "gbps": 1265,
+      "pct_floor": 73
+    }
+  }
+}

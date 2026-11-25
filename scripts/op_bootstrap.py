@@ -62,7 +62,9 @@ PATTERNS = {
 # family ← → 访问模式的合理对应。写错了要报，不静默接受。
 FAMILY_PATTERN = {
     "elementwise": {"elementwise", "elementwise-2in"},
-    "activation": {"elementwise", "elementwise-2in"},
+    # activation 也可能带归约：如 norm-act 三合一（rmsnorm 沿 H 归约后再激活）。
+    # 规则太窄会误伤真实题目 —— 只把**明显不可能**的组合列为不匹配。
+    "activation": {"elementwise", "elementwise-2in", "reduce"},
     "norm": {"reduce", "elementwise-2in"},
     "quant": {"elementwise", "elementwise-2in"},
     "rope": {"elementwise", "elementwise-2in"},
@@ -76,7 +78,12 @@ FAMILY_PATTERN = {
 
 
 def parse_shape(text):
-    """'M=8192,H=4096' → {'M':8192,'H':4096}。解析失败抛 ValueError。"""
+    """'M=8192,H=4096' → {'M':8192,'H':4096}。
+
+    **支持派生维度**：`I=@H/2` 表示 I 是已解析维度的表达式。
+    为什么要它：三合一这类算子里 `I = H/2` 是定义的一部分，
+    让人再手填一个数既啰嗦又容易和 H 不一致。
+    """
     out = {}
     for kv in str(text).split(","):
         kv = kv.strip()
@@ -85,8 +92,16 @@ def parse_shape(text):
         if "=" not in kv:
             raise ValueError("形状必须写成 NAME=整数，收到 %r" % kv)
         k, v = kv.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if v.startswith("@"):
+            expr = v[1:].replace("/", "//")
+            try:
+                out[k] = int(eval(expr, {"__builtins__": {}}, dict(out)))   # noqa: S307
+            except Exception as e:                                      # noqa: BLE001
+                raise ValueError("派生维度 %r=%r 算不出来：%s" % (k, v, e))
+            continue
         try:
-            out[k.strip()] = int(v)
+            out[k] = int(v)
         except ValueError:
             raise ValueError("形状 %r 的值不是整数" % kv)
     if not out:
@@ -213,6 +228,72 @@ def build_contract(name, math, inputs, outputs):
     }
 
 
+def render_contract(name, math, inputs, outputs):
+    """手写 contract 文本。
+
+    **不用 yaml.safe_dump**：它把 shapes 写成块列表（`- M`），而
+    `opverify.parse_yaml` 是极简解析器，会报「map/list 混用」。
+    实测踩过 —— bootstrap 生成的第一张卡就因为这个让 test_ops_gate 失败。
+    其他卡（如 op-fused-add-rmsnorm）用的是行内 `[M, H]`，照做。
+    """
+    def inline(dims):
+        return "[" + ", ".join(dims) + "]"
+    ref = {"bf16": {"mode": "ulp_bound", "max_ulp": 2, "max_abs": 3.125e-2,
+                    "cosine": 0.99999}}
+    bf16_out = any(t["dtype"] == "bf16" for t in outputs)
+    lines = [
+        "# %s 契约（bootstrap 生成，需人工核对）" % name,
+        "",
+        "op: %s" % name,
+        "version: 1",
+        'math: "%s"' % str(math).replace('"', "'"),
+        "",
+        "shapes:",
+    ]
+    for t in inputs + outputs:
+        lines.append("  %s: %s" % (t["name"], inline(t["dims"])))
+    lines += ["", "dtypes:"]
+    for t in inputs + outputs:
+        lines.append("  %s: %s" % (t["name"], t["dtype"]))
+    lines += ["", "tolerance:", "  vs_fp32_ref:"]
+    if bf16_out:
+        lines += ["    mode: ulp_bound", "    max_ulp: 2",
+                  "    max_abs: 3.125e-2", "    cosine: 0.99999",
+                  '    note: "bf16 按量级判 ULP；max_abs 仅兜底"']
+    else:
+        lines += ["    max_abs: 1.0e-5", "    cosine: 0.999999"]
+    lines += ["  variant_vs_variant:", "    mode: tolerance", "",
+              "invariants:", "  - name: determinism",
+              "    mode: bit_exact", "    repeats: 5", ""]
+    # **gates 与 floor 是 opverify 的必填项**（REQUIRED_TOP）。
+    # 第一版 bootstrap 漏了它们，生成的卡跑 test_ops_gate 直接失败。
+    lines += [
+        "gates:",
+        "  - name: correctness",
+        "    template: correctness",
+        "    required: true",
+        "  - name: invariants",
+        "    template: invariants",
+        "    required: true",
+        "  - name: perf",
+        "    script: bench/ab.py",
+        "    required: false",
+        '    skip_reason: "bootstrap 生成时还没有实测，bench 待接"',
+        "",
+        "floor:",
+        "  metric: hbm_bandwidth",
+        "  # peak 必须来自 bw-ladder 的 achievable，不是型号标称值（1100 是型号名）",
+        "  peak: 1730",
+        "  unit: GB/s",
+        "  peak_source: Plugins/ops/op-atlas/bw-ladder.yaml",
+        '  basis: "bootstrap 按访问模式算出的字节数，见 floor_inputs"',
+        "  at_floor_threshold: 0.10",
+        "  status: unmeasured",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def build_common(name, inputs, reference_expr):
     """生成 _common.py 骨架。
 
@@ -286,6 +367,72 @@ def outputs_ref(outputs):
     return outputs or []
 
 
+def build_skill_md(name, title, math, inputs, outputs, pattern, bytes_mb):
+    """生成 SKILL.md（卡的自述）。**必须与卡上字段同源**，不另写一份知识。"""
+    in_desc = ", ".join("%s:%s[%s]" % (t["name"], t["dtype"], ",".join(t["dims"]))
+                        for t in inputs)
+    out_desc = ", ".join("%s:%s[%s]" % (t["name"], t["dtype"], ",".join(t["dims"]))
+                         for t in outputs)
+    sz = ("%.1f MB（pattern=%s）" % (bytes_mb, pattern)) if bytes_mb else \
+         "由 FLOPs 约束，不走 bytes 分母"
+    return """---
+name: %(name)s
+description: "%(title)s。输入 %(in_desc)s，输出 %(out_desc)s。用途：(bootstrap 生成，待补真实场景描述)。触发场景：(待补)。不适用：(待补)。"
+---
+
+# %(name)s
+
+%(math)s
+
+## 输入输出
+
+- 输入：%(in_desc)s
+- 输出：%(out_desc)s
+- 搬运量：%(sz)s
+
+## 状态
+
+bootstrap 生成，**尚未实测**。补齐顺序：
+
+1. `_common.py` 里的 `reference()` —— 现在是 `NotImplementedError`。
+   参考实现是正确性的唯一锚，不要写一个「看起来能跑」的版本。
+2. `build_inputs()` 的数值分布 —— 要覆盖真实场景的取值范围。
+3. `VARIANTS` 里填真实实现（库调用或手写 kernel）。
+4. 跑一次基线拿到 `t_actual`，再 `floor.py` 出 roofline。
+5. `lang_select.py` 判语言路线（**它需要 roofline，所以第 4 步不能省**）。
+
+## 纪律
+
+- 分母来源见 `floor_inputs`，算错方向就反。
+- 每次对比必须 base 重测。
+""" % {"name": name, "title": title, "math": math, "in_desc": in_desc,
+       "out_desc": out_desc, "sz": sz}
+
+
+def build_variants_yaml(name, inputs, outputs, pattern):
+    """生成 variants.yaml。只有 ref-heavy —— 真实实现要人补。
+
+    **不自动填一个「看起来能用」的变体**：那会让 `get_runner` 返回一个
+    没人验证过的实现，而它可能算错。宁可是空的等人填。
+    """
+    p = PATTERNS[pattern]
+    return {"variants": [{
+        "name": "ref-heavy",
+        "source": "本卡 _common.py 的 fp32 参考",
+        "status": "reference",
+        "role": "correctness_only",
+        "applies_to": ["s0"],
+        "mutates_inputs": False,
+        "semantics": {
+            "inputs": [t["name"] for t in inputs],
+            "outputs": [t["name"] for t in outputs],
+            "mutates": [],
+            "traffic_passes": p["r"] + p["w"],
+            "note": "fp32 参考，只用于正确性对照，不是性能候选"},
+        "note": "**不得用于性能对比**：未优化的参考实现",
+    }]}
+
+
 def generate(name, title, family, math, shape_text, inputs_text,
              outputs_text, pattern, write=True):
     """完整一步：算 bytes → 建卡 → 建 contract → 建 _common → 算 floor。
@@ -353,8 +500,7 @@ def generate(name, title, family, math, shape_text, inputs_text,
         sd = SKILLS / ("op-%s" % name)
         sd.mkdir(parents=True, exist_ok=True)
         ct = sd / "contract.yaml"
-        ct.write_text(yaml.safe_dump(build_contract(name, math, inputs, outputs),
-                                     allow_unicode=True, sort_keys=False),
+        ct.write_text(render_contract(name, math, inputs, outputs),
                       encoding="utf-8")
         out["written"].append(str(ct))
         cm = sd / "_common.py"
@@ -366,6 +512,17 @@ def generate(name, title, family, math, shape_text, inputs_text,
                                      allow_unicode=True, sort_keys=False),
                       encoding="utf-8")
         out["written"].append(str(sh))
+        # SKILL.md 与 variants.yaml 也一起生成 —— 少了它们卡是「半张」，
+        # 每次都要人补（实测：第一张 bootstrap 卡就是漏了这两个）。
+        sk = sd / "SKILL.md"
+        sk.write_text(build_skill_md(name, title, math, inputs, outputs,
+                                     pattern, bytes_mb), encoding="utf-8")
+        out["written"].append(str(sk))
+        vf = sd / "variants.yaml"
+        vf.write_text(yaml.safe_dump(
+            build_variants_yaml(name, inputs, outputs, pattern),
+            allow_unicode=True, sort_keys=False), encoding="utf-8")
+        out["written"].append(str(vf))
     return out
 
 

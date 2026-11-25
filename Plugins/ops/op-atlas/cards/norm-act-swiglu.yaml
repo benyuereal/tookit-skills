@@ -1,0 +1,161 @@
+id: norm-act-swiglu
+title: add + RMSNorm + SwiGLU 三合一融合
+family: activation
+math: xf = x + residual; h = w*xf/sqrt(mean(xf^2,-1)+eps); out = silu(h[:, :I]) *
+  h[:, I:]
+status: measured
+layer: kernel
+op_card: null
+semantics:
+  formula: xf=x+residual; h=w*xf/sqrt(mean(xf^2,-1)+eps); out=silu(h[:,:I])*h[:,I:]
+  inputs:
+  - x (M,H)
+  - residual (M,H)
+  - w (H,)
+  outputs:
+  - out (M,I)
+  traffic_passes:
+    reads: 3
+    writes: 1
+    passes: 4
+    source: 按 math：读 x、residual、w（w 只有 H 可忽略），写 out（半宽 I） ⇒ 实际字节 2H + 0.5H = 2.5H
+      = 167.8 MB
+  mutates_inputs: []
+variants:
+- repo: lightop
+  library_profile_ref: libraries.md §11
+  file_hint: kernels/norm_act_swiglu_mr.hip
+  tier: structural
+  role: best_known
+  best_for:
+  - 三合一融合（add+rmsnorm+swiglu），中间张量不落 HBM
+  not_for:
+  - H != 4096 或 I != THREADS*8 的形状（需重新生成）
+  pros:
+  - 融合后流量降到基线的 45.5%
+  - 实测 2.03x，1.00 ULP
+  cons:
+  - H 硬编码 4096（THREADS*8 == I 的前提）
+  source: references/libraries.md
+  source_ref:
+    path: Plugins/ops/skills/op-norm-act-swiglu/kernels/norm_act_swiglu_mr.hip
+    symbol: norm_act_swiglu_mr_k
+    build_cmd: cd kernels && ./build.sh
+  l1_exempt_reason: 自研 HIP kernel，非可 import 包；真正的调用入口是 op-norm-act-swiglu/_common.py
+    的 get_runner("fused-hip-mr2")，源码见 source_ref.path
+  smoke_test: python3 -I Plugins/ops/skills/op-norm-act-swiglu/bench/ab.py --shape
+    s0 --base two-step --variants fused-hip-mr2 --rounds 1
+  import_path: lightop.fused_add_rms_norm
+  signature: norm_act_swiglu_mr_launch(x_ptr, r_ptr, w_ptr, out_ptr, M, H, eps)（ctypes）
+- repo: lightop
+  library_profile_ref: libraries.md §11
+  file_hint: lightop.fused_add_rms_norm + lightop.fuse_silu_and_mul（两步）
+  tier: primary
+  role: competitor
+  best_for:
+  - 现成两步路径，作为性能基准
+  not_for:
+  - 已经融合时
+  pros:
+  - 库自带、无需编译
+  cons:
+  - 中间张量 h[M,2I] 落 HBM，367.9MB 流量
+  import_path: lightop.fused_add_rms_norm
+  signature: fused_add_rms_norm(x, residual, weight, eps) -> (out, residual_out)；fuse_silu_and_mul(x,
+    out)
+  smoke_test: python3 -I Plugins/ops/skills/op-norm-act-swiglu/bench/ab.py --shape
+    s0 --base two-step --variants two-step --rounds 1
+  source: references/libraries.md
+  source_ref:
+    path: /usr/local/lib/python3.10/dist-packages/lightop
+    symbol: fused_add_rms_norm / fuse_silu_and_mul
+  l1_exempt_reason: 库内 kernel 无独立源文件，符号名即入口
+ceiling:
+  kind: roofline_model
+  ref: Plugins/ops/skills/op-norm-act-swiglu/roofline.json
+  bound: memory
+  note: 3 段融合，流量主导
+shapes:
+- s0
+floor_inputs:
+  bytes_mb: 167.78
+  pattern: rw_1to1
+  t_actual_us: 149.3
+  t_source: results
+  is_reduction: true
+  evidence: Plugins/ops/skills/op-norm-act-swiglu/results/s0-vs-twostep.json
+  basis: 2.5H = 167.8 MB @ 1680 GB/s(1:1) ×0.81 归约折扣；实测 149.3µs
+last_verdict:
+  status: measured
+  kb_path: null
+  conclusion: 三合一融合相对两步法快 2.03x（event_isolated 可 claim）
+  verified_on: '2026-11-25'
+  rounds: 5
+  ratio:
+    kind: utilization
+    unit: ratio
+    value: 0.826
+    vs: 1:1 档 1680 GB/s × 0.81 归约折扣；167.8MB ÷ 149.3µs = 1124 GB/s
+    scope:
+      cards: 1
+      concurrency: 1
+      in_len: M=8192
+      out_len: I=2048
+      warmup: hot
+  comparison:
+    baseline: lightop.two-step
+    baseline_role: competitor
+    cand: fused-hip-mr2
+    cand_us: 149.3
+    base_us: 303.3
+    ratio: 0.492
+    significant: true
+    measure_mode: event_isolated
+    semantics_aligned: true
+    alignment:
+      inputs: 3
+      outputs: 1
+      traffic_passes: 3
+      note: 融合 167.8MB vs 基线 369.1MB（45.5%）
+  floor:
+    remaining: 0.211
+    t_floor_us: 123.3
+    t_actual_us: 149.3
+    binding: memory
+    denominator_gbs: 1680.0
+    achieved_gbs: 1124.0
+    verdict: structural
+    basis: 2.5H=167.8MB @ 1680GB/s ×0.81 = 123.3µs；实测 149.3µs
+  evidence:
+  - path: Plugins/ops/skills/op-norm-act-swiglu/results/s0-vs-twostep.json
+    sha256: b11487aefbd035cd5127dc18bcbb69e433628770fba4d01d0cc56d587c461609
+    verified_on: '2026-11-25'
+  inputs: 3
+  outputs: 1
+  traffic_passes: 3
+  next_probe:
+    surface: barrier-width
+    hypothesis: 当前 149.3µs = 地板的 82.6%。剩余空间来自行内归约的两道 barrier（shuffle 6 轮 + LDS 表 +
+      2 次 __syncthreads）。每 CTA 只搬 16KB，归约延迟藏不住。
+    expected: 用 ds_bpermute 替掉 LDS 表可省一次 barrier，预期 -5%~-10%
+    stop_if: 若 ds_bpermute 版本无明显收益，说明归约已不是瓶颈，转去看 output 写的合并
+    effort: 小（改一处归约实现，不动流水）
+    falsifier: 若减少 barrier 后耗时不变，则瓶颈在访存而非同步
+  geomean:
+    value: 0.494
+    shapes:
+    - s0 (M=8192)
+    - holdout (M=13312)
+    coverage: M=8192 与 M=13312 两档；holdout 融合 0.21552ms 达 73% 地板（比 public 的 69% 更高）
+    vs: 基线 two-step（lightop 两步法）。**M=13312 的基线未同口径实测** —— holdout 只验了融合侧的绝对性能（272.6MB
+      / 0.21552ms = 1265 GB/s），比值沿用 public 档的 0.494，标 low_confidence。
+updated: '2026-11-25'
+baseline_ref:
+  impl: lightop.fused_add_rms_norm
+  role: competitor
+  traffic_passes:
+    reads: 5
+    writes: 3
+    passes: 8
+    source: 两步法：①读x,r 写x,r（4趟）②读h 写out（1.5趟）⇒ 5.5H = 369.1 MB
+  note: bench 时拿这条当性能基准；实测 0.3050 ms

@@ -1,0 +1,6 @@
+s0:
+  params:
+    M: 8192
+    H: 4096
+    I: 2048
+  note: bootstrap 生成

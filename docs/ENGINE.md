@@ -6,6 +6,12 @@
 
 ---
 
+> **2026-11-25 更新**：补了三处这段时间新增的东西 ——
+> §七 场景路由（语言选型的调用链）、§八 冷启动（新算子的入口）、
+> §九 本仓已踩过的「写了没接上」清单。原有的边界规则一条没改。
+
+---
+
 ## 一、依赖规则（硬约束，违反即架构退化）
 
 ```
@@ -157,3 +163,121 @@ grep -n 'Path(__file__)' <被迁文件> | grep -v '^.*resolve().parents'
 所以模拟布局里**也要有 engine**，否则 shim `sys.exit`。
 
 **规律**：凡是「复制到临时目录再跑」的测试，迁目录后都要检查它复制的那份是否还自足。
+
+---
+
+## 七、场景路由：语言选型怎么被调用（2026-11-25 新增）
+
+### 为什么加这一节
+
+`scripts/lang_select.py` 存在了很久，判据和数据都对：
+
+```
+rmsnorm prefill-8k：lightop(HIP) 197.0µs / tilelang 221.0 / triton 242.0
+```
+
+**但 `grep lang_select` 全仓只有文档引用，零调用方。**
+外部证据（opbench 三臂对照）：裸 CC / 本 skill / SkillHub **三臂都没写过一行 HIP**，
+而本仓已有实测更快的现成实现。
+
+**这是「写了没接上」的第一个实例，也是最贵的一个** ——
+路线选择这个影响最大的决定，被交给了 agent 的习惯。
+
+### 现在的调用链
+
+```
+roofline.json（数字）
+   ↓
+lang_select.route_scenario（4 个数 → 语言优先级）
+   ↓
+advance.run_advance 的 build_plan **之前**
+   ↓
+候选的 action_class 必须与路线一致
+```
+
+### 路由规则住在 data/ 不是代码里
+
+`data/ops/lang-candidates.yaml` 的 `routing.rules`，6 条，按顺序第一条命中即停
+（顺序即优先级，不靠权重打分）。
+
+**依赖规则**：`scripts/lang_select.py` 读 yaml，规则不硬编码在代码里。
+加了测试 `test_rules_are_loaded_from_yaml_not_hardcoded` 防止两边分叉。
+
+### 两条设计决定
+
+1. **不约定「起手语言」**。规则按场景命中，`hip` 和 `triton` 都可能是第一。
+2. **实测压过先验**。有 bench 数据时按实测排，路由只在无实测时生效。
+
+---
+
+## 八、冷启动：新算子的入口（2026-11-25 新增）
+
+### 之前的断链
+
+```
+roofline.json 需要 roofline 分析
+  → 需要 model（models/*.py）
+    → 需要有人先懂这个算子
+⇒ 新算子卡在循环的第一环
+```
+
+实测：`derive.py` 只认 sparse-mla（参数硬编码）；
+`grep "建卡" scripts/*.py` = 空；卡片 schema 20+ 字段且 `additionalProperties: false`。
+
+### 现在的链路（六步，第四步不能省）
+
+```
+op_bootstrap → 补 reference → 跑一次基线 → floor → lang_select → advance
+                                    ↑
+                            没有 t_actual 时路由「无规则命中」
+```
+
+**这不是缺陷，是物理事实** —— 不知道该多快就不知道该往哪走。
+
+### 三条纪律
+
+1. **bytes 是分母，算错方向就反**。所以 `op_bootstrap` 的反向用例全部
+   围绕「什么情况下 bytes 会算错」：维度名缺失、family/pattern 不匹配、
+   复合算子硬套单一 pattern。
+2. **复合算子必须拒**。含 `@` 的 math 不许用 elementwise pattern ——
+   GEMM 由 FLOPs 约束、elementwise 由字节约束，两种分母不能混。
+3. **reference 故意留 NotImplementedError**。参考实现是正确性的唯一锚，
+   猜一个能让整个门禁「通过」一个算错的实现（两边都错）。
+
+---
+
+## 九、本仓已踩过的「写了没接上」清单
+
+每一条都有机器判据守着（否则会再犯）。
+
+| # | 工具 | 当时的状态 | 现在的守卫 |
+|---|---|---|---|
+| 1 | `lang_select.py` | 判据正确，零调用方 | `advance.py` 在 plan 前调用；测试断言调用顺序 |
+| 2 | `acc_probe` 机制 | `loop.py` 有代码，文件不存在 → 静默跳过 | 文件已建；`decide()` 在 `maxdiff=None` 时改看 acc |
+| 3 | HIP kernel | 实测更快，藏在 `runs/`（gitignore） | 挪到 `kernels/` 并登记 `variants.yaml` |
+| 4 | `ablate.py` | 能算，但分不清消融与计时探针 | `derived_from` / `numerically_valid` 强制声明 |
+| 5 | `surfaces.yaml` 前提检查 | 11/17 条恒失败（`grep traffic` 查的键不存在） | 17/17 通过；占位符无落地判 `unrunnable` 而非假通过 |
+| 6 | `ingest_check` | 只查记录内字段，顶层 `absorption` 漏检 | 补数组校验；修后抓出 14 处键名不一致 |
+
+**规律**：工具「存在」和工具「生效」之间隔着一个调用点。
+写完之后必须回答：**谁调用它？如果没人调用，它怎么被触发？**
+
+---
+
+## 十、当前模块表补充（2026-11-25）
+
+| 模块 | 职责 | 位置 | 被谁调用 |
+|---|---|---|---|
+| `op_bootstrap` | 算子描述 → 能跑的卡 | `scripts/` | 人 / agent（冷启动第一步） |
+| `lang_select` | 场景 → 语言优先级 | `scripts/` | `advance.py`（plan 之前） |
+| `floor` | 地板计算（分母唯一来源） | `scripts/` | `advance` / `lang_select` / 人 |
+| `forge_step` | 生成 → 编译 → 体检 → 登记变体 | `scripts/` | `advance --forge` |
+| `kernel_scaffold` | 生成 HIP 骨架（库形态） | `scripts/` | `forge_step` / `variant_forge` |
+| `ablate` | 消融归因（3×MAD） | `scripts/` | 人（找收益来源时） |
+| `ingest*` | 外部语料吸纳 | `scripts/` | 人 |
+| `check_schema_fields` | 加字段前先问 schema 认不认 | `scripts/` | 人（改卡前必跑） |
+
+**新增依赖边（需守）**：
+- `advance` → `lang_select`（读 roofline，不读 skill 实现）
+- `forge_step` → `kernel_scaffold`（按路径加载，不靠 sys.path）
+- `op_bootstrap` → `floor` 的算法（复算 bytes，不重新实现地板）

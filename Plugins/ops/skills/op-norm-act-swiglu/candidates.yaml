@@ -1,0 +1,45 @@
+# op-norm-act-swiglu 候选队列
+#
+# 三合一：add + RMSNorm + SwiGLU，输出半宽。
+# 基线是两步法（lightop.fused_add_rms_norm + fuse_silu_and_mul），369.1 MB 流量。
+# 融合后 167.8 MB（降到 45.5%）—— 这是全部收益来源。
+defaults:
+  rounds: 5
+  no_sweep: true
+  bench_args:
+  - --shape
+  - s0
+  - --base
+  - two-step
+  - --measure-mode
+  - event_isolated
+  acc_args:
+  - --shape
+  - s0
+  gpu: 7
+directions:
+- id: fusion-boundary
+  statement: 两步法把 h[M,2I] 写回 HBM 再读回，能否在单 kernel 内消掉
+  status: open
+  refutes: 0
+- id: occupancy
+  statement: 行内归约的 barrier 开销能否被多行/CTA 摊薄
+  status: open
+  refutes: 0
+candidates:
+- id: fuse-three-in-one
+  direction: fusion-boundary
+  status: pending
+  priority: 1
+  action_class: reduce-bytes
+  means: |
+    把 add → rmsnorm → silu-mul 合成单个 kernel：(x+r) 留寄存器做归约，
+    归一化后同一线程的 gate/up 直接配对算 silu(g)*u，只写半宽输出。
+    中间张量 h 全程不落 HBM。
+  predicted_effect: -45%~-55%
+  expected_bottleneck: memory-bound
+  expect: -50%
+  expect_basis: 流量 369.1→167.8 MB（-54.5%）；实测 ab.py 0.3033→0.1493 ms = -50.8%
+  variant: fused-hip-mr2
+  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape s0 --variants fused-hip-mr2
+refuted: []

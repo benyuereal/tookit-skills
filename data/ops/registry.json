@@ -203,6 +203,23 @@
     "inplace=True 是否原地写残差",
     "hidden 非 2 的幂的向量化损失"
    ]
+  },
+  {
+   "name": "norm-act-swiglu",
+   "path": "Plugins/ops/skills/op-norm-act-swiglu",
+   "status": "measured",
+   "shapes": [
+    "s0"
+   ],
+   "variants": [
+    "lightop",
+    "lightop"
+   ],
+   "best_variant": null,
+   "floor_status": null,
+   "last_verified": "2026-11-25",
+   "evidence": null,
+   "open_questions": []
   }
  ]
 }

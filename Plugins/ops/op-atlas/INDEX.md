@@ -59,6 +59,7 @@
 | [`moe-w8a8`](cards/moe-w8a8.yaml) | moe | draft | — | mixed | Marlin GEMM 分量达峰值带宽的 0.888；整体未判；as… |
 | [`mqa-logits`](cards/mqa-logits.yaml) | attention | measured | — | bandwidth | epilogue 跨 lane 归约换 ds_bpermute，逐位… |
 | [`mtp-draft`](cards/mtp-draft.yaml) | sampling | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
+| [`norm-act-swiglu`](cards/norm-act-swiglu.yaml) | activation | measured | — | memory | 三合一融合相对两步法快 2.03x（event_isolated 可… |
 | [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | measured | — | bandwidth | flash_attn decode 只达峰值 0.03；同机 MLA… |
 | [`qk-norm`](cards/qk-norm.yaml) | norm | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据。原 ratio=741 无… |
 | [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | — | bandwidth | 无实测：两条真入口已 import 验证，待 bench |

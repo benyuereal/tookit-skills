@@ -1,0 +1,29 @@
+{
+ "card": "norm-act-swiglu",
+ "shape": "s0 (M=8192 H=4096 I=2048)",
+ "flops": null,
+ "bytes": 175930081,
+ "ai": 0.0,
+ "bound": "memory",
+ "primary_metric": "MBU",
+ "t_floor_us": 123.3,
+ "remaining": 0.2109,
+ "t_actual_us": 149.3,
+ "t_actual_mode": "event_isolated",
+ "t_floor_mode": "event_isolated",
+ "denominator_provenance": {
+  "peak_bw": "bw-ladder.yaml rw_1to1 1680 GB/s；归约折扣 0.81"
+ },
+ "basis": "memory 地板 123.3 us（rw_1to1 档 1680 GB/s（confidence=high）；归约折扣 0.81（bw-ladder 3_row_reduction））；binding=memory；实测 149.3 us",
+ "comparison": {
+  "baseline": "two-step (lightop 两步法)",
+  "base_us": 303.3,
+  "cand_us": 149.3,
+  "ratio": 0.492,
+  "speedup": 2.03,
+  "traffic_base_mb": 369.1,
+  "traffic_cand_mb": 167.78,
+  "traffic_ratio": 0.455
+ },
+ "note": "三合一融合：中间张量 h[M,4096] 不落 HBM，流量 369.1→167.8 MB。"
+}

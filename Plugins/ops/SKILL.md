@@ -160,6 +160,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-moe-align-permute` | `draft` | **MoE 第 3 段**：align_block_size + permute。`-1` 只能垫队尾，前置会让输出恒为 0 |
 | `op-fused-add-rmsnorm` | `measured` | 残差 + RMSNorm 融合：**校准件**，字节数完全确定。2026-11-25 自研 fa-rms-reg 比 lightop 快 1.82x（event_isolated），填补证据后升回 measured |
 | `op-rmsnorm-fused` | `measured` | 融合 RMSNorm：等语义（2读2写）242 µs/1108 GB/s；比 lightop 227 µs 慢 6.7%，融合相对分离 1.14x |
+| `op-norm-act-swiglu` | `measured` | add + RMSNorm + SwiGLU 三合一融合 |
 
 ## 六、数据分层（红线，必须遵守）
 
