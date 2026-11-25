@@ -6,7 +6,9 @@
 #include <hip/hip_runtime.h>
 #include <hip/hip_fp8.h>
 
+#ifndef TILE
 #define TILE 16
+#endif
 
 __device__ __forceinline__ float fp8_to_f32(unsigned char b) {
   __hip_fp8_e4m3 v;
