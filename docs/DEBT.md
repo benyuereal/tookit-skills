@@ -560,17 +560,39 @@ status = hipModuleLaunchKernel(flash_mla_func, ...);   // ← 返回值没检查
 | asm 特化路径的问题 | `FLASH_MLA_ENABLE_ASM=0` 也崩 |
 | 512 与 576 的平台差异 | 576 同参数跑通（`out (1,32,64,512)`） |
 
-### 下一步（有具体方向）
+### 进展：主 kernel 已跑通，combine 仍崩（2026-11-25 20:15）
 
-`group_segment_size: 65536` = **LDS 用满 64KB**。512 时 smem 布局
-（`SharedStorageMLAFloat8`）可能超出。查 `SharedStorage` 的 `sizeof`：
+修完上面两个后重测，**形态再变一次**：
 
-```cpp
-// 一行诊断：在启动前打印
-printf("smem_size=%d, cap=65536\n", (int)sizeof(SharedStorage));
+```
+✓ d=512 跑通! out: (1, 32, 64, 512)      ← 主计算 kernel 成功返回
+>>>>>>>> KERNEL VMFault !!!! <<<<<<       ← 之后 combine 阶段崩
 ```
 
-如果超了，要做的是**减 smem**（如减 `kBlockN` 从 64 到 32）。
+用 `FLASH_MLA_DEBUG_SMEM=1` 打开诊断后主 kernel 就过了（说明 smem 没超），
+所以 **smem 假设排除**，问题精确定位到 **combine 阶段**。
+
+### 对照组（同机同代码）
+
+| d_qk | 主 kernel | combine | 完整流程 |
+|---|---|---|---|
+| 576 | ✓ | ✓ | **✓ out (1,32,64,512)** |
+| 512 | ✓ | ✗ VMFault | ✗ |
+
+**576 用完全相同的改动跑通** —— 所以不是我改动引入的，
+是 512 路径本身有未适配处。
+
+### 下一步的精确方向
+
+`flash_fwd_splitkv_mla_combine_kernel` 在 `flash_fwd_mla_kernel.h:4300`
+（注意：fp8 路径复用的是 bf16 的 combine，不是独立的）。
+
+它用 `row_offset_lseaccum = split_offset * hs + hs_idx`，
+其中 `split_offset` 来自 `num_splits` 前缀和、`hs = params.h * params.seqlen_q`。
+
+**最可疑的假设**：576 时 `d_v(512) < d_qk(576)` 严格成立，
+512 时两者相等 —— 任何 `if (d_v < d_qk)` 的分支都不会进。
+要在 `compute_attn_*` 里搜这类分支。
 
 ### 教训
 
