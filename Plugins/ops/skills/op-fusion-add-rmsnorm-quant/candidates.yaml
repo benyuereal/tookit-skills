@@ -1,0 +1,30 @@
+# op-fusion-add-rmsnorm-quant 候选实现
+#
+# **状态：只有 reference，没有可竞速的候选。**
+
+- id: ref-heavy
+  what: 纯 torch 参考实现（fp32，含对称 int8 量化）
+  status: done
+  why: 正确性锚点。不能用来做性能对比。
+
+- id: lightop-fused-quant
+  what: lightop 的 norm+quant 融合实现（若存在）
+  status: blocked
+  blocker: |
+    需先核对 lightop 是否有 add+rmsnorm+quant 三合一算子。
+    已知有 RMSNormAdd / RMSNormAddDropout / RMSNormAddDropoutBias，
+    **没有确认有量化版本**。核对方式：
+      import lightop; [x for x in dir(lightop) if "quant" in x.lower()]
+    不要凭名字假设签名。
+
+- id: hand-hip-3in1
+  what: 手写 HIP 三合一 kernel
+  status: todo
+  why: |
+    这是本卡真正的目标。可复用 op-fused-add-rmsnorm 的寄存器驻留思路，
+    在其基础上加一趟量化（不需要额外读，因为在寄存器里已经有值）。
+
+# 能力边界：
+#   ✅ 能验正确性
+#   ❌ 不能出性能结论（无竞品候选）
+#   ❌ 不能算 S 项

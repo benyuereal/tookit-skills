@@ -1,0 +1,26 @@
+# op-fusion-add-rmsnorm-quant 形状档位
+# 三个 benchmark 形状 + tiny 自检。S 项要求 geomean <= 1.0。
+
+decode-m1:
+  params:
+    M: 1
+    H: 4096
+  note: "单 token decode：固定开销占比最高"
+
+decode-m32:
+  params:
+    M: 32
+    H: 4096
+  note: "小 batch decode"
+
+prefill-8k:
+  params:
+    M: 8192
+    H: 4096
+  note: "prefill：字节数主导"
+
+tiny:
+  params:
+    M: 4
+    H: 256
+  note: "只做正确性门自检；H 不是 THREADS*8*VEC 的倍数，只能跑 ref 变体"

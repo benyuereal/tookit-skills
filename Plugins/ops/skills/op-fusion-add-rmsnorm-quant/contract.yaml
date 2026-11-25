@@ -1,0 +1,62 @@
+# op-fusion-add-rmsnorm-quant 契约
+#
+# 三合一：残差相加 + RMSNorm + 动态量化（per-tensor，int8）。
+# 状态 draft：门已定义；缺的是本机可跑的候选实现（见 candidates.yaml）。
+
+op: fusion-add-rmsnorm-quant
+version: 1
+math: "y = quant(w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps)))；residual 原地更新为 (x+r)"
+
+shapes:
+  x: [M, H]
+  residual: [M, H]
+  weight: [H]
+  y: [M, H]
+  y_scale: [M]          # 每行动态量化的 scale
+  res_out: [M, H]       # 原地写回的 (x+r)
+
+dtypes:
+  x: bfloat16
+  residual: bfloat16
+  weight: bfloat16
+  acc: float32
+  y: int8               # 量化输出
+  y_scale: float32
+  res_out: bfloat16
+
+layout_constraints:
+  - H 必须是 THREADS*8*VEC 的整数倍（手写 kernel 的约束，见 kernels/）
+  - residual 原地更新（inplace），调用方须知情
+
+invariants:
+  eps_position: "eps 在 sqrt 内"
+  eps_value: 1.0e-6
+  quant_scope: "per-tensor（每个 (m,) 行一个 scale），不是 per-channel"
+  quant_type: "对称 int8，范围 [-127, 127]（不用 -128，留对称）"
+  residual_semantics: "res_out 写回 (x + r)，不是 r 本身"
+  clamp_before_cast: |
+    量化前先 clamp 到 [-127, 127] 再四舍五入，**不能先 cast 再 clamp**
+    —— 后者在 bf16 下会先溢出成 inf。
+
+traffic:
+  reads: 2
+  writes: 3          # y(int8) + y_scale + res_out
+  note: |
+    融合省的是中间态：不融合时 norm 的输出要先写出去（bf16）再读回来量化，
+    多 2 次 H 维的往返。三合一后只走一趟。
+
+reference:
+  entry: reference
+  module: _common.py
+  note: fp32 累加；量化用对称 int8。
+
+inputs_order: [x, residual, weight]
+outputs_order: [y, y_scale, res_out]
+
+tolerance:
+  max_rel: 1.0e-2
+  note: |
+    量化本身有 int8 精度损失，但那是**被测对象的语义**，不是误差。
+    比较时应该在反量化后比，且 scale 也要对。
+
+status: draft

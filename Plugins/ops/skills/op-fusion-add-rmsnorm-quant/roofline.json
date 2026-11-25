@@ -1,0 +1,15 @@
+{
+  "op": "fusion-add-rmsnorm-quant",
+  "family": "norm",
+  "status": "estimated",
+  "note": "估算值，未标定；分母用 bw-ladder 1:1 档",
+  "peak_gbs": 1680.0,
+  "traffic": {
+    "fused_reads_mb_per_M8192": 201.3,
+    "fused_writes_mb_per_M8192": 100.7,
+    "note": "读 x+r+w(2*M*H*2)，写 y(int8, M*H) + scale + res_out(M*H*2)"
+  },
+  "bound": "memory",
+  "bound_reason": "逐元素 + 行内归约 + 逐元素量化，算术强度极低",
+  "quant_overhead": "int8 输出让写回流量减半（vs bf16），但多了 scale 和 res_out"
+}
