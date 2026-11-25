@@ -4,6 +4,14 @@
 > - `handoff/` —— 交接文档（进来先读这个）
 > - `engineering-iteration/` —— 工程迭代记录（按时间归档，讲「当时以为的问题 vs 实际的问题」）
 
+## 相关文档
+
+| 文档 | 读者 |
+|---|---|
+| [`../docs/HOW-TO-USE.md`](../docs/HOW-TO-USE.md) | **用的人** —— 从哪进、怎么驱动、什么时候该找别的 skill |
+| [`../docs/ENGINE.md`](../docs/ENGINE.md) | 改代码的人 —— 架构边界与依赖规则 |
+| [`../docs/DEBT.md`](../docs/DEBT.md) | 所有人 —— D1–D11 技术债，每条都有机器判据 |
+
 ## 为什么单独开这个目录
 
 根目录原来只有一份 `HANDOFF.md`（2026-10-30，讲评测框架），
