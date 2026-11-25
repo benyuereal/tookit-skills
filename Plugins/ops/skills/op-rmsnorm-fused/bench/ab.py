@@ -11,6 +11,8 @@
 """
 import argparse
 import json
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -136,6 +138,19 @@ def main(argv=None):
     p.add_argument("--warmup-ms", type=float, default=25.0)
     p.add_argument("--rep-ms", type=float, default=50.0)
     a = p.parse_args(argv)
+
+    # **D24**：不要把 `cuda:N`（N>=4）直接传给 torch。
+    # 实测同一张卡、同一个 .so：
+    #     device='cuda:4'                          -> dumped core
+    #     HIP_VISIBLE_DEVICES=4 + device='cuda:0'  -> OK
+    # 纯 torch 路径不受影响，所以很容易误判成"平台坏了"。
+    # 这里把 N 转成环境变量重映射，然后一律用 cuda:0。
+    if a.device:
+        _m = re.match(r"^(?:cuda:)?(\d+)$", str(a.device))
+        if _m and int(_m.group(1)) > 0:
+            os.environ["HIP_VISIBLE_DEVICES"] = _m.group(1)
+            os.environ["CUDA_VISIBLE_DEVICES"] = _m.group(1)
+            a.device = "cuda:0"
 
     shape = C.load_shape(a.shape)
     params = dict(shape.get("params") or {})
