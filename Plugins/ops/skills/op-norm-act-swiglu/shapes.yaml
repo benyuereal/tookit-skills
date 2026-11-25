@@ -4,3 +4,15 @@ s0:
     H: 4096
     I: 2048
   note: bootstrap 生成
+s1:
+  params:
+    M: 4096
+    H: 4096
+    I: 2048
+  note: 半批量，验证 M 方向扩展性
+s2:
+  params:
+    M: 16384
+    H: 4096
+    I: 2048
+  note: 双批量，验证大 M 下是否仍吃满带宽

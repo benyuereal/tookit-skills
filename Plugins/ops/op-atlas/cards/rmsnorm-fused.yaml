@@ -99,6 +99,13 @@ last_verdict:
     ratio: 0.894
     significant: true
     verdict: 比 lightop 快 10.6%（显著，event_isolated 可 claim）
+    reproduce_note: |
+      **2026-11-25 复测未能重现该结论**（D22）。同机同变体：
+        本次实测 auto-fusedadd-h4096-t64-v8 = 0.4190ms
+        卡片记录                              = 0.1805ms（差 2.3 倍）
+        同次基线 lightop-fused                = 0.1992ms（与卡片 0.2019ms 一致）
+      基线对得上、候选对不上，说明**不是环境问题，是变体本身或记录有误**。
+      在查清之前，这条 1.12x / 0.894 的结论**不应再被引用**。
     semantics_aligned: true
     alignment:
       inputs: 2

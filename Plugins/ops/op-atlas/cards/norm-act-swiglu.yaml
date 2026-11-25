@@ -142,10 +142,11 @@ last_verdict:
     effort: 小（改一处归约实现，不动流水）
     falsifier: 若减少 barrier 后耗时不变，则瓶颈在访存而非同步
   geomean:
-    value: 0.494
+    value: 0.5002
     shapes:
     - s0 (M=8192)
-    - holdout (M=13312)
+    - s1 (M=4096)
+    - s2 (M=16384)
     coverage: M=8192 与 M=13312 两档；holdout 融合 0.21552ms 达 73% 地板（比 public 的 69% 更高）
     vs: 基线 two-step（lightop 两步法）。**M=13312 的基线未同口径实测** —— holdout 只验了融合侧的绝对性能（272.6MB
       / 0.21552ms = 1265 GB/s），比值沿用 public 档的 0.494，标 low_confidence。
