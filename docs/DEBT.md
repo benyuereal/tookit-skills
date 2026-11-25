@@ -1156,3 +1156,40 @@ os.environ["HIP_VISIBLE_DEVICES"] = str(args.device)
 教训：当结论是「环境/平台坏了」时，先问一句
 **「有没有可能只是我用错了？」** —— 换一个参数传递方式，
 成本 10 秒，可能省掉一整轮错误判断。
+
+---
+
+## D24 收尾 · 影响面确认：只有手写 HIP kernel 的算子受影响
+
+修完 `op-rmsnorm-fused/bench/ab.py` 后，同条件测了其他 6 个算子
+（`--device cuda:5`，同样参数）：
+
+```
+op-moe-topk-gating     OK
+op-moe-w8a8            OK
+op-rmsnorm-fused       OK   <- 修过
+op-fused-add-rmsnorm   OK
+op-sparse-mla          OK
+op-gemm-fp8            OK
+```
+
+**其他算子不受影响。** 原因：
+
+- `fused-add-rmsnorm` 的 HIP kernel 通过 `_hip_runner` 调用，
+  也在 `cuda:N` 下跑，但**没崩** —— 说明不是「所有手写 HIP kernel」都中招
+- 更可能的原因是 `rmsnorm-fused` 的 kernel 用 `THREADS=64`（单 wave），
+  对设备上下文更敏感；`fused-add-rmsnorm` 用 `THREADS=256`（4 wave）
+
+**这条未验证，但提供了一个可检验的假设**：
+小 block（<= 1 个 wave）的 kernel 在 `cuda:N`（N>=4）下更易出问题。
+
+### 当前的正确处理
+
+不管根因是什么，**用 `HIP_VISIBLE_DEVICES` 重映射 + `cuda:0` 是安全的做法**，
+已应用到 `op-rmsnorm-fused/bench/ab.py`。其他算子暂不改动 ——
+它们目前没问题，改了反而引入未验证的变化。
+
+### 遗留待查
+
+- 为什么 `THREADS=64` 的 kernel 在 `cuda:4` 下会崩，`THREADS=256` 不会
+- 这是驱动 bug 还是我们的 kernel 有隐藏的未定义行为
