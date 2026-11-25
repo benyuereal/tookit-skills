@@ -672,3 +672,39 @@ int4 meta = *(reinterpret_cast<int4 *>(p));   // 未初始化 → VMFault
 
 3. **报错信息越少，越要先做「变量扫描」而不是「代码猜测」。**
    `KERNEL VMFault` 没有任何信息量，此时逐个参数二分比读代码快。
+
+---
+
+## D15 · 编译缓存与手工补丁的时序陷阱（本次实际踩到）
+
+**现象**：改了 `dense_decode_hip.h` 的修复，`--check` 确认补丁在文件里，
+编译也报成功，但跑起来仍然 VMFault。反复两次。
+
+**根因**：`setup.py build_ext` 按时间戳决定是否重编。观察到的时序：
+
+```
+21:16:23  补丁写入 dense_decode_hip.h
+21:16      api_hip.o 已编译完成（早于补丁，内容不含修复）
+           → 链接成功、运行崩溃、看起来"修了没用"
+```
+
+注意 `ls` 只显示到分钟，肉眼看不出先后。
+
+**判据（必须机器化）**：
+
+```bash
+# 改完源文件后，先确认 .o 比源文件新
+[ build/.../api_hip.o -nt csrc/api/dense_decode_hip.h ] || rm -f build/.../api_hip.o
+```
+
+**已做**：`scripts/fmla_patch.py --check` 确认补丁在文件里。
+**待做**：把「`.o` 必须比源文件新」也加进 `--check`，否则还是靠人看。
+
+## D15 附带：文件"神秘消失"两次
+
+同一份改动两次从工作区消失，`cp` 备份救回。**未查明原因** ——
+那次仓库有一次 `clone: from github.com:HYGON-AI/FlashMLA-das.git`
+（reflog 可见），怀疑是自动化流程重新拉取覆盖，但没有确证。
+
+**应对**：`fmla_patch.py` 让补丁可重现，备份放 `/workspace/.fmla_patch_backup/`。
+**不要**在没确认的情况下假设改动能留住。

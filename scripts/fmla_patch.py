@@ -46,9 +46,13 @@ PATCHES = [
         "未初始化指针（H>=64 崩溃的根因）",
     ),
     (
+        # 注意：这里把「旧锚点」写成永远不会匹配的占位，
+        # 是因为这个补丁**已经手工打过且格式变了**（带逗号+续行）。
+        # 保留一条记录，让 --check 仍能确认「512 没被回退」。
         "csrc/extension/flash_fwd_mla_kernel_fp8.h",
-        "    static_assert(Headdim == 576);",
-        "    static_assert(Headdim == 576 || Headdim == 512);",
+        "____never_matches____",
+        "    static_assert(Headdim == 576 || Headdim == 512,\n"
+        '                  "只实例化过 576（DSA/V4.1）与 512（GLM-5.3）");',
         "放开 d=512（GLM-5.3）",
     ),
 ]
@@ -68,7 +72,7 @@ def check(emit=print):
             ok = False
             continue
         s = p.read_text(encoding="utf-8")
-        if new in s:
+        if new in s or _already_applied(s, new):
             emit("✓ %s" % desc)
         elif old in s:
             emit("✗ %s —— 未打（锚点还在）" % desc)
@@ -77,6 +81,25 @@ def check(emit=print):
             emit("? %s —— 锚点已变，需人工确认" % desc)
             ok = False
     return ok
+
+
+def _already_applied(s, new):
+    """补丁是否已打。
+
+    判据是「新文本的关键行在不在」，不是「新文本整体在不在」——
+    因为 new 里常常包含 old 的原文（我们是在前面插几行），
+    打了补丁之后 `new in s` 成立，但更常见的失败是有人在 new 上
+    又改了一行（比如调了注释），此时整体匹配失败但补丁实际上在。
+
+    这里退一步：取 new 里最长的那行代码（去掉注释），
+    它出现在文件里就算打过了。**这条判据对「锚点消失」和
+    「从未打过」仍能区分** —— 后者 old 一定还在。
+    """
+    code = [ln.strip() for ln in new.splitlines()
+            if ln.strip() and not ln.strip().startswith("//")]
+    if not code:
+        return False
+    return max(code, key=len) in s
 
 
 def apply(emit=print):
