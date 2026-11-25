@@ -928,3 +928,49 @@ H=32 ✓   H=63 ✓   H=64 ✗
 
 **最重要的一条**：`SKIP_COMBINE` 这种对照实验，花 2 分钟就能排除一个方向，
 我应该早点做，而不是连着修了 D19/D20 两个不相干的问题。
+
+---
+
+## D24 · 自研 kernel 在 HCU[4-7] 上 Invalid address access（厂商库与 torch 正常）
+
+**状态**：🔴 未解决。2026-11-26 02:55 发现。
+
+### 现象（同一份代码，只换设备）
+
+| 实现 | HCU[0] | HCU[4] |
+|---|---|---|
+| 纯 torch（`(x*2).sum()`） | ✓ | ✓ |
+| `lightop-fused`（厂商库） | ✓ | ✓ 0.0309ms |
+| `fused-add-rmsnorm` 的 HIP kernel | ✓ | ✓ 0.0456ms |
+| **`rmsnorm-fused` 的 `fused-hip-reg`** | ✓ | ✗ Invalid address access |
+| **`rmsnorm-fused` 的 `fused-3pass-triton`** | ✓ | ✗ Invalid address access |
+
+### 这条排除了什么
+
+- **不是设备坏了**：同一张 HCU[4] 上纯 torch 和厂商库都正常
+- **不是环境问题**：`fused-add-rmsnorm` 的 HIP kernel 在 HCU[4] 上正常
+- **不是我们全仓库的问题**：只有 `op-rmsnorm-fused` 的自研变体崩
+
+### 剩下的可能（未验证）
+
+1. **`rmsnorm-fused` 的 kernel 有越界访存**，只是 HCU[0-3] 上恰好没踩到。
+   `Invalid address access` 是典型的越界症状。
+2. **两批卡的硬件/驱动细节不同**（HCU[0-3] vs [4-7] 可能是不同 NUMA 或固件版本），
+   让一个未定义行为从「侥幸不崩」变成「必崩」。
+
+### 为什么这条值得单独记
+
+它在 HCU[0-3] 上**一直是绿的**，所有历史测量都在那些卡上做的。
+如果 kernel 真有越界，那些数据虽然数值上可能没问题，
+但**基础是不稳的** —— 换个卡就崩。
+
+### 下一步
+
+1. 用 `hip-memcheck` 或类似工具在 HCU[0] 上先扫一遍越界
+   （即使不崩，工具也能报）
+2. 查 `fused_add_rmsnorm_reg.hip` 的 grid/block 计算，
+   特别是 `BLOCK_ROWS` 与 `M` 不是整数倍时的边界处理
+3. 同时在 HCU[0] 和 HCU[4] 上跑同一个正确性用例，对比输出
+
+**在此之前，`op-rmsnorm-fused` 的所有性能数字都只在 HCU[0-3] 上成立，
+不应视为可移植的结论。**
