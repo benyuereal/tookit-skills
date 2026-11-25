@@ -24,8 +24,24 @@
 
 - id: lightop-gemm
   what: lightop.gemm
-  status: todo
-  why: 已确认 lightop 有 gemm 符号，但**签名与性能都未测**。
+  status: blocked
+  known_issue: |
+    **2026-11-26 实测：K > 256 时结果错误。**
+      K=256  (tiny)        误差 0.001574  合格
+      K=4096 (decode-m32)  误差 1.000000  **完全错**
+      K=4096 (prefill-8k)  误差 1.000000  **完全错**
+
+    入参约定也踩过：它吃 (A[M,K], B[N,K])，不是 (A, B[K,N])。
+    传错时误差 1.36，转置后 tiny 才合格。
+
+    adapter 里已加护栏：K>256 直接抛异常，**不返回错误结果**。
+    悄悄算错比报错危险得多。
+
+    root cause 未查（是 lightop 的 bug 还是我们用法不对，未知）。
+    在查清前这个候选不可用。
+  why: |
+    另有一个反向教训：第一次测（传参错误时）跑出「快 9.3 倍」，
+    差点当成重大发现。**没验正确性的性能数字一文不值。**
 
 - id: deepgemm
   what: deepgemm-das 的 bf16 路径

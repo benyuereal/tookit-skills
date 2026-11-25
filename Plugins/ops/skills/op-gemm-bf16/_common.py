@@ -7,7 +7,7 @@
 """
 import torch
 
-VARIANTS = ("ref-fp32", "torch-mm")
+VARIANTS = ("ref-fp32", "torch-mm", "lightop-gemm")
 INPUT_NAMES = ("A", "B")
 
 
@@ -66,6 +66,26 @@ def get_runner(name, **kwargs):
         def _mm(A, B, **kw):
             return (A @ B).to(torch.bfloat16)
         return _mm
+    if name == "lightop-gemm":
+        def _lo(A, B, **kw):
+            """lightop.gemm 吃 (A[M,K], B[N,K])，**不是** (A, B[K,N])。
+
+            实测（2026-11-26）：直接传 B[K,N] 误差 1.36（完全错），
+            传 B.T 误差 0.0016（合格）。契约规定 A 是 [M,K]、B 是 [K,N]，
+            所以这里必须转置 —— 转换放在 adapter 内部，不改变契约。
+            """
+            import lightop
+            if A.shape[1] > 256:
+                # **实测（2026-11-26）：lightop.gemm 在 K > 256 时结果错误。**
+                #   K=256  -> 误差 0.0016（合格）
+                #   K=4096 -> 误差 1.0000（完全错）
+                # 拒绝跑，不返回错误结果 —— 悄悄算错比报错危险得多。
+                raise RuntimeError(
+                    "lightop.gemm 在 K=%d 时结果不可信（K=256 正确、K=4096 错），"
+                    "见 candidates.yaml 的 known_issue。已拒绝运行，避免污染数据。"
+                    % A.shape[1])
+            return lightop.gemm(A, B.t().contiguous()).to(torch.bfloat16)
+        return _lo
     raise ValueError(name)
 
 
