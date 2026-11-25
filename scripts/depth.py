@@ -34,6 +34,9 @@ U 达成率
   没有 utilization 数据 → 0。**不许用 speedup 冒充**——速度比不知道离上限多远。
 
 S 跨 shape
+  geomean > 1.0（整体更慢）→ 0.0  **方向判据，2026-11-26 加**
+    S 衡量的是「多形状下的通用性」。多形状测出整体更慢，
+    证明的是这个实现不通用，不是它通过了通用性检验。
   geomean 有 >=3 个 shape → 1.0；2 个 → 0.5；1 个或无 → 0.0
 
 R 轮次
@@ -137,8 +140,16 @@ def shape_score(card):
     lv = card.get("last_verdict") or {}
     gm = lv.get("geomean") or {}
     shapes = gm.get("shapes") or []
-    if len(shapes) >= 3 and gm.get("value") is not None:
-        return 1.0, "geomean 覆盖 %d 个 shape" % len(shapes)
+    val = gm.get("value")
+    # **方向判据**（2026-11-26 业主批准）。S 衡量的是「多形状下的通用性」。
+    # 如果多形状测出来整体更慢（geomean > 1），那证明的是「这个实现不通用」，
+    # 不是「它通过了通用性检验」。旧版只看形状个数，geomean=0.5（快一倍）
+    # 和 1.45（慢 45%）给一样的分 —— 实测让 rmsnorm-fused 拿 94 分冒充标杆。
+    if isinstance(val, (int, float)) and val > 1.0:
+        return 0.0, ("geomean=%.3f > 1（整体更慢），多形状证明的是不通用"
+                     % val)
+    if len(shapes) >= 3 and val is not None:
+        return 1.0, "geomean 覆盖 %d 个 shape（%.3f）" % (len(shapes), val)
     if len(shapes) == 2:
         return 0.5, "geomean 覆盖 2 个 shape"
     # 退而求其次：看 regimes 有几档
@@ -251,13 +262,31 @@ def selftest():
     assert abs(u - 1.0) < 1e-9, u
     print("[ok] U 达成率：speedup 不给分 / util 0.85 封顶")
 
-    # S：geomean 形状数
-    s, _ = shape_score({"last_verdict": {"geomean": {"value": 1.1,
+    # S：geomean 形状数（用 <1 的值，否则会先被方向判据拦下）
+    s, _ = shape_score({"last_verdict": {"geomean": {"value": 0.5,
                                                      "shapes": ["a", "b", "c"]}}})
     assert s == 1.0, s
-    s, _ = shape_score({"last_verdict": {"geomean": {"value": 1.1, "shapes": ["a"]}}})
+    s, _ = shape_score({"last_verdict": {"geomean": {"value": 0.5, "shapes": ["a"]}}})
     assert s == 0.0, s
     print("[ok] S 跨 shape：3 个=1.0 / 1 个=0")
+
+    # S 的方向判据（2026-11-26 加）：整体更慢时多形状不算通过
+    s, why = shape_score({"last_verdict": {"geomean": {
+        "value": 1.4496, "shapes": ["a", "b", "c"]}}})
+    assert s == 0.0, (s, why)
+    s, why = shape_score({"last_verdict": {"geomean": {
+        "value": 1.1, "shapes": ["a", "b", "c"]}}})
+    assert s == 0.0, (s, why)
+    s, why = shape_score({"last_verdict": {"geomean": {
+        "value": 1.0001, "shapes": ["a", "b", "c"]}}})
+    assert s == 0.0, (s, why)
+    s, why = shape_score({"last_verdict": {"geomean": {
+        "value": 1.0, "shapes": ["a", "b", "c"]}}})
+    assert s == 1.0, ("恰好 1.0（打平）应算通过边界", s, why)
+    s, why = shape_score({"last_verdict": {"geomean": {
+        "value": 0.5002, "shapes": ["a", "b", "c"]}}})
+    assert s == 1.0, (s, why)
+    print("[ok] S 方向判据：geomean>1 判 0（哪怕 3 个形状）；=1.0 与 <1 判满分")
 
     # 总分的量纲
     fake = {"status": "measured", "family": "norm",

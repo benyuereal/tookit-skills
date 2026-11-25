@@ -1,5 +1,5 @@
 id: rmsnorm-fused
-title: 融合 RMSNorm（含残差）
+title: 融合 RMSNorm（含残差）· 仅 prefill 适用，decode 劣于厂商库
 family: elementwise
 math: y = w * ((x + r) / sqrt(mean((x+r)^2, -1) + eps))
 status: measured
@@ -95,7 +95,7 @@ last_verdict:
       说明这不是变体选错，是融合实现在小 batch 下的固有劣势
       （固定开销摊不开，lightop 的 kernel 启动/调度更轻）。
       **本卡当前不满足「比厂商库快」的目标，S 项不予 claim。**
-  conclusion: 自研寄存器驻留实现相对 lightop 快 1.12x（event_isolated 可 claim）
+  conclusion: 仅 prefill 档快于 lightop，decode 两档均更慢，整体 geomean>1 判定不通用
   next_probe:
     surface: none
     none_reason: 三条 memory 类攻击面已逐一实测：fusion-boundary 已在用（2读2写=268.4MB，与 lightop 等语义）；cross-lane-fold

@@ -104,8 +104,11 @@ def main(argv=None):
     for cid, val, n in hits:
         print("  %-28s geomean=%.4f  shapes=%d" % (cid, val, n))
     print("\n这不是说数据造假 —— 数字都是真的。")
-    print("是 shape_score 只看形状个数、不看方向造成的口径问题。")
-    print("要修需改 scripts/depth.py 的 shape_score，属口径变更，需单独决策。")
+    print("是「多形状整体更慢」这类卡。")
+    print()
+    print("2026-11-26 已按业主决策修 shape_score：geomean>1.0 时 S=0。")
+    print("本脚本现在的作用是**独立交叉验证** —— 它不看 shape_score 的实现，")
+    print("直接按 geomean 判断，可用来验收新判据有没有漏网的卡。")
     return 1 if a.strict else 0
 
 
