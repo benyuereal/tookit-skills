@@ -87,6 +87,10 @@ last_verdict:
         decode-m32  0.0493ms  2.0131x  （慢 101%）
         prefill-8k  0.1789ms  0.8930x  （快 10.7%）
       geomean = 1.4496。
+      2026-11-26 05:20 在 HCU[4] 独立重测（event_isolated，3 轮）：
+        decode-m1 1.6579 / decode-m32 1.5758 / prefill-8k 0.9042
+        geomean = 1.3318（与首次 1.4496 差 8.1%，同向同量级）
+      **两次独立测量一致，S=0 的判定稳定，不是单次偶然。**
     vs: |
       **整体比 lightop 慢 45%。** 只有 prefill-8k 这一个档位占优。
       另两种自研变体在 decode 上同样劣于 lightop：
