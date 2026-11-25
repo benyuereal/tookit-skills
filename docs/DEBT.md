@@ -974,3 +974,60 @@ H=32 ✓   H=63 ✓   H=64 ✗
 
 **在此之前，`op-rmsnorm-fused` 的所有性能数字都只在 HCU[0-3] 上成立，
 不应视为可移植的结论。**
+
+---
+
+## D24 更新 · 已定位到最小复现：64 线程 + `__shfl_down` 在 HCU[4-7] 上崩
+
+**这是 2026-11-26 04:00 的新结论，推翻了我之前的判断。**
+
+### 最小复现（35 行，与 rmsnorm-fused 无关）
+
+```cpp
+#include <hip/hip_runtime.h>
+__global__ void k64(float* o) {
+  float a = threadIdx.x;
+  for (int s = 32; s > 0; s >>= 1) a += __shfl_down(a, s);
+  if (threadIdx.x == 0) o[blockIdx.x] = a;
+}
+extern "C" void run(float* o, int g) { k64<<<g, 64>>>(o); }
+```
+
+```
+HCU[0]  o[0] = 2016  ✓ 正确（0+1+...+63）
+HCU[4]  dumped core  ✗
+```
+
+**没有 rmsnorm、没有 uint4、没有 share memory、没有 syncthreads。**
+只有 64 个线程和一次 64 宽 wave 的 shuffle 归约。
+
+### 这条排除了什么（推翻我之前的记录）
+
+| 我之前说的 | 现在知道 |
+|---|---|
+| 「`rmsnorm-fused` 的 kernel 有越界访存」 | 错。最小复现里没有任何访存 |
+| 「`op-rmsnorm-fused` 的问题」 | 错。这是**平台级**问题 |
+| 「`.so` 与源码不一致」 | 已验证：强制重编后仍崩 |
+
+### 两个待验证的方向
+
+1. **`__shfl_down` 在 64 宽 wave 上的 offset 上限。**
+   ROCm 文档里 `__shfl_down` 的 offset 是 [0, 31]（32 宽 wave 语义）。
+   在 64 宽 wave 上传 32 可能越界读 lane 64-95 —— 那超出 warp 范围。
+   **这最可能是根因。** 正确写法应该是 offset 从 32 开始但只对前 32 lane，
+   或者用 `wavefront` 大小宏而不是硬编码。
+
+2. **为什么 HCU[0-3] 上没崩。**
+   同样越界，一批卡崩、一批卡不崩 —— 典型的未定义行为。
+   可能两批卡固件/驱动版本不同，对越界 shuffle 的容忍度不同。
+
+### 影响面（比原来想的大）
+
+**所有用 `THREADS=64` 或小于 wave 大小、且用 `__shfl_down` 跨 32 归约的 kernel
+都受影响。** 需要全仓库扫一遍。
+
+### 下一步
+
+1. 验证 offset >= wave/2 是否是根因（改成 `warpSize/2` 起步）
+2. 全仓 grep `__shfl_down`，检查有没有超过 31 的 offset
+3. 把「`__shfl_down` offset 不得超过 warpSize/2 - 1」写进 hw_kb
