@@ -73,6 +73,7 @@ data/ references/ scripts/ docs/   共享数据层（跨 skill 引用）
 | CUDA crash / 分布式 hang / 训练精度 NaN / vLLM 精度 | debug-cuda-crash、debug-distributed-hang、dcu-train-precision、dcu-vllm-precision、dcu-engine-precision-localization | dcu-troubleshooting |
 | CI 工作流 / 环境变量规范 / 代码风格 / 模型接入 cookbook | ci-workflow-guide、env-var-conventions、cookbook-* 等 | dcu-engineering |
 | 点名某个算子 / 建算子卡 / 查某算子历史结论 / 判断 kernel 改动是否算通过 / 推进一轮优化 / **先算出预测再写代码** / 选哪个算子库、流水线怎么排 / 手写 HIP 慢但数值对 | op-sparse-mla、op-moe-w8a8、op-gemm-fp8；方法见 op-contract、op-bench、op-profiling、op-gate、op-optimize、op-stack-design、op-roofline、op-hip-compile；**同一问题只信一处，见 `Plugins/ops/SKILL.md` §5.1 唯一权威表** | ops |
+| **引擎级源码改动** / indexer 打分精度降级 / fp8 KV 直读删 gather / sglang 换 kernel / FlashMLA 加布局实例 | op-source-patch（两条已落地配方见 `Plugins/ops/skills/op-source-patch/references/engine-recipes.yaml`）；算子选型回 op-sparse-mla | ops |
 
 ## 安装与使用
 

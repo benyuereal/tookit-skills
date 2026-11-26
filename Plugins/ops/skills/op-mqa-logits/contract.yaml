@@ -1,0 +1,81 @@
+# op-mqa-logits 契约
+#
+# DSA（DeepSeek Sparse Attention）的 indexer 打分。
+# 生产上是 v2→v3 prefill 快 2.5 倍的最大单项来源：
+#   BF16 mqa_logits 占 prefill 35.0%、decode 32.5%
+#   INT8 mqa_int8   只占 4.9% / 6.7%，单次快 6.6×
+#   （数据来源：optimize-glm53/OPERATOR-DIFF-V2-V3.md）
+#
+# 状态 draft：门已定义；缺的是竞品候选（见 candidates.yaml）。
+
+op: mqa-logits
+version: 1
+math: "logits[i,j] = sum_h relu(Q[i,h,:] . K[j,:]) * W[i,h]"
+
+shapes:
+  q: [B, L, H, D]
+  k: [S, H, D]
+  w: [B, L, H]
+  logits: [B, L, S]
+
+dtypes:
+  q: bfloat16          # BF16 版；INT8 版见 variants
+  k: bfloat16
+  w: bfloat16
+  acc: float32
+  logits: float32
+
+layout_constraints:
+  - q 是 [B, L, H, D]（L 是 query 长度，decode 时 =1）
+  - k 是 [S, H, D]（S 是 KV 长度，与 L 独立）
+  - **H=32, D=128 是 DSA 的固定配置**，不是可调参数
+  - logits 是 [B, L, S]，第 j 维是 KV 位置
+
+invariants:
+  relu_position: "relu 在每个头的点积之后、乘 W 之前：sum_h relu(q.k) * w"
+  # 等价写法：先 relu 再加权，不是先加权再 relu
+  relu_not_abs: "用 relu（负数置 0），不是 abs 也不是 square"
+  weight_scope: "W 是 per-(b,l,h) 的标量，不是 per-D 的向量"
+  accumulate_dtype: "fp32 累加"
+  heads_fixed: "H=32 固定（DSA indexer 的头数）"
+
+traffic:
+  reads: 3          # q, k, w
+  writes: 1         # logits
+  note: |
+    主流量是 K：S*H*D*2 字节。decode 时 L=1，Q 很小，
+    **几乎整个成本都在读 K**（S=32768 时 K = 32768*32*128*2 = 268MB）。
+    prefill 时 L 大，Q 也可观，但 K 仍占主导。
+    **这是 memory-bound 算子，不是 compute-bound** —— 每个 K 元素只被用 L 次。
+
+reference:
+  entry: reference
+  module: _common.py
+  note: |
+    用 torch 逐条实现上式，fp32 累加。
+    **刻意用显式 relu + einsum，不用 torch 的 fused 实现** —— 后者是被测对象。
+
+inputs_order: [q, k, w]
+outputs_order: [logits]
+
+tolerance:
+  max_rel: 2.0e-2
+  note: |
+    bf16 累加 fp32。S 很大时误差会累积，2% 是 5 个 ULP 量级。
+    **INT8 版（若接入）容差要另算** —— 量化误差不是这个量级，
+    见 candidates.yaml 里 mqa_int8 的 note。
+
+# ── 这张卡的核心命题 ────────────────────────────────────────
+card_kind: selection
+selection_note: |
+  本卡不是「写一个更快的打分 kernel」，而是回答：
+  **BF16 → INT8 的 6.6× 是怎么来的，能不能复现？**
+
+  OPERATOR-DIFF 里 v3 用 lightop::mqa_int8 替掉了 BF16 版，
+  单次 29.96ms → 4.54ms。差 6.6× 远超「int8 省一半带宽」能解释的 2×，
+  **说明还叠加了实现差异**（可能是分块、也可能是根本没算全）。
+
+  本卡要先验证这个 6.6× 是不是真的同语义 ——
+  如果 INT8 版漏算了什么，那 6.6× 就是假的。
+
+status: draft

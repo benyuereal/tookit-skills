@@ -129,6 +129,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | 怎么量（口径、MAD、显著性） | `ops/op-bench` + `scripts/opbench.py` | — |
 | 天花板是多少 | `ops/op-roofline` 的 `derive.py` | 任何别处写的达成率都必须引用它 |
 | 这个算子是什么 / 上次结论 | `ops/op-<算子>` 卡 + `data/ops/registry.json` | — |
+| 引擎级改动怎么落（精度路径 / 布局 / dispatch） | `ops/op-source-patch` 的 `Plugins/ops/skills/op-source-patch/references/engine-recipes.yaml` | 算子卡只记结论，不重复配方 |
 | 候选队列 / 中断续跑 | `ops/op-optimize` 的 `loop.py` | `dcu-op-optimization` 的 `candidates.jsonl` 是历史格式，**已被 `loop.py` 取代** |
 | PMC 怎么读 | `ops/op-profiling` + `scripts/pmc.py` | — |
 | 实测流式带宽 / 访问模式上限 | `scripts/probe_stream.py` / `scripts/probe_pattern.py` | 达成率分母的唯一来源：前者给 read/copy/write 流式峰值，后者给「行内连续 X 字节」的 pattern ceiling |
@@ -151,7 +152,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-optimize` | — | 怎么找下一个改动：候选队列→单实验→机器判定→落盘记账；**单模型、可中断、不重复劳动**（配 `loop.py`） |
 | `op-stack-design` | — | 选哪个库、流水线怎么排：十一库画像（结构定律/可调面/已知遗留税/何时选它）+ 十条流水线定律，**写代码前排掉结构性不可行的设计**；单算子突破换成整库选型 |
 | `op-roofline` | — | 改动从哪来：物理常数→推导规则→算子模型，**先出预测与绑定约束再写代码**（配 `derive.py` / `hipbudget.py`）；写不出预测说明还没理解为什么慢 |
-| `op-source-patch` | — | **源码级改动**：定位→取源→编译→改(patch)→回归→留痕六步。把「卡片说哪个实现好」和「源码怎么改掉编出来验回去」接上；本地已有源码不重拉；只允许 patch 不直接改树 |
+| `op-source-patch` | — | **源码级改动**：定位→取源→编译→改(patch)→回归→留痕六步。把「卡片说哪个实现好」和「源码怎么改掉编出来验回去」接上；本地已有源码不重拉；只允许 patch 不直接改树。**含两条已落地的引擎级配方**（indexer 打分降精度 / fp8 KV 直读删 gather，见 `references/engine-recipes.yaml`） |
 | `op-hip-compile` | — | 手写 HIP 的编译调优：为什么要 aicc 不要 hipcc、怎样**逐字镜像** tilelang 的 `-mllvm` 集（含 FAST_MATH 条件项，漏一条慢 1.16×/CTA 而数值不变）、从 .so 设备 ELF 读 VGPR 算占用率（配 `derive_flags.py` / `inspect_so.py`） |
 | `op-sparse-mla` | `tuned` | 稀疏 MLA 前向（DSA）：q/kv/indices 契约、tilelang / flash_mla / 生产三变体、-1 哨兵语义 |
 | `op-moe-w8a8` | `draft` | FP8 MoE（routed GEMM1/GEMM2 + silu-mul + moe_sum）：M 分档、融合收益判据 |

@@ -1,6 +1,6 @@
 ---
 name: op-sparse-mla
-description: "稀疏 MLA 前向（DeepSeek Sparse Attention / DSA）：q[S,H,576] × kv[SKV,1,576] 按 indices[S,1,topk] 稀疏 gather 后做 MLA，输出[S,H,512]。覆盖四类实现（生产 vLLM aiter、tilelang-hygon、flash_mla、fp32 参考）的适用面、形状档位、-1 哨兵语义、sm_scale=1/sqrt(640) 口径与已知坑。触发场景：稀疏注意力 kernel 选型、topk 相关性能问题、indexer 链路优化、d_v=512 MLA 精度对齐、-1 哨兵布局/num_split 整除排查、跨实现站位的索引池口径。不适用：A/B 的噪声与统计口径（3×MAD、跨卡 ratio）走 op-bench；手写 HIP 的编译 flag 与 VGPR 读法走 op-hip-compile；上界预测与绑定约束走 op-roofline。"
+description: "稀疏 MLA 前向（DeepSeek Sparse Attention / DSA）：q[S,H,576] × kv[SKV,1,576] 按 indices[S,1,topk] 稀疏 gather 后做 MLA，输出[S,H,512]。覆盖四类实现（生产 vLLM aiter、tilelang-hygon、flash_mla、fp32 参考）的适用面、形状档位、-1 哨兵语义、sm_scale=1/sqrt(640) 口径与已知坑。触发场景：稀疏注意力 kernel 选型、topk 相关性能问题、indexer 链路优化、d_v=512 MLA 精度对齐、-1 哨兵布局/num_split 整除排查、跨实现站位的索引池口径、**decode 里 gather+up-convert 与 sparse decode 并存（fp8 KV 直读、删中间 gather）**。不适用：A/B 的噪声与统计口径（3×MAD、跨卡 ratio）走 op-bench；手写 HIP 的编译 flag 与 VGPR 读法走 op-hip-compile；上界预测与绑定约束走 op-roofline。"
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
@@ -160,6 +160,7 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/x python3 bench/pm
 ## 七、深引用
 
 - 手写 HIP 的编译调优（aicc / `-mllvm` 镜像 / VGPR 复核）：**`op-hip-compile`**（`derive_flags.py` / `inspect_so.py`）
+- **fp8 KV 直读 / 删中间 gather 的引擎级配方**（NOPE512 布局、M-block 重复读陷阱）：`op-source-patch` 的 [`../op-source-patch/references/engine-recipes.yaml`](../op-source-patch/references/engine-recipes.yaml)
 - 接口与自动配置：`<repo>/tilelang-hygon/perf/sparse_mla/sparse_mla_fwd.py`（`tilelang_sparse_fwd` / `sparse_mla_fwd_interface` / `get_best_config`）
 - flash_mla 接口：`flash_mla.flash_mla_sparse_fwd`（`d_v` 仅 512；`indices` 无效值 `-1` 或 `>= s_kv`）
 - 生产链路上下游：mqa_logits（logits）→ `topk` → 本算子 → combine（`num_split` 的归约，若 kernel 内部已做则无独立 kernel）；tilelang 自带 bench 为 `<tilelang-hygon>/perf/sparse_mla/benchmark_sparse_mla.py`。mqa_logits **没有独立算子卡**，

@@ -1,0 +1,38 @@
+# op-mqa-logits 候选实现
+#
+# **状态：只有 reference。**
+# 本卡的核心命题见 contract.yaml 的 selection_note：
+# BF16 -> INT8 的 6.6x 里，多少是带宽、多少是别的？
+
+- id: ref-heavy
+  what: 纯 torch 参考实现（fp32，逐头累加）
+  status: done
+  why: 正确性锚点。**不是竞品**，不能用来算 B 项。
+
+- id: bf16-baseline
+  what: torch 的 BF16 打分（不融合，模拟 v2 的 mqa_logits_128x128x32）
+  status: todo
+  why: |
+    这是 v2 的生产实现。要复现「BF16 -> INT8 快 6.6x」，
+    必须先有一个准确的 BF16 基线。
+
+- id: lightop-mqa-int8
+  what: lightop::mqa_int8::m64（v3 在用）
+  status: blocked
+  blocker: |
+    **需先核对接口与语义**。生产 trace 里的名字是
+    `lightop::mqa_int8::m64<32,true,true,true,true,0,32>`，
+    但 Python 层怎么调、签名是什么、是否要求 q 已量化 —— 全未知。
+
+    核对方式（**不要凭名字猜**）：
+      import lightop
+      [x for x in dir(lightop) if 'mqa' in x.lower()]
+
+    **关键疑点**：6.6x 远超「int8 省一半带宽」的 2x 上限。
+    必须先验证它算的是同一个东西（见 roofline.json 的 quant_ceiling）。
+    如果它漏算了什么，那 6.6x 是假的，不能作为本卡的目标。
+
+# 能力边界：
+#   ✅ 能验正确性（有 reference）
+#   ❌ 不能出性能结论（无竞品候选）
+#   ❌ 不能算 S 项

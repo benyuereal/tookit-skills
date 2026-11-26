@@ -1,0 +1,32 @@
+{
+  "skill": "op-source-patch",
+  "description": "路由评测：true=需要改核心引擎源码（精度路径 / 布局 / dispatch）且要可回滚地编出来验回去；false=只调参、只测量、或从零手写新 kernel，应路由 op-optimize / op-bench / op-hip-compile。",
+  "cases": [
+    {
+      "id": "op-source-patch-t1",
+      "prompt": "GLM-5.3 的 trace 里 paged_mqa_logits（BF16）占 decode 32.5%，服务已经用 --kv-cache-dtype fp8_e4m3 启动；打分只用来选 top-k。怎么改？",
+      "expect": "命中引擎级配方 A（references/engine-recipes.yaml#indexer-score-precision-drop）：确认输出只选择不加权 → 取本地 lightop 源码 → prefill 换 lightop::mqa_int8::m64、decode 换 paged_mqa_logits_int8 → 验收看 top-k 选中集合重合率 + 任务精度门，不是只看 logits maxdiff；回退用 --kv-cache-dtype bf16 对照；提醒 fp8_e4m3 是 main KV + index KV + q 的耦合开关。",
+      "forbid": ["只调 tile 尺寸就能解决", "量化误差只看 maxdiff 就够"]
+    },
+    {
+      "id": "op-source-patch-t2",
+      "prompt": "decode 的 trace 里同时有 decode_gather_and_up_convert_with_indices 和 flash_mla_dsa_decode，两个 kernel 时间接近而且带宽都吃不满，KV cache 本身是 fp8。想删掉中间 gather，怎么落？",
+      "expect": "命中引擎级配方 B（references/engine-recipes.yaml#sparse-mla-fp8-direct）：给 FlashMLA sparse_fp8 加 rope-less ModelType::NOPE512（HEAD_DIM_NOPE=512 / HEAD_DIM_ROPE=0 / NUM_SCALES=4，行宽 528 B 对齐 sglang）→ 编译期剔除 rope 并掩掉 k_idx==2 → host 按 d_qk==512 && kv.size(3)==528 判型 → 补 run_flash_splitkv_* 与 run_flash_fixed_splitkv_* 两条入口 → 删 gather → 环境变量灰度；必须先算「行宽 × NUM_M_BLOCKS」，h64 时每个 M-block 各读一遍会反而更慢。",
+      "forbid": ["把 gather 和 up-convert 融成一个 kernel 就够了", "fp8 一定比 bf16 快"]
+    },
+    {
+      "id": "op-source-patch-t3",
+      "prompt": "要给 sparse_fp8 新增一个 ModelType，编译能过但链接期报 run_flash_splitkv_* 的 undefined symbol，怎么办？",
+      "expect": "命中 §二 六步与配方 B 的落地顺序：先列全 DISPATCH_MODEL_TYPE × DISPATCH_NUM_HEADS 的组合，为实际用到的档位补 instantiations/*.cu，并把新 .cu 加进 setup.py sources；run_flash_splitkv_* 与 run_flash_fixed_splitkv_* 是两条入口都要补；不需要的档位用 if constexpr 限定，其余 TORCH_CHECK(false)；链接错误里的符号名能直接读出缺的 (ModelType, NUM_HEADS)。",
+      "forbid": ["把所有档位全量实例化", "改 kernel 逻辑绕过链接"]
+    },
+    {
+      "id": "op-source-patch-f1",
+      "prompt": "两个现成实现谁更快，跑几次、怎么取中位数和显著性？"
+    },
+    {
+      "id": "op-source-patch-f2",
+      "prompt": "现成库都不支持这个形状，要从零手写一个 HIP kernel，编译 flag 怎么配？"
+    }
+  ]
+}

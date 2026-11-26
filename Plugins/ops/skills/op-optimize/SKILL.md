@@ -78,7 +78,7 @@ kind: tool
 ## 五、候选从哪来
 
 按可信度排序：实测证据 > 结构推理 > 外部经验；另有本项目实测的反直觉清单、隔离单变量手法、判死写法。
-全部细节见 [`references/candidates.md`](references/candidates.md)。
+全部细节见 [`references/candidates.md`](references/candidates.md)；**trace 里出现 `mqa_logits_*` / `paged_mqa_logits` 或 `decode_gather_and_up_convert*` 时，先查其中的「引擎级候选」表**（配方在 [`../op-source-patch/references/engine-recipes.yaml`](../op-source-patch/references/engine-recipes.yaml)）。
 
 ### 5.1 实现路线必须先分流（不要默认从 Triton 起步）
 

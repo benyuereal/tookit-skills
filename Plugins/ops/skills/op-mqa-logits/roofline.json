@@ -1,0 +1,34 @@
+{
+  "op": "mqa-logits",
+  "family": "attention",
+  "status": "estimated",
+  "note": "估算值，未经实测标定。分母用 bw-ladder 的 1:1 档 1680 GB/s。",
+  "peak_gbs": 1680.0,
+  "peak_source": "bw-ladder.yaml rw_1to1 档实测（非标称 1100）",
+  "bound_by_regime": {
+    "decode-m1": {
+      "bound": "memory",
+      "reason": "L=1 时算术强度=2*H*D=8192 FLOP / 256 B = 32 FLOP/B，远低于 roofline 拐点",
+      "traffic_mb": 268.4,
+      "note": "K 是 32768*32*128*2 = 268MB，Q 可忽略"
+    },
+    "prefill-8k": {
+      "bound": "mixed",
+      "reason": "L=S=8192 时算术强度升到 2*H*L*S*D/((L*H*D+S*H*D)*2) ≈ 128 FLOP/B，接近拐点",
+      "traffic_mb": 134.2,
+      "note": "Q 和 K 各 67MB，logits 输出 8192*8192*4 = 268MB —— **输出反而最大**"
+    }
+  },
+  "unknowns": [
+    "logits 输出是 fp32（B*L*S*4），prefill 时它可能比 K 还大 —— 需要实测确认写回是不是瓶颈",
+    "INT8 版的 6.6x 收益里，多少来自带宽减半、多少来自实现差异（未拆解）",
+    "paged_mqa_logits 的分页寻址开销（decode 用的那个变体）"
+  ],
+  "quant_ceiling": {
+    "bf16": "K 每元素 2 字节",
+    "int8": "K 每元素 1 字节",
+    "expected_max_gain": "2.0x（纯带宽）",
+    "observed_gain": "6.6x（OPERATOR-DIFF v2->v3）",
+    "note": "**差 3.3 倍无法用带宽解释。** 必须先验证 INT8 版是不是同语义，否则那个 6.6x 是假的。"
+  }
+}

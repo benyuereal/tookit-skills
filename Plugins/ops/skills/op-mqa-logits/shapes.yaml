@@ -1,0 +1,40 @@
+# op-mqa-logits 形状档位
+#
+# H=32, D=128 是 DSA indexer 的固定配置，不是可调参数。
+# 变化的是 S（KV 长度）和 L（query 长度）。
+
+decode-m1:
+  params:
+    B: 1
+    L: 1
+    H: 32
+    D: 128
+    S: 32768
+  note: decode 单 token。L=1 时 Q 只有 1 个 query，成本几乎全在读 K（268MB），纯 memory-bound。对应生产的 paged_mqa_logits（decode 占 32.5%）
+
+prefill-8k:
+  params:
+    B: 1
+    L: 8192
+    H: 32
+    D: 128
+    S: 8192
+  note: prefill。L=S=8192 时 Q 和 K 都可观。对应生产的 mqa_logits_128x128x32（prefill 占 35.0%）
+
+decode-nextn:
+  params:
+    B: 1
+    L: 4
+    H: 32
+    D: 128
+    S: 32768
+  note: MTP / EAGLE 草稿阶段的 L=4（NextN 预测头）
+
+tiny:
+  params:
+    B: 1
+    L: 2
+    H: 32
+    D: 128
+    S: 256
+  note: 只做正确性门自检，绝不用于 bench

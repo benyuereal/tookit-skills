@@ -111,3 +111,43 @@ for M in (8, 16, 24, 32):
 
 **护栏**：<哪个文件里加了什么保护>
 ```
+
+---
+
+## lightop（GDN 分支 `qwen3.8-27b-perf-gdn`）
+
+> 源码位置：`csrc/gdn/`，Python 接口 `lightop.gdn`
+> 状态：**已有一套手写 HIP 实现**，不是空的。
+> 详见 `hw_kb/hip/gfx938/gdn_recurrent_structure.md`。
+
+### lightop.gdn 的精度陷阱（**给错不报错，结果全错**）
+
+`A_log` 和 `dt_bias` 在 kernel 里按 **`const float*`** 读。
+
+```python
+# ❌ 不报错，但每个头的 decay 都错 —— kernel 读越界
+lightop.gdn.gdn_verify(q, k, v, a, b, A_log_bf16, dt_bias_bf16, ...)
+
+# ✅ 走 Python 层的 wrapper（它内部转 fp32）
+lightop.gdn.gdn_verify(...)   # wrapper 有 f32() 转换
+```
+
+**为什么危险**：给错精度不会抛异常，现象是「结果算错」，
+和本仓 `wrong-variable` / `uninit-struct` 是同一族 —— **最难发现的那种**。
+
+**判据**：任何传给 HIP kernel 的 float32 指针参数，
+传之前确认 dtype 是 `float32`。§
+
+### lightop.gdn 的能力降级接口（值得抄的设计）
+
+```python
+lightop.gdn.gdn_conv1d_unsupported_reason(...) -> Optional[str]
+# None = HIP 能跑；字符串 = 为什么必须留在 Triton
+```
+
+**不是布尔，是一句原因。** 调用方据此决定 fallback，不是二元判断 + 猜。
+
+对照本仓：`candidates.yaml` 的 `status: blocked` + `blocker:` 是同一思路，
+但那条是**静态的**（写在文件里），这条是**运行期问出来的**。
+对于「某些形状能跑、某些不能」的场景，后者更准确。
+

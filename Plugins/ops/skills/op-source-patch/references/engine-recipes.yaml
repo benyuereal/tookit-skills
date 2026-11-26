@@ -1,0 +1,234 @@
+# engine-recipes.yaml —— 引擎级改动的可执行配方
+#
+# 为什么有这份文件
+# ----------------
+# `op-source-patch` 的六步（定位→取源→编译→改→回归→留痕）解决的是「怎么改源码不失控」，
+# 但没回答「看到什么信号、该改成什么」。于是同类优化每条都要从零想一遍：
+#   2026-11-26 之前，GLM-5.3 上两条已落地的引擎级改动（indexer 打分降精度、fp8 KV 直读）
+#   只躺在用户知识库的 pattern 文档里（P1/P2/P5/P8/P9/P10）。agent 不会主动去读，
+#   下一次遇到 `mqa_logits` 占 30% 仍会先调 tile / occupancy。
+#
+# 本文件把「信号 → 改哪个仓库/文件/dispatch → 怎么验 → 怎么退 → 哪些坑」变成可查表的数据，
+# 由 op-source-patch 的 §七 与 op-optimize/references/candidates.md 的「引擎级候选」表共同路由。
+#
+# 数据分层（与 Plugins/ops/SKILL.md §六 一致）
+# ------------------------------------------
+# 这里只允许两类数字：物理/布局常数（行宽、头数、字节）与相对倍数（x.xx 倍）。
+# 绝对 ms / µs 一律进用户知识库，只写指针。
+# 所有性能倍数均为 [历史数据，随硬件/DTK/版本变化]，复用前按 op-bench 同批重测。
+#
+# 机器判据
+# --------
+# `trace_signal_index` 是给「拿到 trace 先 grep 一次」用的：命中即进对应 pattern，
+# 不要从 surfaces.yaml 的通用攻击面起手。判据只认 kernel 名与占比，不认模型名。
+
+schema: engine-recipes/1
+version: 1
+updated: '2026-11-26'
+owner: ops/op-source-patch
+evidence_grade: historical
+evidence_kb: ~/.config/dcu-toolkit/kb/op-opt/glm53-flash-inference-op-patterns-20261126.md
+
+# 拿到 trace 先按这张表 grep。命中的 pattern 优先于通用攻击面。
+trace_signal_index:
+  - signal: 'mqa_logits_128x128x32'
+    match: 'kernel 名含 mqa_logits'
+    bucket: prefill
+    pattern: indexer-score-precision-drop
+    note: 'indexer 打分占该桶 ≥25% 且输出只用于 top-k 选择时'
+  - signal: 'paged_mqa_logits'
+    match: 'kernel 名含 paged_mqa_logits'
+    bucket: decode
+    pattern: indexer-score-precision-drop
+    note: '同上；decode 档通常与 KV 量化开关一起出现'
+  - signal: 'decode_gather_and_up_convert_with_indices'
+    match: 'kernel 名含 decode_gather_and_up_convert'
+    bucket: decode
+    pattern: sparse-mla-fp8-direct
+    note: '必须与 flash_mla_dsa_decode_* 同时出现、且两者时间接近才算信号'
+  - signal: 'flash_mla_dsa_decode'
+    match: 'kernel 名含 flash_mla_dsa_decode / flash_mla_sparse'
+    bucket: decode
+    pattern: sparse-mla-fp8-direct
+    note: '若它读的是 bf16 缓冲而 KV cache 是 fp8，就是三遍 HBM 的形态'
+
+patterns:
+
+  # ───────────────────────────────────────────────────────────────────────
+  # A. 索引器打分精度降级：MQA logits BF16 → INT8/FP8
+  # ───────────────────────────────────────────────────────────────────────
+  - id: indexer-score-precision-drop
+    title: '索引器打分精度降级（MQA logits BF16 → INT8/FP8）'
+    layer: engine
+    maps_to: [precision_path, fusion_boundary]
+    applies_to: 'DSA / sparse attention 的 indexer 打分段（logits → top-k），不是 attention 本体'
+
+    when:
+      trace_kernels:
+        - 'mqa_logits_128x128x32（prefill，BF16）'
+        - 'paged_mqa_logits（decode，BF16）'
+      threshold: '上述 kernel 占所在桶（prefill/decode）≥25%，或排进该桶 top-3'
+      preconditions:
+        - '输出只决定 top-k 选哪些 token，不参与 attention 的 softmax 加权与累加'
+        - '带宽模型显示该段受 HBM 读限制（AI 远低于机器平衡点）'
+        - '服务以 --kv-cache-dtype fp8_e4m3 启动；该开关是 main KV + index KV + q 的耦合开关'
+      counter_signals:
+        - '打分结果进入加权/累加（如 softmax 分母）⇒ 不能降精度，换 pattern'
+        - '只看到 LDS bank conflict 偏高 ⇒ 不是本 pattern；该问题实测收益 ≈0'
+
+    steps:
+      - n: 1
+        action: '确认语义边界'
+        where: '模型 indexer 的 logits 消费方（top-k / 排序）'
+        detail: '写出 logits 的去向：只进 top-k 选择才成立。进 softmax 加权的不许照搬。'
+      - n: 2
+        action: '取源，不重拉'
+        where: '/workspace/lightop（源码 tar / 已解包树）与 sglang 源码树'
+        detail: 'LightOp 源码优先用本地已有；按 op-source-patch §三 记录 ref/commit。'
+      - n: 3
+        action: 'prefill 换 kernel'
+        where: 'indexer 的 prefill dispatch'
+        detail: 'mqa_logits_128x128x32（BF16）→ lightop::mqa_int8::m64；保持 q/kv 的 fp8 输入与 per-128 分组 scale 同源。'
+      - n: 4
+        action: 'decode 换 kernel'
+        where: 'indexer 的 decode dispatch'
+        detail: 'paged_mqa_logits（BF16）→ paged_mqa_logits_int8；确认 int8 pooled KV 页布局为 [pages, 16, 1, 132]（16×128 int8 + 16×fp32 scale），交错布局会被 persistent 后端拒绝。'
+      - n: 5
+        action: '（附带）topk/gather 三件套融合'
+        where: '同一数据链上的选择链'
+        detail: 'vectorized_gather_kernel<16,long> + fused_topk_transform_prefill_kernel<1024,false> → kpool_topk_kernel<512,false,4,512>；一次遍历 KV pool，不物化中间 gather 缓冲。融合边界=同一份输入、可一趟扫完的选择链。'
+      - n: 6
+        action: '灰度与回退开关'
+        where: '服务启动参数'
+        detail: '保留 --kv-cache-dtype bf16 作为同镜像对照臂；新增 int8 路径用环境变量灰度（默认关），避免一次切换无法二分。'
+
+    acceptance:
+      correctness:
+        - '主口径：top-k 选中集合的重合率（排序任务里「选错 token」才是风险），不是只看 logits 的 maxdiff'
+        - '任务精度门：检索/长文/业务用例与 BF16 同负载对照，必须过'
+        - '融合版：indices 逐元素一致；-1 哨兵全部垫在队尾'
+      performance:
+        - '同镜像、同负载、同分桶 A/B；口径用 event_isolated（微基准）或 trace 同桶（端到端）'
+        - 'prefill 单次约 6.6×、decode 单次约 6.6× [历史数据]'
+        - '占比：prefill 35.0%→4.9%、decode 32.5%→6.7% [历史数据]；融合三件套 21.4%→5.0% [历史数据]'
+      stop_if:
+        - 'top-k 重合率下降且任务精度不过 ⇒ 回滚，不要用「打分误差小」替代任务门'
+        - 'int8 路径未显著快于 bf16 同批基线 ⇒ 先查页布局与 scale dtype，不要改算法'
+
+    rollback:
+      - '撤 patch（patch -R）并重编；确认产物 mtime 晚于回滚时间'
+      - '服务侧把 --kv-cache-dtype 切回 bf16（同镜像、同负载）即可回到 v2 行为'
+      - 'kpool 融合单独一条 patch，可只回滚融合、保留精度降级'
+
+    traps:
+      - '不是所有打分都能降精度：只有「输出进入选择、不进入加权」的成立。'
+      - '--kv-cache-dtype fp8_e4m3 是 main KV + index KV + q 的耦合开关，不能只量化 indexer。'
+      - '量化误差会改变 top-k 集合；必须和 KV 量化分开评估（bf16 同负载对照），不能把两者收益/误差混在一起。'
+      - 'LDS bank conflict 非零 ≠ 它是瓶颈：mqa 上把 9.6 次/指令的冲突修掉只快 0.36% [历史数据]。'
+      - '融合减少 launch，但两半最优 CTA 粒度不相容时会流碎裂，融合反而更慢（见 P3 的反例）。'
+
+    reproduce:
+      - 'python3 -I /workspace/optimize-glm53/evidence/op-profile/op_diff.py <v2.trace.json.gz> <v3.trace.json.gz>'
+      - 'vllm bench serve --num-prompts 200 --max-concurrency 20 --random-prefix-len <prefix> --random-input-len <suffix> --random-range-ratio 0 --random-output-len 1024 --num-warmups 4 --temperature 0'
+      - '对照臂：同一镜像只把 --kv-cache-dtype 从 fp8_e4m3 换成 bf16，比 top-k 重合率与任务精度'
+    evidence:
+      kb: ~/.config/dcu-toolkit/kb/op-opt/glm53-flash-inference-op-patterns-20261126.md
+      sections: ['P1', 'P2']
+      source_docs: ['/workspace/optimize-glm53/OPERATOR-DIFF-V2-V3.md §2/§3/§4']
+
+  # ───────────────────────────────────────────────────────────────────────
+  # B. 稀疏 MLA 去掉中间 gather：fp8 KV 直读
+  # ───────────────────────────────────────────────────────────────────────
+  - id: sparse-mla-fp8-direct
+    title: '稀疏 MLA 去掉中间 gather（fp8 KV 直读，替代 gather→bf16→attention）'
+    layer: engine
+    maps_to: [layout_pack, fusion_boundary]
+    applies_to: 'DSA decode 的注意力入口（FlashMLA sparse_fp8）与 sglang 的 KV 布局对接'
+
+    when:
+      trace_kernels:
+        - 'decode_gather_and_up_convert_with_indices（或 *_gather_and_up_convert*）'
+        - 'flash_mla_dsa_decode_* / flash_mla_sparse_*'
+      threshold: '两者在 decode 同时出现、时间接近，且各自带宽利用率都低（<30%）；合计占 decode ≥10%（历史信号：9.7% / 5.7%，合计 17.8%）'
+      preconditions:
+        - 'KV cache 本身是 fp8（不是 bf16）'
+        - 'C++ 入口按 kv dtype 分流：bf16 → sparse_bf16_dsa；fp8/int8 → sparse_fp8'
+        - 'sparse_fp8 的打包布局要求 584 B/token，而 sglang 存 528 B（rope=0）/656 B（rope=64），对不上才被迫中转'
+      diagnosis: '按 HBM 通过次数算账：fp8 读 21MB → bf16 写 42MB → bf16 读 42MB，同一份数据过三遍。融合 gather+up-convert 只少一次 launch，不改变三遍通过的本质。'
+
+    steps:
+      - n: 1
+        action: '给 sparse_fp8 增加 rope-less ModelType'
+        where: '/workspace/FlashMLA-das/csrc/gfx93/decode/sparse_fp8/config.h'
+        detail: 'NOPE512：HEAD_DIM_NOPE=512、HEAD_DIM_ROPE=0、NUM_SCALES=4 ⇒ 行宽 512 fp8 + 4×fp32 scale = 528 B，正好等于 sglang rope=0 布局。'
+      - n: 2
+        action: '编译期剔除 rope 段'
+        where: 'sparse_fp8/splitkv_mla.cuh'
+        detail: '复用 V32 的 load/score 路径（IS_V32_LIKE），取 HEAD_DIM_K=512、HEAD_DIM_ROPE=0；把 k_idx==2 的 Q/K load 与 score 整块掩掉，避免越界读。'
+      - n: 3
+        action: 'host 端按布局判型'
+        where: '/workspace/FlashMLA-das/csrc/api/sparse_decode.h（sparse_attn_decode_interface）'
+        detail: '按 d_qk==512 && kv.size(3)==528 判 NOPE512；bytes_per_token = 512 + 4*sizeof(float)。不要依赖函数后段才推断的 model_type。'
+      - n: 4
+        action: '补齐 dispatch 实例化'
+        where: 'instantiations/*.cu + setup.py 的 sources'
+        detail: '只为实际用到的头数实例化；run_flash_splitkv_* 与 run_flash_fixed_splitkv_* 是两条入口，都要补。新类型不需要的档位用 if constexpr 限定，其余走 TORCH_CHECK(false)。'
+      - n: 5
+        action: '删掉 sglang 侧中转'
+        where: 'sglang decode 的 KV 准备路径'
+        detail: 'attention 直接吃 fp8 KV，删除 gather + up-convert 整段；确认 fp8 KV 与 bf16 路径喂的是同一份数值（fp8 由 bf16 按 per-128 分组量化而来）。'
+      - n: 6
+        action: '灰度上线'
+        where: '服务启动'
+        detail: 'SGLANG_DSA_FP8_NOPE512_DECODE=1 开 v3.1，不设即 v3；用 PYTHONPATH 指向源码树而不是安装，避免污染预装环境。'
+
+    acceptance:
+      correctness:
+        - '同精度类对照：fp8 NOPE512 vs 现有 bf16 sparse decode，cosine ≥0.9999、out max|Δ| 在 bf16 噪声量级（历史：cosine 0.999991、相对 max|out| 0.45%）'
+        - '数学参考：torch 按定义直算 fp32（MLA decode 中 V 与 K 是同一份 512 维 latent），lse 必须是自然对数而不是 log2'
+        - '误差报相对量级（max|Δ| / max|out|），与 dtype 的精度噪声对照'
+      performance:
+        - 'micro-bench 口径：b=20 / topk=2048 / 128K；新旧路径同进程、同批输入、交替测'
+        - '每 token 搬运字节自检 = 行宽 × NUM_M_BLOCKS；必须与带宽模型对齐后再解释差异'
+        - '端到端：确认 gather kernel 从 trace 消失；decode ms/step 的收益应≈原 gather 占比（历史：gather 约占 decode 8.3%）'
+        - 'h16（NMB=1）相对 bf16 同任务内核约 1.7×，h64（NMB=4）反而慢 2.07× [历史数据]'
+      stop_if:
+        - 'h_q 使 NUM_M_BLOCKS>1 ⇒ 先按字节账判断，通常不划算，别硬上（见 traps 第 1 条）'
+        - '行宽判型把 528 与 584 混掉 ⇒ 先修行宽判据，不要调 kernel'
+
+    rollback:
+      - '不设 SGLANG_DSA_FP8_NOPE512_DECODE 即回到 v3；环境变量是第一道回退，不需要重编'
+      - '撤 patch 并重编 FlashMLA；确认 .so mtime 晚于回滚'
+      - 'sglang 侧保留 gather+up-convert 代码路径（用开关切换），不要直接删除到无法回退'
+
+    traps:
+      - '**核心陷阱：BLOCK_M=16、NUM_M_BLOCKS=NUM_HEADS/BLOCK_M，每个 M-block 是独立 CTA，各自把整份 topk KV 读一遍。** h_q=64 时 NMB=4，每 token 搬 528×4=2112 B，比 bf16 的 1024 B 还多（字节账 2.06×），实测比 bf16 慢 2.07× [历史数据]；h16 时 NMB=1，每 token 528 B，才反转为更快。'
+      - 'TP8 下每卡 8 个实头 + 8 个 pad 正好走 h16；先确认本部署的实际头数再判 NMB。'
+      - '看到「换了 dtype 反而变慢」先手算「行宽 × M-block 数」，怀疑分块重复读，不要怀疑 dtype 本身。'
+      - 'rope-less 实例的 Q 只有 512 维，k_idx==2 相关 load/score 必须显式掩掉，否则越界读。'
+      - '行宽判型要能区分 528（NOPE512）与 584（MODEL1）；判错会把 MODEL1 当 NOPE512。'
+      - 'bf16 张量算出的 scale 也是 bf16，而 kernel 按 float* 读 scale：必须 .float() 显式转，否则行宽变 4×2 B，后续寻址全错。'
+      - '新增 ModelType 会牵动 DISPATCH_MODEL_TYPE × DISPATCH_NUM_HEADS 的全部组合；漏一条 run_flash_* 入口就是链接期 undefined symbol。'
+      - 'DISPATCH_NUM_HEADS 把 <=16 全归到编译期 NUM_HEADS=16；实际 h_q 可能是 8/16，pad 头数语义要在 kernel 内对齐。'
+      - '参照 bf16 内核只支持 h64/h128；要测 h16 时必须改用 torch 数学参考，不能拿不支持的档位硬跑。'
+
+    reproduce:
+      - 'python3 -I /workspace/FlashMLA-das/bench_nope512.py --batch 20 --topk 2048 --blocks 2048 --heads 16'
+      - 'python3 -I /workspace/FlashMLA-das/bench_nope512.py --batch 20 --topk 2048 --blocks 2048 --heads 64  # 用来确认 M-block 陷阱'
+      - 'python3 -I /workspace/FlashMLA-das/check_h16_ref.py  # h16 无 bf16 对照时用 torch 数学参考'
+      - '共享机先 hy-smi --showmeminfo vram，用 HIP_VISIBLE_DEVICES 挑空闲卡'
+    evidence:
+      kb: ~/.config/dcu-toolkit/kb/op-opt/glm53-flash-inference-op-patterns-20261126.md
+      sections: ['P5', 'P8', 'P9', 'P10']
+      source_docs:
+        - '/workspace/FlashMLA-das/bench_nope512.py'
+        - '/workspace/FlashMLA-das/check_h16_ref.py'
+        - '/workspace/FlashMLA-das/csrc/gfx93/decode/sparse_fp8/config.h'
+        - '/workspace/FlashMLA-das/csrc/api/sparse_decode.h'
+
+# 两条 pattern 共用的判据（放在这里，避免在两个 pattern 里各写一遍）
+shared_rules:
+  - '先算 HBM 通过次数，再谈 launch 数：融合少一次 launch 不等于少一趟 HBM。'
+  - '「换了 dtype 反而慢」先查布局行宽 × 分块重复读。'
+  - '精度类改动必须过任务精度门；「误差小」不是「结果对」。'
+  - '所有相对倍数都是 [历史数据，随硬件/DTK/版本变化]；复用时同批现测基线，不引用本文数字。'
