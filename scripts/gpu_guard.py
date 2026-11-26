@@ -91,12 +91,41 @@ def is_clean(st):
     return True, "空闲（%.1f%%）" % util
 
 
+def _physical_to_local(phys):
+    """物理卡号 -> 进程内逻辑卡号。
+
+    **两套编号必须显式换算。** 2026-11-26 实测的 bug：
+    `read_state()` 解析 hy-smi 拿到的是物理号（全机 0-7），
+    而 `torch.empty(device="cuda:N")` 的 N 是**逻辑号**（受
+    HIP_VISIBLE_DEVICES 约束）。设了 HIP_VISIBLE_DEVICES=7 时，
+    物理 7 = 逻辑 0，直接传 7 会报 "invalid device ordinal"，
+    于是**卡明明空着却被判成不可用**。
+
+    返回 None 表示这张物理卡在本进程里看不见。
+    """
+    import os
+    hv = os.environ.get("HIP_VISIBLE_DEVICES")
+    if hv is None or not hv.strip():
+        return phys          # 未设或为空：物理号 == 逻辑号
+    order = [x.strip() for x in hv.split(",") if x.strip()]
+    try:
+        return order.index(str(phys))
+    except ValueError:
+        return None
+
+
 def can_alloc(device):
-    """真正分配一块显存验证。**这才是「能不能跑」的判据。**"""
+    """真正分配一块显存验证。**这才是「能不能跑」的判据。**
+
+    device 是**物理卡号**（与 read_state 的键一致），内部换算成逻辑号。
+    """
+    local = _physical_to_local(device)
+    if local is None:
+        return False, "本进程看不见物理卡 %d（HIP_VISIBLE_DEVICES 未包含）" % device
     try:
         import torch
         x = torch.empty(PROBE_MB * 1024 * 256, dtype=torch.uint8,
-                        device="cuda:%d" % device)
+                        device="cuda:%d" % local)
         del x
         return True, "可分配 %dMB" % PROBE_MB
     except Exception as e:                                   # noqa: BLE001

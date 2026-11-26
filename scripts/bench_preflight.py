@@ -66,26 +66,38 @@ def preflight(device=None, sources=None, emit=None, skip_bind=False):
     if not skip_bind:
         try:
             import env_probe
+            # **必须区分两种调用方式，它们要查的卡不一样：**
+            #
+            # (a) 调用方传了 --device N
+            #     -> 要查物理卡 N（因为 ab.py 内部会转成重映射）
+            # (b) 调用方没传 --device，但环境里设了 HIP_VISIBLE_DEVICES=M
+            #     -> 进程内的 cuda:0 就是物理卡 M，要查 M
+            #     **这是 loop.py 的调用方式**（它设 env 不传 --device）
+            # (c) 都没有 -> 进程内 cuda:0 就是物理卡 0
+            #
+            # 2026-11-26 实测踩过：第一版在 (b) 情况下去查卡 0，
+            # 而实际用的是卡 7 —— 查错了对象，报告还是「✓」。
+            import os
             if card is None:
-                # **未指定 --device 不等于不用检查。** 默认设备是 cuda:0，
-                # 而 cuda:0 在多数情况下安全 —— 但「多数情况」不是判据。
-                # 用 0 号卡检查一次，代价 10 秒。
-                ok_bind, why = env_probe.probe_bind_modes(0)
-                if ok_bind:
-                    emit("[preflight] 设备绑定（默认卡 0）：✓ %s" % why)
+                hv = os.environ.get("HIP_VISIBLE_DEVICES")
+                if hv and hv.strip():
+                    first = hv.split(",")[0].strip()
+                    try:
+                        card = int(first)
+                        emit("[preflight] 设备绑定：从 HIP_VISIBLE_DEVICES 取到卡 %d"
+                             % card)
+                    except ValueError:
+                        card = 0
                 else:
-                    emit("[preflight] 设备绑定（默认卡 0）：✗ %s" % why)
-                    emit("[preflight]   -> 显式指定 --device N 让检查器定位该卡")
-                    ok_all = False
+                    card = 0
+
+            ok_bind, why = env_probe.probe_bind_modes(card)
+            if ok_bind:
+                emit("[preflight] 设备绑定（卡 %d）：✓ %s" % (card, why))
             else:
-                ok_bind, why = env_probe.probe_bind_modes(card)
-                if ok_bind:
-                    emit("[preflight] 设备绑定：✓ %s" % why)
-                else:
-                    emit("[preflight] 设备绑定：✗ %s" % why)
-                    emit("[preflight]   -> 用 HIP_VISIBLE_DEVICES=%d + cuda:0"
-                         % card)
-                    ok_all = False
+                emit("[preflight] 设备绑定（卡 %d）：✗ %s" % (card, why))
+                emit("[preflight]   -> 用 HIP_VISIBLE_DEVICES=%d + cuda:0" % card)
+                ok_all = False
         except Exception as ex:                        # noqa: BLE001
             emit("[preflight] 设备绑定：? 检查本身出错（%s）" % str(ex)[:60])
 

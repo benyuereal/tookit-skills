@@ -168,8 +168,11 @@ python3 loop.py -C <卡> run <tag> [--skv ...] [--force]
 
 一次实验失败，归因只有两种，**命令不同、后果不同**：**实现写坏了**（`impl-broken`，方向预算不动，连挂 3 次判死该实现）与 **攻击面不成立**（`direction-refuted`，方向预算 +1，2 次封方向）。把实现的 bug 记成方向证伪，等于用一个实现错误处死一整条路。
 
-完整判据、上限、`candidates.yaml` schema 与 `why` 写法见
-[`references/failure-taxonomy.md`](references/failure-taxonomy.md)。
+完整判据、上限、`candidates.yaml` schema 与 `why` 写法见 [`references/failure-taxonomy.md`](references/failure-taxonomy.md)。
+
+### 九·五、坏了先归位：6 条故障定位面
+
+§九 分「怎么记账」；[`references/failure-surfaces.yaml`](references/failure-surfaces.yaml) 分「是哪一类故障」——**先定位，再记账**（归因错了账也是错的）。出现「崩了 / 算错了 / 改了没效果」时按序过一遍（代价从低到高），每条带可跑 `minimal_repro` + 能区分的判据 + D 编号：`device-bind`（纯 torch 正常但自研 kernel 崩 ⇒ `HIP_VISIBLE_DEVICES` 重映射，**最贵 5 小时**）、`uninit-struct`（结构体缺 `{}`）、`build-stale`（产物没重编 / 改错文件）、`verifier-lies`（校验器说通过但没生效）、`wrong-variable`（没控制变量）、`minimal-repro`（大 kernel 先减到 5 行）。
 
 ## 十、交付件格式
 
@@ -201,9 +204,7 @@ python3 loop.py -C <卡> verify --tag <id>                   # 跑 done_when；r
 `report` 默认不显示它们，`verify`/`adopt` 对 held 候选 rc=2。
 补齐后重跑即可，`report --all` 会给出逐条补齐方法。
 
-> 方向从哪来：不要凭空想。`references/surfaces.yaml` 预枚举了 11 条攻击面，
-> 每条挂一条 `pipeline-laws.md` 的定律。`enumerate` 会标出 `SEALED`
-> （已证伪 2 次的方向），开跑前就能看见，不必跑一次才知道被封。
+> 方向从哪来：不要凭空想。`references/surfaces.yaml` 预枚举了 11 条攻击面，每条挂一条 `pipeline-laws.md` 的定律。`enumerate` 会标出 `SEALED`（已证伪 2 次的方向），开跑前就能看见，不必跑一次才知道被封。
 
 参考实现：`op-sparse-mla`（43 条判死 + 3 条待做 + 3 个方向，`candidates.yaml` 可直接抄 schema）。
 

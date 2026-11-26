@@ -118,7 +118,11 @@ def _ensure_probe_so():
     _CACHE.mkdir(parents=True, exist_ok=True)
     hip = _CACHE / "probe_ext.hip"
     so = _CACHE / "probe_ext.so"
-    hip.write_text(_PROBE_HIP, encoding="utf-8")
+    # **只在内容变化时才写 .hip。** 无条件 write_text 会刷新它的 mtime，
+    # 导致下面的「.so 比 .hip 新」永远不成立 —— 每次调用都重编一遍。
+    # 2026-11-26 实测：缓存目录里只有 .hip 没有 .so，就是这个原因。
+    if not hip.is_file() or hip.read_text(encoding="utf-8") != _PROBE_HIP:
+        hip.write_text(_PROBE_HIP, encoding="utf-8")
     if so.is_file() and so.stat().st_mtime > hip.stat().st_mtime:
         return so
     r = subprocess.run(["hipcc", "-O3", "--offload-arch=gfx938", "-fPIC",
@@ -160,6 +164,7 @@ def probe_one(card, build_dir=None):
         timeout=300,
         env={"HIP_VISIBLE_DEVICES": str(card),
              "PROBE_SO": str(_ensure_probe_so())})
+    # 注意：这里用的是「重映射 + cuda:0」，是安全方式
     if ok and "OK" in out:
         return True, "可跑"
     msg = (err or out).strip().splitlines()
@@ -174,12 +179,27 @@ _DIRECT = _ONE_CARD.replace('"cuda:0"', '"cuda:%d"')
 def probe_bind_modes(card):
     """对照两种设备指定方式。返回 (ok, detail)。
 
-    这是 **2026-11-25 那 5 小时的根因**：
-    `cuda:N`（N>=4）时自定义 kernel 崩，`HIP_VISIBLE_DEVICES` 重映射就好。
-    纯 torch 路径两边都正常 —— 这恰恰是它难被发现的原因。
-
-    **判据**：两种方式都必须能跑。任一崩就报告，不往下走。
+    **前提**：调用方的执行环境里没有预设 HIP_VISIBLE_DEVICES。
+    如果设了（loop.py 就是这么调的：它设 env 不传 --device），
+    那么进程内的 cuda:N 语义已经从物理号变成逻辑号，
+    「直接指定物理卡 N」这件事根本不存在，不该判它失败。
     """
+    import os
+    preset = os.environ.get("HIP_VISIBLE_DEVICES")
+    if preset is not None and preset.strip():
+        # 已经被外层绑定 —— 只验这张卡能不能跑，不验「两种方式」
+        ok_one, d_one = probe_one(card)
+        if ok_one:
+            return True, ("已由 HIP_VISIBLE_DEVICES=%s 绑定，卡可跑"
+                          "（不适用两种方式对照）" % preset)
+        return False, "已绑定 %s 但卡跑不通：%s" % (preset, d_one)
+
+    # 以下是未被外层绑定时才走的路径。
+    # 这是 **2026-11-25 那 5 小时的根因**：
+    # `cuda:N`（N>=4）时自定义 kernel 崩，`HIP_VISIBLE_DEVICES` 重映射就好。
+    # 纯 torch 路径两边都正常 —— 这恰恰是它难被发现的原因。
+    #
+    # **判据**：两种方式都必须能跑。任一崩就报告，不往下走。
     ok_env, d_env = probe_one(card)
 
     # 直接指定：不设 HIP_VISIBLE_DEVICES，用 cuda:card
