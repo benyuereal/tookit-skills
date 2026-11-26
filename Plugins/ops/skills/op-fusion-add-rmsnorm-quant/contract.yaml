@@ -34,9 +34,7 @@ invariants:
   quant_scope: "per-tensor（每个 (m,) 行一个 scale），不是 per-channel"
   quant_type: "对称 int8，范围 [-127, 127]（不用 -128，留对称）"
   residual_semantics: "res_out 写回 (x + r)，不是 r 本身"
-  clamp_before_cast: |
-    量化前先 clamp 到 [-127, 127] 再四舍五入，**不能先 cast 再 clamp**
-    —— 后者在 bf16 下会先溢出成 inf。
+  clamp_before_cast: "量化前先 clamp 到 [-127, 127] 再四舍五入，**不能先 cast 再 clamp** —— 后者在 bf16 下会先溢出成 inf。"
 
 traffic:
   reads: 2
