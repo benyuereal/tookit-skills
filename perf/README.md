@@ -21,6 +21,9 @@
 
 ## 索引
 
-| 文档 | 模型 | 镜像 | 日期 |
-|---|---|---|---|
-| [GLM-5.3-Flash-perf-profile-20261126.md](GLM-5.3-Flash-perf-profile-20261126.md) | GLM-5.3-Flash-Channel-FP8-w8a8 | `bw1100_opt_8y8b_20261123` + FlashMLA fp8 直读（v3.1） | 2026-11-26 |
+| 文档 | HTML（免阅读器） | 模型 | 镜像 | 日期 |
+|---|---|---|---|---|
+| [GLM-5.3-Flash-perf-profile-20261126.md](GLM-5.3-Flash-perf-profile-20261126.md) | [.html](GLM-5.3-Flash-perf-profile-20261126.html) | GLM-5.3-Flash-Channel-FP8-w8a8 | `bw1100_opt_8y8b_20261123` + FlashMLA fp8 直读（v3.1） | 2026-11-26 |
+
+`*.html` 是单文件产物（内联 CSS、无外部字体/JS/CDN），双击即可看，转出自
+`/workspace/optimize-glm53/md2html.py`。

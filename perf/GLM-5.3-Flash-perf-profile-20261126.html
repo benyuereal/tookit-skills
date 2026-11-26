@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GLM-5.3-Flash 性能画像（2026-11-26）</title>
+<style>
+:root { --fg:#1a1a1a; --muted:#666; --line:#d8dde3; --bg:#fff; --code:#f6f8fa; }
+* { box-sizing: border-box; }
+body {
+  margin: 0 auto; padding: 48px 32px 96px; max-width: 980px; background: var(--bg);
+  color: var(--fg); font: 15px/1.75 -apple-system, "PingFang SC", "Microsoft YaHei",
+  "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans CJK SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: .2px; }
+h2 { font-size: 21px; margin: 44px 0 14px; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+h3 { font-size: 17px; margin: 30px 0 10px; }
+h1 + blockquote { margin-top: 6px; }
+blockquote {
+  margin: 14px 0; padding: 10px 16px; color: var(--muted);
+  border-left: 3px solid var(--line); background: #fafbfc;
+}
+blockquote p { margin: 4px 0; }
+p { margin: 10px 0; }
+ul, ol { margin: 10px 0; padding-left: 24px; }
+li { margin: 4px 0; }
+code {
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px; background: var(--code); padding: 1px 5px; border-radius: 4px;
+}
+pre {
+  background: var(--code); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 16px; overflow-x: auto; margin: 14px 0;
+}
+pre code { background: none; padding: 0; font-size: 12.5px; line-height: 1.6; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
+th { background: #f2f4f7; font-weight: 600; }
+tbody tr:nth-child(even) { background: #fbfcfd; }
+hr { border: none; border-top: 1px solid var(--line); margin: 36px 0; }
+strong { font-weight: 600; }
+@media print {
+  body { padding: 0; max-width: none; font-size: 11pt; }
+  h2 { page-break-after: avoid; }
+  pre, table, blockquote { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<h1>GLM-5.3-Flash 性能画像（2026-11-26）</h1>
+<blockquote>
+<p>镜像 <code>glm_5.3_flash_fp8:bw1100_opt_8y8b_20261123</code> + FlashMLA fp8 直读
+启动 <code>/workspace/repro-1123-files/scripts/launch3.1.sh</code>
+服务日志 <code>/workspace/img3-logs/launch31-run.log</code>
+硬件 BW1100 ×8（gfx938，TP8），HBM 实测流式读 1 965 GB/s</p>
+</blockquote>
+<p>每一节只贴<strong>一份完整原始数据</strong>，结论写在原始数据之后。</p>
+<hr />
+<h2>摘要（先看这个）</h2>
+<p><strong>1. 真实 prefill 吞吐（冷启动、无任何缓存命中）</strong></p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">并发</th>
+<th style="text-align:right">聚合吞吐</th>
+<th style="text-align:right">单请求 TTFT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">1</td>
+<td style="text-align:right"><strong>10 580 tok/s</strong>（服务端日志 12 020 → 10 476）</td>
+<td style="text-align:right">12.4 s</td>
+</tr>
+<tr>
+<td style="text-align:right">20</td>
+<td style="text-align:right"><strong>53 561 tok/s</strong></td>
+<td style="text-align:right">31.7 s</td>
+</tr>
+</tbody>
+</table>
+<p>c=1 时一个 chunk 只有一个序列，算力/带宽都用不满；c=20 有多个 8192 chunk 并行，
+聚合吞吐涨到 <strong>5.06 倍</strong>，代价是 TTFT 从 12.4 s 拉到 31.7 s。
+<strong>这台机器 128K 冷 prefill 的吞吐天花板在 5×10⁴ tok/s 量级。</strong></p>
+<p><strong>2. 带 0.85 前缀命中时，<code>Total token throughput</code> 不是 prefill 吞吐</strong></p>
+<p>§2 混合场景报出的 47–48k tok/s，分子里 85% 是命中缓存直接复用的 token，
+真正参与计算的只有 ~15%（每请求 ~19.7k）。<strong>要报 prefill 吞吐只能看 §1 的冷启动数</strong>；
+带命中率的数字只能横向比版本，不能当吞吐指标。</p>
+<p><strong>3. n 不改变单请求速度，只改变排队结构</strong></p>
+<ul>
+<li><strong>n = conc</strong>（如 n=20/c20）：一批跑完就结束，没有队列，TTFT ≈ 一次 prefill</li>
+<li><strong>n ≫ conc</strong>（如 n=100/c20，5 轮）：后 4 轮要等服务位空出来，
+TTFT 均值 = prefill + 排队等待，尾巴（P99）会被拉得很长</li>
+<li>所以 <strong>TTFT 只能在同 conc、同 n/conc 比下横比</strong>。n 不同的两组数（例如 n=100 与 n=200）
+均值对不上时，先看 n/conc 比和 P99，不能直接归因于版本或优化</li>
+<li><strong>TPOT 不受 n 影响</strong>，只受并发影响（c16 37.63 ms / c20 46–48 ms）</li>
+</ul>
+<hr />
+<h2>0. 服务配置（启动日志原文）</h2>
+<pre><code>[2026-11-26 15:18:48 TP0] max_total_num_tokens=10389696, chunked_prefill_size=8192,
+  max_prefill_tokens=32768, max_running_requests=48, context_len=133120,
+  available_gpu_mem=26.02 GB
+[2026-11-26 15:15:57] Set DSA backends for fp8_e4m3 KV Cache:
+  prefill=flashmla_auto, decode=flashmla_kv
+</code></pre>
+<p><strong>KV 池</strong>：10 389 696 token（fp8_e4m3，每 token 512 B）。
+单请求上限 133 120，约合 <strong>79 个满长 128K 请求</strong>。c20×128K 只占约 25%，radix cache 有充足余量。</p>
+<hr />
+<h2>1. 纯填充吞吐</h2>
+<h3>1.1 服务端日志原文（c=1，16 个 chunk 全部 <code>cached=0</code>）</h3>
+<pre><code>16:17:02  new=8192 cached=0  input_tput=17.63        ← 首 chunk，分母含建连接
+16:17:02  new=8192 cached=0  input_tput=12020.30
+16:17:03  new=8192 cached=0  input_tput=11944.53
+16:17:04  new=8192 cached=0  input_tput=11767.37
+16:17:04  new=8192 cached=0  input_tput=11622.69
+16:17:05  new=8192 cached=0  input_tput=11512.95
+16:17:06  new=8192 cached=0  input_tput=11358.91
+16:17:07  new=8192 cached=0  input_tput=11228.78
+16:17:07  new=8192 cached=0  input_tput=11131.52
+16:17:08  new=8192 cached=0  input_tput=11008.41
+16:17:09  new=8192 cached=0  input_tput=10852.82
+16:17:10  new=8192 cached=0  input_tput=10783.81
+16:17:10  new=8192 cached=0  input_tput=10702.67
+16:17:11  new=8192 cached=0  input_tput=10635.77
+16:17:12  new=8192 cached=0  input_tput=10475.76
+16:17:12  new=8192 cached=0  input_tput=154361.55   ← 尾 chunk 只剩少量 token，异常值
+</code></pre>
+<h3>1.2 prefill 吞吐测试</h3>
+<pre><code>============ Serving Benchmark Result ============
+Successful requests:                     1
+Failed requests:                         0
+Maximum request concurrency:             1
+Benchmark duration (s):                  12.39
+Total input tokens:                      131072
+Total generated tokens:                  2
+Total token throughput (tok/s):          10580.50
+---------------Time to First Token----------------
+Mean TTFT (ms):                          12360.29
+Median TTFT (ms):                        12360.29
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          27.52
+</code></pre>
+<h3>1.3 prefill 吞吐测试（c=20）</h3>
+<pre><code>============ Serving Benchmark Result ============
+Successful requests:                     20
+Failed requests:                         0
+Maximum request concurrency:             20
+Benchmark duration (s):                  48.94
+Total input tokens:                      2621440
+Total generated tokens:                  20
+Request throughput (req/s):              0.41
+Output token throughput (tok/s):         0.41
+Peak output token throughput (tok/s):    1.00
+Peak concurrent requests:                20.00
+Total token throughput (tok/s):          53560.96
+---------------Time to First Token----------------
+Mean TTFT (ms):                          31669.27
+Median TTFT (ms):                        31784.75
+P50 TTFT (ms):                           31784.75
+P90 TTFT (ms):                           45955.70
+P99 TTFT (ms):                           48611.45
+</code></pre>
+<h3>1.4 结论</h3>
+<table>
+<thead>
+<tr>
+<th>测量方式</th>
+<th style="text-align:right">净填充吞吐</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>服务端日志（c=1，chunk 2–15 区间）</td>
+<td style="text-align:right"><strong>12 020 → 10 476 tok/s</strong></td>
+</tr>
+<tr>
+<td>Total token throughput（c=1）</td>
+<td style="text-align:right"><strong>10 580 tok/s</strong></td>
+</tr>
+<tr>
+<td>Total token throughput（c=20）</td>
+<td style="text-align:right"><strong>53 561 tok/s</strong></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>c=1 时服务端日志与压测输出一致（误差 &lt;1%）</strong>，因为没有缓存可命中，
+<code>Total input tokens</code> 全是要真算的</li>
+<li><strong>c=20 时吞吐升到 53.6k tok/s（c1 的 5.06 倍）</strong>，TTFT 也随之升到 31.7 s</li>
+<li>长 prefill 越往后越慢（12 020 → 10 476，降 13%），说明 128K 冷启动时尾部 chunk 的注意力成本更高</li>
+</ul>
+<h3>1.5 并发 &gt;1 时须先确认有没有命中缓存</h3>
+<p><strong>§1.3 的 c=20（53 561 tok/s）是冷启动的</strong>——自洽性可以验证：
+20 × 131 072 = 2 621 440 token ÷ 48.94 s = 53 561 tok/s，与报出值吻合；
+若命中 85% 前缀则只需算 394k token，48.94 s 意味着 8k tok/s，与 TTFT 31.7 s 矛盾。</p>
+<p>但<strong>如果同一次压测内前缀被写进 radix cache，后续请求会全部命中 111 360</strong>，那时
+<code>Total token throughput</code> 就会把命中的 token 也算成&quot;已处理&quot;，数字虚高：</p>
+<pre><code>16:23:06  new=8192 cached=111360      ← c=8 那一轮
+16:23:08  new=8192 cached=111360
+16:23:10  new=8192 cached=111360
+</code></pre>
+<p>而 <code>Total token throughput = (全部 input + output) / duration</code>，
+<strong>把命中的 token 也算成&quot;已处理&quot;</strong>，所以 c≥2 的数字虚高。
+只有 c=1 的 <strong>10 580 tok/s</strong>（131 072 全冷）是可信的。</p>
+<p>要测 c≥2 的真实 prefill 吞吐，必须每轮换前缀种子（bench 脚本已加 <code>SEED</code> 环境变量）。</p>
+<hr />
+<h2>2. 128K / 1K 混合场景</h2>
+<p>口径：输入 131072（0.85 前缀命中）/ 输出 1024 / <code>request_rate=inf</code> / 预热 4 条 /
+<code>bench_serving_cache_control.py</code>。</p>
+<p><strong>判定口径（两个指标都要过）</strong>：</p>
+<ul>
+<li><strong>TPOT mean ≤ 50 ms</strong></li>
+<li><strong>TTFT mean ≤ 5 s</strong>（略超可接受，取 5.5 s 为上限）</li>
+</ul>
+<blockquote>
+<p>注：脚本自带的那行 <code>&gt;&gt;&gt; … PASS (TPOT=xx)</code> 只判 TPOT，不看 TTFT。
+下文原始输出保留原样，逐档判定以本节表格为准。</p>
+</blockquote>
+<h3>2.0 n=100 / c20（第一次）</h3>
+<pre><code>[flush] 已清空服务端前缀缓存
+[warmup] 发送 4 条 max_tokens=1 请求预热前缀缓存...
+[warmup] 完成 ok=4 failed=0 wall=10.7s
+[bench] backend=sglang in=131072 out=1024 n=100 conc=20 rate=inf hit~0.85 (prefix=111411/131072)
+Successful requests: 100
+Benchmark duration (s): 280.89
+Request throughput (req/s): 0.36
+Output token throughput (tok/s): 364.55
+Total token throughput (tok/s): 47026.87
+Mean TTFT (ms): 6230.66
+Median TTFT (ms): 2010.40
+P99 TTFT (ms): 37113.71
+Mean TPOT (ms): 47.98
+Median TPOT (ms): 46.61
+P99 TPOT (ms): 78.72
+Mean ITL (ms): 47.98
+Median ITL (ms): 14.03
+P99 ITL (ms): 632.07
+Mean E2E Latency (ms): 55313.65
+Failed requests: 0
+&gt;&gt;&gt; 本档服务端实测前缀缓存命中率 = 0.8463 (cached_tokens Δ=11470080 / prompt_tokens Δ=13552860)
+&gt;&gt;&gt; cached in=131072 conc=20 PASS (TPOT=47.98ms)，最大可用并发更新为 20
+</code></pre>
+<h3>2.1 n=100 / c20（第二次）</h3>
+<pre><code>[flush] 已清空服务端前缀缓存
+[warmup] 发送 4 条 max_tokens=1 请求预热前缀缓存...
+[warmup] 完成 ok=4 failed=0 wall=10.6s
+[bench] backend=sglang in=131072 out=1024 n=100 conc=20 rate=inf hit~0.85 (prefix=111411/131072)
+Successful requests: 100
+Benchmark duration (s): 273.52
+Request throughput (req/s): 0.37
+Output token throughput (tok/s): 374.38
+Total token throughput (tok/s): 48295.19
+Mean TTFT (ms): 6552.47
+Median TTFT (ms): 1997.66
+P99 TTFT (ms): 36916.79
+Mean TPOT (ms): 46.07
+Median TPOT (ms): 45.75
+P99 TPOT (ms): 75.56
+Mean ITL (ms): 46.07
+Median ITL (ms): 13.62
+P99 ITL (ms): 626.74
+Mean E2E Latency (ms): 53680.51
+Failed requests: 0
+&gt;&gt;&gt; 本档服务端实测前缀缓存命中率 = 0.8463 (cached_tokens Δ=11470080 / prompt_tokens Δ=13552860)
+&gt;&gt;&gt; cached in=131072 conc=20 PASS (TPOT=46.07ms)，最大可用并发更新为 20
+</code></pre>
+<blockquote>
+<p>两次 n=100 用的是两份启动脚本，但计算路径等价——其中一项 rocBLAS 调优
+（<code>ROCBLAS_TENSILE_LIBPATH</code>）实测<strong>不生效</strong>：本 workload 的 Tensile 内核全部来自
+hipBLASLt，用 router shape 做 A/B 也是 15.6 µs 对 15.6 µs。所以两次的差异（TPOT 47.98 vs 46.07）
+主要来自投机接受率的随机波动（两次跑的中段 accept rate 分别是 0.55 / 0.82）。</p>
+</blockquote>
+<h3>2.2 n=100 / c16</h3>
+<pre><code>[bench] backend=sglang in=131072 out=1024 n=100 conc=16 rate=inf hit~0.85 (prefix=111411/131072)
+Successful requests: 100
+Benchmark duration (s): 278.38
+Request throughput (req/s): 0.36
+Output token throughput (tok/s): 367.84
+Total token throughput (tok/s): 47451.11
+Mean TTFT (ms): 5033.14
+Median TTFT (ms): 1992.46
+P99 TTFT (ms): 29922.24
+Mean TPOT (ms): 37.63
+Median TPOT (ms): 37.11
+P99 TPOT (ms): 64.29
+Mean ITL (ms): 37.63
+Median ITL (ms): 11.50
+P99 ITL (ms): 419.49
+Mean E2E Latency (ms): 43523.83
+Failed requests: 0
+&gt;&gt;&gt; 本档服务端实测前缀缓存命中率 = 0.8463 (cached_tokens Δ=11470080 / prompt_tokens Δ=13552860)
+&gt;&gt;&gt; cached in=131072 conc=16 PASS (TPOT=37.63ms), 最大可用并发更新为 16
+</code></pre>
+<h3>2.3 结论</h3>
+<table>
+<thead>
+<tr>
+<th>配置</th>
+<th style="text-align:right">TTFT mean</th>
+<th style="text-align:right">TTFT median</th>
+<th style="text-align:right">TPOT mean</th>
+<th style="text-align:right">总吞吐</th>
+<th style="text-align:center">TPOT</th>
+<th style="text-align:center">TTFT</th>
+<th style="text-align:center">总判定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>n=100 / c20（第一次）</strong></td>
+<td style="text-align:right">6 230.66 ms</td>
+<td style="text-align:right">2 010.40 ms</td>
+<td style="text-align:right">47.98 ms</td>
+<td style="text-align:right">47 027 tok/s</td>
+<td style="text-align:center">达标</td>
+<td style="text-align:center">不达标（&gt;5 s）</td>
+<td style="text-align:center"><strong>FAIL</strong></td>
+</tr>
+<tr>
+<td><strong>n=100 / c20（第二次）</strong></td>
+<td style="text-align:right">6 552.47 ms</td>
+<td style="text-align:right">1 997.66 ms</td>
+<td style="text-align:right"><strong>46.07 ms</strong></td>
+<td style="text-align:right"><strong>48 295 tok/s</strong></td>
+<td style="text-align:center">达标</td>
+<td style="text-align:center">不达标（&gt;5 s）</td>
+<td style="text-align:center"><strong>FAIL</strong></td>
+</tr>
+<tr>
+<td><strong>n=100 / c16</strong></td>
+<td style="text-align:right"><strong>5 033.14 ms</strong></td>
+<td style="text-align:right">1 992.46 ms</td>
+<td style="text-align:right"><strong>37.63 ms</strong></td>
+<td style="text-align:right">47 451 tok/s</td>
+<td style="text-align:center">达标</td>
+<td style="text-align:center">达标（≈5 s）</td>
+<td style="text-align:center"><strong>PASS</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>两点</strong>：</p>
+<ol>
+<li><strong>按双指标只有 c16 过</strong>：c20 两轮 TPOT（47.98 / 46.07 ms）都达标，但 TTFT 均值
+6.23 / 6.55 s 超过 5 s；只有 c16 的 <strong>5.03 s + 37.63 ms</strong> 同时满足</li>
+<li><strong>TTFT 均值受尾部拖累</strong>：三次中位数都在 2.0 s 附近（1 992–2 010 ms），
+但均值 5.0–6.6 s，因为少数请求排队到 30–37 s（P99）。均值超标的直接原因是尾部，
+不是所有请求都慢——要继续压均值就得压 P99 排队</li>
+</ol>
+<h2>3. 128K / 1K 的最大并发</h2>
+<p>判定：TPOT mean ≤ 50 ms 且 TTFT mean ≤ 5 s。数据取自 §2 的 n=100 实测。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:right">并发</th>
+<th style="text-align:right">n</th>
+<th style="text-align:right">TTFT mean</th>
+<th style="text-align:right">TPOT mean</th>
+<th>判定</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right">16</td>
+<td style="text-align:right">100</td>
+<td style="text-align:right">5 033.14 ms</td>
+<td style="text-align:right">37.63 ms</td>
+<td><strong>PASS</strong></td>
+</tr>
+<tr>
+<td style="text-align:right">20</td>
+<td style="text-align:right">100</td>
+<td style="text-align:right">6 230.66 ms</td>
+<td style="text-align:right">47.98 ms</td>
+<td><strong>FAIL</strong>（TTFT &gt;5 s）</td>
+</tr>
+<tr>
+<td style="text-align:right">20</td>
+<td style="text-align:right">100</td>
+<td style="text-align:right">6 552.47 ms</td>
+<td style="text-align:right">46.07 ms</td>
+<td><strong>FAIL</strong>（TTFT &gt;5 s）</td>
+</tr>
+<tr>
+<td style="text-align:right">24 / 28 / 32</td>
+<td style="text-align:right">100</td>
+<td style="text-align:right">—</td>
+<td style="text-align:right">—</td>
+<td>未测（显卡已让出）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>结论：c16 过、c20 不过，128K/1K 场景最大可用并发落在 16–19 之间</strong>
+（c24 起的档位还没测，上限没有夹死）。</p>
+<ul>
+<li>TPOT 这一维 c20 还有余量（47.98 / 46.07 ms，距 50 ms 不到 4 ms），<strong>不是瓶颈</strong></li>
+<li>卡住的是 <strong>TTFT 均值</strong>：c20 比 c16 多 1.2–1.5 s，超的是尾部排队（P99 37 s），
+中位数只有 2.0 s</li>
+<li>要把上限推到 c20，需要压 TTFT 均值（排队/调度），不是继续压 TPOT</li>
+</ul>
+<hr />
+</body>
+</html>
