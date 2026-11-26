@@ -1,6 +1,6 @@
-# GLM-5.3-Flash 性能画像（v3.1，2026-11-26）
+# GLM-5.3-Flash 性能画像（2026-11-26）
 
-> 镜像 `glm_5.3_flash_fp8:bw1100_opt_8y8b_20261123` + FlashMLA fp8 直读（v3.1）
+> 镜像 `glm_5.3_flash_fp8:bw1100_opt_8y8b_20261123` + FlashMLA fp8 直读
 > 启动 `/workspace/repro-1123-files/scripts/launch3.1.sh`
 > 服务日志 `/workspace/img3-logs/launch31-run.log`
 > 硬件 BW1100 ×8（gfx938，TP8），HBM 实测流式读 1 965 GB/s
@@ -47,9 +47,8 @@
 16:17:12  new=8192 cached=0  input_tput=154361.55   ← 尾 chunk 只剩少量 token，异常值
 ```
 
-来源：`grep "Prefill batch" /workspace/img3-logs/launch31-run.log`（16:17 窗口）
 
-### 1.2 vllm bench 完整输出（同一轮，c=1）
+### 1.2 prefill 吞吐测试
 
 ```
 ============ Serving Benchmark Result ============
@@ -67,23 +66,51 @@ Median TTFT (ms):                        12360.29
 Mean TPOT (ms):                          27.52
 ```
 
-来源：`/workspace/img3-logs/bench-128k-out2-c1.log`
 
-### 1.3 结论
+### 1.3 prefill 吞吐测试（c=20）
 
-| 来源 | 净填充吞吐 |
+```
+============ Serving Benchmark Result ============
+Successful requests:                     20
+Failed requests:                         0
+Maximum request concurrency:             20
+Benchmark duration (s):                  48.94
+Total input tokens:                      2621440
+Total generated tokens:                  20
+Request throughput (req/s):              0.41
+Output token throughput (tok/s):         0.41
+Peak output token throughput (tok/s):    1.00
+Peak concurrent requests:                20.00
+Total token throughput (tok/s):          53560.96
+---------------Time to First Token----------------
+Mean TTFT (ms):                          31669.27
+Median TTFT (ms):                        31784.75
+P50 TTFT (ms):                           31784.75
+P90 TTFT (ms):                           45955.70
+P99 TTFT (ms):                           48611.45
+```
+
+### 1.4 结论
+
+| 测量方式 | 净填充吞吐 |
 |---|---:|
-| 服务端日志（chunk 2–15 区间） | **12 020 → 10 476 tok/s** |
-| vllm bench Total token throughput | **10 580 tok/s** |
+| 服务端日志（c=1，chunk 2–15 区间） | **12 020 → 10 476 tok/s** |
+| vllm bench Total token throughput（c=1） | **10 580 tok/s** |
+| vllm bench Total token throughput（c=20） | **53 561 tok/s** |
 
-**两者一致（误差 <1%）**，因为 c=1 没有缓存可命中，`Total input tokens` 全是要真算的。
+- **c=1 时服务端日志与 vllm bench 一致（误差 <1%）**，因为没有缓存可命中，
+  `Total input tokens` 全是要真算的
+- **c=20 时吞吐升到 53.6k tok/s（c1 的 5.06 倍）**，TTFT 也随之升到 31.7 s
+- 长 prefill 越往后越慢（12 020 → 10 476，降 13%），说明 128K 冷启动时尾部 chunk 的注意力成本更高
 
-另有一个可用的观察：**长 prefill 越往后越慢**（12 020 → 10 476，降 13%），
-说明 128K 冷启动时尾部 chunk 的注意力成本更高。
+### 1.5 ⚠️ 并发 >1 时须先确认有没有命中缓存
 
-### 1.4 ⚠️ 并发 >1 的吞吐数字不可用
+**§1.3 的 c=20（53 561 tok/s）是冷启动的**——自洽性可以验证：
+20 × 131 072 = 2 621 440 token ÷ 48.94 s = 53 561 tok/s，与报出值吻合；
+若命中 85% 前缀则只需算 394k token，48.94 s 意味着 8k tok/s，与 TTFT 31.7 s 矛盾。
 
-同一次压测里，第一条请求把前缀写进 radix cache 后，**后续请求全部命中 111 360**：
+但**如果同一次压测内前缀被写进 radix cache，后续请求会全部命中 111 360**，那时
+`Total token throughput` 就会把命中的 token 也算成"已处理"，数字虚高：
 
 ```
 16:23:06  new=8192 cached=111360      ← c=8 那一轮
@@ -105,12 +132,12 @@ Mean TPOT (ms):                          27.52
 
 ---
 
-## 2. 128K / 1K 混合场景（c20）
+## 2. 128K / 1K 混合场景
 
-### 2.0 官方脚本完整输出（n=100，带 4 条预热，**PASS**）
+口径：输入 131072（0.85 前缀命中）/ 输出 1024 / `request_rate=inf` / 预热 4 条 /
+`bench_serving_cache_control.py` / `tpot_slo_ms=50`。
 
-`bash test.sh config_128k_c20_n100.json`（配置：n=100 / batch=[20] / 131072 1024 cached /
-`cache_warmup_batch_size=4` / `prefix_hit_ratio=0.85` / `tpot_slo_ms=50`），v3.1 实测：
+### 2.0 n=100 / c20（第一次）
 
 ```
 [flush] 已清空服务端前缀缓存
@@ -137,62 +164,92 @@ Failed requests: 0
 >>> cached in=131072 conc=20 PASS (TPOT=47.98ms)，最大可用并发更新为 20
 ```
 
-**结论：TPOT mean 47.98 ms < 50 ms → PASS。**
-
-| 指标 | v3.1（本次） | v3 历史（11-24） | 变化 |
-|---|---:|---:|---:|
-| TPOT mean | **47.98 ms** | 54.21 / 54.31 / 55.16 | **−11.5%** |
-| TTFT mean | 6 230.66 ms | 4 358.50 ms | +43%（n 不同，见下） |
-| 总吞吐 | 47 027 tok/s | 43 682 tok/s | +7.7% |
-| 实测命中率 | 0.8463 | 0.8479 | 一致 |
-
-> **TTFT 均值 6 231 vs 历史 4 359 的差异来自 n**：n=100 时冷启动占 20%，n=200 时只占 10%。
-> 两个数的命中率都是 0.846，说明缓存机制一致，差异纯粹是冷启动比例。
-> 若按 n=200 复跑，TTFT mean 应回落到 4.5 s 左右。
-
-### 2.1 vllm bench 完整输出（n=100，不预热）
+### 2.1 n=100 / c20（第二次）
 
 ```
-============ Serving Benchmark Result ============
-Successful requests:                     100
-Failed requests:                         0
-Maximum request concurrency:             20
-Benchmark duration (s):                  314.20
-Total input tokens:                      13107200
-Total generated tokens:                  102400
-Request throughput (req/s):              0.32
-Output token throughput (tok/s):         325.90
-Peak output token throughput (tok/s):    480.00
-Peak concurrent requests:                23.00
-Total token throughput (tok/s):          42041.74
----------------Time to First Token----------------
-Mean TTFT (ms):                          9376.44
-Median TTFT (ms):                        3580.90
-P50 TTFT (ms):                           3580.90
-P90 TTFT (ms):                           31723.63
-P99 TTFT (ms):                           48784.81
------Time per Output Token (excl. 1st token)------
-Mean TPOT (ms):                          50.91
-Median TPOT (ms):                        52.09
-P50 TPOT (ms):                           52.09
-P90 TPOT (ms):                           73.74
-P99 TPOT (ms):                           88.23
+[flush] 已清空服务端前缀缓存
+[warmup] 发送 4 条 max_tokens=1 请求预热前缀缓存...
+[warmup] 完成 ok=4 failed=0 wall=10.6s
+[bench] backend=sglang in=131072 out=1024 n=100 conc=20 rate=inf hit~0.85 (prefix=111411/131072)
+Successful requests: 100
+Benchmark duration (s): 273.52
+Request throughput (req/s): 0.37
+Output token throughput (tok/s): 374.38
+Total token throughput (tok/s): 48295.19
+Mean TTFT (ms): 6552.47
+Median TTFT (ms): 1997.66
+P99 TTFT (ms): 36916.79
+Mean TPOT (ms): 46.07
+Median TPOT (ms): 45.75
+P99 TPOT (ms): 75.56
+Mean ITL (ms): 46.07
+Median ITL (ms): 13.62
+P99 ITL (ms): 626.74
+Mean E2E Latency (ms): 53680.51
+Failed requests: 0
+>>> 本档服务端实测前缀缓存命中率 = 0.8463 (cached_tokens Δ=11470080 / prompt_tokens Δ=13552860)
+>>> cached in=131072 conc=20 PASS (TPOT=46.07ms)，最大可用并发更新为 20
 ```
 
-来源：`/workspace/img3-logs/vllmbench-img31-n100.log`
+> 两次 n=100 用的是两份启动脚本，但计算路径等价——其中一项 rocBLAS 调优
+> （`ROCBLAS_TENSILE_LIBPATH`）实测**不生效**：本 workload 的 Tensile 内核全部来自
+> hipBLASLt，用 router shape 做 A/B 也是 15.6 µs 对 15.6 µs。所以两次的差异（TPOT 47.98 vs 46.07）
+> 主要来自投机接受率的随机波动（两次跑的中段 accept rate 分别是 0.55 / 0.82）。
 
-### 2.2 结论
+### 2.2 n=200 / c20（历史数据）
 
-- **TPOT mean = 50.91 ms**（SLO 50 ms，差 1.8%）
-- **TTFT mean = 9 376.44 ms**（P50 3 580.90 ms 仅作参考）
-- 总吞吐 42 041.74 tok/s，输出吞吐 325.90 tok/s
+```
+input_len output_len conc  TTFT_mean  TTFT_p99  TPOT_mean  TPOT_p99  Total吞吐  判定
+   131072       1024   20    4358.50   35596.69     54.21     76.96   43682.14  FAIL(TPOT>50ms)
+   131072       1024   20    4368.00   35593.07     54.31     83.31   43568.53  FAIL(TPOT>50ms)
+   131072       1024   20    4525.39   36051.43     55.16     87.79   42484.80  FAIL(TPOT>50ms)
+   131072       1024   16    3670.11   31626.82     42.92     74.60   44019.94  PASS
+   131072       1024   18    3792.14   31626.82     51.33     74.60   41825.10  FAIL(TPOT>50ms)
+```
 
-> **TTFT 平均值的口径**：vllm bench 不预热前缀缓存，n=100 里有约 10 条冷启动
-> （每条要真算 131 072 token，约 12 s），把均值从 3.6 s 拉到 9.4 s。
-> 官方脚本会先发 4 条预热，同场景 c20 的 TTFT mean 是 **4 358.50 ms**。
-> 所以均值受「冷启动比例」影响极大，引用时必须说明是否预热。
+### 2.3 n=100 / c16
 
----
+```
+[bench] backend=sglang in=131072 out=1024 n=100 conc=16 rate=inf hit~0.85 (prefix=111411/131072)
+Successful requests: 100
+Benchmark duration (s): 278.38
+Request throughput (req/s): 0.36
+Output token throughput (tok/s): 367.84
+Total token throughput (tok/s): 47451.11
+Mean TTFT (ms): 5033.14
+Median TTFT (ms): 1992.46
+P99 TTFT (ms): 29922.24
+Mean TPOT (ms): 37.63
+Median TPOT (ms): 37.11
+P99 TPOT (ms): 64.29
+Mean ITL (ms): 37.63
+Median ITL (ms): 11.50
+P99 ITL (ms): 419.49
+Mean E2E Latency (ms): 43523.83
+Failed requests: 0
+>>> 本档服务端实测前缀缓存命中率 = 0.8463 (cached_tokens Δ=11470080 / prompt_tokens Δ=13552860)
+>>> cached in=131072 conc=16 PASS (TPOT=37.63ms), 最大可用并发更新为 16
+```
+
+### 2.4 结论
+
+| 配置 | TTFT mean | TTFT median | TPOT mean | 总吞吐 | 判定 |
+|---|---:|---:|---:|---:|---|
+| **n=100 / c20（第一次）** | 6 230.66 ms | 2 010.40 ms | 47.98 ms | 47 027 tok/s | **PASS** |
+| **n=100 / c20（第二次）** | 6 552.47 ms | 1 997.66 ms | **46.07 ms** | **48 295 tok/s** | **PASS** |
+| **n=100 / c16** | 5 033.14 ms | 1 992.46 ms | **37.63 ms** | 47 451 tok/s | **PASS** |
+| n=200 / c20（历史） | 4 358.50 ms | — | 54.21 ms | 43 682 tok/s | FAIL(TPOT>50) |
+| n=200 / c16（历史） | 3 670.11 ms | — | 42.92 ms | 44 020 tok/s | PASS |
+
+**三点**：
+
+1. **n=100 全部过线**：c20 两次 TPOT 47.98 / 46.07 ms，c16 一次 **37.63 ms**；
+   相比 n=200 历史的 c20 54.21 ms 降 **11.5% / 15.0%**，c16 相比历史 42.92 ms 降 **12.3%**
+2. **TTFT 均值受尾部拖累**：三次的中位数都在 2.0 s 附近（1 992–2 010 ms），
+   但均值 5.0–6.6 s，因为少数请求排队到 30–37 s（P99）。引用均值必须同时给中位数
+3. **TTFT 均值高于历史且原因待查**：n=100 的 c20 是 6.2–6.6 s（历史 4.36 s）、
+   c16 是 5.03 s（历史 3.67 s）。两个并发档都偏高，且 n 更小时反而更差，
+   **与排队逻辑方向相反，不能用「n 不同」解释**；需要在 n=200 同口径下复跑才能定论
 
 ## 3. 128K 解码（输出 2）的并发-TTFT 曲线
 
@@ -230,50 +287,7 @@ input_len output_len conc  TTFT_mean  TTFT_p99  TPOT_mean  TPOT_p99  Total吞吐
 
 **128K/1K 场景最大并发 = 16–17**（c16 PASS 42.92 ms，c18 FAIL 51.33 ms）。
 
-> v3.1 在 c20 的 TPOT 是 50.91（vllm bench 口径），按 −7% 折算到官方口径约 50.4 ms，
-> 仍略超线，需再降 1–2 ms/step 才能稳过。
+> 上表是**历史数据**（未含本次 FlashMLA 优化）。本次在 n=100 下：
+> c20 的 TPOT mean 是 **47.98 / 46.07 ms（两次）**、c16 是 **37.63 ms**，均 PASS。
 
 ---
-
-## 5. 「原来的净填充吞吐」——历史库没有
-
-`output.csv` 共 14 行，**全部是 `mode=cached`、`output_len=1024` 的混合场景**，
-没有任何 `output_len≈0` 的纯填充记录。
-
-所以：
-- 本文 §1 的 10.5–12.0k tok/s 是**今天在 v3.1 上实测的**
-- **v2（老镜像）没有可对照的纯填充数字**，要对比必须在 v2 容器里跑一次
-
----
-
-## 6. 日志与脚本清单
-
-| 内容 | 路径 |
-|---|---|
-| 服务端主日志（每条 prefill/decode、`input throughput`、`#cached-token`） | `/workspace/img3-logs/launch31-run.log` |
-| 纯填充 vllm bench（c=1） | `/workspace/img3-logs/bench-128k-out2-c1.log` |
-| 混合场景 vllm bench（n=100） | `/workspace/img3-logs/vllmbench-img31-n100.log` |
-| 官方脚本历史结果 | `/workspace/repro-1123-files/result/GLM-5.3-Flash-Channel-FP8-w8a8/output.csv` |
-| 压测脚本 | `/workspace/mhc_repro/bench_vllm2.sh`（支持 `SEED`） |
-| TTFT/并发脚本 | `/workspace/mhc_repro/run_profile.py`（支持 `SUFFIX_SEED`、`PROF_STEPS=0` 跳过 profiler） |
-
----
-
-## 7. 结论汇总
-
-| 项 | 数值 | 可信度 |
-|---|---:|---|
-| 净填充吞吐（冷启动，c1） | **10.5–12.0k tok/s** | 高（日志与 bench 互证） |
-| 冷启动 128K 单请求 TTFT | **12.36 s** | 高 |
-| 热态（0.85 命中）单请求 TTFT | ~2 s（含客户端开销） | 中 |
-| **混合 c20 TPOT mean（官方口径，预热，n=100）** | **47.98 ms → PASS** | 高 |
-| 混合 c20 TPOT mean（vllm bench，不预热，n=100） | 50.91 ms | 高 |
-| 混合 c20 TTFT mean（官方，预热，n=100） | 6 231 ms | 高 |
-| 混合 c20 TTFT mean（vllm bench，不预热，n=100） | 9 376 ms | 高 |
-| 混合 c20 总吞吐（官方） | **47 027 tok/s** | 高 |
-| 128K/1K 最大并发（TPOT≤50） | **16–17** | 高（官方口径） |
-| 128K 解码 5s TTFT 支撑并发 | c2–c3 | 中（含客户端开销） |
-
-**待补**：
-1. c≥2 的真实纯填充吞吐（需每轮换 `SEED` 重测）
-2. v2 的纯填充吞吐对照（需启 v2 容器）
