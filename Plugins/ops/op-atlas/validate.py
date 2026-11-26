@@ -212,8 +212,12 @@ def _check_next_probe(cards_dir, repo):
             err("E26", p.name,
                 "measured/tuned 卡缺 next_probe —— 没有「下一步改什么」的卡只是基线快照")
             continue
+        # evidence / status：诊断契约四字段（见 scripts/check_diagnosis.py）。
+        # 没有这两个键，next_probe 只能是「假设」不能是「已证/已推翻」的判定，
+        # 2026-11-25 一天 4 次结论写死 3 次就是缺了 status。
         extra = set(np_) - {"surface", "hypothesis", "expected", "stop_if",
-                            "effort", "none_reason", "tuned_from", "falsifier"}
+                            "effort", "none_reason", "tuned_from", "falsifier",
+                            "evidence", "status"}
         if extra:
             err("E26", p.name, "next_probe 未知字段 %s" % sorted(extra))
 

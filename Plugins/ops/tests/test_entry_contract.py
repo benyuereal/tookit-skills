@@ -330,3 +330,67 @@ def test_minimal_repro_tool_exists():
         "最后一层（L6）不是「换调用方式」—— 正是这一层被漏掉过")
     # 全崩时必须提示查调用方式
     assert "该怀疑调用方式" in s, "工具不会在「全崩」时提示查调用方式"
+
+
+def test_diagnosis_records_carry_hypothesis_and_falsifier():
+    """诊断记录必须带「假设 → 判定」四字段：hypothesis / falsifier / evidence / status。
+
+    **这条测试故意只警告不失败（参考 test_no_card_claims_full_shape_score_while_slower）。**
+    存量记录（runs/loop、candidates.yaml:refuted、卡片 next_probe）写于本契约之前，
+    批量补字段等于编造 falsifier —— 那正是 2026-11-25 一天 4 次错误结论的病根。
+    所以先让问题**可见**，不阻塞：用 warnings.warn 输出按落点统计的清单。
+
+    由来：那天 4 次结论里前 3 次被推翻，每次都写成「结案」「最终结论」
+    （commit 2f22f6f / cf5d49a），却没说「什么实测结果能推翻它」。
+    正确形态是「当前最优假设 + 可观测的 falsifier」—— 见 scripts/check_diagnosis.py。
+    """
+    sys.path.insert(0, str(REPO / "scripts"))
+    from check_diagnosis import counts, scan
+
+    bad = scan()
+    cnt = counts()
+    if bad:
+        import warnings
+        detail = "，".join("%s %d/%d" % (k, b, t) for k, (t, b) in sorted(cnt.items()))
+        warnings.warn(
+            "诊断记录缺「假设/可推翻判据」四字段：%d/%d 条不合规（%s）。"
+            "详见 python3 -I scripts/check_diagnosis.py"
+            % (len(bad), sum(t for t, _ in cnt.values()), detail),
+            stacklevel=1)
+    # 不 assert，避免把存量补录变成阻塞项 —— 但会出现在 pytest -W 输出里。
+    # 契约本身由 scripts/check_diagnosis.py --selftest 守护（含反向用例）。
+    assert isinstance(bad, list)
+
+
+def test_check_diagnosis_selftest_catches_bad_falsifier():
+    """check_diagnosis 的判据必须真的会报错 —— 守住「校验器自己没被校验」。
+
+    正向：五字段齐全的记录要通过。
+    反向：falsifier 为空 / 是空话 / status 越界 / 已证无证据，都必须报错。
+    这条断言在测试进程内直接调函数，不靠子进程输出 —— 免得命令悄悄失效还显示绿。
+    """
+    sys.path.insert(0, str(REPO / "scripts"))
+    from check_diagnosis import STATUSES, check_record
+
+    good = {
+        "hypothesis": "d=512 不支持",
+        "falsifier": "若 d=512 kernel 在 HCU[0] 上跑通且输出与参考一致，则本假设被推翻",
+        "evidence": "代码半截图",
+        "status": "已证",
+    }
+    assert check_record(good) == [], check_record(good)
+
+    # 反向：falsifier 为空必须报错（task 明确要求的反向用例）
+    assert any("falsifier" in p
+               for p in check_record({**good, "falsifier": ""})), "空 falsifier 没被抓住"
+    # 反向：falsifier 是空话
+    assert any("空话" in p
+               for p in check_record({**good, "falsifier": "待定"})), "空话 falsifier 没被抓住"
+    # 反向：status 越界
+    assert any("status" in p
+               for p in check_record({**good, "status": "已确认"})), "越界 status 没被抓住"
+    # 反向：已证但无证据
+    assert any("evidence" in p
+               for p in check_record({**good, "evidence": ""})), "已证无证据没被抓住"
+
+    assert STATUSES == ("未验", "部分证实", "已证", "已被推翻"), STATUSES
