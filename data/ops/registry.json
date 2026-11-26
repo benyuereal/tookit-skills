@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "updated": "2026-11-25",
+ "updated": "2026-11-26",
  "note": "算子索引与状态机。draft -> measured -> tuned -> at_floor -> deprecated。at_floor 必须带 floor_status 与 evidence，且同一档位不得重复立项。本文件只放状态与档位，绝对耗时进 ~/.config/dcu-toolkit/kb/op-opt/。",
  "ops": [
   {
@@ -218,6 +218,71 @@
    "best_variant": null,
    "floor_status": null,
    "last_verified": "2026-11-25",
+   "evidence": null,
+   "open_questions": []
+  },
+  {
+   "name": "fusion-rmsnorm-rope",
+   "path": "Plugins/ops/skills/op-fusion-rmsnorm-rope",
+   "status": "measured",
+   "shapes": [
+    "decode-m1",
+    "prefill-8k"
+   ],
+   "variants": [
+    "aiter",
+    "lightop",
+    "lightop",
+    "aiter"
+   ],
+   "best_variant": null,
+   "floor_status": null,
+   "last_verified": "2026-11-23",
+   "evidence": null,
+   "open_questions": []
+  },
+  {
+   "name": "fusion-add-rmsnorm-quant",
+   "path": "Plugins/ops/skills/op-fusion-add-rmsnorm-quant",
+   "status": "measured",
+   "shapes": [
+    "decode-m1",
+    "decode-m32",
+    "prefill-8k"
+   ],
+   "variants": [
+    "lightop",
+    "lightop",
+    "lightop",
+    "aiter",
+    "lightop",
+    "aiter"
+   ],
+   "best_variant": null,
+   "floor_status": null,
+   "last_verified": "2026-11-23",
+   "evidence": null,
+   "open_questions": []
+  },
+  {
+   "name": "gemm-bf16",
+   "path": "Plugins/ops/skills/op-gemm-bf16",
+   "status": "measured",
+   "shapes": [
+    "decode-m1",
+    "decode-m32",
+    "prefill-8k"
+   ],
+   "variants": [
+    "boltops",
+    "aiter",
+    "boltops",
+    "torch",
+    "triton"
+   ],
+   "best_variant": null,
+   "floor_status": null,
+   "last_verified": "2026-11-22",
    "evidence": null,
    "open_questions": []
   }

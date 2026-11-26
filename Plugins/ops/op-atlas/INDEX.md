@@ -30,7 +30,7 @@
 | [`fusion-silu-mul-quant`](cards/fusion-silu-mul-quant.yaml) | activation | measured | — | bandwidth | 比 silu_and_mul+quant 分步快 2.25x/2.3… |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | — | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |
-| [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | — | compute | hipBLASLt 默认调用达 498.5 TF（nominal 的… |
+| [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | — | compute | 用 aiter，不要自研；4 个变体里 3 个 adapter 空，… |
 | [`gemm-int8`](cards/gemm-int8.yaml) | gemm | draft | — | compute | 已降 draft：连续 3 批缺可补证据。原 ratio=343 无… |
 | [`gemm-swiglu-epilogue`](cards/gemm-swiglu-epilogue.yaml) | gemm | draft | — | mixed | 库里无真入口，需自研 epilogue（现有仅独立 silu_mul… |
 | [`hadamard-transform`](cards/hadamard-transform.yaml) | linear-attn | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
@@ -63,7 +63,7 @@
 | [`paged-attention-decode`](cards/paged-attention-decode.yaml) | attention | measured | — | bandwidth | flash_attn decode 只达峰值 0.03；同机 MLA… |
 | [`qk-norm`](cards/qk-norm.yaml) | norm | draft | — | bandwidth | 已降 draft：连续 3 批缺可补证据。原 ratio=741 无… |
 | [`quant-per-token`](cards/quant-per-token.yaml) | quant | draft | — | bandwidth | 无实测：两条真入口已 import 验证，待 bench |
-| [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | measured | — | bandwidth | 自研寄存器驻留实现相对 lightop 快 1.12x（event_… |
+| [`rmsnorm-fused`](cards/rmsnorm-fused.yaml) | elementwise | measured | — | bandwidth | 仅 prefill 档快于 lightop，decode 两档均更慢… |
 | [`rope-mla`](cards/rope-mla.yaml) | rope | measured | — | bandwidth | MLA decode 为 360 GB/s，与纯 rope 的 33… |
 | [`rope`](cards/rope.yaml) | rope | measured | — | bandwidth | 两种 rotate_style 耗时比为 0.973（差异接近噪声边… |
 | [`sampling-topk-topp`](cards/sampling-topk-topp.yaml) | sampling | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |

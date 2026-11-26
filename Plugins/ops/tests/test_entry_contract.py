@@ -202,3 +202,31 @@ def test_decision_wordlist_documented_where_people_look():
     for w in ("决定", "结论", "完成", "TODO"):
         assert not re.search(DECISION_RE, w), (
             "%r 被误判成决策词，会虚增轮次" % w)
+
+
+def test_env_probe_detects_bind_mode_not_just_device_count():
+    """env_probe 必须同时测「纯 torch」和「自定义 kernel」。
+
+    **这条测试守的是判据本身，不是被测对象。**
+
+    2026-11-26 实测：第一版 env_probe 只用 `a @ a` 探活，
+    在 HCU[4] 上报告「两种设备绑定方式均可」——
+    而同一次测试里，`cuda:4` + 自定义 .so 明确 dump core。
+
+    原因是：**纯 torch 走 at::native，不受设备绑定 bug 影响；
+    自定义 .so 加载的 kernel 才受影响。** 只测纯 torch 会得出
+    「环境没问题」的错误结论，而那个结论正是花 5 小时才推翻的。
+
+    这条测试检查源码里确实包含自定义 kernel 的调用路径。
+    """
+    src = (REPO / "scripts" / "env_probe.py").read_text(encoding="utf-8")
+
+    # 必须有一个自定义 kernel 源码片段与 ctypes 调用
+    assert "_PROBE_HIP" in src, "env_probe 不再自带探针 kernel 源码"
+    assert "ctypes.CDLL" in src, "env_probe 不再加载自定义 .so —— 退化成纯 torch 探活"
+    assert "probe_launch" in src, "env_probe 没有调用自定义 kernel"
+
+    # 反向：不能只靠 torch 的 matmul 判定
+    assert "必须同时测两条路径" in src or "两条路径" in src, (
+        "env_probe 里没有说明「为什么必须测两条路径」—— "
+        "这条注释是防止后人把它简化掉的唯一提示")

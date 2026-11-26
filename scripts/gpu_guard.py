@@ -20,6 +20,14 @@ CLAUDE.md 的硬约束是「每卡 used 需 < 30 GB」，本脚本把它变成�
 2. 使用率 < 10%（说明没有活跃计算）
 3. 连续两次采样间隔 2 秒都满足（防止正好在两次 kernel 之间采到 0）
 
+## **本脚本判「干净」，不判「能用」**
+
+2026-11-26 的血教训：`gpu_guard` 报 HCU[4] 空闲（0%、可分配 2GB），
+但用 `cuda:4` 跑自定义 kernel 会 dump core。**「干净」和「能用」是两件事。**
+
+环境层面是否可用（设备绑定方式、arch 匹配、构建产物可信度）
+由 `scripts/env_probe.py` 负责。**跑 bench 前两个都要过。**
+
 ## 用法
 
     python3 -I scripts/gpu_guard.py            # 查所有卡，返回第一个干净的
@@ -164,9 +172,24 @@ def main(argv=None):
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--no-settle", action="store_true")
+    ap.add_argument("--env", action="store_true",
+                    help="额外跑 env_probe（设备绑定/arch/构建产物），更慢但更可靠")
     a = ap.parse_args(argv)
     if a.selftest:
         return selftest()
+    if a.env:
+        # 先过环境检查 —— 它比使用率更容易让人白跑
+        sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
+        import env_probe
+        cards, bad = env_probe.check(a.card, emit=lambda m: print(m))
+        if not cards:
+            print("✗ env_probe: 没有可用卡 —— 不要硬跑")
+            return 1
+        if a.card is not None and a.card not in cards:
+            print("✗ env_probe: HCU[%d] 环境不可用" % a.card)
+            return 1
+        print()
+
     c, ok, why = check(a.card, settle=0 if a.no_settle else SETTLE_SECONDS)
     if a.json:
         print(json.dumps({"card": c, "clean": ok, "why": why},
