@@ -110,7 +110,27 @@ def get_runner(name, **kwargs):
         return _ref
     if name == "torch-unfused":
         def _unfused(q, k, w_q, w_k, cache, pos, **kw):
-            return reference(q, k, w_q, w_k, cache, pos)
+            """两趟实现：norm 写出中间态，再读回来做 rope。
+
+            这是**融合要打败的对象**。与 reference 的数学等价，
+            区别是把中间态真的写出去再读回来 —— 融合省的正是这一趟。
+            """
+            D = q.shape[-1]
+            cache_f = cache.float()
+            idx = pos.reshape(-1)
+            row = cache_f.index_select(0, idx).reshape(*pos.shape, 2 * D)
+            cos = row[..., :D].unsqueeze(2)
+            sin = row[..., D:].unsqueeze(2)
+
+            def _two_pass(x, w):
+                # 第一趟：norm，结果写成 bf16 落盘
+                xf = x.float()
+                rms = torch.sqrt(xf.pow(2).mean(dim=-1, keepdim=True) + EPS)
+                mid = ((xf / rms) * w.float()).to(torch.bfloat16)
+                # 第二趟：读回来做 rope（这里 bf16 -> float 就是那次往返）
+                return _rope(mid.float(), cos, sin)
+
+            return _two_pass(q, w_q), _two_pass(k, w_k)
         return _unfused
     raise ValueError("未知变体 %r（可选 %s）" % (name, " / ".join(VARIANTS)))
 
