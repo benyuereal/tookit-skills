@@ -75,15 +75,17 @@ def get_runner(name, **kwargs):
             所以这里必须转置 —— 转换放在 adapter 内部，不改变契约。
             """
             import lightop
-            if A.shape[1] > 256:
-                # **实测（2026-11-26）：lightop.gemm 在 K > 256 时结果错误。**
-                #   K=256  -> 误差 0.0016（合格）
-                #   K=4096 -> 误差 1.0000（完全错）
-                # 拒绝跑，不返回错误结果 —— 悄悄算错比报错危险得多。
+            # **实测（2026-11-26）：lightop.gemm 在 M >= 24 时结果错误。**
+            #   M=8/16, K=512, N=512  -> 误差 0.0022（合格）
+            #   M=24,    K=512, N=512 -> 误差 1.0643（完全错）
+            #   M=32,    K=512, N=512 -> 误差 4.4751（完全错）
+            # 与 K 无关 —— 上一轮先归因到 K>256，是没控制变量的误判。
+            # 猜测是它的 tile 分块假设了 M<=16 的 warp 布局，但未查证。
+            if A.shape[0] >= 24:
                 raise RuntimeError(
-                    "lightop.gemm 在 K=%d 时结果不可信（K=256 正确、K=4096 错），"
+                    "lightop.gemm 在 M=%d 时结果不可信（M<=16 正确、M>=24 错），"
                     "见 candidates.yaml 的 known_issue。已拒绝运行，避免污染数据。"
-                    % A.shape[1])
+                    % A.shape[0])
             return lightop.gemm(A, B.t().contiguous()).to(torch.bfloat16)
         return _lo
     raise ValueError(name)
