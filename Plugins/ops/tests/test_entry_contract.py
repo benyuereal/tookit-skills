@@ -260,3 +260,73 @@ def test_every_bench_runs_preflight_by_default():
     assert not missing, (
         "以下 bench 没有默认跑前置检查：\n  " + "\n  ".join(missing) +
         "\n修法：参考 scripts/bench_preflight.py 的用法说明接进 main()")
+
+
+def test_failure_surfaces_are_complete_and_linked():
+    """故障 surface 表必须完整、且 SKILL.md 指向它。
+
+    这 6 条是从 2026-11-25 那 5 小时里提炼的。**有表但不指向，
+    等于没有表** —— 下一个 agent 不会自己去找。
+    """
+    import yaml
+    ref = REPO / "Plugins/ops/skills/op-optimize/references"
+    f = ref / "failure-surfaces.yaml"
+    assert f.is_file(), "缺 failure-surfaces.yaml"
+    d = yaml.safe_load(f.read_text(encoding="utf-8"))
+    surfaces = d.get("failure_surfaces") or []
+    assert len(surfaces) >= 6, "故障 surface 少于 6 条（当前 %d）" % len(surfaces)
+
+    need = ("id", "symptom", "minimal_repro", "diagnosis", "common_causes", "evidence")
+    bad = []
+    for s in surfaces:
+        miss = [k for k in need if not s.get(k)]
+        if miss:
+            bad.append("%s 缺 %s" % (s.get("id"), miss))
+        # evidence 必须指向真实的 D 编号
+        ev = str(s.get("evidence") or "")
+        if not re.search(r"D\d+|candidates\.yaml", ev):
+            bad.append("%s 的 evidence 没指向可追溯来源：%r" % (s.get("id"), ev[:40]))
+    assert not bad, "故障 surface 不完整：\n  " + "\n  ".join(bad)
+
+    # SKILL.md 必须指向它
+    skill = (REPO / "Plugins/ops/skills/op-optimize/SKILL.md").read_text(encoding="utf-8")
+    assert "failure-surfaces" in skill, "SKILL.md 没指向 failure-surfaces.yaml"
+
+
+def test_libraries_bounds_doc_exists_and_linked():
+    """库的可用边界必须有归口文档，且 SKILL.md 指向它。
+
+    2026-11-26：`lightop.gemm` 的 M<=16、FlashMLA fp8 的 H<=32，
+    这些边界之前只存在于 commit message 里 —— 换个人就找不到了。
+    """
+    ref = REPO / "Plugins/ops/skills/op-optimize/references/libraries-bounds.md"
+    assert ref.is_file(), "缺 libraries-bounds.md"
+    txt = ref.read_text(encoding="utf-8")
+    # 至少要有实测数据表和复现命令 —— 光写结论不算
+    assert "|" in txt and "---" in txt, "libraries-bounds.md 没有实测数据表"
+    assert "复现" in txt, "libraries-bounds.md 没写复现命令"
+
+    skill = (REPO / "Plugins/ops/skills/op-optimize/SKILL.md").read_text(encoding="utf-8")
+    assert "libraries-bounds" in skill, "SKILL.md 没指向 libraries-bounds.md"
+
+
+def test_minimal_repro_tool_exists():
+    """递减实验工具必须存在，且 **最后一层是「换调用方式」**。
+
+    2026-11-25 的 40 分钟就是漏了这一层：递减只减了被测对象，
+    没减「怎么调用它」。工具的价值不在跑命令，在于**顺序**。
+    """
+    p = REPO / "scripts/minimal_repro.py"
+    assert p.is_file(), "缺 scripts/minimal_repro.py"
+    s = p.read_text(encoding="utf-8")
+    # 层序里「换调用方式」必须存在
+    assert "换调用方式" in s, "递减层序里没有「换调用方式」这一层"
+    # 且必须在最后
+    layers = re.findall(r'\("(L\d+)",\s*"([^"]+)"', s)
+    ids = [x[0] for x in layers]
+    assert "L6" in ids, "递减层序少于 6 层：%s" % ids.extend(ids)
+    last = [x for x in layers if x[0] == "L6"]
+    assert last and "换调用方式" in last[0][1], (
+        "最后一层（L6）不是「换调用方式」—— 正是这一层被漏掉过")
+    # 全崩时必须提示查调用方式
+    assert "该怀疑调用方式" in s, "工具不会在「全崩」时提示查调用方式"

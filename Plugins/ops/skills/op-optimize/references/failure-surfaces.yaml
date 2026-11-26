@@ -1,305 +1,213 @@
-# failure-surfaces.yaml —— 6 条「为什么坏了」的定位面
-#
-# ## 为什么需要它
-#
-# `surfaces.yaml` 的 17 条全部回答「怎么更快」：每条有 transform、预条件、
-# 预期收益。**0 条回答「为什么坏了」** —— 也就是说，当一次改动变成
-# 「崩了 / 算错了 / 改了没效果」时，agent 手上没有任何可枚举的排查面，
-# 只能靠自由发挥。
-#
-# 代价是可量化的：2026-11-25 那次调试，5 小时里给了 3 次「找到了」
-# （d=512 / 编译缓存 / 验证器通过），全是错的，根因在第 4 次才出现。
-# 事后看，**每一条根因都命中下面这 6 条里的某一条**，而每一条都有一个
-# 30 秒内能跑完的判别命令。
-#
-# ## 与 failure-taxonomy.md 的分工
-#
-# `failure-taxonomy.md` 分的是「这次失败该记成 impl-broken 还是
-# direction-refuted」（记账口径）；这里分的是「这次失败到底是哪一类
-# 故障」（定位口径）。先定位，再记账 —— 归因错了，记的账也是错的。
-#
-# ## 用法
-#
-# 出现「崩 / 错 / 没变化」时，按 id 顺序过一遍（顺序≈代价从低到高），
-# 每条先跑 `minimal_repro` 里的判别命令，再读 `diagnosis`。
-# **不要跳过 device-bind**：它排在第 1 位是因为它最贵（5 小时），
-# 不是因为最常见。
-#
-# 字段：
-#   symptom        现象，写「同时有什么正常」——排除项比现象本身有信息量
-#   minimal_repro  可以真跑的命令（本机 2026-11-26 复证过），不是伪代码
-#   diagnosis      怎么判定是不是这一条（判据要能区分，不能只说"检查一下"）
-#   common_causes  具体原因（写机制，不写"代码有问题"）
-#   evidence       实测出处（docs/DEBT.md 的 D 编号 + 日期）
-#   cost_saved     从"没有这条面"到"命中这条面"省下的时间
-
 version: 1
 updated: '2026-11-26'
-
 failure_surfaces:
+- id: device-bind
+  symptom: Invalid address access / KERNEL VMFault / dumped core，但同一张卡上纯 torch（a @
+    b）和厂商库（lightop）都正常
+  minimal_repro: "# ① 5 行最小 kernel，不用 rmsnorm、不用 shuffle、不做任何访存\ncat > /tmp/db.hip\
+    \ <<'EOF'\n#include <hip/hip_runtime.h>\nextern \"C\" __global__ void k(float*\
+    \ o) { if (threadIdx.x == 0) o[0] = 1.0f; }\nextern \"C\" void run(float* p) {\
+    \ k<<<1, 64>>>(p); }\nEOF\nhipcc -O3 --offload-arch=gfx938 -fPIC -shared -o /tmp/db.so\
+    \ /tmp/db.hip\n\n# ② 崩：直接指定设备号\npython3 -I -c \"import ctypes,torch; t=torch.zeros(4,device='cuda:4');\
+    \ \\\n  l=ctypes.CDLL('/tmp/db.so'); l.run.argtypes=[ctypes.c_void_p]; \\\n  l.run(ctypes.c_void_p(t.data_ptr()));\
+    \ torch.cuda.synchronize(); print(float(t[0]))\"\n#   -> KERNEL VMFault / dumped\
+    \ core\n\n# ③ 正常：同一张卡，改环境变量重映射成逻辑 0 号\nHIP_VISIBLE_DEVICES=4 python3 -I -c \"\
+    import ctypes,torch; t=torch.zeros(4,device='cuda:0'); \\\n  l=ctypes.CDLL('/tmp/db.so');\
+    \ l.run.argtypes=[ctypes.c_void_p]; \\\n  l.run(ctypes.c_void_p(t.data_ptr()));\
+    \ torch.cuda.synchronize(); print(float(t[0]))\"\n#   -> 1.0\n\n# ④ 仓库自带的一条判（同时测纯\
+    \ torch 与自定义 kernel）\npython3 -I /workspace/toolkit_skills/scripts/env_probe.py\
+    \ --card 4\n#   -> HCU[4] ⚠ cuda:4 直接指定会崩，但 HIP_VISIBLE_DEVICES 重映射正常\n"
+  diagnosis: '判据只有一个：**换掉「设备指定方式」这一个变量，崩不崩会不会变。**
 
-  # ══════════════════════════════════════════════════════════════════
-  # 1. 最贵的一条：设备指定方式。纯 torch 正常 ≠ 卡可用。
-  # ══════════════════════════════════════════════════════════════════
-  - id: device-bind
-    symptom: "Invalid address access / KERNEL VMFault / dumped core，但同一张卡上纯 torch（a @ b）和厂商库（lightop）都正常"
-    minimal_repro: |
-      # ① 5 行最小 kernel，不用 rmsnorm、不用 shuffle、不做任何访存
-      cat > /tmp/db.hip <<'EOF'
-      #include <hip/hip_runtime.h>
-      extern "C" __global__ void k(float* o) { if (threadIdx.x == 0) o[0] = 1.0f; }
-      extern "C" void run(float* p) { k<<<1, 64>>>(p); }
-      EOF
-      hipcc -O3 --offload-arch=gfx938 -fPIC -shared -o /tmp/db.so /tmp/db.hip
+    同一个 .so、同一个 kernel、同一张卡，`device=''cuda:N''` 崩而
 
-      # ② 崩：直接指定设备号
-      python3 -I -c "import ctypes,torch; t=torch.zeros(4,device='cuda:4'); \
-        l=ctypes.CDLL('/tmp/db.so'); l.run.argtypes=[ctypes.c_void_p]; \
-        l.run(ctypes.c_void_p(t.data_ptr())); torch.cuda.synchronize(); print(float(t[0]))"
-      #   -> KERNEL VMFault / dumped core
+    `HIP_VISIBLE_DEVICES=N` + `device=''cuda:0''` 正常 ⇒ 命中本条。
 
-      # ③ 正常：同一张卡，改环境变量重映射成逻辑 0 号
-      HIP_VISIBLE_DEVICES=4 python3 -I -c "import ctypes,torch; t=torch.zeros(4,device='cuda:0'); \
-        l=ctypes.CDLL('/tmp/db.so'); l.run.argtypes=[ctypes.c_void_p]; \
-        l.run(ctypes.c_void_p(t.data_ptr())); torch.cuda.synchronize(); print(float(t[0]))"
-      #   -> 1.0
 
-      # ④ 仓库自带的一条判（同时测纯 torch 与自定义 kernel）
-      python3 -I /workspace/toolkit_skills/scripts/env_probe.py --card 4
-      #   -> HCU[4] ⚠ cuda:4 直接指定会崩，但 HIP_VISIBLE_DEVICES 重映射正常
-    diagnosis: |
-      判据只有一个：**换掉「设备指定方式」这一个变量，崩不崩会不会变。**
-      同一个 .so、同一个 kernel、同一张卡，`device='cuda:N'` 崩而
-      `HIP_VISIBLE_DEVICES=N` + `device='cuda:0'` 正常 ⇒ 命中本条。
+    三个会把人带偏的假信号：
 
-      三个会把人带偏的假信号：
-      - 纯 torch 正常 —— 它走 at::native，不受影响，**不能**当环境可用的证据
-      - `gpu_guard.py` 报「干净/可分配」—— 它判的是「干净」不是「能用」
-      - N<4 正常 —— 只有 N>=4 触发，所以先试 N=0 会得出「环境没问题」
-    common_causes:
-      - "调用方把 `cuda:N`（N>=4）直接传给 torch，而不是先设 `HIP_VISIBLE_DEVICES=N` 再用 `cuda:0`"
-      - "探活只跑纯 torch（`a @ a`），它不会崩，于是判成「环境可用」"
-      - "`bench/ab.py --device cuda:N` 在 N>=4 时触发；过去在这些卡上做的测量都不可信"
-      - "把结论写成「卡/平台坏了」—— 那会导向「修不了」，而实际改一行调用方式就好"
-    evidence: "D24 更正 + D24 收尾，2026-11-26（本机 2026-11-26 09:37 复证：HCU[4] 上 cuda:4 崩、重映射 OK）"
-    cost_saved: "5 小时 -> 30 秒"
+    - 纯 torch 正常 —— 它走 at::native，不受影响，**不能**当环境可用的证据
 
-  # ══════════════════════════════════════════════════════════════════
-  # 2. 结果错但形状对：结构体未值初始化。
-  # ══════════════════════════════════════════════════════════════════
-  - id: uninit-struct
-    symptom: "结果错（relerr 1.0 量级）或 CPU 侧 SIGSEGV，但输出形状/dtype 全对，fp32 参考实现本身没问题"
-    minimal_repro: |
-      # ① 运行时判据：未初始化的字段读到的是栈上残留（实测 21941）
-      cat > /tmp/u.cpp <<'EOF'
-      #include <cstdio>
-      struct Params { long tile_meta_ptr; int num_sm_parts; int partition_block_nums; };
-      __attribute__((noinline)) void poison() {
-        volatile long b[512];
-        for (int i = 0; i < 512; i++) b[i] = 0x123456789abcdefL;
-      }
-      int main() {
-        Params p;                 // ← 没有 {}。改成 Params p{}; 结果变 0
-        p.num_sm_parts = 8;       // 只有一个字段被赋值
-        poison();
-        printf("partition_block_nums = %d\n", p.partition_block_nums);
-      }
-      EOF
-      g++ -O0 -o /tmp/u /tmp/u.cpp && /tmp/u
-      #   -> partition_block_nums = 21941     （垃圾值；-O0 才能稳定看到）
+    - `gpu_guard.py` 报「干净/可分配」—— 它判的是「干净」不是「能用」
 
-      # ② 编译器判据：能抓到的子集（抓不到跨函数的）
-      g++ -O2 -Wall -Wextra -Wuninitialized -c /tmp/u.cpp -o /dev/null 2>&1 \
-        | grep -i "is used uninitialized"
+    - N<4 正常 —— 只有 N>=4 触发，所以先试 N=0 会得出「环境没问题」
 
-      # ③ 源码判据：候选清单（缺花括号的 Params 声明；含成员声明，需人工筛）
-      REPO=${REPO:-/workspace/FlashMLA-das}
-      grep -rnE '^\s*[A-Z][A-Za-z0-9_]*Params\s+[a-z_]+\s*;' "$REPO/csrc/" | head
-      # 对照正确写法：应命中 `Params params{};`
-      grep -rn 'DenseAttnDecodeParams params' "$REPO/csrc/api/dense_decode.h"
-    diagnosis: |
-      **按字段扫，不按代码猜。** 用 gdb 或 printf 把结构体每个字段的初值
-      打出来，找那个「在一条分支里从未被赋值」的字段。实测 `1680831347`
-      这类值就是栈残留，不是 nullptr，也不是越界。
+    '
+  common_causes:
+  - 调用方把 `cuda:N`（N>=4）直接传给 torch，而不是先设 `HIP_VISIBLE_DEVICES=N` 再用 `cuda:0`
+  - 探活只跑纯 torch（`a @ a`），它不会崩，于是判成「环境可用」
+  - '`bench/ab.py --device cuda:N` 在 N>=4 时触发；过去在这些卡上做的测量都不可信'
+  - 把结论写成「卡/平台坏了」—— 那会导向「修不了」，而实际改一行调用方式就好
+  evidence: D24 更正 + D24 收尾，2026-11-26（本机 2026-11-26 09:37 复证：HCU[4] 上 cuda:4 崩、重映射
+    OK）
+  cost_saved: 5 小时 -> 30 秒
+- id: uninit-struct
+  symptom: 结果错（relerr 1.0 量级）或 CPU 侧 SIGSEGV，但输出形状/dtype 全对，fp32 参考实现本身没问题
+  minimal_repro: "# ① 运行时判据：未初始化的字段读到的是栈上残留（实测 21941）\ncat > /tmp/u.cpp <<'EOF'\n\
+    #include <cstdio>\nstruct Params { long tile_meta_ptr; int num_sm_parts; int partition_block_nums;\
+    \ };\n__attribute__((noinline)) void poison() {\n  volatile long b[512];\n  for\
+    \ (int i = 0; i < 512; i++) b[i] = 0x123456789abcdefL;\n}\nint main() {\n  Params\
+    \ p;                 // ← 没有 {}。改成 Params p{}; 结果变 0\n  p.num_sm_parts = 8;  \
+    \     // 只有一个字段被赋值\n  poison();\n  printf(\"partition_block_nums = %d\\n\", p.partition_block_nums);\n\
+    }\nEOF\ng++ -O0 -o /tmp/u /tmp/u.cpp && /tmp/u\n#   -> partition_block_nums =\
+    \ 21941     （垃圾值；-O0 才能稳定看到）\n\n# ② 编译器判据：能抓到的子集（抓不到跨函数的）\ng++ -O2 -Wall -Wextra\
+    \ -Wuninitialized -c /tmp/u.cpp -o /dev/null 2>&1 \\\n  | grep -i \"is used uninitialized\"\
+    \n\n# ③ 源码判据：候选清单（缺花括号的 Params 声明；含成员声明，需人工筛）\nREPO=${REPO:-/workspace/FlashMLA-das}\n\
+    grep -rnE '^\\s*[A-Z][A-Za-z0-9_]*Params\\s+[a-z_]+\\s*;' \"$REPO/csrc/\" | head\n\
+    # 对照正确写法：应命中 `Params params{};`\ngrep -rn 'DenseAttnDecodeParams params' \"$REPO/csrc/api/dense_decode.h\"\
+    \n"
+  diagnosis: '**按字段扫，不按代码猜。** 用 gdb 或 printf 把结构体每个字段的初值
 
-      关键区分：形状全对、fp32 参考对、纯 torch 对，只有这条路径错
-      ⇒ 先怀疑「参数结构体有字段没初始化」，而不是 kernel 算法。
+    打出来，找那个「在一条分支里从未被赋值」的字段。实测 `1680831347`
 
-      注意两个陷阱：
-      - 设备端 printf 在 kernel 崩溃时会整段丢弃 —— 不能用「没输出」推断「没执行到」
-      - `-Wuninitialized` 只抓同一个函数内可见的路径，跨函数传结构体抓不到
-    common_causes:
-      - "局部 `Params params;` 少了 `{}` —— 默认初始化对 POD 是不初始化"
-      - "if/else 只在一条分支里给字段赋值，另一条分支保留栈残留（同一份 params 两个分支只初始化一半）"
-      - "空 optional 被无条件解引用（`p->field`），H>=64 时才走到空的那支"
-      - "逐个字段打补丁 —— 修好一个下一个才暴露，说明这是「从未跑通的路径」，应整体 `params{}` 收口"
-    evidence: "D18/D19，2026-11-25（D21 为同一问题的收口：DenseAttnDecodeParams params{}）"
-    cost_saved: "3 小时 -> 5 分钟"
+    这类值就是栈残留，不是 nullptr，也不是越界。
 
-  # ══════════════════════════════════════════════════════════════════
-  # 3. 改了没效果：产物没重编，或改的文件没进编译。
-  # ══════════════════════════════════════════════════════════════════
-  - id: build-stale
-    symptom: "改动之后现象一点没变（崩溃点、耗时、日志都同前），而代码 diff 明明在；或改动「神秘消失」被还原"
-    minimal_repro: |
-      set +e
-      # ① 自包含：产物是不是比源文件旧（时间戳判据，机器化）
-      cd "$(mktemp -d)" && printf 'int f(){return 1;}\n' > k.cpp \
-        && g++ -O2 -c k.cpp -o k.o && sleep 1 && touch k.cpp
-      python3 -I -c "import os,sys; sys.exit(0 if os.path.getmtime('k.o')>os.path.getmtime('k.cpp') else 1)"
-      echo "① rc=$?  (1 = .o 陈旧，rm -f 后重编；ls 只显示到分钟，肉眼看不出先后)"
 
-      # ② 你改的文件到底进不进编译（以 FlashMLA-das 实测）
-      REPO=${REPO:-/workspace/FlashMLA-das}
-      head -1 "$REPO/csrc/api/dense_decode_hip.h"      # -> automatically generated by hipify
-      grep -n 'include "dense_decode' "$REPO/csrc/api/api.cpp" | head -3   # -> 不带 _hip
-      grep -n 'csrc/api/api.cpp' "$REPO/setup.py" | head -2                # -> sources 只列它
+    关键区分：形状全对、fp32 参考对、纯 torch 对，只有这条路径错
 
-      # ③ 产物里有没有你的改动（把 <你的符号> / <你的字符串> 换掉）
-      SO=$(ls "$REPO"/build/lib.*/flash_mla/*.so 2>/dev/null | head -1)
-      nm -D "$SO" | grep -c '<你的符号>'
-      strings "$SO" | grep -c '<你的字符串>'
+    ⇒ 先怀疑「参数结构体有字段没初始化」，而不是 kernel 算法。
 
-      # ④ 仓库自带：幂等补丁脚本，--check 确认锚点还在不在
-      python3 -I /workspace/toolkit_skills/scripts/fmla_patch.py --check
-    diagnosis: |
-      三连，**顺序不能换**（第 ① 步最便宜）：
-      1. 产物时间戳 > 源文件时间戳？否 ⇒ 命中。
-      2. 你改的文件在编译入口（setup.py 的 sources / 入口 .cpp 的 include）里吗？
-         否 ⇒ 命中 —— 这一条比读两小时代码有用。`_hip` / `_generated` /
-         `__pycache__` / `.pb.h` 后缀**默认视为不可手改**。
-      3. 产物里有你的符号/字符串吗？没有 ⇒ 代码从没进过二进制。
 
-      「改动消失」不要先当成外部干扰 —— 更可能的解释是「这不是源文件，
-      下次生成时被覆盖」。先看第 2 步。
-    common_causes:
-      - "构建按时间戳决定重编，补丁写入早于 .o 完成 ⇒ 链接成功、运行还是旧逻辑"
-      - "改的是 hipify 生成物（`_hip.h`），编译器读的是原始 `.h`"
-      - "改的 .h 没被入口 .cpp include，或源文件不在 setup.py 的 sources 里"
-      - "手工补丁无法重现，被下一次生成覆盖 → 应脚本化（幂等 apply + check）"
-    evidence: "D15/D17，2026-11-25（D17 是 D14/D15/D16 的总根因：改了一整天的文件编译器从没读过）"
-    cost_saved: "1 天 -> 2 分钟"
+    注意两个陷阱：
 
-  # ══════════════════════════════════════════════════════════════════
-  # 4. 验证器说谎：说「通过」，其实没生效。
-  # ══════════════════════════════════════════════════════════════════
-  - id: verifier-lies
-    symptom: "校验脚本/`--check` 报「已应用/通过」，但目标文件其实是原样；grep 锚点能直接推翻它"
-    minimal_repro: |
-      # 复现那条恒真的判据（实测：old 还在，启发式却说"已打"）
-      python3 -I - <<'EOF'
-      def _already_applied(s, new):
-          code = [l.strip() for l in new.splitlines()
-                  if l.strip() and not l.strip().startswith('//')]
-          return max(code, key=len) in s      # ← 判据：new 里最长的一行在不在
+    - 设备端 printf 在 kernel 崩溃时会整段丢弃 —— 不能用「没输出」推断「没执行到」
 
-      old = "    if (x) {\n        p = q;\n    }"
-      new = "    p = q;\n    if (x) {\n        p = q;\n    }"   # 只是把一行搬到 if 外面
-      s   = "void f() {\n" + old + "\n}\n"                      # 未打补丁的原文
-      print("new in s:", new in s, "| old in s:", old in s,
-            "| 启发式判已应用:", _already_applied(s, new))
-      EOF
-      #   -> new in s: False | old in s: True | 启发式判已应用: True
+    - `-Wuninitialized` 只抓同一个函数内可见的路径，跨函数传结构体抓不到
 
-      # 用它验真正的补丁脚本：selftest 必须包含「old 还在」这条反向用例
-      python3 -I /workspace/toolkit_skills/scripts/fmla_patch.py --selftest   # 6 项全过
-    diagnosis: |
-      判据是「**锚点消失**」，不是「某行存在」。凡是「new 里最长的那行
-      在文件里 ⇒ 已打」的启发式，在该行本来就存在于原文件时**恒为真**。
+    '
+  common_causes:
+  - 局部 `Params params;` 少了 `{}` —— 默认初始化对 POD 是不初始化
+  - if/else 只在一条分支里给字段赋值，另一条分支保留栈残留（同一份 params 两个分支只初始化一半）
+  - 空 optional 被无条件解引用（`p->field`），H>=64 时才走到空的那支
+  - 逐个字段打补丁 —— 修好一个下一个才暴露，说明这是「从未跑通的路径」，应整体 `params{}` 收口
+  evidence: D18/D19，2026-11-25（D21 为同一问题的收口：DenseAttnDecodeParams params{}）
+  cost_saved: 3 小时 -> 5 分钟
+- id: build-stale
+  symptom: 改动之后现象一点没变（崩溃点、耗时、日志都同前），而代码 diff 明明在；或改动「神秘消失」被还原
+  minimal_repro: "set +e\n# ① 自包含：产物是不是比源文件旧（时间戳判据，机器化）\ncd \"$(mktemp -d)\" && printf\
+    \ 'int f(){return 1;}\\n' > k.cpp \\\n  && g++ -O2 -c k.cpp -o k.o && sleep 1\
+    \ && touch k.cpp\npython3 -I -c \"import os,sys; sys.exit(0 if os.path.getmtime('k.o')>os.path.getmtime('k.cpp')\
+    \ else 1)\"\necho \"① rc=$?  (1 = .o 陈旧，rm -f 后重编；ls 只显示到分钟，肉眼看不出先后)\"\n\n# ②\
+    \ 你改的文件到底进不进编译（以 FlashMLA-das 实测）\nREPO=${REPO:-/workspace/FlashMLA-das}\nhead\
+    \ -1 \"$REPO/csrc/api/dense_decode_hip.h\"      # -> automatically generated by\
+    \ hipify\ngrep -n 'include \"dense_decode' \"$REPO/csrc/api/api.cpp\" | head -3\
+    \   # -> 不带 _hip\ngrep -n 'csrc/api/api.cpp' \"$REPO/setup.py\" | head -2    \
+    \            # -> sources 只列它\n\n# ③ 产物里有没有你的改动（把 <你的符号> / <你的字符串> 换掉）\nSO=$(ls\
+    \ \"$REPO\"/build/lib.*/flash_mla/*.so 2>/dev/null | head -1)\nnm -D \"$SO\" |\
+    \ grep -c '<你的符号>'\nstrings \"$SO\" | grep -c '<你的字符串>'\n\n# ④ 仓库自带：幂等补丁脚本，--check\
+    \ 确认锚点还在不在\npython3 -I /workspace/toolkit_skills/scripts/fmla_patch.py --check\n"
+  diagnosis: "三连，**顺序不能换**（第 ① 步最便宜）：\n1. 产物时间戳 > 源文件时间戳？否 ⇒ 命中。\n2. 你改的文件在编译入口（setup.py\
+    \ 的 sources / 入口 .cpp 的 include）里吗？\n   否 ⇒ 命中 —— 这一条比读两小时代码有用。`_hip` / `_generated`\
+    \ /\n   `__pycache__` / `.pb.h` 后缀**默认视为不可手改**。\n3. 产物里有你的符号/字符串吗？没有 ⇒ 代码从没进过二进制。\n\
+    \n「改动消失」不要先当成外部干扰 —— 更可能的解释是「这不是源文件，\n下次生成时被覆盖」。先看第 2 步。\n"
+  common_causes:
+  - 构建按时间戳决定重编，补丁写入早于 .o 完成 ⇒ 链接成功、运行还是旧逻辑
+  - 改的是 hipify 生成物（`_hip.h`），编译器读的是原始 `.h`
+  - 改的 .h 没被入口 .cpp include，或源文件不在 setup.py 的 sources 里
+  - 手工补丁无法重现，被下一次生成覆盖 → 应脚本化（幂等 apply + check）
+  evidence: D15/D17，2026-11-25（D17 是 D14/D15/D16 的总根因：改了一整天的文件编译器从没读过）
+  cost_saved: 1 天 -> 2 分钟
+- id: verifier-lies
+  symptom: 校验脚本/`--check` 报「已应用/通过」，但目标文件其实是原样；grep 锚点能直接推翻它
+  minimal_repro: "# 复现那条恒真的判据（实测：old 还在，启发式却说\"已打\"）\npython3 -I - <<'EOF'\ndef _already_applied(s,\
+    \ new):\n    code = [l.strip() for l in new.splitlines()\n            if l.strip()\
+    \ and not l.strip().startswith('//')]\n    return max(code, key=len) in s    \
+    \  # ← 判据：new 里最长的一行在不在\n\nold = \"    if (x) {\\n        p = q;\\n    }\"\nnew\
+    \ = \"    p = q;\\n    if (x) {\\n        p = q;\\n    }\"   # 只是把一行搬到 if 外面\n\
+    s   = \"void f() {\\n\" + old + \"\\n}\\n\"                      # 未打补丁的原文\nprint(\"\
+    new in s:\", new in s, \"| old in s:\", old in s,\n      \"| 启发式判已应用:\", _already_applied(s,\
+    \ new))\nEOF\n#   -> new in s: False | old in s: True | 启发式判已应用: True\n\n# 用它验真正的补丁脚本：selftest\
+    \ 必须包含「old 还在」这条反向用例\npython3 -I /workspace/toolkit_skills/scripts/fmla_patch.py\
+    \ --selftest   # 6 项全过\n"
+  diagnosis: '判据是「**锚点消失**」，不是「某行存在」。凡是「new 里最长的那行
 
-      机器化判据（顺序固定，不可被后面的启发式覆盖）：
-      1. `old in s` -> 一定没打（锚点还在，铁证）
-      2. `new in s` -> 打了
-      3. 都不在 -> 锚点已变，报「需人工确认」，**不许**静默通过
+    在文件里 ⇒ 已打」的启发式，在该行本来就存在于原文件时**恒为真**。
 
-      验判据的方法：**必须用会失败的输入验。** 只用一种补丁形态的 selftest
-      是在测自己的实现细节，不是在测判据。
-    common_causes:
-      - "判据取 new 里最长代码行；而补丁只是把该行从 if 里复制到 if 外，原文里本来就有"
-      - "selftest 用的是另一个补丁（new 只有一行且原文里不存在），测不出这个补丁的 bug"
-      - "check 里的顺序写反：先跑启发式，再跑 `old in s`，结论被覆盖"
-      - "同类：gpu_guard 判「可分配」就当「能用」，判据写宽松比没有判据更危险"
-    evidence: "D16，2026-11-25"
-    cost_saved: "1 轮编译（约 10 分钟）-> 10 秒；更贵的是它让前 3 次错误结论都「有据可依」"
 
-  # ══════════════════════════════════════════════════════════════════
-  # 5. 归因到错误的变量：没控制变量。
-  # ══════════════════════════════════════════════════════════════════
-  - id: wrong-variable
-    symptom: "结论是「X 超过某个阈值就坏」（K>256 / d=512 / 「平台坏了」），但换一个变量再扫，分界点跑到别处去了"
-    minimal_repro: |
-      # 2D 交叉表，不是 1D 扫描。lightop.gemm 实测（本机 2026-11-26 复证）：
-      HIP_VISIBLE_DEVICES=4 python3 -I - <<'EOF'
-      import torch, lightop
-      print("         K=256    K=1024   K=4096")
-      for M in (8, 16, 24, 64):
-          row = []
-          for K in (256, 1024, 4096):
-              A = torch.randn(M, K, device='cuda:0', dtype=torch.bfloat16)
-              B = torch.randn(K, 512, device='cuda:0', dtype=torch.bfloat16)
-              ref = A.float() @ B.float()
-              out = lightop.gemm(A, B.t().contiguous()).float()
-              row.append(float((out - ref).norm() / ref.norm()))
-          print("M=%3d  " % M + "  ".join("%7.4f" % e for e in row))
-      EOF
-      #   -> M=8/16 三列都 0.0016（合格）
-      #   -> M=24 三列都 0.58（错）   <- 分界在 M，不是 K
-      #   -> 只看 K 那一行会得出「K>256 有问题」，这就是上一轮的错误结论
-    diagnosis: |
-      判据：**分界点落在哪里，以及它对应源码里的什么。**
-      - 只扫一个维度时，另一个维度往往同时在变（K 变大时 M 也变），
-        得到的「阈值」是相关不是因果。
-      - 做完整 2D 交叉表后，若分界精确落在一个源码字面量上
-        （`M >= 24` 的 tile 假设、`num_heads_q < 64` 的分支），
-        说明它是**代码分支**，不是硬件形状限制 —— 这个区分决定了往哪查。
-      - 「改 A 之后 B 崩了」≠「A 导致 B 崩」。D14 结案里 d=512 被冤枉了两轮，
-        真正变量是 H≥64。
-    common_causes:
-      - "1D 扫描时混入了另一个变量（扫 K 的同时 M 没固定）"
-      - "扫到的是巧合相关：分界点刚好撞上一个常量，被读成「硬件限制」"
-      - "先有假设再找证据（只改猜测的那一处），而不是按变量扫参数"
-      - "把「环境/平台坏了」当下结论，却没试过「是不是我用错了」"
-    evidence: "op-gemm-bf16/candidates.yaml + _common.py（lightop.gemm，2026-11-26，本机复证）；同型误判见 D14 结案（把 H≥64 冤枉成 d=512）"
-    cost_saved: "2 轮错误归因（含一次写进卡片）-> 1 次 2D 扫描"
+    机器化判据（顺序固定，不可被后面的启发式覆盖）：
 
-  # ══════════════════════════════════════════════════════════════════
-  # 6. 方法：大 kernel 崩，先做最小版本。
-  # ══════════════════════════════════════════════════════════════════
-  - id: minimal-repro
-    symptom: "大 kernel 崩/算错，读代码猜不出根因；连改 N 个假设都不复现，每次崩溃点都往前提一点"
-    minimal_repro: |
-      # 递减实验：每一步只删一个成分，直到不能再小。
-      # 每层都跑「能跑吗」这一个判据（下面是第 1 层；后续层改 /tmp/m.hip 即可）
-      cat > /tmp/m.hip <<'EOF'
-      #include <hip/hip_runtime.h>
-      extern "C" __global__ void k(float* o) { if (threadIdx.x == 0) o[0] = 1.0f; }
-      extern "C" void run(float* p) { k<<<1, 64>>>(p); }
-      EOF
-      hipcc -O3 --offload-arch=gfx938 -fPIC -shared -o /tmp/m.so /tmp/m.hip
-      probe() { HIP_VISIBLE_DEVICES=4 python3 -I -c "import ctypes,torch; \
-        t=torch.zeros(4,device='cuda:0'); l=ctypes.CDLL('/tmp/m.so'); \
-        l.run.argtypes=[ctypes.c_void_p]; l.run(ctypes.c_void_p(t.data_ptr())); \
-        torch.cuda.synchronize(); print('OK', float(t[0]))"; }
-      probe
-      # 后续各层（每层只改一个变量，记下崩/不崩）：
-      #   ② 空 kernel，64 线程        -> ?   (去掉全部计算)
-      #   ③ 空 kernel，32/128/256 线程 -> ?   (去掉线程数依赖)
-      #   ④ 换成另一个算子预编译的 .so -> ?   (去掉「本仓代码」这个假设)
-      #   ⑤ 把 device='cuda:0' 换成 'cuda:4' 且不设环境变量 -> ?  (去掉「调用方式」这个变量)
-    diagnosis: |
-      判据：**哪一层删掉之后「崩不崩」翻转，那一层删掉的那个成分就是根因。**
-      这不是「找一个更小的例子」，是「用单调性定位」——成分越少结果越稳定，
-      翻转点就是因果。
+    1. `old in s` -> 一定没打（锚点还在，铁证）
 
-      D24 的 6 层实际走向：完整 kernel 崩 → 35 行 shuffle 也崩 →
-      空 kernel 也崩 → 32/128/256 线程全崩 → **别的算子的 .so 也崩**
-      （到这里会误判成「平台坏了」）→ 第 7 层换设备绑定方式，
-      一句话解决。**第 7 层之所以漏掉，是因为递减只减了「被测对象」，
-      没减「怎么调用它」。**
-    common_causes:
-      - "直接在完整 kernel 里加 printf 定位 —— 崩溃时设备端缓冲区整段丢弃，什么都看不到"
-      - "只减「被测对象」的复杂度，没减「调用方式 / 设备绑定 / 构建方式」这些变量"
-      - "假设「只有一个 bug」：修一个崩溃点前移就继续修下一个，而不改假设"
-      - "用「没输出」推断「没执行到」—— 崩溃场景下 printf 不可信"
-    evidence: "D24，2026-11-26（6 层递减实验；第 6 层用别的算子的 mr2.so 才推翻「平台坏了」）"
-    cost_saved: "90 分钟 -> 5 分钟"
+    2. `new in s` -> 打了
+
+    3. 都不在 -> 锚点已变，报「需人工确认」，**不许**静默通过
+
+
+    验判据的方法：**必须用会失败的输入验。** 只用一种补丁形态的 selftest
+
+    是在测自己的实现细节，不是在测判据。
+
+    '
+  common_causes:
+  - 判据取 new 里最长代码行；而补丁只是把该行从 if 里复制到 if 外，原文里本来就有
+  - selftest 用的是另一个补丁（new 只有一行且原文里不存在），测不出这个补丁的 bug
+  - check 里的顺序写反：先跑启发式，再跑 `old in s`，结论被覆盖
+  - 同类：gpu_guard 判「可分配」就当「能用」，判据写宽松比没有判据更危险
+  evidence: D16，2026-11-25
+  cost_saved: 1 轮编译（约 10 分钟）-> 10 秒；更贵的是它让前 3 次错误结论都「有据可依」
+- id: wrong-variable
+  symptom: 结论是「X 超过某个阈值就坏」（K>256 / d=512 / 「平台坏了」），但换一个变量再扫，分界点跑到别处去了
+  minimal_repro: "# 2D 交叉表，不是 1D 扫描。lightop.gemm 实测（本机 2026-11-26 复证）：\nHIP_VISIBLE_DEVICES=4\
+    \ python3 -I - <<'EOF'\nimport torch, lightop\nprint(\"         K=256    K=1024\
+    \   K=4096\")\nfor M in (8, 16, 24, 64):\n    row = []\n    for K in (256, 1024,\
+    \ 4096):\n        A = torch.randn(M, K, device='cuda:0', dtype=torch.bfloat16)\n\
+    \        B = torch.randn(K, 512, device='cuda:0', dtype=torch.bfloat16)\n    \
+    \    ref = A.float() @ B.float()\n        out = lightop.gemm(A, B.t().contiguous()).float()\n\
+    \        row.append(float((out - ref).norm() / ref.norm()))\n    print(\"M=%3d\
+    \  \" % M + \"  \".join(\"%7.4f\" % e for e in row))\nEOF\n#   -> M=8/16 三列都 0.0016（合格）\n\
+    #   -> M=24 三列都 0.58（错）   <- 分界在 M，不是 K\n#   -> 只看 K 那一行会得出「K>256 有问题」，这就是上一轮的错误结论\n"
+  diagnosis: "判据：**分界点落在哪里，以及它对应源码里的什么。**\n- 只扫一个维度时，另一个维度往往同时在变（K 变大时 M 也变），\n  得到的「阈值」是相关不是因果。\n\
+    - 做完整 2D 交叉表后，若分界精确落在一个源码字面量上\n  （`M >= 24` 的 tile 假设、`num_heads_q < 64` 的分支），\n\
+    \  说明它是**代码分支**，不是硬件形状限制 —— 这个区分决定了往哪查。\n- 「改 A 之后 B 崩了」≠「A 导致 B 崩」。D14 结案里 d=512\
+    \ 被冤枉了两轮，\n  真正变量是 H≥64。\n"
+  common_causes:
+  - 1D 扫描时混入了另一个变量（扫 K 的同时 M 没固定）
+  - 扫到的是巧合相关：分界点刚好撞上一个常量，被读成「硬件限制」
+  - 先有假设再找证据（只改猜测的那一处），而不是按变量扫参数
+  - 把「环境/平台坏了」当下结论，却没试过「是不是我用错了」
+  evidence: op-gemm-bf16/candidates.yaml + _common.py（lightop.gemm，2026-11-26，本机复证）；同型误判见
+    D14 结案（把 H≥64 冤枉成 d=512）
+  cost_saved: 2 轮错误归因（含一次写进卡片）-> 1 次 2D 扫描
+- id: minimal-repro
+  symptom: 大 kernel 崩/算错，读代码猜不出根因；连改 N 个假设都不复现，每次崩溃点都往前提一点
+  minimal_repro: "# 递减实验：每一步只删一个成分，直到不能再小。\n# 每层都跑「能跑吗」这一个判据（下面是第 1 层；后续层改 /tmp/m.hip\
+    \ 即可）\ncat > /tmp/m.hip <<'EOF'\n#include <hip/hip_runtime.h>\nextern \"C\" __global__\
+    \ void k(float* o) { if (threadIdx.x == 0) o[0] = 1.0f; }\nextern \"C\" void run(float*\
+    \ p) { k<<<1, 64>>>(p); }\nEOF\nhipcc -O3 --offload-arch=gfx938 -fPIC -shared\
+    \ -o /tmp/m.so /tmp/m.hip\nprobe() { HIP_VISIBLE_DEVICES=4 python3 -I -c \"import\
+    \ ctypes,torch; \\\n  t=torch.zeros(4,device='cuda:0'); l=ctypes.CDLL('/tmp/m.so');\
+    \ \\\n  l.run.argtypes=[ctypes.c_void_p]; l.run(ctypes.c_void_p(t.data_ptr()));\
+    \ \\\n  torch.cuda.synchronize(); print('OK', float(t[0]))\"; }\nprobe\n# 后续各层（每层只改一个变量，记下崩/不崩）：\n\
+    #   ② 空 kernel，64 线程        -> ?   (去掉全部计算)\n#   ③ 空 kernel，32/128/256 线程 -> ?\
+    \   (去掉线程数依赖)\n#   ④ 换成另一个算子预编译的 .so -> ?   (去掉「本仓代码」这个假设)\n#   ⑤ 把 device='cuda:0'\
+    \ 换成 'cuda:4' 且不设环境变量 -> ?  (去掉「调用方式」这个变量)\n"
+  diagnosis: '判据：**哪一层删掉之后「崩不崩」翻转，那一层删掉的那个成分就是根因。**
+
+    这不是「找一个更小的例子」，是「用单调性定位」——成分越少结果越稳定，
+
+    翻转点就是因果。
+
+
+    D24 的 6 层实际走向：完整 kernel 崩 → 35 行 shuffle 也崩 →
+
+    空 kernel 也崩 → 32/128/256 线程全崩 → **别的算子的 .so 也崩**
+
+    （到这里会误判成「平台坏了」）→ 第 7 层换设备绑定方式，
+
+    一句话解决。**第 7 层之所以漏掉，是因为递减只减了「被测对象」，
+
+    没减「怎么调用它」。**
+
+    '
+  common_causes:
+  - 直接在完整 kernel 里加 printf 定位 —— 崩溃时设备端缓冲区整段丢弃，什么都看不到
+  - 只减「被测对象」的复杂度，没减「调用方式 / 设备绑定 / 构建方式」这些变量
+  - 假设「只有一个 bug」：修一个崩溃点前移就继续修下一个，而不改假设
+  - 用「没输出」推断「没执行到」—— 崩溃场景下 printf 不可信
+  evidence: D24，2026-11-26（6 层递减实验；第 6 层用别的算子的 mr2.so 才推翻「平台坏了」）
+  cost_saved: 90 分钟 -> 5 分钟
+  tool: scripts/minimal_repro.py
+  usage: 'python3 -I scripts/minimal_repro.py --init > plan.json  # 填 cmd 后 --plan
+    plan.json'
+  tool_note: 工具会强制按 L1-L6 的顺序递减，**并把「换调用方式」放在最后一层**。当所有层都崩时，它会明确提示「问题不在被测对象，去查调用方式」——
+    D24 就是漏了这一层，多花 40 分钟。

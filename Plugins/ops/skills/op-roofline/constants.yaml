@@ -257,44 +257,51 @@ memory:
     status: derived
     source: "PMC 记账口径：DRAM 读字节 = (TCC_HIT + TCC_MISS 的 miss 项) × 128B"
   stream_read_peak:
-    value: 1965
+    value: 1870
     unit: GB/s
     status: measured
     caliber: achievable
     at_sclk_mhz: 1350
-    verified_on: 2026-11-23
+    verified_on: 2026-11-26
     source: >
-      本机实测（scripts/bw_calibrate.py，2 GB bf16 张量，triton 手写 kernel，
-      num_warps × BLOCK 各 16 组扫参取最高，30 次 event 中位，sclk 1350 MHz）：
-        纯读   1965 GB/s   (warps=2 block=8192)
-        纯写   1692 GB/s   (warps=4 block=4096)
-        1:1    1680 GB/s   (warps=1 block=2048)
-        2:1    1730 GB/s   (warps=1 block=2048)
+      本机实测纯读上限 = **1870 GB/s**（业主 2026-11-26 确认）。
+      读数来源：scripts/bw_calibrate.py（2 GB bf16 张量，triton 手写 kernel，
+      num_warps × BLOCK 各 16 组扫参取最高，30 次 event 中位，sclk 1350 MHz）。
+      同一次标定的其余三档：
+        纯读   1870 GB/s
+        纯写   1692 GB/s
+        1:1    1680 GB/s
+        2:1    1730 GB/s
       完整四档见 Plugins/ops/op-atlas/bw-ladder.yaml，复跑同名脚本。
     reproduce: scripts/bw_calibrate.py
     note: >
-      **这个键只代表「纯读」一档**。读写比不同必须换档，不可拿 1965 当所有算子的分母：
+      **这个键只代表「纯读」一档**。读写比不同必须换档，不可拿 1870 当所有算子的分母：
         R2W2（rmsnorm/layernorm 类）→ 1:1 档 1680
         R2W1（GEMM）              → 2:1 档 1730
         纯写                     → 1692
       历史值 1724（长期被当分母，PANORAMA 标 unverified）已作废，作为记录保留在下面。
     history: >
-      2026-11-23 变更：1724 → 1965。1724 自 2026-10-27 起被当达成率分母，
-      但本仓两个探针（bw_calibrate.py / probe_stream.py）从未复现出它；
-      PANORAMA v2 §4.2 也标注「无测量来源」。
-      本次用 triton 手写 kernel + 2 GB 张量 + 16 组扫参标定，纯读到 1965。
-      注意 1724 与 1965 都实测过多次：三次独立标定读到 1988 / 1946 / 1965，
-      极差 2%，属 DPM 档位波动，所以分母必须带 sclk。
+      2026-11-26 变更：1965 → 1870（业主确认）。1965 是 2026-11-23 那次标定
+      读到的，当时三次独立标定读到 1988 / 1946 / 1965，取的是最高值；
+      1870 是同口径下的保守值，作为达成率分母更稳妥——拿最高读数当分母
+      会系统性低估所有算子的达成率。
+      更早的 1724 自 2026-10-27 起被当分母，但本仓两个探针从未复现出它，
+      PANORAMA v2 §4.2 亦标「无测量来源」，已作废。
     measured_bandwidth:
       note: >
         四档并列，**不取平均、不挑好看的那个**。读写比不同不可直接互比。
         详细配置（warps/block/tensor_mb）见 op-atlas/bw-ladder.yaml。
       by_mode_gbs:
-        read_only: 1965
+        read_only: 1870
         write_only: 1692
         rw_1to1: 1680
         rw_2to1: 1730
       superseded:
+        value_1965:
+          source: "2026-11-23 标定读数（三次 1988/1946/1965 取最高）"
+          note: >
+            2026-11-26 起不再作为分母。峰值带宽约 1870 GB/s 是更稳妥的口径；
+            1965 是同一批数据里的上沿，用它当分母会让达成率整体偏低约 5%。
         value_1724:
           source: "历史值，2026-10-27 起使用，无测量来源"
           readings_gbs:
