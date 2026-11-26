@@ -196,18 +196,7 @@ Failed requests: 0
 > hipBLASLt，用 router shape 做 A/B 也是 15.6 µs 对 15.6 µs。所以两次的差异（TPOT 47.98 vs 46.07）
 > 主要来自投机接受率的随机波动（两次跑的中段 accept rate 分别是 0.55 / 0.82）。
 
-### 2.2 n=200 / c20（历史数据）
-
-```
-input_len output_len conc  TTFT_mean  TTFT_p99  TPOT_mean  TPOT_p99  Total吞吐  判定
-   131072       1024   20    4358.50   35596.69     54.21     76.96   43682.14  FAIL(TPOT>50ms)
-   131072       1024   20    4368.00   35593.07     54.31     83.31   43568.53  FAIL(TPOT>50ms)
-   131072       1024   20    4525.39   36051.43     55.16     87.79   42484.80  FAIL(TPOT>50ms)
-   131072       1024   16    3670.11   31626.82     42.92     74.60   44019.94  PASS
-   131072       1024   18    3792.14   31626.82     51.33     74.60   41825.10  FAIL(TPOT>50ms)
-```
-
-### 2.3 n=100 / c16
+### 2.2 n=100 / c16
 
 ```
 [bench] backend=sglang in=131072 out=1024 n=100 conc=16 rate=inf hit~0.85 (prefix=111411/131072)
@@ -231,7 +220,25 @@ Failed requests: 0
 >>> cached in=131072 conc=16 PASS (TPOT=37.63ms), 最大可用并发更新为 16
 ```
 
-### 2.4 结论
+### 2.3 n=200 / c20（历史）
+
+```
+input_len output_len conc  TTFT_mean  TTFT_p99  TPOT_mean  TPOT_p99  Total吞吐  判定
+   131072       1024   20    4358.50   35596.69     54.21     76.96   43682.14  FAIL(TPOT>50ms)
+   131072       1024   20    4368.00   35593.07     54.31     83.31   43568.53  FAIL(TPOT>50ms)
+   131072       1024   20    4525.39   36051.43     55.16     87.79   42484.80  FAIL(TPOT>50ms)
+   131072       1024   16    3670.11   31626.82     42.92     74.60   44019.94  PASS
+   131072       1024   18    3792.14   31626.82     51.33     74.60   41825.10  FAIL(TPOT>50ms)
+```
+
+### 2.4 n=200 / c16（历史）
+
+```
+input_len output_len conc  TTFT_mean  TTFT_p99  TPOT_mean  TPOT_p99  Total吞吐  判定
+   131072       1024   16    3670.11   31626.82     42.92     74.60   44019.94  PASS
+```
+
+### 2.5 结论
 
 | 配置 | TTFT mean | TTFT median | TPOT mean | 总吞吐 | 判定 |
 |---|---:|---:|---:|---:|---|
