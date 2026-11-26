@@ -95,10 +95,10 @@ P99 TTFT (ms):                           48611.45
 | 测量方式 | 净填充吞吐 |
 |---|---:|
 | 服务端日志（c=1，chunk 2–15 区间） | **12 020 → 10 476 tok/s** |
-| vllm bench Total token throughput（c=1） | **10 580 tok/s** |
-| vllm bench Total token throughput（c=20） | **53 561 tok/s** |
+| Total token throughput（c=1） | **10 580 tok/s** |
+| Total token throughput（c=20） | **53 561 tok/s** |
 
-- **c=1 时服务端日志与 vllm bench 一致（误差 <1%）**，因为没有缓存可命中，
+- **c=1 时服务端日志与压测输出一致（误差 <1%）**，因为没有缓存可命中，
   `Total input tokens` 全是要真算的
 - **c=20 时吞吐升到 53.6k tok/s（c1 的 5.06 倍）**，TTFT 也随之升到 31.7 s
 - 长 prefill 越往后越慢（12 020 → 10 476，降 13%），说明 128K 冷启动时尾部 chunk 的注意力成本更高
@@ -118,7 +118,7 @@ P99 TTFT (ms):                           48611.45
 16:23:10  new=8192 cached=111360
 ```
 
-而 vllm bench 的 `Total token throughput = (全部 input + output) / duration`，
+而 `Total token throughput = (全部 input + output) / duration`，
 **把命中的 token 也算成"已处理"**，所以 c≥2 的数字虚高：
 
 | 并发 | 报出的吞吐 | 实际真算的 input | 是否可信 |
