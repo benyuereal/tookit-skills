@@ -70,7 +70,26 @@ def main(argv=None):
     p.add_argument("--measure-mode", default="back_to_back", dest="measure_mode",
                    choices=["back_to_back", "event_isolated", "end_to_end"],
                    help="back_to_back 不可 claim（仅筛方向）；event_isolated 可 claim")
+    p.add_argument("--skip-preflight", action="store_true",
+                   help="跳过环境前置检查（**只在已手工验过环境时用**）")
     a = p.parse_args(argv)
+
+    # **默认跑前置检查**（scripts/bench_preflight.py）。
+    # 2026-11-25 的 5 小时根因是「设备绑定方式」问题 —— 纯 torch 探活查不出，
+    # 必须用自定义 kernel 试。默认检查是为了不依赖「谁记得跑」。
+    if not a.skip_preflight:
+        import sys as _sys
+        from pathlib import Path as _P
+        _sys.path.insert(0, str(_P(__file__).resolve().parents[4] / "scripts"))
+        try:
+            from bench_preflight import preflight
+            if not preflight(device=getattr(a, "device", None)):
+                print("✗ 前置检查未全过 —— 加 --skip-preflight 可强制继续，"
+                      "但测出的数字不可信", file=sys.stderr)
+                return 2
+        except ImportError:
+            pass   # 没装检查器时不阻塞（但会在 stderr 提一句）
+
 
     shape = C.load_shape(a.shape)
     params = dict(shape.get("params") or {})

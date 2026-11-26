@@ -230,3 +230,33 @@ def test_env_probe_detects_bind_mode_not_just_device_count():
     assert "必须同时测两条路径" in src or "两条路径" in src, (
         "env_probe 里没有说明「为什么必须测两条路径」—— "
         "这条注释是防止后人把它简化掉的唯一提示")
+
+
+def test_every_bench_runs_preflight_by_default():
+    """每个 bench/ab.py 都必须在 main 里调 preflight，且默认执行。
+
+    2026-11-25 的 5 小时根因（设备绑定方式）本来 30 秒能查出来。
+    `env_probe.py` 写出来不等于会被用 —— **如果没人记得跑，等于没写。**
+    所以接进 bench 入口，默认执行，想跳过必须显式 --skip-preflight。
+
+    这条测试防的是：有人觉得「太慢」把它改成 opt-in，
+    或者新建 ab.py 时忘了接。
+    """
+    benches = sorted((REPO / "Plugins/ops/skills").glob("*/bench/ab.py"))
+    assert benches, "一个 ab.py 都没找到 —— 路径变了？"
+
+    missing = []
+    for p in benches:
+        s = p.read_text(encoding="utf-8")
+        card = p.parent.parent.name
+        if "bench_preflight" not in s:
+            missing.append("%s: 没有 import bench_preflight" % card)
+            continue
+        if "skip_preflight" not in s:
+            missing.append("%s: 没有 --skip-preflight 开关" % card)
+        # **默认必须是「跑」，不是「跳过」**
+        if "if not a.skip_preflight:" not in s:
+            missing.append("%s: preflight 不是默认执行" % card)
+    assert not missing, (
+        "以下 bench 没有默认跑前置检查：\n  " + "\n  ".join(missing) +
+        "\n修法：参考 scripts/bench_preflight.py 的用法说明接进 main()")
