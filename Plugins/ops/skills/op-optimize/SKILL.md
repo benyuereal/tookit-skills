@@ -170,15 +170,12 @@ python3 loop.py -C <卡> run <tag> [--skv ...] [--force]
 
 完整判据、上限、`candidates.yaml` schema 与 `why` 写法见 [`references/failure-taxonomy.md`](references/failure-taxonomy.md)。
 
-### 九·五、坏了先归位：6 条故障定位面
-
-§九 分「怎么记账」；[`references/failure-surfaces.yaml`](references/failure-surfaces.yaml) 分「是哪一类故障」——**先定位，再记账**（归因错了账也是错的）。出现「崩了 / 算错了 / 改了没效果」时按序过一遍（代价从低到高），每条带可跑 `minimal_repro` + 能区分的判据 + D 编号：`device-bind`（纯 torch 正常但自研 kernel 崩 ⇒ `HIP_VISIBLE_DEVICES` 重映射，**最贵 5 小时**）、`uninit-struct`（结构体缺 `{}`）、`build-stale`（产物没重编 / 改错文件）、`verifier-lies`（校验器说通过但没生效）、`wrong-variable`（没控制变量）、`minimal-repro`（大 kernel 先减到 5 行）。
-
-**库的可用边界**（「这个库在什么范围内可信」）见
-[`references/libraries-bounds.md`](references/libraries-bounds.md) —— 与 `libraries.md`
-的分工：那个讲「有哪些库、怎么调」，这个讲「哪里不能用」。每条带实测数据表 + 复现命令。
-选库之前先查这里，**不要凭「它应该支持」下结论**（`lightop.gemm` 的 M≤16、
-FlashMLA fp8 的 H≤32 都是这么发现的）。
+### 九·五、坏了先归位
+**先定位，再记账**。出现「崩了 / 算错了 / 改了没效果」时，按
+[`references/failure-surfaces.yaml`](references/failure-surfaces.yaml) 的 6 条
+按序过（每条带可跑 `minimal_repro` + 判据 + D 编号）。选库前先查
+[`references/libraries-bounds.md`](references/libraries-bounds.md)（哪里不能用），
+**不要凭「它应该支持」下结论**。
 
 ## 十、交付件格式
 
@@ -187,12 +184,10 @@ FlashMLA fp8 的 H≤32 都是这么发现的）。
 ## 十一、一条命令看懂现状
 
 ```bash
-python3 loop.py -C <卡> resume                 # * 先跑这条：下一个该跑谁（上下文丢了也能接着干）
-python3 loop.py -C <卡> enumerate              # 方向菜单（OPEN/SEALED），direction 只能从这挑
-python3 loop.py -C <卡> status|queue|report    # 现状 / 方向预算 + 待做 + 已判死附机制（违规 rc=2） / 交付表
-python3 loop.py -C <卡> impl-broken <tag> --why "..."       # 实现写坏了
-python3 loop.py -C <卡> direction-refuted <tag> --why "..." # 攻击面不成立
-python3 loop.py -C <卡> verify --tag <id>                   # 跑 done_when；rc=0 才 adopted（§七）
+python3 loop.py -C <卡> resume | enumerate | status|queue|report    # 先 resume：下一个该跑谁
+python3 loop.py -C <卡> impl-broken <tag> --why "..."               # 实现写坏了
+python3 loop.py -C <卡> direction-refuted <tag> --why "..."         # 攻击面不成立
+python3 loop.py -C <卡> verify --tag <id>                           # 跑 done_when；rc=0 才 adopted
 ```
 
 ### 主张门：什么时候「快了 x%」才算数

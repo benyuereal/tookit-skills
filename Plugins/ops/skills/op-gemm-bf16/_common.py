@@ -7,7 +7,7 @@
 """
 import torch
 
-VARIANTS = ("ref-fp32", "torch-mm", "lightop-gemm")
+VARIANTS = ("ref-fp32", "torch-mm", "lightop-gemm", "aiter-gemm")
 INPUT_NAMES = ("A", "B")
 
 
@@ -66,6 +66,16 @@ def get_runner(name, **kwargs):
         def _mm(A, B, **kw):
             return (A @ B).to(torch.bfloat16)
         return _mm
+    if name == "aiter-gemm":
+        def _ai(A, B, **kw):
+            """aiter 的 bf16 GEMM。
+
+            **入参约定**：吃 (A[M,K], B[N,K])，与 lightop.gemm 一样需要转置。
+            实测（2026-11-27）：传 B[K,N] 误差 1.36；传 B.T 误差 0.0037 合格。
+            """
+            import aiter
+            return aiter.gemm_a16w16_opus(A, B.t().contiguous())
+        return _ai
     if name == "lightop-gemm":
         def _lo(A, B, **kw):
             """lightop.gemm 吃 (A[M,K], B[N,K])，**不是** (A, B[K,N])。

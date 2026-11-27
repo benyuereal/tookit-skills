@@ -95,7 +95,8 @@ def main(argv=None):
         return f / (ms * 1e-3) / 1e12
 
     def gbps(ms, nbytes_per_elem):
-        b = float(S) * topk * (d_qk + dv) * nbytes_per_elem
+        # MLA 吸收式：K/V 是同一份 512 维 latent，只读一遍 → 用 d_qk，不乘 2
+        b = float(S) * topk * d_qk * nbytes_per_elem
         return b / (ms * 1e-3) / 1e9
 
     out, runs = {}, []
@@ -103,6 +104,9 @@ def main(argv=None):
         try:
             fn = get_runner(tag, d_v=dv, sm_scale=sm_scale)
             y = fn(q, kv, idx)
+            if isinstance(y, (tuple, list)):      # 扩展返回 [out, ...]
+                y = y[0]
+            y = y.reshape(S, H, dv)
             torch.cuda.synchronize()
         except Exception as e:  # noqa: BLE001
             print("# variant=%s SKIPPED: %s: %s" % (tag, type(e).__name__, e))

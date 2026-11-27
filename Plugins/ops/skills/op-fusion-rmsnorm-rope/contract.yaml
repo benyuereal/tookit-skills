@@ -51,11 +51,7 @@ traffic:
 reference:
   entry: reference
   module: _common.py
-  note: |
-    用 torch 逐条实现上式，fp32 累加。
-    **刻意不用 torch 的 fused 实现** —— 那是被测对象之一，
-    拿它当 oracle 会掩盖它的误差。
-
+  note: "用 torch 逐条实现上式，fp32 累加。 **刻意不用 torch 的 fused 实现** —— 那是被测对象之一， 拿它当 oracle 会掩盖它的误差。"
 inputs_order: [q, k, w_q, w_k, cos_sin_cache, positions]
 outputs_order: [q_out, k_out]
 

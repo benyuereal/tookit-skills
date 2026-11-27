@@ -35,6 +35,15 @@ directions:
     按 KV block 分桶、合并连续行、提前预取
   status: open
   refutes: 0
+- id: fp8-kv-direct-read-qbf16
+  statement: KV cache 存 fp8（行内 per-128 scale），attention 直接读 fp8 并在 kernel 内反量化成
+    bf16；Q 保持 bf16、MMA 仍走 bf16。目标是省 HBM 字节（每 token KV 1024→528 B），不是换 MMA 精度
+  status: open
+  refutes: 0
+  note: 2026-11-27 / BW1100 / gfx938。decode 已生产验证（NOPE512，TPOT 54.70→50.91 ms，
+    cos 0.999991 / max_abs 3.1e-4）；prefill 待实现（候选 prefill_fp8kv_qbf16）。
+    反例是「Q 也量化成 fp8、走 fp8×fp8 MMA」（/workspace/fp8_mla，2026-11-21），
+    机制与反例见 SKILL.md §八。
 candidates:
 - id: mainloop_restage
   parent: prefetch_1slice
@@ -184,6 +193,45 @@ candidates:
     若 fp8 版仍有 spill，本条立刻转 impl-broken 而不是硬推。
     **另一未验证项**：serving 侧 per-rank 只有 h_q=8（H=64/TP8），B_H=64 是否按掩码空跑一半以上 lane
     必须实测，否则「跨 head 复用 ×4」只在单卡满 64 head 时成立。先测 H=8/16/64 三档。
+- id: prefill_fp8kv_qbf16
+  direction: fp8-kv-direct-read-qbf16
+  parent_surface: kv-byte-width
+  status: pending
+  priority: 1
+  hypothesis: |
+    prefill 现在走「fp8 cache → 上转 bf16 → bf16 kernel」，因为 flash_mla 的 sparse prefill
+    接口要求 `kv: bfloat16`。照 decode 已验证的配方改成 **Q bf16 + KV fp8 直读 + kernel 内
+    `dequant_fp8_to_bf16()`**、MMA 仍 bf16 后，每 token KV 字节 1024→528（−48%），
+    理论上限 ~1.9×；但 prefill kernel 的 KV 是 global→LDS 直通（不经寄存器），反量化要多一次
+    寄存器中转与 LDS store，现实收益预期 1.3~1.6×。
+  expect: '1.3x'
+  why: |
+    为什么不是 prefill_fp8_bh64 的重跑：那条把 **Q 也量化成 fp8**（Q 只占 32 B/线程，为 B_H=64
+    省 VGPR），走的是 fp8×fp8 MMA；Q fp8 在 decode 上已实测精度不过（cos 0.999506 /
+    max_abs 2.44e-2，容差 3e-4）。本候选保持 Q bf16，只把 KV 的**读**路径换成 fp8，
+    计算域与现役 bf16 一致（decode 对照：cos 0.999991 / max_abs 3.1e-4）。
+  evidence: |
+    decode 生产实测（2026-11-27 / BW1100 / gfx938）：TPOT 54.70→50.91 ms（−6.9%），
+    median 56.27→52.09 ms（−7.4%），吞吐 +6.4%，TTFT 不变；cos 0.999991 / max_abs 3.1e-4；
+    v3 trace 里 decode_gather_and_up_convert_with_indices 占 3.63 ms/step（8.3%）。
+    反例 /workspace/fp8_mla（2026-11-21）：decode 形态只 −8.4%（36.81→33.71 ms），
+    cos 0.999506 / max_abs 2.44e-2；该 fp8 kernel 262 GB/s（13% 峰值）vs bf16 1165 GB/s（59% 峰值）。
+    正确 decode 实现：/workspace/FlashMLA-das/csrc/gfx93/decode/sparse_fp8/（Element=bfloat16_t，
+    dequant_fp8_to_bf16() 在 splitkv_mla.cuh:23）。
+  expect_basis: 未在本仓实测；1.3× 取现实区间 1.3~1.6× 的下沿，理论上限 ~1.9×（KV 字节 −48%）
+  blocked_by: |
+    当前 bench/prefill_fp8_gate.py 的 TAGS 只有 flash_mla / fp8-bh64 / fp8-bh64-qonly，
+    后两者是 **Q 也量化成 fp8** 的反例码路；_common.get_runner 里没有「Q bf16 + KV fp8 直读」
+    的 prefill runner。因此本候选**没有可机器裁决的 done_when**：先实现 runner（照 decode 的
+    sparse_fp8/，Element=bfloat16_t，读 fp8 行 + scale 反量化），在 gate 里加 tag，再把
+    done_when 指向 `python3 -I bench/prefill_fp8_gate.py --shape prefill-glm53-8k --rounds 5 ...`。
+    在那之前不要用 loop.py verify 把它判成「完成」。
+  note: |
+    实现障碍（已确认）：prefill kernel 的 KV 是 `buffer_load_dwordx4 ... lds` 直接 global→LDS、
+    不经寄存器（/workspace/FlashMLA-das/csrc/gfx93/prefill/sparse/phase1_hip.cuh）；加反量化必须
+    走寄存器中转 + 额外的 LDS store，必须实测确认「省的 HBM 字节」大于「多出的 LDS/VALU 开销」。
+    读放大前置检查：prefill 实测 h_q≤16 时 1 CTA/token 无冗余，h_q=64 时 4 CTA/token
+    （2.88 vs 1.80 µs/token）；prefill 若按 M-block 分 CTA，先算行宽 × NUM_M_BLOCKS 再判收益。
 - id: prefill_gather_floor
   direction: prefill-gather-coalesce
   parent_surface: gather-transaction

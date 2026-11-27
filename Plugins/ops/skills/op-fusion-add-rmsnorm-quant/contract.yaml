@@ -39,10 +39,7 @@ invariants:
 traffic:
   reads: 2
   writes: 3          # y(int8) + y_scale + res_out
-  note: |
-    融合省的是中间态：不融合时 norm 的输出要先写出去（bf16）再读回来量化，
-    多 2 次 H 维的往返。三合一后只走一趟。
-
+  note: "融合省的是中间态：不融合时 norm 的输出要先写出去（bf16）再读回来量化， 多 2 次 H 维的往返。三合一后只走一趟。"
 reference:
   entry: reference
   module: _common.py
@@ -53,8 +50,5 @@ outputs_order: [y, y_scale, res_out]
 
 tolerance:
   max_rel: 1.0e-2
-  note: |
-    量化本身有 int8 精度损失，但那是**被测对象的语义**，不是误差。
-    比较时应该在反量化后比，且 scale 也要对。
-
+  note: "量化本身有 int8 精度损失，但那是**被测对象的语义**，不是误差。 比较时应该在反量化后比，且 scale 也要对。"
 status: draft

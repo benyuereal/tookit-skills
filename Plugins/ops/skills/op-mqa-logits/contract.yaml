@@ -42,40 +42,18 @@ invariants:
 traffic:
   reads: 3          # q, k, w
   writes: 1         # logits
-  note: |
-    主流量是 K：S*H*D*2 字节。decode 时 L=1，Q 很小，
-    **几乎整个成本都在读 K**（S=32768 时 K = 32768*32*128*2 = 268MB）。
-    prefill 时 L 大，Q 也可观，但 K 仍占主导。
-    **这是 memory-bound 算子，不是 compute-bound** —— 每个 K 元素只被用 L 次。
-
+  note: "主流量是 K：S*H*D*2 字节。decode 时 L=1，Q 很小， **几乎整个成本都在读 K**（S=32768 时 K = 32768*32*128*2 = 268MB）。 prefill 时 L 大，Q 也可观，但 K 仍占主导。 **这是 memory-bound 算子，不是 compute-bound** —— 每个 K 元素只被用 L 次。"
 reference:
   entry: reference
   module: _common.py
-  note: |
-    用 torch 逐条实现上式，fp32 累加。
-    **刻意用显式 relu + einsum，不用 torch 的 fused 实现** —— 后者是被测对象。
-
+  note: "用 torch 逐条实现上式，fp32 累加。 **刻意用显式 relu + einsum，不用 torch 的 fused 实现** —— 后者是被测对象。"
 inputs_order: [q, k, w]
 outputs_order: [logits]
 
 tolerance:
   max_rel: 2.0e-2
-  note: |
-    bf16 累加 fp32。S 很大时误差会累积，2% 是 5 个 ULP 量级。
-    **INT8 版（若接入）容差要另算** —— 量化误差不是这个量级，
-    见 candidates.yaml 里 mqa_int8 的 note。
-
+  note: "bf16 累加 fp32。S 很大时误差会累积，2% 是 5 个 ULP 量级。 **INT8 版（若接入）容差要另算** —— 量化误差不是这个量级， 见 candidates.yaml 里 mqa_int8 的 note。"
 # ── 这张卡的核心命题 ────────────────────────────────────────
 card_kind: selection
-selection_note: |
-  本卡不是「写一个更快的打分 kernel」，而是回答：
-  **BF16 → INT8 的 6.6× 是怎么来的，能不能复现？**
-
-  OPERATOR-DIFF 里 v3 用 lightop::mqa_int8 替掉了 BF16 版，
-  单次 29.96ms → 4.54ms。差 6.6× 远超「int8 省一半带宽」能解释的 2×，
-  **说明还叠加了实现差异**（可能是分块、也可能是根本没算全）。
-
-  本卡要先验证这个 6.6× 是不是真的同语义 ——
-  如果 INT8 版漏算了什么，那 6.6× 就是假的。
-
+selection_note: "本卡不是「写一个更快的打分 kernel」，而是回答： **BF16 → INT8 的 6.6× 是怎么来的，能不能复现？** OPERATOR-DIFF 里 v3 用 lightop::mqa_int8 替掉了 BF16 版， 单次 29.96ms → 4.54ms。差 6.6× 远超「int8 省一半带宽」能解释的 2×， **说明还叠加了实现差异**（可能是分块、也可能是根本没算全）。 本卡要先验证这个 6.6× 是不是真的同语义 —— 如果 INT8 版漏算了什么，那 6.6× 就是假的。"
 status: draft

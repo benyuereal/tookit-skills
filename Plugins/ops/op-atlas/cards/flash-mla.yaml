@@ -1,4 +1,4 @@
-id: sparse-mla
+id: flash-mla
 title: 稀疏 MLA 前向（DSA 长上下文注意力）
 family: attention
 math: out[i,:] = Σ_{j∈TopK(i)} softmax(q_i·k_j)·v_j；索引 j 来自稀疏块生成器

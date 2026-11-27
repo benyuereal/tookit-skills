@@ -1,4 +1,4 @@
-# op-sparse-mla 结论台账
+# op-flash-mla 结论台账
 
 > 规则：本文件只写**档位 / 变体 / 相对值 / 状态 / 口径**。绝对耗时、带宽、TFLOPS、寄存器数、
 > 索引池大小与消融表**不进 skill 树**，统一落在
@@ -114,8 +114,26 @@
 
 ## 五、待办（下次进来先看这里）
 
-完整清单与交付口径表见 `~/.config/dcu-toolkit/kb/op-opt/sparse-mla-20261027.md` §20.4（原 §五）。卡里只留三条**方向性**判断：
+完整清单与交付口径表见 `~/.config/dcu-toolkit/kb/op-opt/sparse-mla-20261027.md` §20.4（原 §五）。卡里只留四条**方向性**判断：
 
 - **唯一有实测支撑的杠杆**：thr256 下把非 acc_o 的 VGPR 压到放得下 bm64（判据：`scratch==0` 且 heads/wave=16 且 DRAM 不涨）；其余参数面已否决。
 - **待用户拍板**：`maxn N=32`（−11.7%，320k 首次反超 fm，但非逐位一致）——需 GPQA/HumanEval 端到端不掉分才收。
 - **`prod-vllm` / `prefill-8k` / `prefill-320k` 仍未测**；H=16 的旧站位行未换真池，换完之前任何跨实现「领先」结论不可引用。
+- **prefill fp8 KV 直读（Q 保持 bf16）是剩余唯一有字节级账的杠杆**：先补 `_common.get_runner` 的 q-bf16 runner 与 gate tag，再谈收益；当前候选 `prefill_fp8kv_qbf16` 因无 runner 处于 `blocked_by`。
+
+## 六、2026-11-27 实测结论（BW1100 / gfx938）
+
+> 卡型号：**BW1100 / gfx938**。口径列写明 n / 并发 / 冷热 / 分母；绝对数只在该行口径下成立。
+> 本表是 `SKILL.md §八` 配方与 `candidates.yaml` 候选的证据落点，原始日志/脚本路径见 kb。
+> **本节按 2026-11-27 任务要求收录绝对数**（相对上面的「绝对数不进 skill 树」是显式例外）；
+> 完整表格、日志与脚本仍以 kb 为准。
+
+| # | 结论 | 口径 / 分母 | 证据 | 日期 |
+|---|---|---|---|---|
+| 1 | **decode fp8 KV 直读（Q 保持 bf16，NOPE512）生产已验证**：TPOT 54.70 → 50.91 ms（−6.9%），median 56.27 → 52.09 ms（−7.4%），吞吐 +6.4%，TTFT 不变；精度 cos 0.999991 / max_abs 3.1e-4；机制是删掉 `decode_gather_and_up_convert_with_indices`（3.63 ms/step，8.3%），每 token KV 1024 → 528 B | 生产 e2e；n=200、前缀命中 0.85、热；**分母 = bf16 同配置** | `/workspace/FlashMLA-das/csrc/gfx93/decode/sparse_fp8/`；v3 trace | 2026-11-27 |
+| 2 | **prefill 注意力已接近带宽天花板**：生产形态隔离测量 1.80 µs/token/层 = 1165 GB/s = **59% HBM 峰值**；排序索引 / 传 `topk_length` / 50% `-1` 槽位**全部无收益**（1.79–1.80 µs） | H=8、topk=2048、S=8192、128K 池、隔离测量；**分母 = token·层** | prefill 隔离 bench（kb） | 2026-11-27 |
+| 3 | **每 token 起多个 CTA 会重复读 KV**：`B_H=16`、`h_q=64` ⇒ 4 CTA/token ⇒ 2.88 µs/token，比 H=8 慢 **1.6×**；`h_q≤16` 时 1 CTA、无冗余 | 同 #2 的 prefill 隔离形态；**分母 = h_q≤16 的 1.80 µs/token** | prefill 隔离 bench（kb） | 2026-11-27 |
+| 4 | **生产索引已经排好序**：`SGLANG_KERNEL_KPOOL_TOPK_SORT_WRITEBACK=1` 由 aiter 的 `module_kpool_topk.so` 在回写时排序（`strings` 确认该 .so 读这个环境变量）。所以「排序能省 37%」的收益**生产已经吃到**，不要再立项 | 生产配置核对 + `strings`；非性能测量 | `module_kpool_topk.so` / aiter | 2026-11-27 |
+| 5 | **通信折叠（TBO）重叠效率只有 25.7%**：串行 21.43 ms、并发 20.85 ms、理想 19.15 ms ⇒ 只省 **2.7%**；折算 prefill 仅 −3.4%、TTFT −1.7% | 8 卡 micro-bench；GEMM 8192×4096@4096×1024 = 0.228 ms / 301.8 TFLOPS，AllReduce 67 MB = 0.958 ms / 140 GB/s；**分母 = 串行 21.43 ms** | TBO micro-bench（kb） | 2026-11-27 |
+| 6 | **TP8 vs DP8**：16K/8 打平（6.892 s vs 6.862 s；19 018 vs 18 980 tok/s）；32K/8 我们快 **8.9%**（12 937 vs 14 195 ms；20 263 vs 18 467 tok/s）；128K/8 我们 53 207 ms / 19 708 tok/s（对方未测）。**生产用 TP8，不要迁 DP** | 同锚点、n=conc=8、**冷**、out=8；**分母 = 对方同配置** | TP8/DP8 对照（kb） | 2026-11-27 |
+| 7 | **prefill 计算量基准**：5.43 GFLOP/token/卡（MoE 39%、注意力投影 28.3%、注意力主体 27.8%、lm_head 2.9%、dense FFN 2.1%）；131K 请求 = 711 TFLOP/卡、8 卡 5.69 PFLOP；c=1 实测 57.5 TFLOPS/卡 = **10.3% 峰值**，混合负载 128 TFLOPS/卡 = **22.9%** | 每卡；**分母 = 卡峰值**（百分比为当次报告值） | prefill 计算量拆解（kb） | 2026-11-27 |

@@ -39,7 +39,7 @@ GOOD_ENV = ["gfx=gfx938", "dtk=dtk2604", "torch=2.11.0", "python=3.10.12",
 
 def _sparse_run():
     return {
-        "op": "sparse-mla", "shape": "decode-s128", "variant": "tilelang",
+        "op": "flash-mla", "shape": "decode-s128", "variant": "tilelang",
         "env": {"gfx": "gfx938", "dtk": "dtk2604"},
         "correctness": {"max_abs": 6.8e-4, "cosine": 0.999998, "n_compared": 1024},
         "invariants": {"determinism": True, "index_permutation_invariance": True,
@@ -56,7 +56,7 @@ def _record_manifest(td, src, lib, out=None, env=None):
         artifact=["source=%s" % src, "build=%s" % lib, "loaded=%s" % lib],
         env_json=None, env=list(env if env is not None else GOOD_ENV),
         from_bench=None, variant=None,
-        op="sparse-mla", shape="decode-s128", note="unit test")
+        op="flash-mla", shape="decode-s128", note="unit test")
     with contextlib.redirect_stdout(io.StringIO()):
         rc = opman.cmd_record(a)
     assert rc == 0, rc
@@ -111,7 +111,7 @@ def _run(**over):
 class TestContractCheck(unittest.TestCase):
     def test_repo_sample_contract_is_clean(self):
         c = opverify.parse_yaml(SPARSE_CONTRACT.read_text(encoding="utf-8"))
-        self.assertEqual(c["op"], "sparse-mla")
+        self.assertEqual(c["op"], "flash-mla")
         self.assertEqual(c["shapes"]["q"], ["S", "H", 576])
         self.assertEqual(c["invariants"][0]["name"], "determinism")
         self.assertAlmostEqual(c["floor"]["at_floor_threshold"], 0.85)
@@ -234,7 +234,7 @@ class TestCliIntegration(unittest.TestCase):
             payload = json.loads(buf.getvalue())
         self.assertEqual(rc, 0, payload)
         self.assertEqual(payload["verdict"], "ACCEPTED", payload)
-        self.assertEqual(payload["op"], "sparse-mla")
+        self.assertEqual(payload["op"], "flash-mla")
         self.assertEqual(payload["gates"]["identity"], "pass", payload)
 
     def test_real_contract_without_manifest_is_rejected(self):

@@ -100,7 +100,7 @@ python3 -I scripts/pmc.py /tmp/pmcout/x.csv --kernel main --cu 64 --json
 | 3 | **每卡 CU 数不是常数** | 硬编码 69，本机实为 69/70/71 ⇒ 同一 CSV 的 cycle/MMA 差 ±6% | 当场探测（dmesg SE 位图）或 `--cu` 显式传；探测不到写 `unknown`，不猜 |
 | 4 | **`TA_*` 按 CU 编号跨 8 个 SE 求和** | `max(TA_TA_BUSY)/GRBM` = **352%**（>100% 的荒谬值） | `Σ TA_TA_BUSY[n] / (CU × GRBM)` ⇒ 33%/27% |
 | 5 | **CU 编号只有 0..8 存在**，9..15 恒 0 | 逐编号均值/中位数、横向比大小全无意义 | 只求和（每个活跃 CU 恰计一次，不受屏蔽影响） |
-| 6 | **「某段指令占 7.5%」≠「删掉省 7.5%」** | `reord` 变体删掉那条 16 标量 LDS 拷贝，反而**慢 1.1%** —— 它实际是 prefetch | 用消融实测（`op-sparse-mla/bench/bench.py --mode workset\|config`），不用占比推算 |
+| 6 | **「某段指令占 7.5%」≠「删掉省 7.5%」** | `reord` 变体删掉那条 16 标量 LDS 拷贝，反而**慢 1.1%** —— 它实际是 prefetch | 用消融实测（`op-flash-mla/bench/bench.py --mode workset\|config`），不用占比推算 |
 | 7 | **`SQ_INSTS_VALU` 含 MFMA** | 直接当纯向量指令数 ⇒ 片上开销被高估 | `非MFMA = SQ_INSTS_VALU − FLOPs/8192`。别用 MACs/4096，差 1.23×；解析代码只标注「含 MFMA」，不替你拆 |
 
 以及两条硬事实：

@@ -131,6 +131,27 @@ last_verdict:
     - M=4096
     coverage: 3/3
     gate: true
+  geomean:
+    value: 0.3239
+    shapes:
+    - decode-m1 (M=1)
+    - decode-m32 (M=32)
+    - prefill-8k (M=8192)
+    coverage: |
+      torch-mm 相对 ref-fp32（fp32 参考实现，非竞品）：
+        decode-m1   0.0694 ms  0.5064
+        decode-m32  0.0771 ms  0.5106
+        prefill-8k  0.9374 ms  0.1314
+        geomean = 0.3239
+      **ref-fp32 是正确性锚点不是竞品**，上面的比值只说明「比 fp32 参考快多少」，
+      不构成 B 项。真正的竞品对比见下面 aiter/lightop 两条。
+
+      aiter.gemm_a16w16_opus vs torch.mm（同形状，bf16）：
+        decode-m32   aiter 0.2832 ms  vs torch.mm 0.0771 ms  -> aiter 慢 3.7x
+        prefill-8k   aiter 10.978 ms  vs torch.mm 0.9374 ms  -> aiter 慢 11.7x
+      **结论：torch.mm（hipBLASLt 默认启发式）在本机最快，aiter 大 M 差一个数量级。**
+
+      lightop.gemm：本机 M>=24 全部算错（两种调用方式都错），**不可用**。
   evidence:
   - path: Plugins/ops/skills/op-gemm-bf16/results/prefill-8k-vs-fp32.json
     sha256: 36341d941434b045b8e95c485320e0b53686a73725e365823b72a8a54ea5c467

@@ -489,7 +489,22 @@ def get_runner(name, tilelang_root=None, d_v=None, sm_scale=None):
             if _p not in sys.path:
                 sys.path.insert(0, _p)
         import fused_quant  # /workspace/fp8_mla/bench/fused_quant.py
-        from flash_mla import flash_mla_interface as fi
+
+        # 注意：不能 `import flash_mla` —— base 变体（TAGS 里排在前）已经 import 过
+        # 安装版 flash_mla，sys.modules 里是旧包，树里那份 .so 永远不会被加载，
+        # 于是 fp8 op 表现为「AttributeError: no attribute sparse_prefill_fwd_fp8」。
+        # 这里按文件路径把树里的扩展单独加载成一个独立模块名。
+        import importlib.util as _ilu
+        import glob as _glob
+
+        cand = sorted(_glob.glob(str(Path(root) / "flash_mla" / "cuda*.so")))
+        if not cand:
+            raise RuntimeError("树里找不到 cuda 扩展：%s/flash_mla/cuda*.so（先编译）" % root)
+        _spec = _ilu.spec_from_file_location("cuda", cand[0])  # .so 导出的就是 PyInit_cuda
+        fc = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(fc)
+        if not hasattr(fc, "sparse_prefill_fwd_fp8"):
+            raise RuntimeError("%s 里没有 sparse_prefill_fwd_fp8（树没编到这一版？）" % cand[0])
 
         qquant_in_timed = name == "fp8-bh64"
         state = {}
@@ -510,7 +525,7 @@ def get_runner(name, tilelang_root=None, d_v=None, sm_scale=None):
             kvf, kvs = state[key]
 
             def _call(qf, qs):
-                return fi.sparse_prefill_fwd_fp8(qf, qs, kvf, kvs, kv, idx, scale, dv, None)
+                return fc.sparse_prefill_fwd_fp8(qf, qs, kvf, kvs, kv, idx, scale, dv, None)
 
             def _quant_q():
                 qf, qs = fused_quant.quant_per_row(q.reshape(-1, d_qk), 8)

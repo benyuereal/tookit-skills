@@ -219,8 +219,9 @@ prefill-glm53-8k:
     - "生产 chunk 大小：真机 trace 里每个 EXTEND 步就是 S=8192、bs=1（2026-11-27 prefill trace 实测）"
     - "本档 baseline（flash_mla bf16，B_H=16）与服务内实测对齐：6.87 µs/token = 306 GB/s = 15.6% HBM 峰值"
     - "构造性上限：B_H=16 时算术强度 32 FLOP/B（bf16 ridge 142）⇒ 算力利用率天花板 22%；H=64/TP8 时只有 8 个 head 有效，实际 11%"
-    - "对 A 档（fp8 + B_H=64）的判据：kernel ≤ 0.6× baseline 且 cos ≥ 0.9999"
+    - "对 A 档（fp8 + B_H=64，**Q 也量化**：反例码路）的判据：kernel ≤ 0.6× baseline 且 cos ≥ 0.9999"
   notes:
     - "serving 侧 per-rank h_q=8（H=64/TP8）⇒ B_H=16 有一半 lane 空跑；换 B_H=64 前必须先确认 kernel 支持 h_q<B_H 的掩码，或按单卡满 head 形态测"
     - "本档未实测；首次测量须同时跑 flash_mla（base）、fp8-bh64、fp8-bh64-qonly 三个 tag"
+    - "正确配方（Q 保持 bf16 + KV fp8 直读）也复用本档，但 gate 当前没有对应 runner/tag；候选 `prefill_fp8kv_qbf16` 处于 `blocked_by`，不要把 fp8-bh64 的结果当成它的结果"
     - "生产长上下文 prefill 的真实瓶颈常在 KV 抓取与 indexer 侧，不在本算子本身"

@@ -67,7 +67,7 @@
 | [`rope-mla`](cards/rope-mla.yaml) | rope | measured | — | bandwidth | MLA decode 为 360 GB/s，与纯 rope 的 33… |
 | [`rope`](cards/rope.yaml) | rope | measured | — | bandwidth | 两种 rotate_style 耗时比为 0.973（差异接近噪声边… |
 | [`sampling-topk-topp`](cards/sampling-topk-topp.yaml) | sampling | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
-| [`sparse-mla`](cards/sparse-mla.yaml) | attention | tuned | — | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REP… |
+| [`flash-mla`](cards/flash-mla.yaml) | attention | tuned | — | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REP… |
 | [`topk-block-index`](cards/topk-block-index.yaml) | attention | measured | — | latency | 耗时约等于空 kernel（0.79×），已无优化空间；比 torc… |
 | [`verify-accept`](cards/verify-accept.yaml) | sampling | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`weight-prepack`](cards/weight-prepack.yaml) | quant | draft | — | bandwidth | 无实测：索引卡。核心价值是提醒「漏 prepack 是静默错误」 |

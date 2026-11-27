@@ -1,6 +1,6 @@
 ---
 name: op-flash-mla
-description: "稀疏 MLA 前向（DeepSeek Sparse Attention / DSA）：q[S,H,576] × kv[SKV,1,576] 按 indices[S,1,topk] 稀疏 gather 后做 MLA，输出[S,H,512]。覆盖四类实现（生产 vLLM aiter、tilelang-hygon、flash_mla、fp32 参考）的适用面、形状档位、-1 哨兵语义、sm_scale=1/sqrt(640) 口径与已知坑。触发场景：稀疏注意力 kernel 选型、topk 相关性能问题、indexer 链路优化、d_v=512 MLA 精度对齐、-1 哨兵布局/num_split 整除排查、跨实现站位的索引池口径、**decode 里 gather+up-convert 与 sparse decode 并存（fp8 KV 直读、删中间 gather）**。不适用：A/B 的噪声与统计口径（3×MAD、跨卡 ratio）走 op-bench；手写 HIP 的编译 flag 与 VGPR 读法走 op-hip-compile；上界预测与绑定约束走 op-roofline。"
+description: "稀疏 MLA 前向（DeepSeek Sparse Attention / DSA）：q[S,H,576] × kv[SKV,1,576] 按 indices[S,1,topk] 稀疏 gather 后做 MLA，输出[S,H,512]。覆盖四类实现（生产 vLLM aiter、tilelang-hygon、flash_mla、fp32 参考）的适用面、形状档位、-1 哨兵语义、sm_scale=1/sqrt(640) 口径与已知坑。触发场景：稀疏注意力 kernel 选型、topk 相关性能问题、indexer 链路优化、d_v=512 MLA 精度对齐、-1 哨兵布局/num_split 整除排查、跨实现站位的索引池口径、decode 里 gather+up-convert 与 sparse decode 并存、**KV cache 是 fp8 想让 attention 直读（fp8 KV 直读配方：行内 per-128 scale 在 kernel 内反量化成 bf16，Q 必须保持 bf16；不要把 Q 也量化走 fp8×fp8 MMA）**。不适用：A/B 的噪声与统计口径（3×MAD、跨卡 ratio）走 op-bench；手写 HIP 的编译 flag 与 VGPR 读法走 op-hip-compile；上界预测与绑定约束走 op-roofline。"
 version: 1.0.0
 author: DCU Toolkit Contributors
 license: MIT
@@ -12,13 +12,15 @@ kind: card
 > **本卡的立场（2026-11-27 更名：op-sparse-mla → op-flash-mla）**
 > 算子契约（形状、-1 哨兵、sm_scale、索引池口径）仍以本卡为准；
 > 但**优化主线走 `flash_mla` 源码树**（`/workspace/FlashMLA-das`、`/workspace/fp8_mla`），
-> 不再以 tilelang / hip-glm 的 DSL 调参为主。两条在产改动：
+> 不再以 tilelang / hip-glm 的 DSL 调参为主。一条在产 + 两条 prefill 路线的状态：
 >
 > | 路径 | 改动 | 状态 |
 > |---|---|---|
-> | decode | `ModelType::NOPE512`：528 B fp8 KV 直读，删掉 gather+up-convert | 已上线：TPOT 54.70 → 50.91 ms（−6.9%），cos 0.999991 |
-> | prefill | `B_H=64` + fp8 KV 直读（`phase1_fp8.cuh`） | 已实现/已编译，**待验证**（候选 `prefill_fp8_bh64`） |
+> | decode | `ModelType::NOPE512`：528 B fp8 KV 直读（**Q 保持 bf16**），删掉 gather+up-convert | 已上线：TPOT 54.70 → 50.91 ms（−6.9%），cos 0.999991 |
+> | prefill（正确配方） | Q 保持 bf16 + KV fp8 直读 + kernel 内反量化（照 decode） | **未实现**（候选 `prefill_fp8kv_qbf16`；gate 暂无 runner，`blocked_by`） |
+> | prefill（反例码路） | `B_H=64` + fp8 KV 直读，但 **Q 也量化成 fp8**、走 fp8×fp8 MMA（`phase1_fp8.cuh`） | 已实现/已编译，**待验证**（候选 `prefill_fp8_bh64`）；机制与反例见 §八 |
 >
+> fp8 KV 直读的完整配方（机制 / 适用条件 / 反例 / decode 已验证数据 / prefill 实现障碍）见 **§八**。
 > prefill 现役 bf16 路径（`B_H=16`）实测 306 GB/s = 15.6% HBM、算力 1.8–3.5% of 279 TFLOPS，
 > 算术强度仅 32 FLOP/B（bf16 ridge 142）⇒ 结构天花板 22%。详见 `shapes.yaml:prefill-glm53-8k`。
 
@@ -180,3 +182,8 @@ HIP_VISIBLE_DEVICES=<idle> hipprof --pmc --pmc-type 3 -o /tmp/x python3 bench/pm
   它的机器模型在 `op-roofline/models/mqa_logits.py`（`derive.py mqa-logits`），
   历史实测与口径矛盾见 `~/.config/dcu-toolkit/kb/op-opt/mqa-logits-model-20261027.md`；indexer 侧见 `dcu-operators/dcu-hipdsa-source`
 - 历史结论与绝对数字：`~/.config/dcu-toolkit/kb/op-opt/`（不在本卡）
+
+## 八、fp8 KV 直读配方
+
+见 [`references/fp8-kv-direct-read.md`](references/fp8-kv-direct-read.md)
+（机制 / 适用条件 / 反例 / 可抄的 decode 实现 / prefill 障碍）。

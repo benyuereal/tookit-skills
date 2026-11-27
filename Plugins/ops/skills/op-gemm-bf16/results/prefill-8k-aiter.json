@@ -1,0 +1,50 @@
+{
+  "caliber": {
+    "what": "op_call",
+    "alloc": false,
+    "state": "hot",
+    "rounds": 3,
+    "timer": "hip_event"
+  },
+  "measure_mode": "event_isolated",
+  "measure_note": "back_to_back：偏乐观（kernel 间可重叠），不可 claim。event_isolated：每次 sync，可 claim。卡片/周报口径必须用端到端（每次 empty_like）：2026-11-23 实测 183.0 µs / 1081 GB/s / util 0.63。纯 kernel（event 隔离）172.5 µs。",
+  "shape": {
+    "params": {
+      "M": 8192,
+      "K": 4096,
+      "N": 4096
+    },
+    "note": "prefill：compute-bound，接近 GEMM 的算力上限",
+    "_name": "prefill-8k",
+    "shape": "prefill-8k"
+  },
+  "runs": [
+    {
+      "skv": 0,
+      "variants": [
+        {
+          "tag": "aiter-gemm",
+          "ms": 10.978391647338867,
+          "mad": 0.023679733276367188,
+          "delta_pct": 53.89361605703955,
+          "significant": false,
+          "why": "显著：ratio=1.5389，|Δ|=3.84464 > 3.0*MAD=0.0710392",
+          "maxdiff": null,
+          "rel": null
+        },
+        {
+          "tag": "torch-mm",
+          "ms": 0.9374390244483948,
+          "mad": 0.0008009672164916992,
+          "delta_pct": -86.85910596564328,
+          "significant": true,
+          "why": "显著：ratio=0.1314，|Δ|=6.19631 > 3.0*MAD=0.0024029",
+          "maxdiff": null,
+          "rel": null
+        }
+      ],
+      "base_ms": 7.133753776550293,
+      "base_mad": 0.00047969818115234375
+    }
+  ]
+}

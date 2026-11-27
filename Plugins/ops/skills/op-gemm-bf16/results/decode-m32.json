@@ -1,0 +1,50 @@
+{
+  "caliber": {
+    "what": "op_call",
+    "alloc": false,
+    "state": "hot",
+    "rounds": 3,
+    "timer": "hip_event"
+  },
+  "measure_mode": "event_isolated",
+  "measure_note": "back_to_back：偏乐观（kernel 间可重叠），不可 claim。event_isolated：每次 sync，可 claim。卡片/周报口径必须用端到端（每次 empty_like）：2026-11-23 实测 183.0 µs / 1081 GB/s / util 0.63。纯 kernel（event 隔离）172.5 µs。",
+  "shape": {
+    "params": {
+      "M": 32,
+      "K": 4096,
+      "N": 4096
+    },
+    "note": "小 batch decode",
+    "_name": "decode-m32",
+    "shape": "decode-m32"
+  },
+  "runs": [
+    {
+      "skv": 0,
+      "variants": [
+        {
+          "tag": "torch-mm",
+          "ms": 0.07711999863386154,
+          "mad": 0.0038399994373321533,
+          "delta_pct": -48.940679784568516,
+          "significant": true,
+          "why": "显著：ratio=0.5106，|Δ|=0.07392 > 3.0*MAD=0.01152",
+          "maxdiff": null,
+          "rel": null
+        },
+        {
+          "tag": "aiter-gemm",
+          "ms": 0.2831999957561493,
+          "mad": 0.0019199848175048828,
+          "delta_pct": 87.49999383393434,
+          "significant": false,
+          "why": "显著：ratio=1.8750，|Δ|=0.13216 > 3.0*MAD=0.00576",
+          "maxdiff": null,
+          "rel": null
+        }
+      ],
+      "base_ms": 0.1510400027036667,
+      "base_mad": 0.0019199997186660767
+    }
+  ]
+}

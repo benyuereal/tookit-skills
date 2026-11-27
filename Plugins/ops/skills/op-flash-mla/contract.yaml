@@ -3,7 +3,7 @@
 # 注意：本文件刻意使用 YAML 的安全子集（无 inline map / 无 block scalar / 无锚点），
 #       以便纯标准库解析器读取。
 
-op: sparse-mla
+op: flash-mla
 version: 1
 capability_baseline: flash_mla
 math: "out[i,h,:] = softmax_j(q[i,h,:] dot kv[indices[i,j],:] * sm_scale) dot kv[indices[i,j],:512]；indices 的 -1 表示无效槽位，softmax 前必须掩成 -inf"

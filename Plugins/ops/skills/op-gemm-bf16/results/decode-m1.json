@@ -1,0 +1,40 @@
+{
+  "caliber": {
+    "what": "op_call",
+    "alloc": false,
+    "state": "hot",
+    "rounds": 3,
+    "timer": "hip_event"
+  },
+  "measure_mode": "event_isolated",
+  "measure_note": "back_to_back：偏乐观（kernel 间可重叠），不可 claim。event_isolated：每次 sync，可 claim。卡片/周报口径必须用端到端（每次 empty_like）：2026-11-23 实测 183.0 µs / 1081 GB/s / util 0.63。纯 kernel（event 隔离）172.5 µs。",
+  "shape": {
+    "params": {
+      "M": 1,
+      "K": 4096,
+      "N": 4096
+    },
+    "note": "单 token decode（GEMV 极限）：完全 memory-bound，K*N 的 B 矩阵要整个读一遍",
+    "_name": "decode-m1",
+    "shape": "decode-m1"
+  },
+  "runs": [
+    {
+      "skv": 0,
+      "variants": [
+        {
+          "tag": "torch-mm",
+          "ms": 0.06943999975919724,
+          "mad": 0.0044789984822273254,
+          "delta_pct": -49.35822417098431,
+          "significant": true,
+          "why": "显著：ratio=0.5064，|Δ|=0.06768 > 3.0*MAD=0.013437",
+          "maxdiff": null,
+          "rel": null
+        }
+      ],
+      "base_ms": 0.13711999356746674,
+      "base_mad": 0.0007999986410140991
+    }
+  ]
+}

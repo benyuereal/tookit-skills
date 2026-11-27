@@ -127,7 +127,7 @@ tilelang.contrib.hcu.get_hcu_compile_flags` 并显式传 `pass_configs`。若 ai
 | `op-bench` | 编译差异必须用同进程 A/B 才能看出（跨进程绝对 µs 不可比） |
 | `op-profiling` | VGPR→占用率→「等内存时无可切换」的推理链在这里收口 |
 | `op-optimize` | 「所有调参都撞墙」时，先按 §二 排除 codegen，再判「需重写 kernel」 |
-| `op-sparse-mla` | 本模块的来源案例：`../op-sparse-mla/dev/sparse_mla_hip_glm.hip` 的 11-flag 构建与 1.16×/CTA 代价 |
+| `op-flash-mla` | 本模块的来源案例：`../op-flash-mla/dev/sparse_mla_hip_glm.hip` 的 11-flag 构建与 1.16×/CTA 代价 |
 
 ## 九、落点
 
