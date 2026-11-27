@@ -1134,14 +1134,49 @@ def round_stats(recs):
     return rounds, reruns
 
 
+def next_step_hint(cands, runnable, card_name=""):
+    """没有可跑候选时给下一步。返回 (文案, 是否需要补线)。
+
+    为什么要单独成一个函数：这里是「引擎与使用者的唯一接口」，而它此前在
+    「待做 0」时什么都不说。agent 唯一一次执行 loop.py 就是在这一步走掉的。
+    """
+    pend = [c for c in cands.get("candidates") or []
+            if isinstance(c, dict) and c.get("status", "pending") == "pending"]
+    prop = [c for c in cands.get("candidates") or []
+            if isinstance(c, dict) and c.get("status") == "proposed"]
+    cmd = "python3 -I scripts/explore.py --card %s --apply" % (card_name or "<卡>")
+    if runnable:
+        return "", False
+    if pend:
+        return ("\n下一步：待做的 %d 条都被方向预算或登记门拦住了（见上）。"
+                % len(pend)), False
+    if prop:
+        lines = ["\n下一步：待做 0 条，已有 %d 条**拟做**（status=proposed）。"
+                 "它们还没有实现变体，所以 run 会（且应该）拒绝：" % len(prop)]
+        for c in sorted(prop, key=lambda x: x.get("priority", 99))[:3]:
+            lines.append("  [%s] %s — %s" % (c.get("priority", "-"), c.get("id"),
+                                              str(c.get("hypothesis", ""))[:70]))
+        lines.append("  推进：实现变体 → 把 status 改成 pending 并补 variant/done_when "
+                     "→ loop.py run <id>")
+        return "\n".join(lines), False
+    return ("\n下一步：待做 0 条、拟做 0 条 —— 这张卡上没有候选了。\n"
+            "  从通用信号（roofline / 带宽 / 占用率 / LDS / 串行比）生成拟做候选：\n"
+            "    %s\n"
+            "  只看不写：去掉 --apply。生成的是**拟做**不是待做：变体实现出来之前\n"
+            "  run 仍然会拒，这是设计如此，不是故障。" % cmd), True
+
+
 def cmd_status(a):
     card, cands, recs = a.card, load_candidates(a.card), read_records(a.card)
     pend = [c for c in cands["candidates"]
             if isinstance(c, dict) and c.get("status", "pending") == "pending"]
     print("卡片      %s" % card)
     _rounds, _reruns = round_stats(recs)
-    print("候选      待做 %d / 已判死 %d / 停滞可作父代 %d / 共记录 %d 条"
-          % (len(pend), len(cands["refuted"]), len(cands.get("stalled") or []), len(recs)))
+    prop = [c for c in cands["candidates"]
+            if isinstance(c, dict) and c.get("status") == "proposed"]
+    print("候选      待做 %d / 拟做 %d / 已判死 %d / 停滞可作父代 %d / 共记录 %d 条"
+          % (len(pend), len(prop), len(cands["refuted"]),
+             len(cands.get("stalled") or []), len(recs)))
     # 轮次与重跑分开报：同一 tag 反复测不算多轮（P0-6）
     print("轮次      独立实验 %d 轮 / 重跑 %d 次（D4 只数前者）"
           % (len(_rounds), len(_reruns)))
@@ -1173,8 +1208,10 @@ def cmd_status(a):
         print("\n下一步：")
         for c in sorted(runnable, key=lambda x: x.get("priority", 99))[:3]:
             print("  [%s] %s — %s" % (c.get("priority", "-"), c.get("id"), c.get("hypothesis", "")))
-    elif pend:
-        print("\n下一步：没有可跑的候选 —— 待做的 %d 条都被方向预算拦住了（见上）。" % len(pend))
+    else:
+        hint, _needs_forge = next_step_hint(cands, runnable, card.name)
+        if hint:
+            print(hint)
 
 
 def cmd_queue(a):
