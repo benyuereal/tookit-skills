@@ -35,13 +35,37 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SKILLS = REPO / "Plugins/ops/skills"
+ENGINE_DIR = REPO / "Plugins/ops/engine"
+
+
+def _engine(name):
+    """按路径加载 engine/<name>.py（本脚本用 -I 跑，脚本目录不在 sys.path 上）。
+
+    为什么不 `from engine import card`：`Plugins/ops` 不是包，仓库也没有
+    install 步骤；而 `python3 -I` 连脚本目录都不放进 sys.path。仓库里已有
+    若干处这样按路径加载的先例，原因与写法见 engine/loop.py::_engine。
+    """
+    key = "_ops_engine_" + name
+    if key in sys.modules:
+        return sys.modules[key]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(key, str(ENGINE_DIR / (name + ".py")))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[key] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# 读卡的唯一入口。**这里曾经自己 yaml.safe_load**：于是 candidates.yaml 的
+# 裸 list 格式（新工坊 4 张卡）在这里 AttributeError:'list' object has no
+# attribute 'get'，而且按字母序扫到第 5 张就崩，后面所有卡根本没被检查。
+card = _engine("card")
 
 NUMERIC = re.compile(r"^\s*-?\d+(?:\.\d+)?\s*[%x]\s*$")
 
 
 def check_skill(skill_dir):
     """返回 (problems, stats)。"""
-    import yaml
     p = Path(skill_dir) / "candidates.yaml"
     if not p.is_file():
         # **没有 candidates.yaml 不是问题**：只有参与优化循环的 skill 才需要它
@@ -49,7 +73,8 @@ def check_skill(skill_dir):
         # 第一版把它报成错误，结果 15 个 skill 全被误报。
         # 返回空 problems + 空 stats，调用方据此跳过。
         return [], {}
-    d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    # 归一化（dict / 裸 list 两种顶层格式）只在 engine/card.py 发生一次。
+    d = card.load_candidates(skill_dir)
     cands = d.get("candidates") or []
     probs, ok = [], 0
     for c in cands:

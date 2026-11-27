@@ -23,28 +23,67 @@
 
     每轮：plan → gate(precondition) → run(调 loop.py) → judge → record
           → replan → stop
+
+结构：本文件只剩「编排」这一件事
+--------------------------------
+纯逻辑已经搬进 `Plugins/ops/engine/`：
+  · `ledger.py`   —— Cand/Top、parse_gain、replan、ledger_cites、overlay、progress
+  · `card.py`     —— 读卡（含 overlay 合并、candidates.yaml 两种顶层格式）
+  · `floor.py`    —— 地板（at_floor 前置门用的 remaining 也来自它）
+本文件保留的是**只剩这里能做的事**：一轮一轮地推进、通过子进程调 loop.py、
+以及 `SURFACES_PATH` 这个模块级常量 —— 测试用 monkeypatch 把它指向临时
+surfaces.yaml（`test_advance.py::surfaces_file`），把它或读它的函数搬走，
+补丁会静默失效：测试仍然"通过"，但测的已经不是真实路径了。
+这类耦合比"文件行数"重要得多 —— 宁可这个文件长，也不许测试变成假绿。
 """
 import argparse
 import json
-import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
 from pathlib import Path
 
 # scripts/advance.py → 向上找到 .git 即为仓库根（与 loop.py 同一策略）
 REPO_ROOT = next((p for p in Path(__file__).resolve().parents if (p / ".git").exists()),
                  Path(__file__).resolve().parents[1])
-ENGINE_LOOP = REPO_ROOT / "Plugins/ops/engine/loop.py"
+ENGINE_DIR = REPO_ROOT / "Plugins/ops/engine"
+ENGINE_LOOP = ENGINE_DIR / "loop.py"
 SURFACES_PATH = REPO_ROOT / "Plugins/ops/skills/op-optimize/references/surfaces.yaml"
 
-# advance 自己的进度文件（loop.py 写 runs/loop/，advance 写 runs/advance/）。
-# **不写卡片**：写范围禁止碰任何 cards，所以 stage 只能落在运行时目录里。
-ADVANCE_DIR = "advance"
-# 阶段是有序的；「stage 前进」= 索引只增不减（blocked/stopped 是终态另算）。
-STAGES = ("idle", "planned", "gated", "ran", "judged", "recorded", "replanned")
-TERMINAL = ("blocked", "stopped")
+def _engine(name):
+    """按路径加载 engine/<name>.py（见 engine/loop.py::_engine 的说明）。
+
+    必须在常量之前定义：下面的 ADVANCE_DIR / Cand 等都是对 engine 模块的转发，
+    它们在**模块导入时**就要能取到值。这类顺序问题在脚本里最容易埋雷 ——
+    `python3 -m py_compile` 过得去，只有真的 import 时才炸。
+    """
+    key = "_ops_engine_" + name
+    if key in sys.modules:
+        return sys.modules[key]
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(key, str(ENGINE_DIR / (name + ".py")))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[key] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# 读卡的唯一入口。**这里曾经 importlib 加载 loop.py 只为了借它的
+# load_candidates** —— 为了「别自己再写一份 overlay 合并」而把整个 2200 行
+# 引擎拖进编排层。现在那份实现在 engine/card.py，直接调它即可。
+card_io = _engine("card")
+# 地板入口：三处各算一遍地板的重复已收敛到 engine/floor.py。
+floor_io = _engine("floor")
+# 记账入口：纯数据结构、replan、overlay、progress 都在 engine/ledger.py。
+# 本文件只留「编排」——它读模块级 SURFACES_PATH（测试 monkeypatch 的那个名字），
+# 搬走会让补丁静默失效，见 run_advance 的说明。
+_ledger = _engine("ledger")
+
+# 进度文件 / stage 语义 / overlay 命名定义在 engine/ledger.py（与 explore 共用）。
+# 这里保留同名转发：既有调用点与测试直接读 advance.ADVANCE_DIR 之类。
+ADVANCE_DIR = _ledger.ADVANCE_DIR
+STAGES = _ledger.STAGES
+TERMINAL = _ledger.TERMINAL
 
 # floor.py 的 at_floor 阈值（remaining < 0.10 ⇒ 别再折腾）
 AT_FLOOR = 0.10
@@ -54,88 +93,36 @@ MAX_CONSECUTIVE_REFUTED = 2
 
 # ---------------------------------------------------------------- 数据结构
 
-@dataclass
-class Cand:
-    """一个候选（来自 candidates.yaml + surfaces.yaml 的排序附加信息）。"""
-    id: str
-    direction: str
-    ev: float
-    priority: int = 99
-    surface: dict = None
-    precondition_check: str = None
-    variant: str = None
-    raw: dict = None
-
-
-class RejectedList(list):
-    """rejected 列表。带上 ledger，使 `ledger_cites(rejected, prev)` 保持 2 参签名。"""
-
-    def __init__(self, items=(), ledger=None):
-        super().__init__(items)
-        self.ledger = ledger
-
-
-class Top(list):
-    """top-N 计划。保留 `.rejected` / `.ledger`，与 §6.3 的伪代码对齐。"""
-
-    def __init__(self, items=(), rejected=None, ledger=None):
-        super().__init__(items)
-        if isinstance(rejected, RejectedList):
-            self.rejected = rejected
-        else:
-            self.rejected = RejectedList(rejected or [], ledger=ledger)
-        self.ledger = ledger
+# Cand / RejectedList / Top 定义在 engine/ledger.py。这里 re-export 是**契约**：
+# 测试直接构造 `adv.Cand(...)` / `adv.Top(...)`，文档里也这么写。
+Cand = _ledger.Cand
+RejectedList = _ledger.RejectedList
+Top = _ledger.Top
 
 
 # ---------------------------------------------------------------- 知识读取
 
-def _yaml(path):
-    try:
-        import yaml
-        return yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
-    except (OSError, ImportError, ValueError):
-        return {}
-
-
 def load_surfaces():
-    d = _yaml(SURFACES_PATH)
+    d = card_io.read_yaml(SURFACES_PATH, {}) if Path(SURFACES_PATH).is_file() else {}
     return [s for s in d if isinstance(s, dict) and s.get("id")] if isinstance(d, list) else []
 
 
 def parse_gain(text):
-    """把 surfaces.yaml 的 `expected_gain` 文本解析成一个 0..1 的**代理值**。
+    """surfaces.yaml 的 expected_gain 文本 → 0..1 代理值（实现在 engine/ledger.py）。
 
-    这是 plan 的**简化版**（完整 EV 归 plan.py，后续阶段）。它不是 EV：
-    只用于排序与 replan 的塌缩判据。取值口径写死如下，避免「凭感觉」：
-      20~60%  → 区间中点 0.40
-      ≤15%    → 上界 0.15
-      ≈0      → 0.0
-      约 2×   → 1.0（2 倍加速 = 收益 100%）
+    口径写死在那个函数的 docstring 里；这里保留名字是因为 plan/selftest 与测试
+    都直接点名它。
     """
-    if not text:
-        return 0.0
-    s = str(text)
-    m = re.search(r"(\d+(?:\.\d+)?)\s*[~～\-]\s*(\d+(?:\.\d+)?)\s*%", s)
-    if m:
-        return (float(m.group(1)) + float(m.group(2))) / 2.0 / 100.0
-    m = re.search(r"约\s*(\d+(?:\.\d+)?)\s*[×x]", s)
-    if m:
-        return max(0.0, float(m.group(1)) - 1.0)
-    m = re.search(r"[≤<=]\s*(\d+(?:\.\d+)?)\s*%", s)
-    if m:
-        return float(m.group(1)) / 100.0
-    m = re.search(r"(\d+(?:\.\d+)?)\s*%", s)
-    if m:
-        return float(m.group(1)) / 100.0
-    return 0.0
+    return _ledger.parse_gain(text)
 
 
 def read_roofline(card):
-    p = Path(card) / "roofline.json"
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
+    """读 `<卡>/roofline.json`（derive 的离线产物）。读不到返回 {}。
+
+    这个函数保留的原因是**返回值**：`lang_select.route_scenario()` 要的是整份
+    roofline（含场景签名），不只是地板。谁要地板谁去 `floor_io.resolve()`。
+    """
+    return card_io.load_roofline(card)
 
 
 def card_id(card, roof=None):
@@ -143,22 +130,9 @@ def card_id(card, roof=None):
     return str(roof.get("card") or Path(card).name)
 
 
-def read_records(card):
-    """读 `runs/loop/*.jsonl` —— 只读取 loop.py 的产出，不产生任何判定。"""
-    out = []
-    d = Path(card) / "runs" / "loop"
-    if not d.is_dir():
-        return out
-    for f in sorted(d.glob("*.jsonl")):
-        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                out.append(json.loads(line))
-            except ValueError:
-                continue
-    return out
+# read_records / judge / confirm_record 都在 engine/ledger.py：它们只读 loop.py
+# 的产出，不产生判定，编排层不该自己再写一遍「怎么读 runs/loop」。
+read_records = _ledger.read_records
 
 
 def _rel(p):
@@ -183,73 +157,39 @@ def pick_results_json(card):
 # ---------------------------------------------------------------- plan（简化版）
 
 def _load_candidates_via_loop(card):
-    """**复用 loop.py 的 load_candidates**，不在这里重写一份合并逻辑。
+    """读候选队列（含 overlay 合并），返回 (candidates, 来源)。
 
-    为什么要复用而不是自己读 yaml：loop.py 的 load_candidates 会把
-    runs/advance/overlay.yaml 合并进来（forge 生成的候选只能通过这条路上桌）。
-    如果 advance 自己读 candidates.yaml，会出现「overlay 写了、loop.py 认了、
-    但 plan 看不见」的三角不一致 —— 生成的变体永远排不进 top3，
-    而报错信息是「没有 pending 候选」，完全指不到真因。
+    函数名保留 `_via_loop` 是为了不动调用点与日志里的来源串，但**实现已经
+    不经过 loop.py**：合并 runs/advance/overlay.yaml 的逻辑收在
+    engine/card.py::load_candidates 里，与 loop.py 用的是同一个函数。
+    原先为了借这一步而 importlib 整个 loop.py，等于让编排层依赖引擎的
+    全部导入副作用（它还会去找 measure_mode、注册常量、读 references/），
+    而真正需要的只有「读卡 + 合并」这十行。
 
-    loop.py 不可用时退回只读卡片（明确标注，不假装合并过）。
+    读卡失败时退回 {}（plan 会得到「没有 pending 候选」）：
+    plan 是只读的规划步骤，它不该因为卡片写坏了而崩掉整轮编排 ——
+    真坏了由 loop.py 的门去拒，那里才是该报错的地方。
     """
-    import importlib.util
-    p = ENGINE_LOOP
-    if p.is_file():
-        try:
-            spec = importlib.util.spec_from_file_location("_loop_for_plan", str(p))
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            return mod.load_candidates(Path(card)), "loop.load_candidates"
-        except Exception:                       # noqa: BLE001
-            pass
-    return _yaml(Path(card) / "candidates.yaml"), "card-only"
+    try:
+        return card_io.load_candidates(Path(card)), "card.load_candidates"
+    except Exception:                           # noqa: BLE001
+        return {}, "card-unreadable"
 
 
 def _sweep_key(cid):
-    """同一批 sweep 的变体共享同一前缀：auto-<template>-h<H>-t<N>-v<M> → 去掉末段。"""
-    import re
-    m = re.match(r"^(auto-[a-z0-9]+-h\d+)-t\d+-v\d+$", str(cid))
-    return m.group(1) if m else None
+    """同一批 sweep 的变体共享前缀（实现在 engine/ledger.py::sweep_key）。"""
+    return _ledger.sweep_key(cid)
 
 
 def build_plan(card, ledger=None):
     """读候选队列（含 overlay）+ surfaces.yaml，给出 top3。
 
-    排序只按 `expected_gain` 解析出的代理值（简化版，不做完整 EV）。
-    只挑 pending 候选：loop.py 的登记门要求候选在队列里，plan 不越权发明候选。
+    **只在这里读 SURFACES_PATH**：测试用 monkeypatch 把它指到临时文件，
+    所以"从哪读 surfaces"这个知识必须留在本模块（这也是 build_plan 没搬进
+    engine 的唯一原因，见 run_advance 的说明）。纯排序逻辑在 ledger.build_plan。
     """
     cands, _src = _load_candidates_via_loop(card)
-    surf = {str(s["id"]): s for s in load_surfaces()}
-    items = []
-    for c in cands.get("candidates") or []:
-        if not isinstance(c, dict):
-            continue
-        if str(c.get("status") or "pending") != "pending":
-            continue
-        d = str(c.get("direction") or "")
-        s = surf.get(d) or {}
-        if isinstance(c.get("ev"), (int, float)):
-            ev = float(c["ev"])
-        else:
-            ev = parse_gain(s.get("expected_gain"))
-        items.append(Cand(
-            id=str(c.get("id") or "?"), direction=d, ev=ev,
-            priority=int(c.get("priority") or 99), surface=s,
-            precondition_check=s.get("precondition_check"),
-            variant=c.get("variant"), raw=c))
-    items.sort(key=lambda x: (-x.ev, x.priority, x.id))
-    # top3 是「一次跑几个**不同方向**」的上限，但同一次 sweep 出来的兄弟变体
-    # 必须整组一起跑 —— 它们共用一次 base 测量才可比，被截断的那组就白生成了。
-    # 判据：id 前缀相同（auto-<template>-h<H>-）即视为同一批 sweep。
-    top = items[:3]
-    seen = {_sweep_key(c.id) for c in top}
-    for c in items[3:]:
-        k = _sweep_key(c.id)
-        if k and k in seen:
-            top.append(c)
-    rejected = RejectedList(items[3:], ledger=ledger)
-    return Top(top, rejected=rejected, ledger=ledger)
+    return _ledger.build_plan(cands, load_surfaces(), ledger=ledger)
 
 
 # ---------------------------------------------------------------- gate（前提门）
@@ -398,24 +338,9 @@ class Runner:
 
 # ---------------------------------------------------------------- judge / record
 
-def judge(card, before_len):
-    """从 loop.py 的产出里读 decision。**不自己算显著性、不重判。**
-
-    loop.py 在一个 tag 下会为每个 variant×shape 各写一条记录；这里取本轮新增
-    记录的最后一条为主判定，并原样保留全部记录供报告。
-    """
-    recs = read_records(card)
-    new = recs[before_len:]
-    if not new:
-        return {"decision": None, "records": [], "why": "本轮没有新增记录"}
-    return {"decision": new[-1].get("decision"), "records": new, "why": "读自 runs/loop"}
-
-
-def confirm_record(card, before_len):
-    """确认 loop.py 的 append 真的落盘了（advance 只确认，不代写）。"""
-    recs = read_records(card)
-    new = recs[before_len:]
-    return len(new) > 0, new
+# 只读 loop.py 的 decision，不重判 —— 实现在 engine/ledger.py（read_records 的同处）。
+judge = _ledger.judge
+confirm_record = _ledger.confirm_record
 
 
 # ---------------------------------------------------------------- forge（写新实现）
@@ -430,7 +355,7 @@ def confirm_record(card, before_len):
 #   ② 生成物只能落 runs/。要进六道门，必须写 runs/advance/overlay.yaml
 #      （loop.py 只读合并它），**绝不改 candidates.yaml**。
 #   ③ 体检不过就不登记 —— 一个算错的变体进了队列，会把这轮方向判死。
-FORGE_OVERLAY = "overlay.yaml"
+FORGE_OVERLAY = _ledger.FORGE_OVERLAY
 
 
 def _load_forge():
@@ -448,40 +373,10 @@ def _load_forge():
     return mod, None
 
 
-def write_overlay(card, entries):
-    """把生成的候选写进 runs/advance/overlay.yaml（**只新增，不覆盖**）。
-
-    loop.py 的 `load_candidates` 会合并它，并拒绝同 id 冲突。
-    这里也做一次同 id 检查：两次生成同名变体时应当停下，而不是让第二次静默赢。
-    """
-    import yaml
-    d = Path(card) / "runs" / ADVANCE_DIR
-    d.mkdir(parents=True, exist_ok=True)
-    f = d / FORGE_OVERLAY
-    cur = {"candidates": []}
-    if f.is_file():
-        cur = yaml.safe_load(f.read_text(encoding="utf-8")) or {"candidates": []}
-    have = {c.get("id") for c in cur.get("candidates") or [] if isinstance(c, dict)}
-    for e in entries:
-        if e["id"] in have:
-            raise SystemExit(
-                "overlay 已存在候选 %r。**不覆盖**：同名变体两次生成会让"
-                "「这轮到底测的是哪个实现」无法回答。" % e["id"])
-        cur.setdefault("candidates", []).append(e)
-        have.add(e["id"])
-    f.write_text(yaml.safe_dump(cur, allow_unicode=True, sort_keys=False),
-                 encoding="utf-8")
-    return f
-
-
-def _overlay_ids(card):
-    """overlay 里已登记的候选 id（用于「别再生成一遍」）。"""
-    import yaml
-    f = Path(card) / "runs" / ADVANCE_DIR / FORGE_OVERLAY
-    if not f.is_file():
-        return set()
-    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
-    return {c.get("id") for c in d.get("candidates") or [] if isinstance(c, dict)}
+# overlay 的读写实现在 engine/ledger.py：`explore --apply` 与 `advance --forge`
+# 写的是同一份文件、同一个格式，两处各写一份 sync 检查迟早会不一致。
+write_overlay = _ledger.write_overlay
+_overlay_ids = _ledger.overlay_ids
 
 
 def _route_language(card, emit=print, selector=None):
@@ -533,27 +428,20 @@ def _shape_of(card):
       2. shapes.yaml 里 note 不含「不用于 bench」的第一个
     都找不到就返回 {}，由调用方报错 —— **不猜**。
     """
-    try:
-        import yaml
-    except ImportError:
+    d = card_io.load_shapes(card)
+    if not d:
         return {}
-    f = Path(card) / "shapes.yaml"
-    if not f.is_file():
-        return {}
-    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
 
     wanted = None
-    cf = Path(card) / "candidates.yaml"
-    if cf.is_file():
-        try:
-            cy = yaml.safe_load(cf.read_text(encoding="utf-8")) or {}
-            args = ((cy.get("defaults") or {}).get("bench_args") or [])
-            if "--shape" in args:
-                i = args.index("--shape")
-                if i + 1 < len(args):
-                    wanted = str(args[i + 1])
-        except Exception:                       # noqa: BLE001
-            wanted = None
+    try:
+        cy = card_io.load_candidates(card)
+        args = ((cy.get("defaults") or {}).get("bench_args") or [])
+        if "--shape" in args:
+            i = args.index("--shape")
+            if i + 1 < len(args):
+                wanted = str(args[i + 1])
+    except Exception:                           # noqa: BLE001
+        wanted = None
 
     if wanted and isinstance(d.get(wanted), dict):
         return dict(d[wanted].get("params") or {})
@@ -584,11 +472,9 @@ def forge_next(card, shape, direction=None, emit=print, sweep=3,
     # 默认取卡上第一个 open 方向；卡上没有就报错（不猜）。
     if direction is None:
         try:
-            import yaml
-            cy = yaml.safe_load((Path(card) / "candidates.yaml")
-                                .read_text(encoding="utf-8")) or {}
-            opens = [x.get("id") for x in (cy.get("directions") or [])
-                     if isinstance(x, dict) and str(x.get("status")) == "open"]
+            # directions 段的读法（裸 list 卡没有这一段 ⇒ []）在 card 里。
+            opens = [x.get("id") for x in card_io.load_directions(card)
+                     if str(x.get("status")) == "open"]
         except Exception:                       # noqa: BLE001
             opens = []
         if not opens:
@@ -664,90 +550,18 @@ def forge_next(card, shape, direction=None, emit=print, sweep=3,
 
 # ---------------------------------------------------------------- replan（v5.1 §6.3）
 
-def ledger_cites(rejected, prev, ledger=None):
-    """新 top1 的取舍必须引用上一轮 verdict。返回 citation 或 None。
-
-    两个来源：
-      1. rejected 条目显式 `cites` 了 prev.id（候选自己写的理由）
-      2. ledger（runs/loop 记录）里存在 prev.id 的 verdict（机器记录）
-    """
-    pid = getattr(prev, "id", None) or (prev.get("id") if isinstance(prev, dict) else None)
-    if not pid:
-        return None
-    ledger = ledger if ledger is not None else getattr(rejected, "ledger", None)
-
-    for item in rejected or []:
-        raw = getattr(item, "raw", None) or {}
-        cites = raw.get("cites") or []
-        if pid in [str(x) for x in cites]:
-            return {"tag": pid, "verdict": "cited-by-candidate",
-                    "card": None, "ts": None}
-
-    for r in ledger or []:
-        if r.get("tag") == pid or r.get("candidate") == pid:
-            verdict = r.get("verdict") or r.get("decision")
-            if verdict:
-                return {"card": r.get("card"), "ts": r.get("ts"),
-                        "tag": pid, "verdict": verdict}
-    return None
-
-
-def replan(prev_top, new_top, ledger=None):
-    """§6.3 防 EV 塌缩。**逐条照实现**，分支顺序不能改。"""
-    if not new_top:
-        return {"action": "STOP", "reason": "无可挖方向"}
-    if new_top[0].ev < 0.30:
-        return {"action": "STOP", "reason": "EV 塌缩到 0.3 以下"}
-    # prev_top 为空时「掉一半」无从比（与上一轮不可比），按不塌缩处理；
-    # 直接跳过该判据而不是抛 IndexError——编排器不能因为数据稀疏就崩。
-    if prev_top and new_top[0].ev < 0.5 * prev_top[0].ev:
-        return {"action": "STOP", "reason": "EV 掉了一半以上"}
-    if prev_top and prev_top[0].id == new_top[0].id:
-        return {"action": "CONTINUE_SAME", "reason": "top1 未变"}
-    # 只有 1 个候选时不存在「拉开差距」的问题（没有第二名可比）。
-    if len(new_top) >= 2 and new_top[0].ev < 1.5 * new_top[1].ev:
-        return {"action": "STALLED", "reason": "没拉开差距，可能是抖动"}
-    cited = ledger_cites(new_top.rejected, prev_top[0] if prev_top else Cand("?", "", 0.0),
-                         ledger)
-    return {"action": "CONTINUE_SWITCH", "reason": "换向", "cited": cited}
+# §6.3 的防塌缩判据与「新 top1 必须引用上一轮 verdict」都在 engine/ledger.py。
+ledger_cites = _ledger.ledger_cites
+replan = _ledger.replan
 
 
 # ---------------------------------------------------------------- progress 状态
 
-def progress_path(card):
-    return Path(card) / "runs" / ADVANCE_DIR / "progress.json"
-
-
-def load_progress(card):
-    p = progress_path(card)
-    try:
-        d = json.loads(p.read_text(encoding="utf-8"))
-        if isinstance(d, dict):
-            return d
-    except (OSError, ValueError):
-        pass
-    return {"card": Path(card).name, "round": 0, "stage": "idle",
-            "since": time.strftime("%Y-%m-%dT%H:%M:%S"), "history": []}
-
-
-def save_progress(card, state):
-    p = progress_path(card)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _advance_stage(state, stage):
-    """stage 只许前进（终态除外）。返回是否真的前进。"""
-    cur = state.get("stage") or "idle"
-    if cur in TERMINAL:
-        return False
-    if stage in TERMINAL:
-        state["stage"] = stage
-        return True
-    if cur in STAGES and stage in STAGES and STAGES.index(stage) > STAGES.index(cur):
-        state["stage"] = stage
-        return True
-    return False
+# progress.json 的读写与「stage 只许前进」的判据在 engine/ledger.py。
+progress_path = _ledger.progress_path
+load_progress = _ledger.load_progress
+save_progress = _ledger.save_progress
+_advance_stage = _ledger.advance_stage
 
 
 # ---------------------------------------------------------------- 编排
@@ -770,8 +584,15 @@ def run_advance(card, max_rounds, runner=None, dry_run=False, emit=print,
         report.update(status="noop", reason="max-rounds=0", progress_stage="idle")
         return report
 
-    roof = read_roofline(card)
-    remaining = roof.get("remaining")
+    # at_floor 前置门。**只信本卡自己的 derive 产物**（roofline.json），
+    # 不吃 atlas 卡的 floor_inputs 兜底 —— 这不是漏了统一，是刻意的：
+    # atlas 的 t_actual 是**仓库级**的历史测量，不是本次编排的起点；拿它
+    # 判「这张卡已经到顶」会让「先量一次基线」永远跑不起来。实测代价：
+    # op-gemm-bf16 的 roofline.json 里还没有 remaining，而 atlas 卡里算出来
+    # 是 0.072（< 0.10）—— 吃兜底就会把它从「没有待做候选」改成「at_floor 停机」，
+    # 也就是这张卡再也进不了循环。
+    fl = floor_io.resolve(card, sources=("roofline",))
+    remaining = fl.remaining
     if isinstance(remaining, (int, float)) and remaining < AT_FLOOR:
         emit("at_floor：remaining=%.4f < %.2f，停在计划前。" % (remaining, AT_FLOOR))
         report.update(status="stopped", reason="at_floor", progress_stage="idle")

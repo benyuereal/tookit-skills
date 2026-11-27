@@ -8,6 +8,17 @@ license: MIT
 
 # 算子卡域（ops）
 
+## 要做算子优化？先加载 `op-optimize`
+
+**任何「改实现 / 提速 / 换语言 / 建新卡」的任务都从这里进**：
+`skills/op-optimize/SKILL.md`；执行层入口是 `engine/loop.py`。
+算子卡（`op-*`）只回答「这个算子是什么、有哪些实现、判据是什么」，
+**不是优化的执行入口**——查到卡不等于完成任务；要改实现就必须走闭环：
+`python3 -I <skill根>/Plugins/ops/engine/loop.py -C <卡目录> run <tag>`，
+并把流水留在 `<卡目录>/runs/loop/*.jsonl`。
+**没有语义相同的现成卡时**，用 `scripts/op_bootstrap.py` 建新卡后同样走闭环——
+「没有现成卡」不是退回手搓单次测量的理由。
+
 ## 一、定位：三个域正交
 
 | 域 | 回答的问题 | 典型入口 |
@@ -166,6 +177,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-fusion-add-rmsnorm-quant` | `measured` | 残差 + RMSNorm + 动态量化 三合一（add_rmsnorm_quant） |
 | `op-gemm-bf16` | `measured` | BF16 GEMM（基础档） |
 | `op-mqa-logits` | `measured` | MQA logits（DSA indexer 打分；支持分组调度） |
+| `op-gated-add` | `draft` | 门控残差加 |
 
 ## 六、数据分层（红线，必须遵守）
 

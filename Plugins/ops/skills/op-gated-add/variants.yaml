@@ -1,0 +1,18 @@
+variants:
+- name: ref-heavy
+  source: 本卡 _common.py 的 fp32 参考
+  status: reference
+  role: correctness_only
+  applies_to:
+  - s0
+  mutates_inputs: false
+  semantics:
+    inputs:
+    - x
+    - gate
+    outputs:
+    - y
+    mutates: []
+    traffic_passes: 3
+    note: fp32 参考，只用于正确性对照，不是性能候选
+  note: '**不得用于性能对比**：未优化的参考实现'

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated": "2026-11-27",
+  "updated": "2026-11-28",
   "note": "算子索引与状态机。draft -> measured -> tuned -> at_floor -> deprecated。at_floor 必须带 floor_status 与 evidence，且同一档位不得重复立项。本文件只放状态与档位，绝对耗时进 ~/.config/dcu-toolkit/kb/op-opt/。",
   "ops": [
     {
@@ -302,6 +302,22 @@
       "best_variant": null,
       "floor_status": null,
       "last_verified": "2026-11-22",
+      "evidence": null,
+      "open_questions": []
+    },
+    {
+      "name": "gated-add",
+      "path": "Plugins/ops/skills/op-gated-add",
+      "status": "draft",
+      "shapes": [
+        "s0"
+      ],
+      "variants": [
+        "ref-heavy"
+      ],
+      "best_variant": null,
+      "floor_status": null,
+      "last_verified": "2026-11-27",
       "evidence": null,
       "open_questions": []
     }

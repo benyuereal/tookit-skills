@@ -1,0 +1,76 @@
+# 由 scripts/op_bootstrap.py 生成后人工补齐的 draft 卡。
+# 纪律：本卡只有一次 ref-heavy 校准（runs/loop，CALIBRATION_ONLY），
+# 没有任何收益数字。补实测前不许出现比值/达成率/加速比。
+id: gated-add
+title: 门控残差加
+family: elementwise
+math: y = x + gate * s ；s 为标量 scale
+status: draft
+layer: kernel
+op_card: Plugins/ops/skills/op-gated-add
+semantics:
+  formula: y = x + gate * s（s 取 shapes.yaml 的 params.s，缺省 1.0）
+  inputs:
+  - x (M,H)
+  - gate (M,H)
+  outputs:
+  - y (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 math：读 x、读 gate，写 y，各一次（**未实测，须用 --actual 校正**）
+  mutates_inputs: []
+variants:
+- repo: in-house
+  library_profile_ref: null
+  file_hint: 本卡 _common.py 的 fp32 参考实现（变体名 ref-heavy）
+  tier: reference
+  role: correctness_only
+  best_for:
+  - 建立本算子的正确性锚与首个可运行基线（现成库没有同名融合入口）
+  not_for:
+  - 算收益：未优化的参考实现打赢了没有工程意义（baseline-policy 明令禁止）
+  pros:
+  - 与本卡 _common.py 同源，输入构造与语义口径不会漂
+  cons:
+  - 现成库不支持：lightop / aiter / deepgemm / flash-attn / triton 均无「x + gate*s」这个融合入口，要跑只能自研
+  source: Plugins/ops/skills/op-gated-add/_common.py
+  l1_exempt_reason: 自研参考实现，不是可 import 的库函数；真实入口是 op-gated-add/_common.py 的 reference() 与 get_runner("ref-heavy")
+ceiling:
+  kind: missing
+  ref: null
+  bound: memory
+  note: bootstrap 新建，尚无实测天花板；分母见 floor_inputs（2 读 1 写 201.327 MB）
+shapes:
+- s0
+floor_inputs:
+  bytes_mb: 201.327
+  pattern: rw_2to1
+  t_actual_us: 629.6
+  t_source: results
+  basis: bootstrap 按访问模式 elementwise-2in 算出：x(read)=67108864B + gate(read)=67108864B
+    + y(write)=67108864B
+  t_variant: ref-heavy
+  t_measured_at: '2026-11-27T23:41:40'
+  t_measure_mode: event_isolated
+  evidence: Plugins/ops/skills/op-gated-add/runs/loop/20261127.jsonl
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: bootstrap 新建，尚无实测；runs/loop 仅一次 CALIBRATION_ONLY 校准，不构成收益
+  verified_on: null
+baseline_ref:
+  impl: null
+  role: unverified
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 semantics 推定（**未实测，须用 --actual 校正**）
+  no_baseline_reason: 本卡目前只有一条实现 ref-heavy（本卡 _common.py 的 fp32 参考，role=correctness_only）。baseline-policy.yaml
+    既把 correctness_only 排除在性能基准之外，也把 ref-heavy 列进 forbidden_impl_patterns —— 拿它当基准算出的倍数没有工程意义。等有厂商/第三方实现（或本卡自研优化版）时回填
+    impl + role=competitor|best_known，并按实际测量校正 traffic_passes。
+  note: 在补上真基准之前，本卡不许写任何「快多少」
+updated: '2026-11-27'

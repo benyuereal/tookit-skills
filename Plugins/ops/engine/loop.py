@@ -90,6 +90,136 @@ MEMORY_WRITE = True
 REPO_ROOT = next((p for p in Path(__file__).resolve().parents if (p / ".git").exists()),
                  Path(__file__).resolve().parents[3])
 
+# engine/ 下的兄弟模块（card / floor / probe / propose / ledger）。
+_ENGINE_DIR = Path(__file__).resolve().parent
+
+
+def _engine(name):
+    """按路径加载 engine/ 下的兄弟模块；**文件不存在时返回 None**。
+
+    loop.py 有三种被加载方式，`__package__` 三种都不是 `engine`：
+      ① `python3 -I engine/loop.py`            —— __name__ == "__main__"，无包
+      ② 测试 `spec_from_file_location("op_loop_under_test", ...)` —— 合成模块名
+      ③ shim `runpy.run_path(..., run_name="__main__")` —— 同 ①
+    而 `-I` 又保证脚本目录不在 sys.path 上，所以裸 `import card` 同样落空。
+    仓库里已有三处（_load_measure_mode / _load_forge / _load_candidates_via_loop）
+    各自写了一遍这个动作 —— 那是上一轮为了不改加载方式付出的代价，
+    这里不再增加第四种写法：**统一成这一个函数**，改名也只改这里。
+
+    先挂 sys.modules 再 exec 是必须的：模块之间会互相加载（floor 要用 card，
+    cli 要用全部），不先挂就会把同一个文件执行两遍，模块级缓存（例如
+    `_bound_map()` 的表）跟着分裂成两份。
+
+    返回 None 而不是抛异常：仓库里确实存在**只安装 engine/loop.py 的布局**
+    （见 _FallbackCard 的说明），那种布局下兄弟模块缺失是"部署形态"，
+    不是程序错误 —— 但也不能静默降级，调用方必须显式处理。
+    """
+    key = "_ops_engine_" + name
+    if key in sys.modules:
+        return sys.modules[key]
+    path = _ENGINE_DIR / (name + ".py")
+    if not path.is_file():
+        return None
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(key, str(path))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[key] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class _FallbackCard:
+    """`engine/card.py` 缺失时的最小读卡器 —— **只用于单文件部署**。
+
+    为什么需要它（这不是"再写一份读卡实现"的借口，是一个真实的部署约束）：
+    仓库里存在只安装 `engine/loop.py` 的布局 —— `scripts/opgate_checks.py` 的
+    方向预算门就是 `python3 -I <装好的>/engine/loop.py -C <卡> queue`，而
+    `tests/test_ops_gate.py` 的夹具按这个布局**只拷 loop.py**（它模拟的是
+    插件安装后的树）。这两处都不在本轮允许改动的范围内，而让门禁崩掉等于
+    让所有 commit 被拦。
+
+    所以 loop.py 必须能单文件跑。口径上它**不是第二套判据**：读的文件、
+    归一化规则（裸 list → dict、五段缺省）、报错文案都与 card.py 一致，
+    少的只有 `runs/advance/overlay.yaml` 合并 —— 单文件部署里没有 advance，
+    也就不存在 overlay。
+
+    它不会悄悄生效：构造时往 stderr 打一行告警。缺少这一行，两个实现哪天
+    分叉了没有任何人会发现。
+    """
+
+    #: `config` 段缺失时的空容器表（与 card.py::_SECTIONS 同值）
+    SECTIONS = (("defaults", dict), ("directions", list), ("candidates", list),
+                ("refuted", list), ("stalled", list))
+
+    def __init__(self):
+        print("[engine] 警告：engine/card.py 不存在，读卡降级为 loop.py 内置实现"
+              "（单文件部署；overlay 不参与合并）", file=sys.stderr)
+
+    def read_yaml(self, path, default=None):
+        try:
+            import yaml
+            d = yaml.safe_load(Path(str(path)).read_text(encoding="utf-8"))
+        except (OSError, ValueError, ImportError):
+            return {} if default is None else default
+        if d is None:
+            return {} if default is None else default
+        return d
+
+    def load_candidates(self, card):
+        p = Path(str(card)) / "candidates.yaml"
+        d = self.read_yaml(p, {}) if p.exists() else {}
+        if isinstance(d, list):
+            d = {"candidates": d}
+        if not isinstance(d, dict):
+            raise SystemExit(
+                "candidates.yaml 必须是 dict 或 list，实际是 %s：%s"
+                % (type(d).__name__, p))
+        for key, ctor in self.SECTIONS:
+            d.setdefault(key, ctor())
+        return d
+
+    def load_contract_tol(self, card, default=2e-3):
+        p = Path(str(card)) / "contract.yaml"
+        if not p.exists():
+            return default
+        c = self.read_yaml(p, {})
+        for path in (("tolerance", "vs_fp32_ref", "max_abs"), ("tolerance", "max_abs")):
+            node = c
+            for k in path:
+                node = node.get(k) if isinstance(node, dict) else None
+                if node is None:
+                    break
+            if isinstance(node, (int, float)):
+                return float(node)
+        return default
+
+    def load_roofline(self, card):
+        p = Path(str(card)) / "roofline.json"
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        return d if isinstance(d, dict) else {}
+
+    def load_variants(self, card):
+        d = self.read_yaml(Path(str(card)) / "variants.yaml", {})
+        vs = d.get("variants") if isinstance(d, dict) else d
+        return [v for v in (vs or []) if isinstance(v, dict)]
+
+    def load_directions(self, card):
+        return [d for d in (self.load_candidates(card).get("directions") or [])
+                if isinstance(d, dict)]
+
+
+# 读卡的唯一实现搬到了 engine/card.py：`candidates.yaml` 的两种顶层格式
+# （dict / 裸 list）与 runs/advance/overlay.yaml 合并都在那里。这里 re-export
+# 是**对外契约**——测试、shim、别的插件都直接点名 `loop.load_candidates`。
+# 别名用 `_CARD` 而不是 `card`：本文件里 `card` 是一个用了上百次的**参数名**
+# （卡片目录），同名会把这个模块对象整个遮住，而这类错只在被调用到的那条分支炸。
+_CARD = _engine("card")
+if _CARD is None:                       # 单文件部署（见 _FallbackCard）
+    _CARD = _FallbackCard()
+
 
 def _load_measure_mode():
     """加载 scripts/measure_mode.py —— measure_mode 的**唯一真源**。
@@ -120,67 +250,9 @@ def _c(s, color):
 
 # ---------------------------------------------------------------- 卡片读取
 
-def load_candidates(card):
-    """读卡片的候选队列。**另可合并 runs/advance/overlay.yaml**。
-
-    overlay 是「多轮编排自动生成的候选」的登记处。它解决一个真实冲突：
-      · ENGINE.md 规定 advance **不许写卡片**（写范围只到 runs/）
-      · 但本文件的登记门要求「候选必须在队列里」，否则拒绝跑
-    没有 overlay 时，自动生成的变体无法进入六道门 —— 要么绕过门（不可接受），
-    要么让 advance 去改 candidates.yaml（违反边界）。
-
-    overlay 只是**追加**，永远不能：
-      · 覆盖已存在的候选 id（重复即冲突，直接报错，不静默取其一）
-      · 改 refuted 清单（已判死的不能被 overlay 复活）
-      · 改 defaults / directions 的状态与计数
-    所以它不能让任何一条已经生效的约束失效。
-
-    每个候选会打上 `_origin: advance-overlay`，记录里看得出来源。
-    """
-    p = card / "candidates.yaml"
-    if not p.exists():
-        d = {"defaults": {}, "directions": [], "candidates": [],
-             "refuted": [], "stalled": []}
-    else:
-        import yaml
-        d = yaml.safe_load(p.read_text()) or {}
-        # **两种格式都接受**：老卡写成 dict（defaults/directions/candidates/...），
-        # 新工坊写成裸 list（只是一串候选）。实测 2026-11-27：9 张卡里 4 张是 list
-        # （op-gemm-bf16 / op-mqa-logits / op-fusion-rmsnorm-rope /
-        #  op-fusion-add-rmsnorm-quant），loop.py 一进去就 AttributeError，
-        # 导致这几张卡**根本进不了引擎入口**。在入口处一次收敛，比让每张卡改格式可靠。
-        if isinstance(d, list):
-            d = {"candidates": d}
-        if not isinstance(d, dict):
-            raise SystemExit(
-                "candidates.yaml 必须是 dict 或 list，实际是 %s：%s"
-                % (type(d).__name__, p))
-        d.setdefault("defaults", {})
-        d.setdefault("directions", [])
-        d.setdefault("candidates", [])
-        d.setdefault("refuted", [])
-        d.setdefault("stalled", [])
-    ov = card / "runs" / "advance" / "overlay.yaml"
-    if ov.is_file():
-        import yaml
-        o = yaml.safe_load(ov.read_text()) or {}
-        have = {c.get("id") for c in d["candidates"] if isinstance(c, dict)}
-        dead = {r.get("id") for r in d["refuted"] if isinstance(r, dict)}
-        for c in (o.get("candidates") or []):
-            if not isinstance(c, dict) or not c.get("id"):
-                continue
-            cid = c["id"]
-            if cid in have:
-                raise SystemExit(
-                    "overlay 冲突：候选 %r 与卡片已有候选同 id。"
-                    "overlay 只能新增，不能覆盖（否则登记的候选会被悄悄换掉）。" % cid)
-            if cid in dead:
-                raise SystemExit(
-                    "overlay 冲突：候选 %r 已在 refuted 里。"
-                    "已判死的候选不能被 overlay 复活。" % cid)
-            have.add(cid)
-            d["candidates"].append(dict(c, _origin="advance-overlay"))
-    return d
+# `load_candidates` 的实现在 engine/card.py（裸 list 卡片的兼容、overlay 合并
+# 都在那里，见该模块说明）。这里只保留名字：正文、shim、测试都直接 import 它。
+load_candidates = _CARD.load_candidates
 
 
 def direction_table(cands):
@@ -249,9 +321,11 @@ def _bound_map():
     # engine 只读它。原先写 Path(__file__).parent 是因为实现和知识同目录，
     # 迁移后 engine 在 Plugins/ops/engine/，必须显式跨目录。
     p = Path(__file__).resolve().parents[1] / "skills" / "op-optimize" / "references" / "bound-to-class.yaml"
+    # 走 card.read_yaml：读 YAML 的容错口径（缺文件 / 坏 YAML / 无 PyYAML）
+    # 只该有一份。这张表是**知识**不是卡，但从「怎么读一个 yaml 文件」的角度
+    # 它与读卡没有区别，所以复用同一个入口而不是再写一个 try/except。
     try:
-        import yaml
-        d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        d = _CARD.read_yaml(p, {})
         BOUND_TO_CLASS = d.get("bound_to_class") or {}
     except Exception:                                            # noqa: BLE001
         BOUND_TO_CLASS = {}
@@ -265,8 +339,7 @@ def _class_of(direction):
     # 迁移后 engine 在 Plugins/ops/engine/，必须显式跨目录。
     p = Path(__file__).resolve().parents[1] / "skills" / "op-optimize" / "references" / "bound-to-class.yaml"
     try:
-        import yaml
-        d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        d = _CARD.read_yaml(p, {})
     except Exception:                                            # noqa: BLE001
         return None
     for cls, ids in (d.get("class_members") or {}).items():
@@ -294,11 +367,9 @@ def bottleneck_problems(cands, tags=None, card=None):
     roof = None
     p_roof = (card / "roofline.json") if card else None
     if p_roof is not None and p_roof.is_file():
-        try:
-            import json
-            roof = json.loads(p_roof.read_text(encoding="utf-8"))
-        except Exception:                                        # noqa: BLE001
-            roof = None
+        # 读 roofline.json 的口径（缺文件 / 坏 JSON ⇒ {}）只在 card 里有一份：
+        # 三个调用点各自 json.loads 一遍，就会出现「这里当空、那里当异常」。
+        roof = _CARD.load_roofline(card) or None
     if not isinstance(bn, dict) and not roof:
         probs.append("缺 bottleneck 记录：先做第 3 步（derive.py 出 bound + "
                      "按 surfaces 的 check 取证），再列候选")
@@ -429,23 +500,12 @@ def stalled_parent_problems(cands):
 
 
 def load_contract_tol(card, default=2e-3):
-    p = card / "contract.yaml"
-    if not p.exists():
-        return default
-    try:
-        import yaml
-        c = yaml.safe_load(p.read_text()) or {}
-    except Exception:
-        return default
-    for path in (("tolerance", "vs_fp32_ref", "max_abs"), ("tolerance", "max_abs")):
-        node = c
-        for k in path:
-            node = node.get(k) if isinstance(node, dict) else None
-            if node is None:
-                break
-        if isinstance(node, (int, float)):
-            return float(node)
-    return default
+    """读 contract.yaml 的精度容差，缺就退回 default。
+
+    实现搬到 engine/card.py（容差的键路径只该有一处知道）；名字留在这里是因为
+    `cmd_run` 与测试都直接点名它。签名与缺省值必须与旧实现完全一致。
+    """
+    return _CARD.load_contract_tol(card, default)
 
 
 def db_dir(card):
@@ -522,7 +582,7 @@ def sync_atlas_measurement(card, rec):
         return False, "没有 atlas 卡 %s（不新建，建卡是 op_bootstrap 的事）" % f.name
 
     import yaml
-    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    d = _CARD.read_yaml(f, {})
     fi = d.get("floor_inputs")
     if not isinstance(fi, dict):
         return False, "atlas 卡缺 floor_inputs，不从这里补"
@@ -781,16 +841,11 @@ def _check_base_role(card, defaults, calibration=False):
     可以用于验正确性，但「打赢未优化的参考实现」没有工程意义——
     而 loop.py 原先完全不读这个字段，换张卡就可能把参考实现当基线。
     """
-    import yaml as _y
-    vp = card / "variants.yaml"
-    if not vp.is_file():
-        return
-    try:
-        d = _y.safe_load(vp.read_text(encoding="utf-8")) or {}
-    except Exception:                                            # noqa: BLE001
-        return
+    # variants.yaml 的读法与 schema（`variants:` 列表、元素是 dict）收在 card 里：
+    # 这里原先自己 safe_load + `d.get("variants") or []`，于是同一份文件在
+    # loop / explore / rank_impls 三处各有一套「不是 dict 怎么办」的分支。
     roles = {}
-    for v in d.get("variants") or []:
+    for v in _CARD.load_variants(card):
         if isinstance(v, dict):
             tag = v.get("tag") or v.get("name") or v.get("id")
             if tag:
@@ -831,10 +886,7 @@ def _bn_signal(card):
     p = card / "roofline.json"
     if not p.is_file():
         return None
-    try:
-        d = json.loads(p.read_text())
-    except (ValueError, OSError):
-        return None
+    d = _CARD.load_roofline(card)
     sig = d.get("bottleneck_signal")
     return sig if isinstance(sig, str) and sig else None
 
@@ -927,19 +979,13 @@ SCENARIOS_PATH = _REFS / "scenarios.yaml"
 
 def load_surfaces():
     """读攻击面表。缺文件返回空表（不报错——老卡片环境可能没有）。"""
-    if not SURFACES_PATH.exists():
-        return []
-    import yaml
-    d = yaml.safe_load(SURFACES_PATH.read_text(encoding="utf-8")) or []
+    d = _CARD.read_yaml(SURFACES_PATH, [])
     return [s for s in d if isinstance(s, dict) and s.get("id")]
 
 
 def load_scenarios():
     """读场景映射。缺文件返回空列表（老环境兼容）。"""
-    if not SCENARIOS_PATH.exists():
-        return []
-    import yaml
-    d = yaml.safe_load(SCENARIOS_PATH.read_text(encoding="utf-8")) or {}
+    d = _CARD.read_yaml(SCENARIOS_PATH, {})
     return [s for s in (d.get("scenarios") or []) if isinstance(s, dict) and s.get("id")]
 
 
@@ -1381,10 +1427,7 @@ def load_allowed_actions(card):
     p = card / "roofline.json"
     if not p.is_file():
         return None, None
-    try:
-        d = json.loads(p.read_text())
-    except (ValueError, OSError):
-        return None, None
+    d = _CARD.load_roofline(card)
     bound = d.get("bound")
     if not bound:
         return None, "roofline.json 缺 bound 字段"

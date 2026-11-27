@@ -1,5 +1,10 @@
 # 算子图谱索引（op-atlas）
 
+> **要做算子优化？本图谱不是入口。** 先走 `skills/op-optimize/SKILL.md`，
+> 实验只经 `engine/loop.py -C <卡> run <tag>`，流水留 `<卡>/runs/loop/*.jsonl`。
+> 图谱只用于认算子、查首选实现与上次结论。
+
+
 > **图谱是索引层，不是知识副本。** 卡片只回答四个问题：它算什么 / 谁结构上赢 /
 > 上限在哪 / 上次结论。技术描述一律指向别处（`libraries.md` 的 §号、
 > `pipeline.md` 的 Q 号、kb 台账），卡片 schema 用 `additionalProperties: false` 锁死。
@@ -28,6 +33,7 @@
 | [`fusion-rmsnorm-rope`](cards/fusion-rmsnorm-rope.yaml) | rope | measured | — | bandwidth | 融合档比单做 2 次 norm 还快 1.86x(S=2048)/1… |
 | [`fusion-rope-kv-write`](cards/fusion-rope-kv-write.yaml) | kv | measured | — | bandwidth | 真融合比同入口的 bf16 split 分支快 2.18x；选 fp… |
 | [`fusion-silu-mul-quant`](cards/fusion-silu-mul-quant.yaml) | activation | measured | — | bandwidth | 比 silu_and_mul+quant 分步快 2.25x/2.3… |
+| [`gated-add`](cards/gated-add.yaml) | elementwise | draft | — | memory | bootstrap 新建，尚无实测；runs/loop 里只有一次 … |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | — | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | — | compute | 用 aiter，不要自研；4 个变体里 3 个 adapter 空，… |

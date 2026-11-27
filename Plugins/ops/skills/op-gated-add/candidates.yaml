@@ -1,0 +1,32 @@
+defaults:
+  base: ref-heavy
+  rounds: 3
+  bench_args:
+  - --base
+  - ref-heavy
+  - --measure-mode
+  - event_isolated
+  - --rounds
+  - '3'
+bottleneck:
+  bound: memory
+  derive_evidence: bootstrap 按访问模式 elementwise-2in 算出的分母：201.327 MB
+directions:
+- id: baseline
+  statement: 先量参考实现/现成实现的基线，作为后续改动的比较口径
+  status: open
+  refutes: 0
+candidates:
+- id: baseline-ref
+  direction: baseline
+  status: pending
+  priority: 1
+  action_class: reduce-bytes
+  class: residency
+  purpose: calibration
+  variant: ref-heavy
+  expect: 仅取基线；不声称收益
+  expect_confidence: low
+  expect_basis: calibration-only：baseline 是 correctness_only 的参考实现，loop.py 只接受它作校准（CALIBRATION_ONLY），不计收益；未实测，给不出数值
+refuted: []
+note: 由 op_bootstrap 生成。真实候选请按 op-optimize 的方向预算补进 candidates；baseline-ref 只用于校准。
