@@ -144,6 +144,17 @@ def load_candidates(card):
     else:
         import yaml
         d = yaml.safe_load(p.read_text()) or {}
+        # **两种格式都接受**：老卡写成 dict（defaults/directions/candidates/...），
+        # 新工坊写成裸 list（只是一串候选）。实测 2026-11-27：9 张卡里 4 张是 list
+        # （op-gemm-bf16 / op-mqa-logits / op-fusion-rmsnorm-rope /
+        #  op-fusion-add-rmsnorm-quant），loop.py 一进去就 AttributeError，
+        # 导致这几张卡**根本进不了引擎入口**。在入口处一次收敛，比让每张卡改格式可靠。
+        if isinstance(d, list):
+            d = {"candidates": d}
+        if not isinstance(d, dict):
+            raise SystemExit(
+                "candidates.yaml 必须是 dict 或 list，实际是 %s：%s"
+                % (type(d).__name__, p))
         d.setdefault("defaults", {})
         d.setdefault("directions", [])
         d.setdefault("candidates", [])
@@ -686,7 +697,7 @@ def decide(base, cand, acc_base, acc_cand, tol, primary, stress_mult,
 _V2C = {}
 
 
-def _check_base_role(card, defaults):
+def _check_base_role(card, defaults, calibration=False):
     """P0-2：基线必须是可作性能对比的角色。
 
     `correctness_only`（含 ref-heavy / torch-native 这类未优化参考实现）
@@ -716,6 +727,13 @@ def _check_base_role(card, defaults):
                 base = str(ba[i + 1])
                 break
     if base and roles.get(base) == "correctness_only":
+        if calibration:
+            # 新算子第一次跑：还没有 competitor 基线，先用参考实现**校准**，
+            # 只取 t_actual，不声称收益（判定写 CALIBRATION_ONLY）。
+            print(_c("caveat：基线 %s 是 correctness_only 参考实现 —— "
+                     "本轮只作校准（CALIBRATION_ONLY），不计收益。"
+                     % base, WARN))
+            return
         print(_c("拒绝跑：基线 %s 的 role=correctness_only —— 它是未优化的参考实现，"
                  "打赢它没有工程意义。换一个 role=competitor 的实现作基线。"
                  % base, WARN))
@@ -1347,7 +1365,9 @@ def cmd_run(a):
     # 它是未优化的参考实现，打赢它没有工程意义」，而 loop.py 一个字不读。
     # R0 是靠 candidates.yaml 手写 --base lightop-fused 才躲过这条。
     d = cands["defaults"]
-    _check_base_role(card, d)
+    _calib = bool(a.tags) and all(
+        (declared.get(t) or {}).get("purpose") == "calibration" for t in a.tags)
+    _check_base_role(card, d, calibration=_calib)
 
     bench = card / d.get("bench", "bench/ab.py")
     if not bench.exists():
@@ -1391,15 +1411,39 @@ def cmd_run(a):
                  % ",".join(unmapped), WARN))
         return 2
     variants_arg = ",".join(vmap[t] for t in tags)
-    globals()["_V2C"] = {v: k for k, v in vmap.items()}   # 变体名 → 候选 id
+    # 变体名 → 候选 id。**只登记本次要跑的 tag**：同一变体可能被多个候选复用
+    # （fuse-residual 与 inplace-residual 都指向 fused-3pass-triton），
+    # 若按整个 vmap 反查，字典后写者覆盖前者，跑 A 会记成 B 的预期收益。
+    _v2c_run = {}
+    for _t in tags:
+        _prev = _v2c_run.get(vmap[_t])
+        if _prev is not None and _prev != _t:
+            print(_c("警告：变体 %s 同时被候选 %s 与 %s 指向，本次只跑 %s，"
+                     "record 归因按后者，语义可疑——建议一次只跑一个共享变体的候选。"
+                     % (vmap[_t], _prev, _t, _t), WARN), flush=True)
+        _v2c_run[vmap[_t]] = _t
+    globals()["_V2C"] = _v2c_run
     cmd = [sys.executable, str(bench),
            "--json", str(ab_json), "--rounds", str(a.rounds), *bench_args]
     if "--variants" not in bench_args:
         cmd += ["--variants", variants_arg]
     # 选一张空闲卡：不设 HIP_VISIBLE_DEVICES 会默认落到卡 0，
     # 而卡 0 常常被别人的大任务占满（实测 "0 bytes free"）。
-    # 依赖 defaults.gpu 显式声明，或环境变量；都不给就用 7（本机最常空的卡）。
-    gpu = str(d.get("gpu", os.environ.get("OPS_GPU", "7")))
+    # **优先级：OPS_GPU 环境变量 > 卡的 defaults.gpu > 7**。
+    # 环境变量优先是刻意的：评测/多任务并行时由外层调度器分配卡
+    # （实测 2026-11-27：卡里写死 gpu: 7，会把并行实验全赶到卡 7，
+    #  外层怎么绑卡都没用，跨臂对照直接混进卡差）。
+    _req = str(os.environ.get("OPS_GPU") or d.get("gpu", "7"))
+    # 逻辑索引 → 物理卡：外层若已用 HIP_VISIBLE_DEVICES 把进程限制到一张卡，
+    # 模型看到的设备号是 0。直接把 0 写回 HIP_VISIBLE_DEVICES 会选中**物理卡 0**
+    # （实测 2026-11-27：C 臂自己加 OPS_GPU=0，而它的进程可见的是物理卡 1，
+    #  一跑就会落到 A 臂的卡上，跨臂污染）。
+    _vis = os.environ.get("HIP_VISIBLE_DEVICES") or os.environ.get("CUDA_VISIBLE_DEVICES")
+    if _vis and _req.isdigit():
+        _ids = [x.strip() for x in _vis.split(",") if x.strip()]
+        if int(_req) < len(_ids):
+            _req = _ids[int(_req)]
+    gpu = _req
     env = dict(os.environ, HIP_VISIBLE_DEVICES=gpu)
     print("$ HIP_VISIBLE_DEVICES=%s %s" % (gpu, " ".join(cmd)), flush=True)
     rc = subprocess.call(cmd, env=env)
@@ -1467,7 +1511,13 @@ def cmd_run(a):
                              if run.get("skv") is not None else "default"))
             if decision == "ACCEPTED_NUMERICS":
                 decision = "ACCEPTED_NUMERICS_PENDING_E2E"
-            if order.index(decision) < order.index(worst):
+            _cal = (declared.get(_cid_of(v["tag"])) or {}).get("purpose") == "calibration"
+            if _cal:
+                why = ("校准口径：base=correctness_only 参考实现，不声称收益"
+                       "（原判定 %s，Δ=%.1f%%）"
+                       % (decision, v.get("delta_pct") or 0.0))
+                decision = "CALIBRATION_ONLY"
+            if not _cal and order.index(decision) < order.index(worst):
                 worst = decision
             _skv_disp = run.get("skv")
             print("%-14s %-9s %+8.1f %s  %s" % (v["tag"],
@@ -1476,7 +1526,7 @@ def cmd_run(a):
             append_record(card, {
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "card": card.name,
                 "tag": v["tag"], "skv": run.get("skv"),
-                "direction": (declared.get(v["tag"]) or {}).get("direction"),
+                "direction": (declared.get(_cid_of(v["tag"])) or {}).get("direction"),
                 "shape": ab.get("shape", {}),
                 "base_ms": run["base_ms"], "base_mad": run.get("base_mad", 0.0),
                 "fm_ms": run.get("fm_ms"), "fm_ratio": run.get("fm_ratio"),
