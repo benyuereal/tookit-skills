@@ -133,9 +133,13 @@ class TestCeilingOverrun(unittest.TestCase):
             self.run_check(dict(self.BASE, achieved_gbs=2100.0)), ["E40"])
 
     def test_bandwidth_inside_tolerance_passes(self):
-        """1965×1.02=2004，落在容差内不算错（sclk 档位波动是 2%）。"""
+        """1870×1.02=1907，落在容差内不算错（sclk 档位波动是 2%）。
+
+        2026-11-27：纯读档 1965 → 1870（与 constants.yaml 同步），
+        原用例取 2000 已超出新上限 1907，改用 1900。
+        """
         self.assertEqual(
-            self.run_check(dict(self.BASE, achieved_gbs=2000.0)), [])
+            self.run_check(dict(self.BASE, achieved_gbs=1900.0)), [])
 
     def test_bf16_compute_over_cap_is_error(self):
         self.assertEqual(

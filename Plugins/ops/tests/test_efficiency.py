@@ -98,7 +98,7 @@ def test_mfu_fp8_uses_579_7_not_279():
 
 
 @pytest.mark.parametrize("pattern,peak", [
-    ("r_only", 1965.0),
+    ("r_only", 1870.0),
     ("w_only", 1692.0),
     ("rw_1to1", 1680.0),
     ("rw_2to1", 1730.0),

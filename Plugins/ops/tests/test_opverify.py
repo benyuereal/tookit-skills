@@ -31,7 +31,7 @@ def _load(name, path):
 opverify = _load("opverify_under_test", REPO / "scripts" / "opverify.py")
 opman = _load("opmanifest_under_test", REPO / "scripts" / "opmanifest.py")
 
-SPARSE_CONTRACT = REPO / "Plugins" / "ops" / "skills" / "op-sparse-mla" / "contract.yaml"
+SPARSE_CONTRACT = REPO / "Plugins" / "ops" / "skills" / "op-flash-mla" / "contract.yaml"
 
 GOOD_ENV = ["gfx=gfx938", "dtk=dtk2604", "torch=2.11.0", "python=3.10.12",
             "sclk_mhz=600", "device=BW1100"]

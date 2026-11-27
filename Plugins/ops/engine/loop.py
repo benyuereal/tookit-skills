@@ -346,7 +346,7 @@ def bottleneck_problems(cands, tags=None, card=None):
         cls = _class_of(str(d))
         if cls is None:
             # surfaces.yaml 是**标准攻击面库**，但真实卡可以有更具体的子方向名
-            # （如 op-sparse-mla 的 bypass-tilelang-codegen）。
+            # （如 op-flash-mla 的 bypass-tilelang-codegen）。
             # 只要该卡声明了 parent_surface 就按它归 class；没有则放行但要求显式说明。
             ps = str(c.get("parent_surface") or "")
             if ps:

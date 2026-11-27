@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""op-sparse-mla 的公共装配：形状加载、输入构造、参考实现、变体适配。
+"""op-flash-mla 的公共装配：形状加载、输入构造、参考实现、变体适配。
 
 bench/ 与 tests/ 都从这里取，避免各写一套口径。
 
@@ -58,7 +58,7 @@ def find_scripts_dir():
             return c
     raise SystemExit(
         "找不到 scripts/opbench.py。请设置 DCU_TOOLKIT_SHARED 指向共享层根目录，"
-        "或从仓库内运行（<repo>/Plugins/ops/skills/op-sparse-mla）。候选：%s"
+        "或从仓库内运行（<repo>/Plugins/ops/skills/op-flash-mla）。候选：%s"
         % [str(c) for c in cands]
     )
 
@@ -473,7 +473,67 @@ def get_runner(name, tilelang_root=None, d_v=None, sm_scale=None):
 
         return run
 
-    raise SystemExit("未知变体: %s（可选 tilelang / tilelang-prefetch / flash_mla / hip-glm）" % name)
+    if name in ("fp8-bh64", "fp8-bh64-qonly"):
+        # fp8 KV 直读 + B_H=64 的 prefill 稀疏 MLA（/workspace/fp8_mla/flashmla-fp8）。
+        # 与 bf16 基线（flash_mla，B_H=16）的两点差别就是本候选要验的两件事：
+        #   ① 每个 KV 行被 64 个 head 复用（而不是 16 个）→ 算术强度 ×4
+        #   ② KV 走 e4m3（8 B/lane 的 gather），省掉 bf16 那一半字节
+        # 生产侧 KV 本来就是 fp8 在 cache 里，所以 KV 量化**不计入** op_call 口径。
+        # Q 的 per-row 量化：`fp8-bh64` 计入（保守口径，生产里可被 fused_rms_quant 吸收），
+        # `fp8-bh64-qonly` 不计入（只衡量 kernel 本体）。两个 tag 一起测才能把账分开。
+        root = os.environ.get("FLASHMLA_FP8_ROOT", "/workspace/fp8_mla/flashmla-fp8")
+        if not Path(root).is_dir():
+            raise RuntimeError("未找到 fp8 树：%s（设 FLASHMLA_FP8_ROOT）" % root)
+        bench_dir = os.environ.get("FP8_BENCH_DIR", "/workspace/fp8_mla/bench")
+        for _p in (root, bench_dir):
+            if _p not in sys.path:
+                sys.path.insert(0, _p)
+        import fused_quant  # /workspace/fp8_mla/bench/fused_quant.py
+        from flash_mla import flash_mla_interface as fi
+
+        qquant_in_timed = name == "fp8-bh64"
+        state = {}
+
+        def run(q, kv, idx):
+            S, H, d_qk = q.shape
+            topk = idx.shape[-1]
+            if not (d_qk == 512 and dv == 512):
+                raise SystemExit("fp8-bh64 只支持 d_qk=d_v=512（收到 %d/%d）" % (d_qk, dv))
+            if H > 64:
+                raise SystemExit("fp8-bh64 的 B_H=64，H>64 需先扩实例（收到 H=%d）" % H)
+
+            key = (S, H, int(kv.shape[0]), topk, q.dtype, q.data_ptr(), kv.data_ptr())
+            if key not in state:
+                kvf, kvs = fused_quant.quant_per_row(kv.reshape(-1, d_qk), 8)
+                state.clear()
+                state[key] = (kvf, kvs.reshape(-1))
+            kvf, kvs = state[key]
+
+            def _call(qf, qs):
+                return fi.sparse_prefill_fwd_fp8(qf, qs, kvf, kvs, kv, idx, scale, dv, None)
+
+            def _quant_q():
+                qf, qs = fused_quant.quant_per_row(q.reshape(-1, d_qk), 8)
+                return qf.reshape(S, H, d_qk), qs.reshape(S, H)
+
+            if qquant_in_timed:
+                def timed():
+                    qf, qs = _quant_q()
+                    return _call(qf, qs)
+                return timed()
+
+            # qonly：Q 量化只跑一次并缓存，计时内只剩 kernel
+            qk = ("q", key)
+            if qk not in state:
+                state[qk] = _quant_q()
+            qf, qs = state[qk]
+            return _call(qf, qs)
+
+        return run
+
+    raise SystemExit(
+        "未知变体: %s（可选 tilelang / tilelang-prefetch / flash_mla / hip-glm / "
+        "fp8-bh64 / fp8-bh64-qonly）" % name)
 
 
 def tilelang_split_runner(tilelang_root, num_split, num_split_tail=0, d_v=None, tail_dim=None, sm_scale=None):

@@ -26,7 +26,7 @@ LEGACY_FREEZE = {
     # 2026-11-23：43 → 42。prefetch_1slice 改记为 stalled
     # （它的 why 原文写明「不是预取这个想法错，而是在这个循环结构里不划算」，
     #   属于「变慢但结构变了」，原先记 refuted 会连带封掉方向）。
-    "op-sparse-mla": 42,
+    "op-flash-mla": 42,
 }
 
 # 机制必须有点实质：太短、或全是泛词，等于没写

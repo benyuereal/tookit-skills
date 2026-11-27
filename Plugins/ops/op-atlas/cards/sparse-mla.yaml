@@ -4,7 +4,7 @@ family: attention
 math: out[i,:] = Σ_{j∈TopK(i)} softmax(q_i·k_j)·v_j；索引 j 来自稀疏块生成器
 status: tuned
 layer: kernel
-op_card: Plugins/ops/skills/op-sparse-mla
+op_card: Plugins/ops/skills/op-flash-mla
 variants:
 - repo: tilelang
   library_profile_ref: libraries.md §8
@@ -68,8 +68,8 @@ variants:
     symbol: null
     line: null
     build_cmd: null
-    note: 手写主循环（hip-glm）的源码在 op-sparse-mla/dev/ 下
-  l1_exempt_reason: 手写主循环（hip-glm）是绕开 tilelang 布局税的定制实现，源码在 op-sparse-mla/dev/ 下，不在任何库里
+    note: 手写主循环（hip-glm）的源码在 op-flash-mla/dev/ 下
+  l1_exempt_reason: 手写主循环（hip-glm）是绕开 tilelang 布局税的定制实现，源码在 op-flash-mla/dev/ 下，不在任何库里
   role: best_known
 ceiling:
   kind: roofline_model
@@ -168,4 +168,4 @@ floor_inputs:
   t_source: missing
   missing_evidence: 每 q-head 取 topk 个 token 的 576×2B：S=128 × H=16 × topk=2048 × 576 × 2B = 4832MB；【t 缺】卡片只有 mem-only 变体达成率 0.94，没有绝对耗时 —— 标 missing_evidence
   basis: 每 q-head 取 topk 个 token 的 576×2B：S=128 × H=16 × topk=2048 × 576 × 2B = 4832MB；【t 缺】卡片只有 mem-only 变体达成率 0.94，没有绝对耗时 —— 标 missing_evidence
-  evidence: Plugins/ops/skills/op-sparse-mla/contract.yaml
+  evidence: Plugins/ops/skills/op-flash-mla/contract.yaml

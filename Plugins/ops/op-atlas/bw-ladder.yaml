@@ -12,7 +12,7 @@ layers:
     note: '**只作参考，永不当分母。** 实测显示本机可达远高于此。'
     confidence: n/a
   2_read_only:
-    achievable: 1965
+    achievable: 1870
     mode: read_only
     tensor_mb: 2147.5
     shape: n=1073741824 bf16
@@ -22,8 +22,13 @@ layers:
     iters: 30
     impl: triton 手写
     confidence: high
-    note: 上一版 1940 GB/s（2026-11-23，sclk=[1350, 1350]）→ 本版 1965 GB/s（sclk=[1350, 1350]）。差异来自 DPM 档位波动：同一台机同一张量，三次标定读到
-      1988/1946/1946。**达成率引用时必须带本次的 sclk**。
+    note: |
+      **2026-11-26 变更：1965 → 1870（业主确认）**，与
+      `Plugins/ops/skills/op-roofline/constants.yaml` 的 `stream_read_peak`
+      同步。1965 是 2026-11-23 那次标定三次读数（1988/1946/1946）取的最高值，
+      拿最高值当分母会系统性低估所有算子的达成率；1870 是同口径下的保守值。
+      上一版 1940 GB/s（2026-11-23）→ 1965。差异来自 DPM 档位波动。
+      **达成率引用时必须带本次的 sclk。**
   2_write_only:
     achievable: 1692
     mode: write_only

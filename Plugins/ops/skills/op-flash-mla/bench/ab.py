@@ -59,7 +59,7 @@ def _measure(run, q, kv, idx, rounds, warmup_ms, rep_ms):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="op-sparse-mla A/B 适配器（喂 loop.py run）")
+    p = argparse.ArgumentParser(description="op-flash-mla A/B 适配器（喂 loop.py run）")
     p.add_argument("--json", required=True, help="输出路径")
     p.add_argument("--rounds", type=int, default=3, help="每变体测量轮数（建议 ≥5）")
     p.add_argument("--shape", default="decode-s128", help="shapes.yaml 档位名")

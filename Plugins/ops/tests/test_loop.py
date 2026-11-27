@@ -836,13 +836,13 @@ class TestDoneWhen(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_YAML, "需要 PyYAML 读真实卡片")
 class TestRealCard(unittest.TestCase):
-    """参考实现 op-sparse-mla 的 candidates.yaml 自己必须过门槛。
+    """参考实现 op-flash-mla 的 candidates.yaml 自己必须过门槛。
 
     这条测的是**产物**而不是脚本：卡片写歪了，`loop.py` 会在下次 run 时才拒绝，
     而那时人已经在卡上了。静态先拦一次。
     """
 
-    CARD = REPO / "Plugins" / "ops" / "skills" / "op-sparse-mla"
+    CARD = REPO / "Plugins" / "ops" / "skills" / "op-flash-mla"
 
     def setUp(self):
         if not (self.CARD / "candidates.yaml").exists():

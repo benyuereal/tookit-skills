@@ -14,7 +14,7 @@ license: MIT
 |---|---|---|
 | `dcu-operators` | 这个**框架/源码**怎么读、怎么写（aiter / lightop / triton / tilelang / deepgemm …） | `dcu-tilelang-source`、`dcu-lightop-moe` |
 | `dcu-perf` | 怎么**发现热点**、怎么定优化目标、闭环怎么走 | `dcu-perf-profiling`、`dcu-op-optimization` |
-| **`ops`（本域）** | 这个**算子**是什么、有哪些实现、哪个档位用哪个、判据是什么、上次结论是什么 | `op-sparse-mla`、`op-gemm-fp8` |
+| **`ops`（本域）** | 这个**算子**是什么、有哪些实现、哪个档位用哪个、判据是什么、上次结论是什么 | `op-flash-mla`、`op-gemm-fp8` |
 
 三者正交、互不替代：**找方法**去 `dcu-perf`，**找源码**去 `dcu-operators`，**认算子 / 查结论 / 跑基准 / 判通过**来本域。
 
@@ -154,7 +154,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-roofline` | — | 改动从哪来：物理常数→推导规则→算子模型，**先出预测与绑定约束再写代码**（配 `derive.py` / `hipbudget.py`）；写不出预测说明还没理解为什么慢 |
 | `op-source-patch` | — | **源码级改动**：定位→取源→编译→改(patch)→回归→留痕六步。把「卡片说哪个实现好」和「源码怎么改掉编出来验回去」接上；本地已有源码不重拉；只允许 patch 不直接改树。**含两条已落地的引擎级配方**（indexer 打分降精度 / fp8 KV 直读删 gather，见 `references/engine-recipes.yaml`） |
 | `op-hip-compile` | — | 手写 HIP 的编译调优：为什么要 aicc 不要 hipcc、怎样**逐字镜像** tilelang 的 `-mllvm` 集（含 FAST_MATH 条件项，漏一条慢 1.16×/CTA 而数值不变）、从 .so 设备 ELF 读 VGPR 算占用率（配 `derive_flags.py` / `inspect_so.py`） |
-| `op-sparse-mla` | `tuned` | 稀疏 MLA 前向（DSA）：q/kv/indices 契约、tilelang / flash_mla / 生产三变体、-1 哨兵语义 |
+| `op-flash-mla` | `tuned` | 稀疏 MLA 前向（DSA）：q/kv/indices 契约、tilelang / flash_mla / 生产三变体、-1 哨兵语义 |
 | `op-moe-w8a8` | `draft` | FP8 MoE（routed GEMM1/GEMM2 + silu-mul + moe_sum）：M 分档、融合收益判据 |
 | `op-gemm-fp8` | `measured` | FP8 GEMM：hipBLASLt 在 gfx938 无方案，aiter opus 实测 49.8 TF（比 bf16 慢 5.3×） |
 | `op-moe-topk-gating` | `draft` | **MoE 第 2 段**：gate→topk→归一化。索引是离散量必须逐位一致；tie-break 需固定 |
@@ -165,6 +165,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-fusion-rmsnorm-rope` | `measured` | RMSNorm + RoPE 融合（rmsnorm_rope） |
 | `op-fusion-add-rmsnorm-quant` | `measured` | 残差 + RMSNorm + 动态量化 三合一（add_rmsnorm_quant） |
 | `op-gemm-bf16` | `measured` | BF16 GEMM（基础档） |
+| `op-mqa-logits` | `measured` | MQA logits（DSA indexer 打分；支持分组调度） |
 
 ## 六、数据分层（红线，必须遵守）
 

@@ -30,7 +30,7 @@ def _measure(fn, inp, rounds, warmup_ms, rep_ms, mode="back_to_back"):
 
     2026-11-23 实测：lightop 复用 buffer 196.8 µs / 每轮副本 199.9 µs（差 1.6%），
     说明它一次性完成读改写，复用与否几乎不影响。但**不隔离的实现在别的卡上会失真**
-    （本项目 op-sparse-mla 就因 flash_mla 改 indices 把两个变体的结果看反过）。
+    （本项目 op-flash-mla 就因 flash_mla 改 indices 把两个变体的结果看反过）。
     所以统一隔离，代价只有 1.6%。
 
     用 --reps 轮换预克隆的 buffer，避免把 clone 开销算进计时。

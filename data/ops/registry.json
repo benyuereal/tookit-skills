@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "updated": "2026-11-26",
+ "updated": "2026-11-27",
  "note": "算子索引与状态机。draft -> measured -> tuned -> at_floor -> deprecated。at_floor 必须带 floor_status 与 evidence，且同一档位不得重复立项。本文件只放状态与档位，绝对耗时进 ~/.config/dcu-toolkit/kb/op-opt/。",
  "ops": [
   {
@@ -279,6 +279,25 @@
     "boltops",
     "torch",
     "triton"
+   ],
+   "best_variant": null,
+   "floor_status": null,
+   "last_verified": "2026-11-22",
+   "evidence": null,
+   "open_questions": []
+  },
+  {
+   "name": "mqa-logits",
+   "path": "Plugins/ops/skills/op-mqa-logits",
+   "status": "measured",
+   "shapes": [
+    "decode-m1",
+    "decode-nextn",
+    "prefill-8k"
+   ],
+   "variants": [
+    "lightop",
+    "hbird-gemm"
    ],
    "best_variant": null,
    "floor_status": null,

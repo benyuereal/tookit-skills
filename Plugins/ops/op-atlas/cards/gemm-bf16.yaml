@@ -4,7 +4,7 @@ family: gemm
 math: out = A*B；A/B bf16，acc fp32
 status: measured
 layer: kernel
-op_card: null
+op_card: Plugins/ops/skills/op-gemm-bf16
 variants:
 - repo: boltops
   library_profile_ref: libraries.md §10
@@ -132,6 +132,9 @@ last_verdict:
     coverage: 3/3
     gate: true
   evidence:
+  - path: Plugins/ops/skills/op-gemm-bf16/results/prefill-8k-vs-fp32.json
+    sha256: 36341d941434b045b8e95c485320e0b53686a73725e365823b72a8a54ea5c467
+    verified_on: '2026-11-27'
   - path: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/results/gemm-crossover.json
     sha256: 5dbd0de69978f49ee4487a54f50c2e59f7f293de3c4d2de4d28d16e9084ad3ca
     verified_on: '2026-11-23'

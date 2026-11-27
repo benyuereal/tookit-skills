@@ -1,5 +1,5 @@
 #!/bin/bash
-# 复现 op-sparse-mla 的全部测量。缺环境变量时明确报错，不静默跑错口径。
+# 复现 op-flash-mla 的全部测量。缺环境变量时明确报错，不静默跑错口径。
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../../../.." && pwd)

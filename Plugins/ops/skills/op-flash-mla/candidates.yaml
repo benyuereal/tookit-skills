@@ -25,6 +25,16 @@ directions:
   status: open
   refutes: 1
   note: 2026-11-13 新增。LDS 探针实测：1 CTA/CU 比 2 慢 67~69%，本 kernel 对驻留数极度敏感。已判死 1 条路（lds_cut_to_3cta，结构零余量）；剩下的路是 d 跨 CTA 切分（重写级）。
+- id: prefill-fp8-kv-bh64
+  statement: prefill 稀疏 MLA 改 fp8 KV 直读 + B_H=64（一行 KV 被 64 个 head 复用），
+    把算术强度从 32 FLOP/B 抬到 ~128，同时每 token 的 KV 字节从 1152 降到 528
+  status: open
+  refutes: 0
+- id: prefill-gather-coalesce
+  statement: 提 prefill 的 top-k gather 有效带宽（实测 306 GB/s = 15.6% 峰值）：
+    按 KV block 分桶、合并连续行、提前预取
+  status: open
+  refutes: 0
 candidates:
 - id: mainloop_restage
   parent: prefetch_1slice
@@ -148,6 +158,46 @@ candidates:
   evidence: ledger §五
   expect_confidence: low
   expect_basis: 本条预期是**判据型**（多条件同时成立）或端到端指标，不是单一的"快了百分之几"。calibrate.py 无法把它折成数值比值，因此标 low —— 保留原文，不强行改成一个数（那会丢掉判据含义）。
+- id: prefill_fp8_bh64
+  direction: prefill-fp8-kv-bh64
+  parent_surface: kv-byte-width
+  status: pending
+  priority: 1
+  hypothesis: |
+    现役 flash_mla bf16 prefill（B_H=16、每 CTA 只算 1 个 query token）的算术强度只有 32 FLOP/B，
+    bf16 ridge 是 142 ⇒ 算力利用率天花板 22%（per-rank h_q=8 时实际 11%）；
+    实测只跑到 306 GB/s = 15.6% HBM，算力 1.8~3.5% of 279 TFLOPS。
+    /workspace/fp8_mla/flashmla-fp8（2026-11-21 已实现并编译）把 B_H 抬到 64（跨 head 复用 ×4）、
+    KV 换 e4m3 直读（8 B/lane gather，字节 ÷2.18），两项叠加后强度 ~128 FLOP/B，贴到 ridge。
+  expect: 该算子 0.4~0.6×；prefill 段整体 −8~10%（prefill 占 TTFT 的 ~1/2、占 TPOT 的 ~1/6）
+  evidence: /workspace/fp8_mla/flashmla-fp8（phase1_fp8.cuh FINAL + cuda.so 已编译）；旧 bench 脚本 bench_final2.py（S=16384）
+  done_when: 'python3 -I bench/prefill_fp8_gate.py --shape prefill-glm53-8k --rounds 5 --json /tmp/prefill_fp8.json'
+  note: |
+    gate 用两个 tag 把账分开：ratio_kernel 取 fp8-bh64-qonly（Q 量化在计时外），
+    ratio_net 取 fp8-bh64（Q 的 per-row 量化计入，保守）。生产 KV 本来就在 cache 里是 fp8，
+    所以 KV 量化不计入 op_call；Q 量化可由 fused_rms_quant 吸收。
+    **与已证伪方向的区别（必须写清楚，否则等于重跑死路）**：refuted 里的 `cross_head_kv_reuse_g64`
+    说的是 **bf16** 下 bm=64 跨 head 复用：acc_o 与 Q_split 各要 `bm·512/thr`=128 个 fp32 VGPR，
+    合起来 256 已顶到单线程上限，实测 scratch 141 B、DRAM 4.09×、墙钟 +98%；退 thr512 又掉 occupancy。
+    本候选之所以不是重跑：**fp8 的 Q 只占 32 B/线程（bf16 是 128 B），直接省掉 96 个 VGPR**，
+    这正是 bf16 那条不等式无解的约束项。⇒ 首次测量必须同时记 `scratch` 与 DRAM 字节，
+    若 fp8 版仍有 spill，本条立刻转 impl-broken 而不是硬推。
+    **另一未验证项**：serving 侧 per-rank 只有 h_q=8（H=64/TP8），B_H=64 是否按掩码空跑一半以上 lane
+    必须实测，否则「跨 head 复用 ×4」只在单卡满 64 head 时成立。先测 H=8/16/64 三档。
+- id: prefill_gather_floor
+  direction: prefill-gather-coalesce
+  parent_surface: gather-transaction
+  status: pending
+  priority: 1
+  hypothesis: |
+    306 GB/s 是 kernel 抓得慢，还是 top-k gather 本身就这个地板？
+    用 torch 的纯 index_select 量同一组 (S, topk, d) 的搬运带宽：
+      纯 gather ≥1200 GB/s 而 kernel 306 GB/s ⇒ 有 4 倍空间，改布局/预取（B）
+      纯 gather 也只有 ~300 GB/s ⇒ 先回头核对字节模型（是否有冗余读/重复 gather）
+  expect: 判据型（两种结果各自给出下一步），不预设百分比
+  done_when: 'python3 -I bench/gather_probe.py --shape prefill-glm53-8k'
+  note: 这是 B 的第一步，零新代码；跑完把 gather_only 与 flash_mla 的两个 GB/s 写回本 note 再决定是否做 coalesce。
+
 stalled:
 - id: prefetch_1slice
   kind: stalled
