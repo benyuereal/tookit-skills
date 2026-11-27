@@ -205,25 +205,25 @@ last_verdict:
     achieved_tf: 260.5
     precision: bf16
   comparison:
-    baseline: F.linear（torch 高层 API）
-    baseline_role: self
-    baseline_impl: torch.nn.functional.linear
-    cand: torch.mm
-    cand_us: null
-    base_us: null
-    ratio: 1.1
+    baseline: aiter.gemm_a16w16_opus
+    baseline_role: competitor
+    baseline_impl: aiter.gemm_a16w16_opus（bf16，入参需 B.t()）
+    cand: torch.mm（hipBLASLt 默认启发式）
+    cand_us: 937.4
+    base_us: 10978.4
+    ratio: 0.0854
     significant: true
-    verdict: 同形状 bf16 GEMM：torch.mm 比 F.linear 跨 3 形状几何平均快 1.10x
+    verdict: prefill-8k：torch.mm 0.9374 ms vs aiter 10.9784 ms，torch 快 11.7x；decode-m32 快 3.7x。aiter 在此形状更慢，这本身就是选型结论
     semantics_aligned: true
     alignment:
       inputs: 2
       outputs: 1
       traffic_passes: 3
-      note: 两者都走 hipBLASLt；差异来自 API 路径的布局处理，不是算法
-    not_comparable_to: 不同库之间（需 rank_impls.py 交替测）
-    evidence: Plugins/ops/skills/op-optimize/cases/005-bf16-gemm-shape-crossover/results/gemm-crossover.json
-    checked_on: '2026-11-24'
-    cand_us_note: 该对比只有比值，绝对耗时见同文件的 sweep_m_4096
+      note: 两者都是 bf16 输入 fp32 累加 bf16 输出；入参都要求 B 转置（aiter 传 B[K,N] 误差 1.36，传 B.T 误差 0.0037）
+    not_comparable_to: lightop.gemm —— 本机 M>=24 全部算错，不可用（见 libraries-bounds.md）
+    evidence: Plugins/ops/skills/op-gemm-bf16/results/prefill-8k-aiter.json
+    checked_on: '2026-11-27'
+    cand_us_note: 三形状实测见 results/，torch-mm 相对 ref-fp32 的 geomean 见 last_verdict.geomean
   inputs: 2
   outputs: 1
   traffic_passes: 3
