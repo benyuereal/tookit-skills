@@ -148,6 +148,46 @@ def run_derive(card, shape, timeout=180):
         return None, "derive.py 输出不是 JSON：%s" % e
 
 
+def atlas_card_id(card):
+    """卡片目录名 → atlas 卡 id（`op-gated-add` → `gated-add`）。"""
+    n = Path(card).name
+    return n[3:] if n.startswith("op-") else n
+
+
+def floor_via_script(card):
+    """没有 derive 模型时的通用地板：`scripts/floor.py --card <id> --json`。
+
+    `floor.py` 只要 `bytes_mb` + `pattern` + `t_actual_us` 就能算，**不需要
+    算子专用模型** —— 这正是不管新算子还是老算子都该走通的那条路。
+    `t_actual_us` 由 `loop.py run` 落账时写回 atlas 卡（见 sync_atlas_measurement）。
+    """
+    cid = atlas_card_id(card)
+    p = REPO_ROOT / "scripts" / "floor.py"
+    if not p.is_file():
+        return None, "找不到 scripts/floor.py"
+    card_file = REPO_ROOT / "Plugins/ops/op-atlas/cards" / ("%s.yaml" % cid)
+    if not card_file.is_file():
+        return None, "没有 atlas 卡 %s（先 op_bootstrap 建卡）" % card_file.name
+    try:
+        r = subprocess.run([sys.executable, "-I", str(p), "--card", cid, "--json"],
+                           capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, "floor.py 调不起来：%s: %s" % (type(e).__name__, e)
+    out = r.stdout or ""
+    # floor.py 把「人读的一行 + JSON + 写卡统计」一起打到 stdout，
+    # 所以不能 json.loads(整段)：从第一个 { 起 raw_decode，后面的尾巴不管。
+    i = out.find("{")
+    if i < 0:
+        tail = (r.stderr or out).strip().splitlines()
+        return None, "floor.py 没给出 JSON：%s" % (
+            tail[-1][:200] if tail else "rc=%d" % r.returncode)
+    try:
+        obj, _end = json.JSONDecoder().raw_decode(out[i:])
+        return obj, None
+    except json.JSONDecodeError as e:
+        return None, "floor.py 输出不是 JSON：%s" % e
+
+
 def achieved_us(card, shape=None):
     """从 runs/loop/*.jsonl 里取**已达到**的最小耗时（微秒）。没有就 None。
 
@@ -234,11 +274,26 @@ def collect_signals(card, shape):
     """把判断需要的通用事实集中取一次。取不到的项显式记 None + 原因。"""
     sig = {"card": Path(card).name, "shape": shape, "missing": []}
     roof, why = run_derive(card, shape)
+    sig["roof"] = roof
+    sig["floor_src"] = "derive.py" if roof else None
     if roof is None:
-        sig["missing"].append(why)
-        sig["roof"] = None
-    else:
-        sig["roof"] = roof
+        # 没有算子模型不是死路：退回按访问模式算地板（对任意算子成立）
+        fl, why2 = floor_via_script(card)
+        if fl is None:
+            sig["missing"].append(why)
+            sig["missing"].append(why2)
+        else:
+            sig["floor_src"] = "floor.py"
+            sig["bound"] = fl.get("binding")
+            sig["ceiling_us"] = fl.get("t_floor_us")
+            sig["achieved_us"] = fl.get("t_actual_us")
+            sig["efficiency"] = fl.get("utilization")
+            sig["gate"] = fl.get("gate")
+            sig["remaining"] = fl.get("remaining")
+            sig["floor_advice"] = fl.get("advice")
+            sig["achieved_gbs"] = fl.get("achieved_gbs")
+            sig["peak_gbs"] = fl.get("denominator_gbs")
+            sig["floor_basis"] = fl.get("basis")
     sig["surfaces"] = load_surfaces()
     sig["variants"], sig["variants_src"] = available_variants(card)
     sig["achieved_us"] = achieved_us(card, shape)
@@ -263,6 +318,8 @@ def collect_signals(card, shape):
         sig["bound_gap"] = (min(mem, comp) / max(mem, comp)) if mem and comp else None
         ach, ceil = sig["achieved_us"], sig.get("ceiling_us")
         sig["efficiency"] = (ceil / ach) if (ach and ceil) else None
+        rem = geo.get("rounds")  # 只为保持字段存在，真正的剩余空间由 floor.py 给
+        sig.setdefault("gate", None if rem is None else sig.get("gate"))
     return sig
 
 
@@ -336,10 +393,23 @@ def propose(sig):
             skipped.append("没有实测、也没有已实现变体可作基线——%s"
                            % (sig.get("variants_src") or ""))
 
-    if not sig.get("roof"):
-        skipped.append("没有 roofline 推导结果，除校准外的规则不启用：%s"
+    if not sig.get("roof") and not sig.get("floor_src"):
+        skipped.append("既没有 derive 模型也没有 floor.py 地板，除校准外的规则不启用：%s"
                        % "; ".join(sig.get("missing") or []))
         return out, skipped
+
+    # floor.py 说已经到了该停的地方，就别再出候选 —— 这是它比 derive 多的信息
+    if sig.get("gate") and sig.get("gate") != "headroom":
+        skipped.append("floor.py 判定 gate=%s（%s）：%s"
+                       % (sig.get("gate"), sig.get("remaining"),
+                          sig.get("floor_advice") or "不再出候选"))
+        return out, skipped
+
+    # 几何类规则（1-4）只有 derive 模型才给得出；没有就明说，而不是静默跳过
+    if not sig.get("roof") and sig.get("floor_src") == "floor.py":
+        skipped.append("地板来自 floor.py（按访问模式算），没有 cta/cu、rounds、lds、"
+                       "串行比这些几何量 —— 几何类规则（prefetch/occupancy/grid-tail/"
+                       "lds）本轮不启用，只按达成率出题")
 
     eff = sig.get("efficiency")
     bound = sig.get("bound")
@@ -452,6 +522,8 @@ def render(sig, props, skipped):
                  % ("%.1fµs" % sig["achieved_us"] if sig.get("achieved_us") else "（无）",
                     sig.get("ceiling_us") or 0,
                     "%.0f%%" % (sig["efficiency"] * 100) if sig.get("efficiency") else "（算不出）"))
+    if sig.get("floor_src") == "floor.py":
+        L.append("地板来源 floor.py：%s" % (sig.get("floor_basis") or ""))
     for m in sig.get("missing") or []:
         L.append("缺  %s" % m)
     L.append("")

@@ -483,6 +483,74 @@ def is_noise_record(rec):
     return "本轮不可信" in why and "噪声" not in why or "MAD/median" in why
 
 
+ATLAS_CARDS = REPO_ROOT / "Plugins/ops/op-atlas/cards"
+# 这些判定才允许写回 atlas 卡：都要求"这一轮测的是真实实现且口径可 claim"
+_ATLAS_OK_DECISIONS = ("CALIBRATION_ONLY", "ACCEPTED_BITEXACT",
+                       "ACCEPTED_NUMERICS", "ACCEPTED_NUMERICS_PENDING_E2E")
+
+
+def sync_atlas_measurement(card, rec):
+    """把一条实测写回 atlas 卡的 `floor_inputs`，返回 (是否写了, 说明)。
+
+    没有这一根线，新算子就永远没有地板：`floor.py` 只要
+    `bytes_mb + pattern + t_actual_us` 就能算，但 `t_source=derived` 会被它
+    拒算，而"实测出来了"这件事只有这里知道。见模块说明。
+    """
+    if os.environ.get("OPS_NO_ATLAS_SYNC") in ("1", "true", "yes"):
+        return False, "OPS_NO_ATLAS_SYNC=1"
+    if "pytest" in sys.modules:
+        return False, "pytest 环境不写真实卡"
+    if str(rec.get("measure_mode")) != "event_isolated":
+        return False, "口径 %r 不可 claim" % rec.get("measure_mode")
+    if str(rec.get("decision")) not in _ATLAS_OK_DECISIONS:
+        return False, "判定 %r 不写回" % rec.get("decision")
+
+    ms = [v for v in (rec.get("base_ms"), rec.get("cand_ms"))
+          if isinstance(v, (int, float)) and v > 0]
+    if not ms:
+        return False, "记录里没有可用的耗时"
+    best_ms = min(ms)
+    # 哪个实现跑出了这个数：cand 更快就是候选变体，否则是基线
+    who = str(rec.get("tag"))
+    if isinstance(rec.get("base_ms"), (int, float)) and rec["base_ms"] <= best_ms + 1e-12 \
+            and best_ms != rec.get("cand_ms"):
+        who = "base"
+
+    cid = card.name[3:] if card.name.startswith("op-") else card.name
+    f = ATLAS_CARDS / ("%s.yaml" % cid)
+    if not f.is_file():
+        return False, "没有 atlas 卡 %s（不新建，建卡是 op_bootstrap 的事）" % f.name
+
+    import yaml
+    d = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+    fi = d.get("floor_inputs")
+    if not isinstance(fi, dict):
+        return False, "atlas 卡缺 floor_inputs，不从这里补"
+    old = fi.get("t_actual_us")
+    if isinstance(old, (int, float)) and fi.get("t_source") not in ("derived", "missing") \
+            and old <= best_ms * 1000.0 + 1e-9:
+        return False, "已有更快且非反推的 t_actual=%.1fµs，不覆盖" % old
+
+    try:
+        rel = str(Path(rec.get("_record_path") or "").relative_to(REPO_ROOT))
+    except (ValueError, TypeError):
+        rel = "runs/loop/"
+    fi["t_actual_us"] = round(best_ms * 1000.0, 1)
+    fi["t_source"] = "results"
+    fi["t_variant"] = who
+    fi["t_measured_at"] = rec.get("ts")
+    fi["t_measure_mode"] = "event_isolated"
+    fi["evidence"] = rel
+    prev = fi.get("t_previous_us")
+    if isinstance(old, (int, float)) and old != fi["t_actual_us"]:
+        fi["t_previous_us"] = (prev or [])[-3:] + [old]
+    d["floor_inputs"] = fi
+    f.write_text(yaml.safe_dump(d, allow_unicode=True, sort_keys=False),
+                 encoding="utf-8")
+    return True, "atlas %s: t_actual_us=%.1f（%s，原 %s）" % (
+        cid, fi["t_actual_us"], who, "无" if old is None else old)
+
+
 def append_record(card, rec):
     """写流水。噪声记录进 `runs/loop/noise/`，不进权威流（`runs/loop/*.jsonl`）。
 
@@ -496,6 +564,15 @@ def append_record(card, rec):
     f = d / (time.strftime("%Y%m%d") + ".jsonl")
     with f.open("a") as fh:
         fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    # P0：实测写回 atlas 卡，让 floor.py 对**任意**算子都能算出地板。
+    # 放在落盘之后：先用日志留痕，再改卡；卡写失败也不能让这一轮白跑。
+    try:
+        _ok, _why = sync_atlas_measurement(card, dict(rec, _record_path=str(f)))
+        if _ok:
+            print("[atlas] " + _why, flush=True)
+    except Exception as _e:                     # noqa: BLE001
+        print(_c("[atlas] 写回失败（不影响本轮记录）：%s: %s"
+                 % (type(_e).__name__, _e), WARN), flush=True)
     # **memory 索引**（ENGINE.md §二：memory/ 只由 engine 写）。
     # 只索引权威流水里的记录：噪声记录已被隔离，它们没形成决策，索引了会污染检索。
     # 字段 = runs/loop 那份原样 + card，两者可逐字段对账，不做二次加工。
