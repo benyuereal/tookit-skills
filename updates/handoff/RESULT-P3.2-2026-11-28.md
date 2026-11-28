@@ -254,3 +254,21 @@ pytest test_loop_uniqueness.py test_driver_fake.py test_claim_gate.py test_loop.
 ```
 全量目标：13 failed（剩余为 card_index / doc_links / evidence / ingest /
 ops_gate / refute 等既有问题，非本次改动引入）。
+
+### ③ 测试最终计数（R4）
+
+```
+python3 -m pytest Plugins/ops -q
+→ 13 failed, 1080 passed, 8 skipped, 2 warnings, 13 subtests passed in 272.22s
+```
+
+13 条全部是既有问题，与本次改动无关：
+
+```
+test_card_index ×1        test_check_expect ×1      test_doc_links ×2
+test_evidence ×2          test_ingest_check ×4      test_ops_gate ×2
+test_refute_mechanism ×1
+```
+
+（`test_loop_uniqueness` 已从失败清单消失：扫描排除 `.artifacts/`/`runs/`，
+预算常量改为引用 `engine/loop.py`。）
