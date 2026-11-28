@@ -61,6 +61,22 @@ DECISIONS = ATLAS / "decisions"
 
 K_SIGMA = 3.0
 
+_SCRIPTS = Path(__file__).resolve().parent
+
+
+def _render_template(name, **ctx):
+    """读 scripts/templates/<name>.md；本文件只提供动态行。
+
+    `python3 -I` 不把脚本目录放进 sys.path（与 recall/state 同约定），这里补一次。
+    延迟 import：self_iteration 会把本文件拷进没有 templates/ 的临时仓，
+    那里只做 where/_cards 逻辑，不渲染人读输出。
+    """
+    if str(_SCRIPTS) not in sys.path:
+        sys.path.append(str(_SCRIPTS))
+    from template_render import render
+    return render(name, **ctx)
+
+
 # 集成成本：越小越好。function 最省，自写最贵。
 INTEGRATION_COST = {"function": 0, "class": 1, "template": 2, "handwrite": 3}
 
@@ -298,6 +314,37 @@ def write_decision(dec):
     return DECISIONS / name
 
 
+# ---------------------------------------------------------------- 人读输出
+
+def render_where(hits):
+    """where：表头 + 每一条命中 + 「共 N 处」。"""
+    lines = ["%-24s %-42s %-14s %s" % ("卡", "入口", "role", "tier")]
+    lines += ["%-24s %-42s %-14s %s"
+              % (h["card"], h["impl"], h["role"], h["tier"]) for h in hits]
+    return _render_template("atlas_query_where",
+                            table="\n".join(lines), n=len(hits))
+
+
+def render_select(dec, decision_path=None):
+    """select：置信度/结论固定，其余行按有无条件拼接。"""
+    lines = []
+    if dec.get("chosen"):
+        lines.append("选中   : %s" % dec["chosen"])
+    if dec.get("runner_up"):
+        lines.append("次优   : %s" % dec["runner_up"])
+    if dec.get("measure_cmd"):
+        lines.append("复跑   : %s" % dec["measure_cmd"])
+    if dec.get("rejected"):
+        lines.append("淘汰   :")
+        lines += ["  - %s（%s）" % (r["variant"], r["reason"])
+                  for r in dec["rejected"]]
+    if decision_path is not None:
+        lines.append("决策   : %s" % decision_path)
+    tail = ("\n" + "\n".join(lines)) if lines else ""
+    return _render_template("atlas_query", confidence=dec["confidence"],
+                            note=dec["note"], tail=tail)
+
+
 # ---------------------------------------------------------------- selftest
 
 def selftest():
@@ -392,33 +439,19 @@ def main(argv=None):
         if a.json:
             print(json.dumps(hits, ensure_ascii=False, indent=2))
         else:
-            print("%-24s %-42s %-14s %s" % ("卡", "入口", "role", "tier"))
-            for h in hits:
-                print("%-24s %-42s %-14s %s"
-                      % (h["card"], h["impl"], h["role"], h["tier"]))
-            print("\n共 %d 处" % len(hits))
+            print(render_where(hits), end="")
         return 0
 
     dec = select(a.op, a.shape, a.dtype, a.allow_partial)
     if a.json:
         print(json.dumps(dec, ensure_ascii=False, indent=2))
-    else:
-        print("置信度 : %s" % dec["confidence"])
-        print("结论   : %s" % dec["note"])
         if dec.get("chosen"):
-            print("选中   : %s" % dec["chosen"])
-        if dec.get("runner_up"):
-            print("次优   : %s" % dec["runner_up"])
-        if dec.get("measure_cmd"):
-            print("复跑   : %s" % dec["measure_cmd"])
-        if dec.get("rejected"):
-            print("淘汰   :")
-            for r in dec["rejected"]:
-                print("  - %s（%s）" % (r["variant"], r["reason"]))
-    if dec.get("chosen"):
-        p = write_decision(dec)
-        if not a.json:
-            print("决策   : %s" % p.relative_to(REPO))
+            write_decision(dec)
+    else:
+        path = None
+        if dec.get("chosen"):
+            path = write_decision(dec).relative_to(REPO)
+        print(render_select(dec, decision_path=path), end="")
     return 0
 
 

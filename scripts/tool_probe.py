@@ -44,6 +44,19 @@ REPO = Path(__file__).resolve().parents[1]
 OUT_MD = REPO / "Plugins/ops/skills/op-profiling/references/tool-status.md"
 TIMEOUT = 60
 
+_SCRIPTS = Path(__file__).resolve().parent
+
+
+def _render_template(name, **ctx):
+    """读 scripts/templates/<name>.md；本文件只提供动态行与统计。
+
+    `python3 -I` 不把脚本目录放进 sys.path（与 recall/state 同约定），这里补一次。
+    """
+    if str(_SCRIPTS) not in sys.path:
+        sys.path.append(str(_SCRIPTS))
+    from template_render import render
+    return render(name, **ctx)
+
 
 def run(cmd, timeout=TIMEOUT, env=None):
     """跑一条命令，返回 (rc, stdout+stderr 的尾部)。异常一律转成 rc=-1。"""
@@ -612,26 +625,22 @@ def collect(only=None):
 
 
 def render_md(rows):
-    L = ["# 工具层可用性（`scripts/tool_probe.py` 实测生成，勿手改）", ""]
-    L.append("> 每一条都是**真跑**的结果，不是文档抄来的。")
-    L.append("> 判据里只能写 `available` 的工具；`degraded` 要标明弱在哪；")
-    L.append("> `unverified` 不许当成可用。")
-    L.append("")
-    L.append("| 工具 | 阶段 | 状态 | 实测细节 | 缺失时的降级路径 |")
-    L.append("|---|---|---|---|---|")
-    for r in rows:
-        L.append("| `%s` | %s | **%s** | %s | %s |"
+    row_lines = ["| `%s` | %s | **%s** | %s | %s |"
                  % (r["tool"], r["stage"], r["status"],
                     r["detail"].replace("|", "/")[:110],
-                    r["fallback"].replace("|", "/")[:90]))
+                    r["fallback"].replace("|", "/")[:90])
+                 for r in rows]
     counts = {}
     for r in rows:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
-    L.append("")
-    L.append("统计：%s" % " / ".join("%s %d" % (k, v) for k, v in sorted(counts.items())))
-    L.append("")
-    L.append("生成命令：`python3 -I scripts/tool_probe.py --write`")
-    return "\n".join(L) + "\n"
+    stats = " / ".join("%s %d" % (k, v) for k, v in sorted(counts.items()))
+    # 空表时 {{rows}} 留空；有行时补一个换行，保持与「统计」之间恰好一个空行。
+    body = "\n".join(row_lines)
+    return _render_template(
+        "tool_probe",
+        rows=(body + "\n") if body else "",
+        stats=stats,
+    )
 
 
 def selftest():
