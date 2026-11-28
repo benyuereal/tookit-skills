@@ -39,6 +39,11 @@ GROUPS = [
         ("Plugins/ops/engine/propose.py", "信号 → 候选（七条规则）+ 人读渲染。**对外文本是契约**，改话术要当改接口"),
         ("Plugins/ops/engine/ledger.py", "记账：候选计划、判死/停滞流水、overlay、进度文件、judge 判定搬用"),
         ("Plugins/ops/engine/cli.py", "explore / floor 的薄 CLI 层：只解析参数、打印、定退出码"),
+        ("Plugins/ops/engine/judge.py", "从 description+shapes 生成 judge、GPU 校准并**冻结容差**（fail-closed）"),
+        ("Plugins/ops/engine/nextstep.py", "唯一的策略实现：算出「下一步做什么」（run/implement/explore/fix/stop）"),
+        ("Plugins/ops/engine/driver.py", "**循环拥有者**：IterationRecord + Backend 接缝 + iterate 控制流（可 fake 单测）"),
+        ("Plugins/ops/engine/iterate.py", "工作流反转的 CLI：agent 只交实现，测量/判定/记账由引擎做"),
+        ("scripts/coordinate.py", "进程级协调者：在不依赖模型自觉性时验证引擎能否闭环（非产品主路）"),
     ]),
     ("③ 判「对不对 / 算不算数」", [
         ("scripts/opcheck.py", "算子卡的共用检查模板：正确性 / padding / 边界，别再给每张卡抄一份测试"),

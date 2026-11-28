@@ -79,9 +79,16 @@ def test_engine_layer_has_no_cli_entry_except_loop():
     这条守的是「实现沉到哪」——`engine/` 里出现 argparse 就说明有人把 CLI
     又写回库里，`scripts/` 的薄壳就没意义了。
     """
+    # 允许自带 CLI 的模块（都是有明确理由的可运行工具）：
+    #   loop.py    —— 驱动器本身
+    #   cli.py     —— explore/floor 的薄 CLI
+    #   judge.py   —— 会被拷进 <artifact>/judge/ 当可执行 judge
+    #   driver.py  —— --selfcheck / --demo（fake backend 演示）
+    #   iterate.py —— 工作流反转入口
+    CLI_OK = {"__init__.py", "loop.py", "cli.py", "judge.py", "driver.py", "iterate.py"}
     offenders = []
     for p in sorted(ENGINE.glob("*.py")):
-        if p.name in ("__init__.py", "loop.py", "cli.py"):
+        if p.name in CLI_OK:
             continue
         src = p.read_text(encoding="utf-8", errors="replace")
         if "argparse.ArgumentParser" in src or "import argparse" in src:
