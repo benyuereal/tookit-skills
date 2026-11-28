@@ -175,3 +175,41 @@ class TestCaliberNormalisation(unittest.TestCase):
                             "device": "gfx938"}, shape={"s": 1})
         ok, reasons = self.loop.claim_gate(rec)
         self.assertTrue(ok, reasons)
+
+
+class TestClaimJson(unittest.TestCase):
+    """S1：claim --json 是控制流唯一输入，禁止解析中文文案。"""
+
+    def test_json_shape(self):
+        import contextlib, io, json, tempfile, pathlib
+        from types import SimpleNamespace
+        loop = _load_loop()
+        d = pathlib.Path(tempfile.mkdtemp())
+        rec = _rec()
+        rec.update({"measure_mode": "event_isolated",
+                    "impl": "bench/ab.py:_measure", "command": "python3 x",
+                    "env": {"torch": "2.11.0", "device": "gfx938"}})
+        loop.append_record(d, rec)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = loop.cmd_claim(SimpleNamespace(card=d, tag="t", json=True))
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertEqual(rc, 0)
+        self.assertEqual(out["verdict"], "PASS")
+        self.assertTrue(out["found"])
+        self.assertEqual(out["reasons"], [])
+        self.assertEqual({c["key"] for c in out["checks"]},
+                         {"caliber", "reproducible", "impl", "env", "evidence"})
+
+    def test_json_no_record(self):
+        import contextlib, io, json, tempfile, pathlib
+        from types import SimpleNamespace
+        loop = _load_loop()
+        d = pathlib.Path(tempfile.mkdtemp())
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = loop.cmd_claim(SimpleNamespace(card=d, tag="missing", json=True))
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        self.assertEqual(rc, 1)
+        self.assertFalse(out["found"])
+        self.assertEqual(out["verdict"], "NO_RECORD")

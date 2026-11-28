@@ -52,7 +52,7 @@ LOOP = ENGINE_DIR / "loop.py"
 KEEP_DELTA = -0.015
 DEFAULT_TIMEOUT = 1800
 MAX_CONSECUTIVE_FAILURES = 3
-ACCURACY_MARKERS = ("有精度证据", "evidence_kind", "accuracy")
+ACCURACY_MARKERS = ("有精度证据", "evidence_kind", "accuracy", "evidence")
 
 #: 结构化反馈块里**只放**这些字段（路线图 3.3）。顺序即渲染顺序。
 FEEDBACK_FIELDS = (
@@ -282,43 +282,41 @@ def run_engine(card, tag, bench_std):
 
 
 def run_claim(card, tag, variant):
-    """`loop.py claim --tag <tag>`；tag 是候选 id，记录里是变体名。
+    """读 `loop.py claim --json`（**不解析中文文案**，AUDIT-STRUCTURE S1）。
 
-    先按候选 id 问一次（路线图 4 步的字面要求）；若输出了「没有 tag=…」，
-    再按变体名重问一次 —— 否则候选 id 与变体名不同的卡永远审计不到。
-    返回 (status, failing_checks, no_record, output)。
+    tag 是候选 id，记录里是变体名；先按 id 问，`found=false` 再按变体名问。
+    返回 (status, failing_keys, no_record, output)。
     """
     attempts = [tag]
     if variant and variant != tag:
         attempts.append(variant)
     out_all = []
-    status, fails, no_record = "UNKNOWN", [], False
     for i, t in enumerate(attempts):
-        cmd = [sys.executable, "-I", str(LOOP), "-C", str(card), "claim", "--tag", str(t)]
+        cmd = [sys.executable, "-I", str(LOOP), "-C", str(card), "claim",
+               "--tag", str(t), "--json"]
         try:
             p = subprocess.run(cmd, capture_output=True, text=True)
         except OSError as e:
             return "UNKNOWN", [], True, "%s: %s" % (type(e).__name__, e)
-        out = (p.stdout or "") + (p.stderr or "")
-        out_all.append(out)
-        this_no_record = "没有 tag=" in out
-        if this_no_record:
-            no_record = True
+        raw = (p.stdout or "") + (p.stderr or "")
+        out_all.append(raw)
+        d = {}
+        for ln in (p.stdout or "").splitlines():
+            ln = ln.strip()
+            if ln.startswith("{"):
+                try:
+                    d = json.loads(ln)
+                except ValueError:
+                    d = {}
+        if not d:
+            return "UNKNOWN", [], True, "\n".join(out_all)
+        if not d.get("found"):
             if i + 1 < len(attempts):
-                continue                    # 换变体名再问一次
-            status, fails = "FAIL", []
-            break
-        no_record = False
-        fails = [ln.strip()[1:].strip() for ln in out.splitlines()
-                 if ln.strip().startswith("✗")]
-        if "**PASS**" in out:
-            status = "PASS"
-        elif "**FAIL**" in out:
-            status = "FAIL"
-        else:
-            status = "PASS" if p.returncode == 0 else "FAIL"
-        break
-    return status, fails, no_record, "\n".join(out_all)
+                continue
+            return "FAIL", [], True, "\n".join(out_all)
+        return (str(d.get("verdict") or "FAIL"),
+                list(d.get("reasons") or []), False, "\n".join(out_all))
+    return "UNKNOWN", [], True, "\n".join(out_all)
 
 
 def floor_metrics(card, cand_ms):

@@ -2295,6 +2295,15 @@ def cmd_record(a):
 
 
 # claim 审计的五项（业主点名的五件事）
+# 每项检查的**机器 key**：--json 输出与会话控制流只用它，不再解析中文文案
+CLAIM_CHECK_KEYS = {
+    "口径可 claim": "caliber",
+    "可复现": "reproducible",
+    "实现可定位": "impl",
+    "环境已冻结": "env",
+    "有精度证据": "evidence",
+}
+
 CLAIM_CHECKS = (
     ("口径可 claim", lambda r: str(r.get("measure_mode")) == "event_isolated",
      "measure_mode=event_isolated（back_to_back 永远不可 claim）"),
@@ -2313,22 +2322,44 @@ CLAIM_CHECKS = (
 
 
 def cmd_claim(a):
-    """审计一条记录是否满足五项性质。**任一项不过就 FAIL。**"""
+    """审计一条记录是否满足五项性质。**任一项不过就 FAIL。**
+
+    `--json` 输出 `{tag, found, verdict, exit_code, checks:[{key,name,passed,why}],
+    reasons:[key...]}` —— 会话控制流（driver/iterate）只许读它，不再解析中文文案。
+    """
+    want_json = bool(getattr(a, "json", False))
     recs = [r for r in read_records(a.card) if r.get("tag") == a.tag]
     if not recs:
-        print(_c("没有 tag=%r 的记录 —— 先 run 或 record" % a.tag, WARN))
+        if want_json:
+            print(json.dumps({"tag": a.tag, "found": False, "verdict": "NO_RECORD",
+                              "exit_code": 1, "checks": [], "reasons": ["no_record"]},
+                             ensure_ascii=False))
+        else:
+            print(_c("没有 tag=%r 的记录 —— 先 run 或 record" % a.tag, WARN))
         return 1
     rec = recs[-1]
-    print("审计 %s / %s（记录时间 %s）" % (a.card.name, a.tag, rec.get("ts")))
-    print("")
-    ok = True
+    checks, reasons, ok = [], [], True
     for name, fn, why in CLAIM_CHECKS:
         try:
             passed = bool(fn(rec))
         except Exception:                        # noqa: BLE001
             passed = False
-        print("  %s %-12s %s" % ("✓" if passed else "✗", name, why))
-        ok = ok and passed
+        key = CLAIM_CHECK_KEYS.get(name, name)
+        checks.append({"key": key, "name": name, "passed": passed, "why": why})
+        if not passed:
+            reasons.append(key)
+            ok = False
+    if want_json:
+        print(json.dumps({"tag": a.tag, "found": True,
+                          "verdict": "PASS" if ok else "FAIL",
+                          "exit_code": 0 if ok else 1,
+                          "checks": checks, "reasons": reasons},
+                         ensure_ascii=False))
+        return 0 if ok else 1
+    print("审计 %s / %s（记录时间 %s）" % (a.card.name, a.tag, rec.get("ts")))
+    print("")
+    for c in checks:
+        print("  %s %-12s %s" % ("✓" if c["passed"] else "✗", c["name"], c["why"]))
     print("")
     if ok:
         print("结论：**PASS** —— 这条结论可以进报告（五项性质齐全）")
@@ -2847,6 +2878,8 @@ def main():
 
     cl = sub.add_parser("claim", help="审计一条记录是否满足五项性质")
     cl.add_argument("--tag", required=True)
+    cl.add_argument("--json", action="store_true",
+                    help="机器可读输出（{tag,found,verdict,exit_code,checks,reasons}）")
 
     nx = sub.add_parser("next", help="下一步做什么（给 agent 的决策参考，不是命令）")
     nx.add_argument("--json", action="store_true", help="机器可读输出")

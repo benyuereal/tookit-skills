@@ -226,18 +226,24 @@ class EngineEvaluator:
         return recs[-1] if recs else {}
 
     def _claim_for(self, variant_hint: str, tag: str | None = None) -> str:
-        c = self._loop("claim", "--tag", str(tag or self.tag))
-        if "没有 tag=" in c.stdout and variant_hint:
-            c = self._loop("claim", "--tag", variant_hint)
-        if "结论：**PASS**" in c.stdout:
+        """只读 `claim --json`；**不再解析中文文案**（AUDIT-STRUCTURE S1）。"""
+        def _run(t):
+            c = self._loop("claim", "--tag", str(t), "--json")
+            try:
+                lines = [ln for ln in c.stdout.splitlines() if ln.strip().startswith("{")]
+                return json.loads(lines[-1]) if lines else {}
+            except (ValueError, IndexError):
+                return {}
+
+        d = _run(tag or self.tag)
+        if not d.get("found") and variant_hint:
+            d = _run(variant_hint)
+        if d.get("verdict") == "PASS":
             return "PASS"
-        fails = [ln for ln in c.stdout.splitlines() if ln.strip().startswith("✗")]
-        evk = str(self._rec.get("evidence_kind")
-                  or (self._rec.get("acc") or {}).get("evidence_kind") or "")
-        if (any("精度" in ln or "证据" in ln for ln in fails)
-                or evk not in ("independent_reference", "vendor_library")):
+        reasons = list(d.get("reasons") or [])
+        if "evidence" in reasons:
             return "FAIL:evidence"
-        if any("口径" in ln or "显著性" in ln for ln in fails):
+        if "caliber" in reasons:
             return "FAIL:caliber"
         return "FAIL:claim"
 
@@ -320,18 +326,31 @@ class RealBackend:
         return self.evaluator.evaluate(tag)
 
     def _implemented_variants(self) -> set:
-        """_common.py 里已登记（VARIANTS / HIP_VARIANTS）或 forged 的变体名。"""
-        import re as _re
+        """_common.py 里已登记（VARIANTS / HIP_VARIANTS）或 forged 的变体名。
+
+        S4：用 `ast` 读字面量，不用正则 —— 单行字典 / 尾逗号 / 注释都读得出。
+        """
+        import ast
         got = set()
         common = self.card / "_common.py"
         if common.is_file():
-            src = common.read_text(encoding="utf-8", errors="replace")
-            m = _re.search(r"^VARIANTS\s*=\s*\(([^)]*)\)", src, _re.M)
-            if m:
-                got |= {x.strip().strip("'\"") for x in m.group(1).split(",") if x.strip()}
-            m2 = _re.search(r"^HIP_VARIANTS\s*=\s*\{(.*?)\}", src, _re.M | _re.S)
-            if m2:
-                got |= set(_re.findall(r'"([^"]+)"\s*:', m2.group(1)))
+            try:
+                tree = ast.parse(common.read_text(encoding="utf-8", errors="replace"))
+            except (SyntaxError, ValueError):
+                tree = None
+            if tree is not None:
+                for node in tree.body:
+                    if not isinstance(node, ast.Assign):
+                        continue
+                    names = {getattr(t, "id", None) for t in node.targets}
+                    val = node.value
+                    try:
+                        if "VARIANTS" in names and isinstance(val, (ast.Tuple, ast.List)):
+                            got |= {str(ast.literal_eval(e)) for e in val.elts}
+                        elif "HIP_VARIANTS" in names and isinstance(val, ast.Dict):
+                            got |= {str(ast.literal_eval(k)) for k in val.keys}
+                    except (ValueError, SyntaxError):
+                        continue
         forged = self.card / "runs" / "forged"
         if forged.is_dir():
             got |= {p.stem for p in forged.glob("*.py")}
