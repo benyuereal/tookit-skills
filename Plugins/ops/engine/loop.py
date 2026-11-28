@@ -43,6 +43,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -509,6 +510,9 @@ def load_tolerance_json(card):
     import hashlib
     p = Path(str(card)) / "judge" / "tolerance.json"
     if not p.is_file():
+        # P2：judge 产物落在 .artifacts/<arm>/<op>_<id>/judge/
+        p = artifact_dir(Path(str(card))) / "judge" / "tolerance.json"
+    if not p.is_file():
         env = os.environ.get("JUDGE_TOLERANCE")
         if env and Path(env).is_file():
             p = Path(env)
@@ -540,8 +544,42 @@ def load_contract_tol(card, default=2e-3):
     return _CARD.load_contract_tol(card, default)
 
 
+def artifact_dir(card):
+    """运行时数据的唯一真源：`.artifacts/<arm>/<op>_<id>/`。
+
+    P2：账本从卡目录（在 git 里）搬到 `.artifacts`（不在 git），
+    一次 run 一个目录，卡目录不再写运行时数据。
+
+    稳定性要求：同一 run 的多次 `loop.py` 调用必须落到**同一个**目录，
+    否则 status/claim/next 看不到上一条账本。所以：
+      arm    = $OPS_ARM    > cwd 里 `arm-<X>` > "local"
+      run id = $OPS_RUN_ID > cwd 的目录名（C 臂里就是 attempt-N）> "default"
+    `OPS_ARTIFACTS_LEGACY=1` 可退回旧的 `<card>/runs/loop`（迁移期兜底）。
+    """
+    if os.environ.get("OPS_ARTIFACTS_LEGACY") == "1":
+        return card / "runs"
+    arm = os.environ.get("OPS_ARM")
+    run = os.environ.get("OPS_RUN_ID")
+    if not arm or not run:
+        cwd = Path.cwd()
+        m = re.search(r"arm-([A-Za-z0-9]+)", str(cwd))
+        arm = arm or (m.group(1) if m else "local")
+        run = run or (cwd.name or "default")
+    # **出仓的卡（单测/临时卡）保持旧路径**：`.artifacts` 锚在 REPO_ROOT，
+    # 只对仓库内的真实卡有意义。单测用 tmpdir 建卡，若也搬过去，30 个既有
+    # 断言（账本在 <card>/runs/loop）会全红（实测 2026-11-28）。
+    try:
+        inside = card.resolve().is_relative_to(REPO_ROOT.resolve())
+    except (AttributeError, ValueError, OSError):
+        inside = str(card).startswith(str(REPO_ROOT))
+    if not inside:
+        return card / "runs"
+    root = Path(os.environ.get("OPS_ARTIFACTS") or (REPO_ROOT / ".artifacts"))
+    return root / arm / ("%s_%s" % (card.name, run))
+
+
 def db_dir(card):
-    d = card / "runs" / "loop"
+    d = artifact_dir(card) / "runs" / "loop"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -1781,7 +1819,7 @@ def cmd_run(a):
     # 我们把它落在 runs/loop/base.json（引擎状态，不改进用户文件），
     # 下一轮 run 自动以它为 base —— 否则每轮都在跟最开始的基线比，
     # 链条永远原地踏步。
-    _promo = card / "runs" / "loop" / "base.json"
+    _promo = db_dir(card) / "base.json"
     if _promo.is_file():
         try:
             _pb = json.loads(_promo.read_text(encoding="utf-8")).get("base")
@@ -2064,7 +2102,7 @@ def cmd_run(a):
             print(_c("不晋升 %s：claim 未通过（%s）—— 先把这几项补齐再晋升"
                      % (_best_tag, ", ".join(_reasons)), WARN))
         else:
-            _pp = card / "runs" / "loop" / "base.json"
+            _pp = db_dir(card) / "base.json"
             _pp.parent.mkdir(parents=True, exist_ok=True)
             _pp.write_text(json.dumps({
                 "base": _best_tag, "ms": _best_ms,

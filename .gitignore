@@ -49,3 +49,4 @@ HANDOFF-TO-39.md
 *-hip-amdgcn-amd-amdhsa-*
 *-host-x86_64-unknown-linux-gnu-*
 *.resolution.txt
+.artifacts/
