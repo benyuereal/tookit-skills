@@ -335,8 +335,26 @@ class RealBackend:
              "-C", str(self.card), *args],
             capture_output=True, text=True, env=self.env, timeout=3600)
 
+    def _ensure_judge(self) -> None:
+        """跑 run 之前确保 judge/冻结容差存在（幂等）。
+
+        没有它 → loop.py 退回 contract 容差 → claim 第五项 FAIL:evidence →
+        每轮必然 REVERT，闭环永远不"接受"任何结果（lead 2026-11-28 打回）。
+        judge 产物放本次 run 的 artifact 目录，避免写脏卡片。
+        """
+        import subprocess
+        jd = (self.artifacts / "driver"
+              / ("%s_%s" % (self.card.name, self.run_id)) / "judge")
+        if (jd / "tolerance.json").is_file():
+            return
+        subprocess.run(
+            [sys.executable, "-I", str(self.ws / "Plugins/ops/engine/judge.py"),
+             "generate", "--card", str(self.card), "--out", str(jd)],
+            cwd=str(self.ws), env=self.env, capture_output=True)
+
     def eval(self, tag: str) -> dict:
         import glob
+        self._ensure_judge()
         bench = self.ws / "results" / "bench_std.json"
         before = set(glob.glob(str(self.artifacts / "**/runs/loop/*.jsonl"), recursive=True))
         r = self._loop("run", self.tag, "--bench-std", str(bench))
@@ -360,7 +378,20 @@ class RealBackend:
             except (OSError, ValueError):
                 continue
         rec = recs[-1] if recs else {}
+        # 记录里的 tag 是**变体名**，CLI 的 --tag 是候选 id；先按候选 id，
+        # 找不到再用变体名重试（与 iterate.py 同口径）。
         c = self._loop("claim", "--tag", self.tag)
+        if "没有 tag=" in c.stdout:
+            try:
+                import yaml
+                cd = yaml.safe_load((self.card / "candidates.yaml").read_text(
+                    encoding="utf-8")) or {}
+                for x in cd.get("candidates") or []:
+                    if str(x.get("id")) == str(self.tag) and x.get("variant"):
+                        c = self._loop("claim", "--tag", str(x["variant"]))
+                        break
+            except Exception:                                # noqa: BLE001
+                pass
         if "结论：**PASS**" in c.stdout:
             claim = "PASS"
         else:

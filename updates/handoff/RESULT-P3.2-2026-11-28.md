@@ -81,3 +81,50 @@ fe5877e [agent] 实现 fused-single-pass：单表达式融合 silu(x1)*x2，注�
    `git worktree` 或只保留卡目录 + 依赖的脚本，避免历史膨胀。
 5. **没有 P4 的 sandbox/deny**：agent 脚本理论上可以自己跑 bench。当前靠 prompt +
    计划里的后续 P4 边界；按 ForgeKernel 的经验，这块必须由 sandbox 兜底，不能靠提示。
+
+---
+
+## 四、修后复验（回应 REVIEW-P3.2：0 KEEP / 4 REVERT）
+
+**根因**：`RealBackend.eval` 不生成 judge → 无 `tolerance.json` → claim 第五项
+FAIL:evidence → 每轮 REVERT。**修法**：eval 开头调用 `judge.py generate` 到本次 run
+的 artifact 目录（幂等），并补了候选 id → 变体名的 claim 回退。
+
+### 复验命令（op-fused-add-rmsnorm + reg-resident）
+
+```bash
+cd .artifacts/driver/op-fused_p32/workspace
+python3 -I Plugins/ops/engine/driver.py --real --workspace . \
+  --card-rel Plugins/ops/skills/op-fused-add-rmsnorm --tag reg-resident \
+  --agent-cmd "echo noop" --demo 2 --gpu 0 --out .../fused_iter.jsonl
+```
+
+输出：
+
+```
+r1  KEEP    cand=0.14336000382900238 base=0.2531200051307678 claim=PASS
+r2  NEUTRAL cand=0.14319999516010284 base=0.14351999759674072 claim=PASS  stop=rounds_done
+```
+
+记录：
+
+```
+r1 KEEP    commit=e2ecc585 claim=PASS vs_base=0.566 cand=0.1434 base=0.2531
+r2 NEUTRAL commit=c6fcabe3 claim=PASS vs_base=0.998 cand=0.1432 base=0.1435
+counts: {'KEEP': 1, 'NEUTRAL': 1}
+```
+
+`base.json`（自进化链：第 1 轮被接受的实现成为第 2 轮的参照）：
+
+```json
+{"base":"fa-rms-mr2","ms":0.14336,"source_tag":"fa-rms-mr2",
+ "evidence_kind":"vendor_library","ts":"2026-11-28T14:02:35"}
+```
+
+**闭环证据**：KEEP ≥1；claim PASS；第 2 轮 base 自动变为第 1 轮的 best（vs_base=0.998）。
+
+### 仍存在的限制
+
+1. 真 claude agent 仍未接（`--agent-cmd "echo noop"`），下步接。
+2. silu-mul / 新算子那两张卡仍会 REVERT —— 它们没有 vendor 变体，
+   `claim` 按策略必须 FAIL:evidence；这是判据的正确行为，不是 bug。
