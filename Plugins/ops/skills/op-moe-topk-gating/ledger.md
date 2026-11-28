@@ -46,4 +46,6 @@ M=1 时这一段的地板在微秒级——**它不该是瓶颈**。如果 profi
 
 - 索引比较一律逐位；权重比较用契约容差。
 - 任何「快了 x%」必须过 `claim_gate` 三条硬门。
-- 本段通常不是瓶颈，先跑 `trace_budget.py` 确认占比再投入。
+- 本段通常不是瓶颈：先跑 `trace_budget.py` 确认占比再投入。
+  **但它仍是待优化对象——要改实现就必须走 `op-optimize` + `engine/loop.py` 闭环，
+  手搓单次测量不算交付（判 `invalid:no_loop_evidence`）。**

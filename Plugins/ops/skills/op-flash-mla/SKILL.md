@@ -9,6 +9,15 @@ kind: card
 
 # 稀疏 MLA 前向（op-flash-mla）
 
+## 闭环（必读）
+
+本卡只提供该算子的形状、字节数与既有事实，**不承担实验流程**。
+做优化请回到入口 skill `op-optimize`，实验只经：
+
+    python3 -I <skill根>/Plugins/ops/engine/loop.py -C <卡目录> run <tag>
+
+单次手测的数字不能当结论提交（判 `invalid:no_loop_evidence`）。
+
 > **本卡的立场（2026-11-27 更名：op-sparse-mla → op-flash-mla）**
 > 算子契约（形状、-1 哨兵、sm_scale、索引池口径）仍以本卡为准；
 > 但**优化主线走 `flash_mla` 源码树**（`/workspace/FlashMLA-das`、`/workspace/fp8_mla`），

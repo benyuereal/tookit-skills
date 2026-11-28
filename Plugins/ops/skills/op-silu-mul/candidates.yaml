@@ -16,6 +16,10 @@ directions:
   statement: 先量参考实现/现成实现的基线，作为后续改动的比较口径
   status: open
   refutes: 0
+- id: fusion-boundary
+  statement: 单趟融合能否省掉两个中间张量带来的 2 趟 HBM 往返
+  status: open
+  refutes: 0
 candidates:
 - id: baseline-ref
   direction: baseline
@@ -28,5 +32,17 @@ candidates:
   expect: 仅取基线；不声称收益
   expect_confidence: low
   expect_basis: calibration-only：baseline 是 correctness_only 的参考实现，loop.py 只接受它作校准（CALIBRATION_ONLY），不计收益；未实测，给不出数值
+- id: fused-single-pass
+  direction: fusion-boundary
+  status: pending
+  priority: 2
+  action_class: reduce-bytes
+  hypothesis: 参考实现产生 2 个中间张量（sigmoid 输出、乘 x1 的输出），每个都是一趟完整读写；合成单趟能把 5 趟压到 3 趟
+  expect: -40%
+  expect_confidence: low
+  expect_basis: 按达成率 13% 反推：地板 116.4µs、实测 909µs，差额里主要就是多趟往返；5 趟压到 3 趟理论上是 1.67×，取
+    -40% 作保守预期。**未实测**
+  note: 实现方式不限（Triton / torch.compile / HIP 都行），只要语义与 reference() 一致并被 _common.VARIANTS
+    收录
 refuted: []
 note: 由 op_bootstrap 生成。真实候选请按 op-optimize 的方向预算补进 candidates；baseline-ref 只用于校准。

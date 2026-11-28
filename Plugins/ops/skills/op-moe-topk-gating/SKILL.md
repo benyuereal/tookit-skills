@@ -9,6 +9,15 @@ kind: card
 
 # MoE top-k gating（MoE 7 段中的第 2 段）
 
+## 闭环（必读）
+
+本卡只提供该算子的形状、字节数与既有事实，**不承担实验流程**。
+做优化请回到入口 skill `op-optimize`，实验只经：
+
+    python3 -I <skill根>/Plugins/ops/engine/loop.py -C <卡目录> run <tag>
+
+单次手测的数字不能当结论提交（判 `invalid:no_loop_evidence`）。
+
 ## 一、这段算什么
 
 ```

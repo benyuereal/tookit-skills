@@ -9,6 +9,10 @@ kind: tool
 
 # 算子优化循环（单模型可执行版）
 
+> **入口就是本 skill。** 做算子优化时先按这里走；
+> 读算子卡只用于查事实与判据，**读完卡不等于完成任务**。
+> 执行层唯一入口：`python3 -I <skill根>/Plugins/ops/engine/loop.py -C <卡> run <tag>`。
+
 ## 不适用场景
 
 - 只想量一个数、不做迭代 → 走 `op-bench`
