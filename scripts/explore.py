@@ -15,7 +15,7 @@ C 臂在三臂测试里**唯一一次**执行 loop.py 是：
 
 ## 现在这个文件只剩入口
 
-    engine/probe.py    采信号（derive 模型 / runs 达成 / 变体清单 / 方向预算）
+    engine/signals.py    采信号（derive 模型 / runs 达成 / 变体清单 / 方向预算）
     engine/propose.py  信号 → 候选（规则与话术）+ 人读渲染
     engine/floor.py    地板（通用地板与 derive 模型都从它取，唯一实现）
     engine/card.py     读卡（candidates.yaml 两种格式的兼容）
@@ -57,13 +57,13 @@ def _engine(name):
 
 
 # 历史名字：既有脚本/测试点过这些名字，转发到新位置（同一批对象，不是副本）。
-_probe = _engine("probe")
+_signals = _engine("signals")
 _propose = _engine("propose")
-load_surfaces = _probe.load_surfaces
-achieved_us = _probe.achieved_us
-direction_budget = _probe.direction_budget
-available_variants = _probe.available_variants
-collect_signals = _probe.collect
+load_surfaces = _signals.load_surfaces
+achieved_us = _signals.achieved_us
+direction_budget = _signals.direction_budget
+available_variants = _signals.available_variants
+collect_signals = _signals.collect
 propose = _propose.propose
 render = _propose.render
 

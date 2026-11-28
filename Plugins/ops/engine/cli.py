@@ -50,7 +50,7 @@ def explore_report(card, shape=None, limit=5):
     这是 `explore` 这个**命令**的语义，不是「引擎」的语义：换一个前端
     （比如 loop.py 的 next_step_hint）可以要 signals 但不要截断。
     """
-    probe = _engine("probe")
+    probe = _engine("signals")
     propose = _engine("propose")
     shape = probe.pick_shape(card, shape)
     if not shape:
@@ -73,7 +73,7 @@ def build_explore_parser():
 
 
 def main_explore(argv=None):
-    probe = _engine("probe")
+    probe = _engine("signals")
     propose = _engine("propose")
     ledger = _engine("ledger")
     import json
