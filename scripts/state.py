@@ -28,6 +28,14 @@ REPO = Path(__file__).resolve().parents[1]
 DEFAULT_ATLAS = REPO / "Plugins/ops/op-atlas"
 DEFAULT_STATE = REPO / "docs/STATE.md"
 
+# 文本骨架放 scripts/templates/state.md；本文件只负责拼动态块。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render as _render_text  # noqa: E402
+
 # 加载 validate.py（它只有常量与函数定义，import 不产生副作用）。
 # 这是全仓唯一一份阶段定义；state.py 里没有第二份。
 _VALIDATE_PATH = DEFAULT_ATLAS / "validate.py"
@@ -138,86 +146,76 @@ def _stage_line(st, width):
     return "%s %-*s" % (st, width, label)
 
 
+def _bullets(items):
+    return "\n".join("- %s" % x for x in items) if items else "- （无）"
+
+
+def _pair_bullets(pairs):
+    return ("\n".join("- %s：%s" % (n, r) for n, r in pairs)
+            if pairs else "- （无）")
+
+
+def _stage_section(st, names, needs):
+    title = STAGE_LABELS.get(st)
+    lines = ["",
+             "### %s%s（%d 张）"
+             % (st, (" " + title) if title else "", len(names)),
+             "前置产出：%s" % _needs_text(needs)]
+    lines.extend("- %s" % name for name in names)
+    if not names:
+        lines.append("- （无）")
+    return "\n".join(lines)
+
+
 def render(board):
     """把 scan() 的结果渲染成 Markdown（纯函数，--check 依赖其确定性）。"""
     stages = board["stages"]
     needs = board["needs"]
     blocked = board["blocked"]
-    lines = []
-    lines.append("# 状态看板")
-    lines.append("")
-    lines.append("> 自动生成，勿手改。重新生成：`python3 -I scripts/state.py --write`")
-    lines.append("> 阶段定义来自 `Plugins/ops/op-atlas/validate.py` 的 "
-                 "`STAGES` / `STAGE_NEEDS` / `BLOCKED_BY`。")
-    lines.append("")
-    lines.append("阶段分布（自动生成，勿手改）")
 
     width = max([len(STAGE_LABELS.get(st, "")) for st in STAGES] + [0])
-    for st in STAGES:
-        n = len(stages[st])
-        lines.append("%s  %3d 张   前置产出：%s"
-                     % (_stage_line(st, width), n, _needs_text(needs[st])))
+    stage_distribution = "\n".join(
+        "%s  %3d 张   前置产出：%s"
+        % (_stage_line(st, width), len(stages[st]), _needs_text(needs[st]))
+        for st in STAGES)
 
     nb = sum(len(v) for v in blocked.values())
-    detail = " / ".join("%s %d" % (r, len(blocked[r]))
-                        for r in sorted(blocked))
-    lines.append("blocked  %3d 张%s" % (nb,
-                                        "（%s）" % detail if detail else ""))
-    lines.append("")
+    detail = " / ".join("%s %d" % (r, len(blocked[r])) for r in sorted(blocked))
+    blocked_summary = "blocked  %3d 张%s" % (nb,
+                                             "（%s）" % detail if detail else "")
 
-    lines.append("## 分阶段清单")
-    for st in STAGES:
-        names = stages[st]
-        lines.append("")
-        title = STAGE_LABELS.get(st)
-        lines.append("### %s%s（%d 张）"
-                     % (st, (" " + title) if title else "", len(names)))
-        lines.append("前置产出：%s" % _needs_text(needs[st]))
-        if names:
-            for name in names:
-                lines.append("- %s" % name)
-        else:
-            lines.append("- （无）")
+    stage_sections = "\n".join(
+        _stage_section(st, stages[st], needs[st]) for st in STAGES)
 
-    lines.append("")
-    lines.append("### blocked（%d 张）" % nb)
     if blocked:
-        for reason in sorted(blocked):
-            names = blocked[reason]
-            lines.append("")
-            lines.append("- %s（%d）：%s" % (reason, len(names), ", ".join(names)))
+        blocked_body = "\n".join(
+            "\n- %s（%d）：%s" % (reason, len(blocked[reason]),
+                                 ", ".join(blocked[reason]))
+            for reason in sorted(blocked))
     else:
-        lines.append("- （无）")
+        blocked_body = "- （无）"
 
-    lines.append("")
-    lines.append("### 未接入（%d 张，未写 progress.stage）" % len(board["unadmitted"]))
-    if board["unadmitted"]:
-        for name in board["unadmitted"]:
-            lines.append("- %s" % name)
-    else:
-        lines.append("- （无）")
-
-    lines.append("")
-    lines.append("### 非法（%d 张）" % len(board["illegal"]))
-    if board["illegal"]:
-        for name, reason in board["illegal"]:
-            lines.append("- %s：%s" % (name, reason))
-    else:
-        lines.append("- （无）")
-
+    extra_sections = ""
     if board["bad_blocked"]:
-        lines.append("")
-        lines.append("### blocked_by 非法（%d 张）" % len(board["bad_blocked"]))
-        for name, reason in board["bad_blocked"]:
-            lines.append("- %s：%s" % (name, reason))
-
+        extra_sections += "\n\n### blocked_by 非法（%d 张）\n%s" % (
+            len(board["bad_blocked"]), _pair_bullets(board["bad_blocked"]))
     if board["errors"]:
-        lines.append("")
-        lines.append("### 读取失败（%d 张）" % len(board["errors"]))
-        for name, reason in board["errors"]:
-            lines.append("- %s：%s" % (name, reason))
+        extra_sections += "\n\n### 读取失败（%d 张）\n%s" % (
+            len(board["errors"]), _pair_bullets(board["errors"]))
 
-    return "\n".join(lines) + "\n"
+    return _render_text(
+        "state",
+        stage_distribution=stage_distribution,
+        blocked_summary=blocked_summary,
+        stage_sections=stage_sections,
+        blocked_count=nb,
+        blocked_body=blocked_body,
+        unadmitted_count=len(board["unadmitted"]),
+        unadmitted_body=_bullets(board["unadmitted"]),
+        illegal_count=len(board["illegal"]),
+        illegal_body=_pair_bullets(board["illegal"]),
+        extra_sections=extra_sections,
+    )
 
 
 def to_json(board):

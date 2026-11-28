@@ -10,6 +10,14 @@ from pathlib import Path
 
 LEDGER = Path(__file__).resolve().parents[1] / "memory/ledger.jsonl"
 CITE = ("card", "ts", "verdict")
+
+# 文本骨架放 scripts/templates/recall.md；本文件只负责动态字段/列表。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render as _render_text  # noqa: E402
 _tp = lambda r: r["trigger_pattern"] if isinstance(r.get("trigger_pattern"), dict) else {}
 _v = lambda r: r.get("verdict") or r.get("decision")   # loop.py 写 decision，索引样例写 verdict
 
@@ -49,16 +57,21 @@ def render(r, idx=1):
     dead, b, c = r.get("falsified") is True, r.get("base_ms"), r.get("cand_ms")
     spd = ("  %sms vs %sms（%s %.1f%%）" % (c, b, "快" if c < b else "慢", abs(1 - c / b) * 100)
            if all(isinstance(x, (int, float)) for x in (b, c)) and b else "")
-    rows = [("direction  ", r.get("direction") or tp.get("direction") or "-"),
-            ("结果       ", (_v(r) or "-") + spd),
-            ("预期       ", r.get("expected_effect") or "-"),
-            ("证伪       ", "⚠ 已证伪（falsified=true）" if dead else "未知"
-             if r.get("falsified") is None else "false"),
-            ("citation   ", cite or "⚠ incomplete_citation（缺 %s）" % ",".join(miss))]
-    rows += [("教训       ", r["lesson"])] if r.get("lesson") else []
     head = "%s%s%s" % (r.get("card") or "?", " / %s" % r["tag"] if r.get("tag") else "",
                        "  ⚠ 已证伪" if dead else "")   # 证伪条目在标题行也标出
-    return "\n".join(["[%d] %s" % (idx, head)] + ["    %s%s" % x for x in rows])
+    return _render_text(
+        "recall",
+        idx=idx,
+        head=head,
+        direction=r.get("direction") or tp.get("direction") or "-",
+        result=_v(r) or "-",
+        speed=spd,
+        expected=r.get("expected_effect") or "-",
+        falsified="⚠ 已证伪（falsified=true）" if dead else "未知"
+        if r.get("falsified") is None else "false",
+        citation=cite or "⚠ incomplete_citation（缺 %s）" % ",".join(miss),
+        lesson="\n    教训       %s" % r["lesson"] if r.get("lesson") else "",
+    )
 
 def emit(recs, warns, bound=None, signal=None, card=None, as_json=False):
     for w in warns:
