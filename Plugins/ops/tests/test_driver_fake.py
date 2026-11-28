@@ -106,3 +106,14 @@ def test_repeat_spread_raises_noise_floor():
     # 对照：噪声 0 → 5% 改善判 KEEP
     be2 = D.FakeBackend(times=[0.190], noise=0.0)
     assert D.iterate(be2, 1, card="fake")[0].verdict == "KEEP"
+
+
+def test_docs_and_config_are_not_agent_changes():
+    """接受标准：只改 ledger.md → INVALID_NOOP；改 _common.py → 非空。"""
+    assert D.agent_changes(["Plugins/ops/skills/op-x/ledger.md"]) == []
+    assert D.agent_changes(["Plugins/ops/skills/op-x/variants.yaml"]) == []
+    assert D.agent_changes(["Plugins/ops/skills/op-x/candidates.yaml"]) == []
+    assert D.agent_changes(["Plugins/ops/skills/op-x/_common.py"]) == [
+        "Plugins/ops/skills/op-x/_common.py"]
+    assert D.agent_changes(["Plugins/ops/skills/op-x/kernels/a.hip",
+                            "Plugins/ops/skills/op-x/bench/ab.py"]) != []

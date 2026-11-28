@@ -16,13 +16,23 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Protocol
 
-AGENT_PATHS = ("Plugins/ops/skills/",)   # 只认 agent 该改的地方
+# BUG B：只认**代码**文件。ledger.md / variants.yaml / candidates.yaml 是文档与配置，
+# agent 只改它们不算"实现了什么东西"（实测 2026-11-28：agent 只改 ledger.md，
+# 变体是上一轮就有的，却被算成 agent 改动 → 又一次错误归因的 KEEP）。
+AGENT_CODE_RE = re.compile(
+    r"^Plugins/ops/skills/[^/]+/("
+    r"_common\.py"
+    r"|bench/[^/]+\.py"
+    r"|kernels/[^/]+\.(hip|so|sh)"
+    r"|tests/[^/]+\.py"
+    r")$")
 ENGINE_PATHS = ("memory/", "results/", ".artifacts/", "Plugins/ops/op-atlas/")
 MAX_NOOP = 2
 
@@ -53,7 +63,8 @@ class IterationRecord:
     claim: str = ""                   # PASS | FAIL:<reason>
     refuted_directions: list[str] = field(default_factory=list)
     noise_floor: float = NOISE_FLOOR
-    stop_reason: str | None = None    # plateau | impl_fails | rounds_done
+    stop_reason: str | None = None    # plateau | impl_fails | rounds_done | noop
+    agent_meta: dict = field(default_factory=dict)  # duration_api_ms / num_turns / cost
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), ensure_ascii=False)
@@ -164,9 +175,13 @@ def noise_floor_from(ratios, floor: float = NOISE_FLOOR) -> float:
 
 
 def agent_changes(changed_files: list[str]) -> list[str]:
-    """只保留 agent 该改的路径。引擎自己写的一律不算。"""
+    """只保留 **agent 代码改动**：_common.py / bench/*.py / kernels/*.{hip,so,sh} / tests/*.py。
+
+    文档（ledger.md / SKILL.md）与配置（variants.yaml / candidates.yaml）不算 ——
+    否则"只改了文档"会被当成"实现了东西"，又是一个错误归因的 KEEP。
+    """
     return [f for f in (changed_files or [])
-            if any(f.startswith(p) for p in AGENT_PATHS)
+            if AGENT_CODE_RE.match(str(f))
             and not any(f.startswith(q) for q in ENGINE_PATHS)]
 
 
@@ -269,6 +284,7 @@ def iterate(backend: Backend, rounds: int, card: str = "",
             claim=str(ev.get("claim") or ""),
             refuted_directions=list(ev.get("refuted_directions") or []),
             noise_floor=noise,
+            agent_meta=dict(getattr(backend, "last_agent_meta", {}) or {}),
         )
         records.append(rec)
         if delta is not None:
@@ -389,6 +405,7 @@ class RealBackend:
         self._claim = ""
         self._changed: list[str] = []
         self.no_promote = False
+        self.last_agent_meta = {}
 
     @property
     def changed_files(self) -> list[str]:
@@ -452,7 +469,24 @@ class RealBackend:
             return "[agent-timeout after %ss] partial=%s" % (self.timeout_s, part)
         if r.returncode != 0:
             return "[agent-rc=%d] %s" % (r.returncode, (r.stderr or "")[-300:])
-        return r.stdout.strip()
+        # BUG A：`claude -p --output-format json` 的 stdout 是整份 66KB JSON，
+        # 不能直接当 change（它会变成 commit message 和记录里的自述）。
+        # 取 result 字段，其余诊断信息单独留。
+        out = (r.stdout or "").strip()
+        self.last_agent_meta = {}
+        try:
+            obj = json.loads(out)
+            if isinstance(obj, dict):
+                self.last_agent_meta = {k: obj.get(k) for k in
+                                        ("duration_api_ms", "num_turns",
+                                         "total_cost_usd", "is_error", "session_id")
+                                        if obj.get(k) is not None}
+                res = obj.get("result")
+                if isinstance(res, str) and res.strip():
+                    return res.strip()[:4000]
+        except (ValueError, TypeError):
+            pass
+        return out[:2000]
 
     # -- eval
     def _loop(self, *args):
