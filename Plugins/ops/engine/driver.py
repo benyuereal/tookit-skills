@@ -94,6 +94,12 @@ def render_student_prompt(records: list[IterationRecord], card: str = "",
         "你只负责**写实现**。测量、判定、记账全部由引擎完成；"
         "不要在会话里自己跑 bench 或计时。",
         "",
+        "## 落卡硬约束（违反即判 INVALID_NOOP）",
+        "- **所有实现必须写进 `<卡>/_common.py`**（`VARIANTS` / `HIP_VARIANTS` + `get_runner` 分支）；"
+        "需要新 kernel 就加 `<卡>/kernels/*.hip` 并登记。",
+        "- **每完成一段就落卡**，不要等「最后一次性写回」。引擎只认工作区里的改动。",
+        "- `/tmp` 只允许临时验证；临时文件请放 `<工作区>/.scratch/`（引擎看得见）。",
+        "",
         "## 上一轮（结构化，不是总结）",
     ]
     if not records:
@@ -191,6 +197,14 @@ def iterate(backend: Backend, rounds: int, card: str = "",
         commit = backend.commit(change or ("round %d" % i))
         files = list(getattr(backend, "changed_files", []) or [])
         noop = not agent_changes(files)
+        if noop:
+            diag = []
+            if hasattr(backend, "scratch_files"):
+                sf = backend.scratch_files()
+                if sf:
+                    diag.append("scratch=%s" % ",".join(sf[:5]))
+            if diag:
+                change = (change + " | " + " ".join(diag))[:600]
         if hasattr(backend, "no_promote"):
             backend.no_promote = bool(noop)    # noop 轮禁止晋升
         ev = backend.eval(("r%d" % i))
@@ -342,6 +356,7 @@ class RealBackend:
         self.timeout_s = timeout_s
         self.run_id = run_id
         self.card = self.ws / card_rel
+        (self.ws / ".scratch").mkdir(exist_ok=True)
         self.artifacts = self.ws / ".artifacts"
         self.env = dict(os.environ,
                         OPS_GPU=self.gpu, HIP_VISIBLE_DEVICES=self.gpu,
@@ -355,6 +370,13 @@ class RealBackend:
     @property
     def changed_files(self) -> list[str]:
         return list(self._changed)
+
+    def scratch_files(self) -> list[str]:
+        """工作区 .scratch 下的文件（引擎可见的临时产物，只用于诊断）。"""
+        d = self.ws / ".scratch"
+        if not d.is_dir():
+            return []
+        return sorted(str(p.relative_to(self.ws)) for p in d.rglob("*") if p.is_file())[:10]
 
     # -- git
     def _git(self, *args, check=True):
@@ -397,9 +419,14 @@ class RealBackend:
             r = subprocess.run(self.agent_cmd, shell=True, cwd=str(self.ws),
                                input=prompt, text=True, timeout=self.timeout_s,
                                env=self.env, capture_output=True)
-        except subprocess.TimeoutExpired:
-            # 超时不炸整个 driver：记一轮 REVERT 的素材，让循环继续/按 noop 停下
-            return "[agent-timeout after %ss]" % self.timeout_s
+        except subprocess.TimeoutExpired as e:
+            # 超时不炸整个 driver；把已产生的部分输出带回去，便于诊断
+            part = ""
+            try:
+                part = (e.stdout or b"").decode("utf-8", "replace")[-400:]
+            except Exception:                                # noqa: BLE001
+                part = ""
+            return "[agent-timeout after %ss] partial=%s" % (self.timeout_s, part)
         if r.returncode != 0:
             return "[agent-rc=%d] %s" % (r.returncode, (r.stderr or "")[-300:])
         return r.stdout.strip()
