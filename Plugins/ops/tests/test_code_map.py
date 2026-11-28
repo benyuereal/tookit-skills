@@ -83,9 +83,11 @@ def test_engine_layer_has_no_cli_entry_except_loop():
     #   loop.py    —— 驱动器本身
     #   cli.py     —— explore/floor 的薄 CLI
     #   judge.py   —— 会被拷进 <artifact>/judge/ 当可执行 judge
-    #   driver.py  —— --selfcheck / --demo（fake backend 演示）
+    #   orchestrator.py —— 迭代循环拥有者（--selfcheck / --demo / --real）
+    #   driver.py  —— 兼容 shim（转发到 orchestrator）
     #   iterate.py —— 工作流反转入口
-    CLI_OK = {"__init__.py", "loop.py", "cli.py", "judge.py", "driver.py", "iterate.py"}
+    CLI_OK = {"__init__.py", "loop.py", "cli.py", "judge.py", "driver.py",
+              "orchestrator.py", "iterate.py"}
     offenders = []
     for p in sorted(ENGINE.glob("*.py")):
         if p.name in CLI_OK:

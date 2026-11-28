@@ -44,7 +44,7 @@
 | 查「这个操作以前谁做过」 | `scripts/atlas_query.py` / `scripts/recall.py` | 图谱查询 / 跨卡检索 |
 | 算分：深度/覆盖/质量 | `scripts/scorecard.py` / `scripts/depth.py` | 三维可机检 |
 
-## 四、全量清单（按角色分组，共 82 个文件）
+## 四、全量清单（按角色分组，共 83 个文件）
 
 ### ① 驱动一次优化（入口）
 
@@ -68,7 +68,8 @@
 | `Plugins/ops/engine/cli.py` | explore / floor 的薄 CLI 层：只解析参数、打印、定退出码 |
 | `Plugins/ops/engine/judge.py` | 从 description+shapes 生成 judge、GPU 校准并**冻结容差**（fail-closed） |
 | `Plugins/ops/engine/nextstep.py` | 唯一的策略实现：算出「下一步做什么」（run/implement/explore/fix/stop） |
-| `Plugins/ops/engine/driver.py` | **循环拥有者**：iterate 控制流 + CLI（可 fake 单测） |
+| `Plugins/ops/engine/orchestrator.py` | **循环拥有者**：iterate 控制流 + CLI（可 fake 单测） |
+| `Plugins/ops/engine/driver.py` | 兼容 shim：转发到 orchestrator（旧命令/测试仍可用） |
 | `Plugins/ops/engine/contract.py` | 迭代契约：IterationRecord / Backend 接缝 / 判定与噪声策略 |
 | `Plugins/ops/engine/prompt.py` | 给 agent 的结构化 prompt（反馈块 + 落卡硬约束） |
 | `Plugins/ops/engine/backends.py` | 三类 backend：Fake / WorkspaceGit / ClaudeAgent / EngineEvaluator 的组合门面 |

@@ -604,6 +604,61 @@ def read_records(card):
     return out
 
 
+def run_repeated(cmd, ab_json, card, reps, env):
+    """同一 job 跑 reps 次，返回首份 ab 并给每个变体附 repeat_ms / repeat_spread。
+
+    R1：噪声底必须是**同一次测量**的重复 spread，不是跨轮比值的 max-min。
+    失败返回 None（调用方负责退出码）。
+    """
+    ab_list = []
+    for r in range(max(1, int(reps or 1))):
+        out = ab_json if r == 0 else db_dir(card) / ("_ab_r%d.json" % r)
+        cmd_r = [x if x != str(ab_json) else str(out) for x in cmd]
+        rc = subprocess.call(cmd_r, env=env)
+        if rc != 0 or not out.exists():
+            print(_c("A/B 失败（rc=%d，第 %d/%d 次），没有记录" % (rc, r + 1, reps), WARN))
+            return None
+        ab_list.append(json.loads(out.read_text()))
+    ab = ab_list[0]
+    rep = {}
+    for x in ab_list:
+        for run in x.get("runs") or []:
+            for v in run.get("variants") or []:
+                if v.get("ms") is not None:
+                    rep.setdefault(v["tag"], []).append(float(v["ms"]))
+    for run in ab.get("runs") or []:
+        base = run.get("base_ms")
+        for v in run.get("variants") or []:
+            ms = rep.get(v["tag"]) or []
+            v["repeat_ms"] = ms
+            v["repeat_spread"] = ((max(ms) - min(ms)) / base
+                                  if len(ms) > 1 and base else None)
+    return ab
+
+
+def promote_base(card, best_tag, best_ms, rec):
+    """把本轮最好的可接受实现晋升为下一轮基线。**必须 claim PASS**（P1）。"""
+    if not best_tag:
+        return
+    if os.environ.get("OPS_NO_PROMOTE") == "1":
+        print(_c("不晋升 %s：本轮没有 agent 改动（OPS_NO_PROMOTE=1）" % best_tag, WARN))
+        return
+    ok, reasons = claim_gate(rec)
+    if not ok:
+        print(_c("不晋升 %s：claim 未通过（%s）—— 先把这几项补齐再晋升"
+                 % (best_tag, ", ".join(reasons)), WARN))
+        return
+    pp = db_dir(card) / "base.json"
+    pp.parent.mkdir(parents=True, exist_ok=True)
+    pp.write_text(json.dumps({
+        "base": best_tag, "ms": best_ms,
+        "source_tag": best_tag,
+        "evidence_kind": rec.get("evidence_kind"),
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }, ensure_ascii=False), encoding="utf-8")
+    print("基线晋升：下一轮以 %s 为参照（%s；claim PASS）" % (best_tag, pp))
+
+
 # 噪声记录（baseline MAD 超熔断线）**不是决策**，是「本轮没测出结论」。
 # 实测代价（2026-11-24）：同一份代码在四张卡上，lightop 从 197µs 漂到 220~236µs，
 # MAD 4.9~7.2% 全超 5% 熔断线。judge 正确地判了 INCONCLUSIVE，但记录照样进了
@@ -1925,29 +1980,9 @@ def cmd_run(a):
     # 噪声底必须是**同一次测量的重复 spread**，不是跨轮比值的 max-min：
     # 后者在出现一次大改善后会把噪声底抬到几十个百分点，真实收益被 NEUTRAL。
     reps = max(1, int(getattr(a, "repeat", 1) or 1))
-    ab_list = []
-    for _r in range(reps):
-        _out = ab_json if _r == 0 else db_dir(card) / ("_ab_r%d.json" % _r)
-        _cmd = [x if x != str(ab_json) else str(_out) for x in cmd]
-        rc = subprocess.call(_cmd, env=env)
-        if rc != 0 or not _out.exists():
-            print(_c("A/B 失败（rc=%d，第 %d/%d 次），没有记录" % (rc, _r + 1, reps), WARN))
-            return 1
-        ab_list.append(json.loads(_out.read_text()))
-    ab = ab_list[0]
-    _rep = {}
-    for _x in ab_list:
-        for _run in _x.get("runs") or []:
-            for _v in _run.get("variants") or []:
-                if _v.get("ms") is not None:
-                    _rep.setdefault(_v["tag"], []).append(float(_v["ms"]))
-    for _run in ab.get("runs") or []:
-        _base = _run.get("base_ms")
-        for _v in _run.get("variants") or []:
-            _ms = _rep.get(_v["tag"]) or []
-            _v["repeat_ms"] = _ms
-            _v["repeat_spread"] = ((max(_ms) - min(_ms)) / _base
-                                   if len(_ms) > 1 and _base else None)
+    ab = run_repeated(cmd, ab_json, card, reps, env)
+    if ab is None:
+        return 1
 
     # ---- 交付物落盘（--bench-std）----
     # 放在判定之前：一个变体被拒不代表这次测量无效，已测到的数仍应成为交付物。
@@ -2124,27 +2159,7 @@ def cmd_run(a):
             append_record(card, _rec)
             _recs_by_tag[v["tag"]] = _rec
     print("\n合计判定：%s" % (worst or "CALIBRATION_ONLY（只有校准记录，没有可声称的收益）"))
-    if _best_tag and os.environ.get("OPS_NO_PROMOTE") == "1":
-        print(_c("不晋升 %s：本轮没有 agent 改动（OPS_NO_PROMOTE=1）" % _best_tag, WARN))
-        _best_tag = None
-    if _best_tag:
-        # P1：晋升必须过 claim 的**同一套**检查 —— 否则一个没过审计的结果
-        # 被升成基线，后面每一代都建在它上面，整条自进化链就脏了。
-        _rec = _recs_by_tag.get(_best_tag) or {}
-        _ok, _reasons = claim_gate(_rec)
-        if not _ok:
-            print(_c("不晋升 %s：claim 未通过（%s）—— 先把这几项补齐再晋升"
-                     % (_best_tag, ", ".join(_reasons)), WARN))
-        else:
-            _pp = db_dir(card) / "base.json"
-            _pp.parent.mkdir(parents=True, exist_ok=True)
-            _pp.write_text(json.dumps({
-                "base": _best_tag, "ms": _best_ms,
-                "source_tag": _best_tag,
-                "evidence_kind": _rec.get("evidence_kind"),
-                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            }, ensure_ascii=False), encoding="utf-8")
-            print("基线晋升：下一轮以 %s 为参照（%s；claim PASS）" % (_best_tag, _pp))
+    promote_base(card, _best_tag, _best_ms, _recs_by_tag.get(_best_tag) or {})
     # ---- 报告（--report）：用最后一条记录 + 地板 + 下一步填成题面六问 ----
     if getattr(a, "report", None):
         _last = None
