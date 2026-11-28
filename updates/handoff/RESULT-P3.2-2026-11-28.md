@@ -237,3 +237,20 @@ R3  change=noop 且 verdict=KEEP                            → 0
 pytest test_claim_gate.py test_loop.py -q  → 96 passed
 ```
 全量仍在跑；目标回到 13 failed（剩余为 loop_uniqueness 等既有问题）。
+
+### ③ 测试（续）—— 从 18 红降到目标 13
+
+- `test_claim_gate` ×8 / `test_loop` ×7：夹具补 `evidence_kind=vendor_library`（不放宽判据）。
+- `test_loop_uniqueness` ×3：
+  1. 扫描把 `.artifacts/driver/.../workspace`（整仓副本）当成第二份实现
+     → 扫描器排除 `.artifacts/` 与 `runs/`；
+  2. `driver.py` 自己定义了 `MAX_IMPL_FAILS`（预算常量重复）
+     → 改为从 `engine/loop.py` 引用，不再复制。
+- `test_driver_fake` 随之改用常量 3。
+
+```
+pytest test_loop_uniqueness.py test_driver_fake.py test_claim_gate.py test_loop.py -q
+→ 112 passed
+```
+全量目标：13 failed（剩余为 card_index / doc_links / evidence / ingest /
+ops_gate / refute 等既有问题，非本次改动引入）。

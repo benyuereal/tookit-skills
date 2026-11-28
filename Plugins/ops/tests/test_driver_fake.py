@@ -59,7 +59,7 @@ def test_impl_fails_stops_after_consecutive_correctness_breaks():
     be = D.FakeBackend(fail_every=1)
     recs = D.iterate(be, 10, card="fake")
     assert recs[-1].stop_reason == "impl_fails"
-    assert len(recs) == D.MAX_IMPL_FAILS
+    assert len(recs) == 3      # engine/loop.py 的 MAX_IMPL_FAILS（单一真源）
 
 
 def test_prompt_contains_structured_feedback_and_refuted_directions():

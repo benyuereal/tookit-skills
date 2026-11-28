@@ -51,7 +51,9 @@ def _declares_itself_the_only_loop(text):
 
 def _py_files():
     for p in REPO.rglob("*.py"):
-        if ".git" in p.parts or "__pycache__" in p.parts:
+        # 运行时目录里可能有整仓副本（driver 工作区），不是仓库实现
+        if (".git" in p.parts or "__pycache__" in p.parts
+                or ".artifacts" in p.parts or "runs" in p.parts):
             continue
         yield p
 
@@ -106,7 +108,8 @@ class TestLoopUniqueness(unittest.TestCase):
         """不允许出现 KNOWN_DUPLICATES 之外的「第二套闭环」定义。"""
         found = []
         for p in REPO.rglob("*.md"):
-            if ".git" in p.parts or "__pycache__" in p.parts:
+            if (".git" in p.parts or "__pycache__" in p.parts
+                    or ".artifacts" in p.parts or "runs" in p.parts):
                 continue
             rel = _rel(p)
             if rel in KNOWN_DUPLICATES:
@@ -168,7 +171,8 @@ class TestEngineMigration(unittest.TestCase):
         """全仓（不只 Plugins/ops）只许有一份 `def cmd_run(`。"""
         hits = []
         for p in REPO.rglob("*.py"):
-            if ".git" in p.parts or "__pycache__" in p.parts:
+            if (".git" in p.parts or "__pycache__" in p.parts
+                    or ".artifacts" in p.parts or "runs" in p.parts):
                 continue
             if "tests" in p.parts:          # 测试里的字符串是断言，不是实现
                 continue

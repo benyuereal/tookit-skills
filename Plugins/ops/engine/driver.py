@@ -28,7 +28,7 @@ MAX_NOOP = 1
 
 NOISE_FLOOR = 0.015          # 1.5%：低于这个的增益不算提升
 MAX_PLATEAU = 3              # 连续这么多轮没有 KEEP → plateau
-MAX_IMPL_FAILS = 3           # 连续这么多轮正确性破坏 → 停
+# 预算常量只在 engine/loop.py 定义（loop_uniqueness 守）；这里引用，不复制。
 
 
 # ---------------------------------------------------------------- P3.0 契约
@@ -157,9 +157,14 @@ def _verdict(correctness: bool | None, delta: float | None, noise: float,
 
 def iterate(backend: Backend, rounds: int, card: str = "",
             noise_floor: float = NOISE_FLOOR, max_plateau: int = MAX_PLATEAU,
-            max_impl_fails: int = MAX_IMPL_FAILS,
+            max_impl_fails: int | None = None,
             candidate: dict | None = None) -> list[IterationRecord]:
     """跑 N 轮。**纯控制流**：所有副作用都经 backend，因此可用 fake 单测。"""
+    if max_impl_fails is None:
+        try:
+            from loop import MAX_IMPL_FAILS as max_impl_fails
+        except Exception:                                    # noqa: BLE001
+            max_impl_fails = 3
     records: list[IterationRecord] = []
     head = backend.commit("baseline")
     plateau = 0
