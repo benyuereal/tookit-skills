@@ -131,8 +131,10 @@ def deliverable_args() -> str:
     `loop.py` 源码才知道怎么交差（实测：它真的回头读了 120 行源码）。
     """
     try:
+        # 题目工作目录的形状：有 results/（opbench 约定）。此时同时产出
+        # 交付物与报告 —— 一条命令交差，引擎才不比"自己干活"贵。
         if (Path.cwd() / "results").is_dir():
-            return " --bench-std results/bench_std.json"
+            return " --bench-std results/bench_std.json --report report.md"
     except OSError:
         pass
     return ""

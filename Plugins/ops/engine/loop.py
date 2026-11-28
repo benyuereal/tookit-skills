@@ -1289,6 +1289,19 @@ def next_step_hint(cands, runnable, card_name=""):
             "  run 仍然会拒，这是设计如此，不是故障。" % cmd), True
 
 
+def _load_floor():
+    """延迟加载 engine/floor.py（拿 Floor 对象给报告用）。"""
+    import importlib.util
+    key = "_engine_floor"
+    if key in sys.modules:
+        return sys.modules[key]
+    spec = importlib.util.spec_from_file_location(key, str(Path(__file__).parent / "floor.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[key] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def _nextstep():
     """延迟加载 engine/nextstep.py（本仓没有 packaging，按路径加载）。"""
     import importlib.util
@@ -1543,6 +1556,97 @@ def write_bench_std(out_path, card, ab, variants, denominator=None):
         p = Path.cwd() / p
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(_json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
+
+
+def write_report(out_path, card, rec, plan=None, floor=None, cmdline=""):
+    """按 opbench 题面的六问，用**实测数据**填一份 report.md 骨架。
+
+    为什么要引擎来写：题面要报告，`next` 驱动实验 —— 形状不同，agent 就会
+    判定"跑实验答不了题"而去做调研（实测 mla 会话 24 条 Bash 里 0 条执行 run）。
+    把报告和实测一起产出，走引擎才不比直接干活贵。
+    """
+    d = rec or {}
+    nxt = (plan or {}).get("action")
+    L = []
+    L.append("# %s — 实测报告（由 loop.py 生成）" % card.name)
+    L.append("")
+    L.append("> 本文件由 `loop.py run` 用**实测数据**生成；判定与数字都可回溯到")
+    L.append("> `%s/runs/loop/*.jsonl`。" % card.name)
+    L.append("")
+    L.append("## 1. 落到的实现")
+    L.append("")
+    L.append("- 变体名：`%s`" % d.get("tag"))
+    L.append("- 适配器：`%s/bench/ab.py`（`_common.get_runner` 分派）" % card.name)
+    L.append("- 口径：`%s`（%s）" % (d.get("measure_mode"),
+                                    "可 claim" if d.get("measure_mode") == "event_isolated"
+                                    else "**不可 claim**"))
+    L.append("")
+    L.append("## 2. 实测耗时")
+    L.append("")
+    L.append("| 项 | 值 |")
+    L.append("|---|---|")
+    L.append("| 基线（base） | %.4f ms（MAD %.4f） |"
+             % (d.get("base_ms") or 0, d.get("base_mad") or 0))
+    L.append("| 本实现（cand） | %.4f ms（MAD %.4f） |"
+             % (d.get("cand_ms") or 0, d.get("mad") or 0))
+    L.append("| Δ | %+.2f%%（%s） |"
+             % (d.get("delta_pct") or 0,
+                "显著" if d.get("significant") else "在噪声内，不建议据此下结论"))
+    L.append("")
+    if floor is not None and getattr(floor, "ok", False):
+        L.append("## 3. 有效流量与达成率")
+        L.append("")
+        L.append("| 项 | 值 |")
+        L.append("|---|---|")
+        L.append("| 地板 | %.1f µs（来源 `%s`） |"
+                 % (getattr(floor, "t_floor_us", 0) or 0, getattr(floor, "source", "?")))
+        L.append("| 实测 | %.1f µs |" % (getattr(floor, "t_actual_us", 0) or 0))
+        L.append("| 达成率 | %.1f%% |" % ((getattr(floor, "efficiency", 0) or 0) * 100))
+        L.append("| 判定 | `%s` |" % getattr(floor, "gate", "?"))
+        L.append("")
+        L.append("分母依据：%s" % (getattr(floor, "basis", "") or "（见 atlas 卡）"))
+        L.append("")
+    L.append("## 4. 正确性")
+    L.append("")
+    acc = d.get("acc") or {}
+    if acc:
+        for qs, row in acc.items():
+            L.append("- qscale=%s：max_abs=%.3e，max_ulp=%.2f，cosine=%.7f，nonfinite=%d"
+                     % (qs, row.get("max_abs", 0), row.get("max_ulp", 0),
+                        row.get("cosine", 0), row.get("nonfinite", 0)))
+        L.append("- 容差：%s" % (d.get("tolerance")))
+        L.append("- **acc_ok=%s**" % d.get("acc_ok"))
+    else:
+        L.append("- ⚠ 没有精度探针结果（本卡缺 `bench/acc_probe.py`）—— "
+                 "结论只能标「未验证精度」")
+    L.append("")
+    L.append("## 5. 引擎判定")
+    L.append("")
+    L.append("- `decision` = **%s**" % d.get("decision"))
+    L.append("- 理由：%s" % d.get("why"))
+    L.append("")
+    L.append("## 6. 复跑")
+    L.append("")
+    L.append("```bash")
+    L.append(cmdline or ("python3 -I Plugins/ops/engine/loop.py -C %s run %s"
+                         % (card, d.get("tag"))))
+    L.append("```")
+    L.append("")
+    if nxt:
+        L.append("## 7. 下一步")
+        L.append("")
+        L.append("引擎建议：`%s` —— %s" % (nxt, (plan or {}).get("why", "")))
+        L.append("")
+        L.append("```bash")
+        L.append((plan or {}).get("cmd", ""))
+        L.append("```")
+        L.append("")
+    p = Path(out_path)
+    if not p.is_absolute():
+        p = Path.cwd() / p
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("\n".join(L), encoding="utf-8")
     return p
 
 
@@ -1863,6 +1967,39 @@ def cmd_run(a):
                 "env": ab.get("env") or {},
             })
     print("\n合计判定：%s" % worst)
+    # ---- 报告（--report）：用最后一条记录 + 地板 + 下一步填成题面六问 ----
+    if getattr(a, "report", None):
+        _last = None
+        try:
+            _recs = [r for r in read_records(card) if "cand_ms" in r]
+            _last = _recs[-1] if _recs else None
+        except Exception:                       # noqa: BLE001
+            _last = None
+        _fl = None
+        try:
+            _fl = _nextstep().floor_state(card)  # 只为拿 floor 对象
+        except Exception:                       # noqa: BLE001
+            _fl = None
+        if _last is not None:
+            _plan = None
+            try:
+                _plan = _nextstep().plan_next(card)
+            except Exception:                   # noqa: BLE001
+                _plan = None
+            try:
+                _floor_obj = None
+                try:
+                    _floor_obj = _load_floor().resolve(card)
+                except Exception:               # noqa: BLE001
+                    _floor_obj = None
+                _cmd = "python3 -I " + " ".join(
+                    [p for p in sys.argv if p != "-I"])
+                _p = write_report(a.report, card, _last, plan=_plan,
+                                  floor=_floor_obj, cmdline=_cmd)
+                print("[report] 已生成 %s" % _p, flush=True)
+            except Exception as _e:              # noqa: BLE001
+                print(_c("[report] 写失败：%s: %s" % (type(_e).__name__, _e), WARN),
+                      flush=True)
     if worst.startswith("ACCEPTED_NUMERICS"):
         print("下一步：这个改动不是逐位一致的，必须补端到端质量门（GPQA/HumanEval 一档）才能进生产。")
     elif worst == "ACCEPTED_BITEXACT":
@@ -2377,6 +2514,8 @@ def main():
     r.add_argument("--primary-qscale", type=float, help="主口径 logit 尺度（默认 1；压力档只报退化倍数）")
     r.add_argument("--stress-mult", type=float, help="压力档允许的相对退化倍数（默认 1.5）")
     r.add_argument("--no-acc", action="store_true", help="跳过精度探针（只在你确定逐位一致时用）")
+    r.add_argument("--report", default=None, metavar="PATH",
+                   help="按题面六问生成实测报告 report.md（用实测数据填，不编）")
     r.add_argument("--bench-std", default=None, metavar="PATH",
                    help="把本次实测写成 opbench 口径的 results/bench_std.json。"
                         "**这是交付物的唯一合法来源**：手写的同形状文件不满足"
