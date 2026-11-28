@@ -502,7 +502,10 @@ def load_shape(arg=None):
     """
     import sys as _sys
     from pathlib import Path as _P
-    _sys.path.insert(0, str(_P(__file__).resolve().parents[3] / "scripts"))
+    _root = next((q for q in _P(__file__).resolve().parents
+                  if (q / "scripts" / "opverify.py").is_file()),
+                 _P(__file__).resolve().parents[4])
+    _sys.path.insert(0, str(_root / "scripts"))
     from opverify import parse_yaml
 
     p = _P(__file__).resolve().parent

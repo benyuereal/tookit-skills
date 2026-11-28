@@ -22,7 +22,9 @@ from pathlib import Path
 
 CARD = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(CARD))
-sys.path.insert(0, str(CARD.parents[3] / "scripts"))
+_root = next((q for q in CARD.parents if (q / "scripts" / "opverify.py").is_file()),
+             CARD.parents[4])
+sys.path.insert(0, str(_root / "scripts"))
 
 import _common as C  # noqa: E402
 
