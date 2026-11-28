@@ -412,53 +412,48 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
               "python3 -I %s --card %s --apply" % (_REPO / "scripts/explore.py", card))
 
 
+def _block(title: str, items) -> list:
+    """一段「空行 + 标题 + 缩进条目」；items 为空就整段消失。"""
+    items = [str(x) for x in (items or []) if x]
+    if not items:
+        return []
+    return [""] + ([title] if title else []) + items
+
+
+def _status_line(plan: dict) -> str:
+    tail = ("  remaining=%s" % plan["remaining"]) if "remaining" in plan else ""
+    return ("当前状态：记录 %d 条（可 claim %d）/ 待做 %d / 拟做 %d / 已判死 %d%s"
+            % (plan.get("n_records", 0), plan.get("n_claimable", 0),
+               plan.get("n_pending", 0), plan.get("n_proposed", 0),
+               plan.get("n_refuted", 0), tail))
+
+
 def render(plan: dict) -> str:
     """人读渲染。**第一行必须是下一步**，因为 agent 常常只读一行就行动。"""
     act = plan.get("action")
     label = {"run": "跑实验", "implement": "实现变体", "explore": "出题",
              "baseline": "先测基线", "stop": "停止"}.get(act, act)
-    L = ["下一步：%s（%s）" % (label, act), ""]
-    L.append("为什么：%s" % plan.get("why", ""))
-    L.append("")
-    L.append("照做（复制粘贴即可）：")
-    L.append("    %s" % plan.get("cmd", ""))
     d = plan.get("detail") or {}
-    if d.get("self_checks"):
-        L.append("")
-        L.append("已自检（1 秒，未跑实验）——直接执行不会失败：")
-        for x in d["self_checks"]:
-            L.append("  ✓ %s" % x)
-    if d.get("problems"):
-        L.append("")
-        L.append("预检不通过（先修这些）：")
-        for x in d["problems"]:
-            L.append("  ✗ %s" % x)
+    lines = [
+        "下一步：%s（%s）" % (label, act), "",
+        "为什么：%s" % plan.get("why", ""), "",
+        "照做（复制粘贴即可）：",
+        "    %s" % plan.get("cmd", ""),
+    ]
+    lines += _block("已自检（1 秒，未跑实验）——直接执行不会失败：",
+                    ["  ✓ %s" % x for x in d.get("self_checks") or []])
+    lines += _block("预检不通过（先修这些）：",
+                    ["  ✗ %s" % x for x in d.get("problems") or []])
     if d.get("expect_seconds"):
-        L.append("")
-        L.append("预计耗时：%s" % d["expect_seconds"])
-    if d.get("produces"):
-        L.append("")
-        L.append("跑完之后你会得到：")
-        for x in d["produces"]:
-            L.append("  · %s" % x)
-    if d.get("on_failure"):
-        L.append("")
-        L.append("如果失败：")
-        for x in d["on_failure"]:
-            L.append("  · %s" % x)
+        lines += ["", "预计耗时：%s" % d["expect_seconds"]]
+    lines += _block("跑完之后你会得到：",
+                    ["  · %s" % x for x in d.get("produces") or []])
+    lines += _block("如果失败：", ["  · %s" % x for x in d.get("on_failure") or []])
     if d.get("also"):
-        L.append("")
-        L.append("之后还有：%s" % ", ".join(str(x) for x in d["also"]))
-    if d.get("spec"):
-        L.append("")
-        L.append("这条候选的说明：")
-        for k, v in d["spec"].items():
-            if v:
-                L.append("  %-12s %s" % (k, str(v)[:160]))
-    L.append("")
-    L.append("当前状态：记录 %d 条（可 claim %d）/ 待做 %d / 拟做 %d / 已判死 %d%s"
-             % (plan.get("n_records", 0), plan.get("n_claimable", 0),
-                plan.get("n_pending", 0), plan.get("n_proposed", 0),
-                plan.get("n_refuted", 0),
-                ("  remaining=%s" % plan["remaining"]) if "remaining" in plan else ""))
-    return "\n".join(L)
+        lines += ["", "之后还有：%s" % ", ".join(str(x) for x in d["also"])]
+    spec = {k: v for k, v in (d.get("spec") or {}).items() if v}
+    if spec:
+        lines += ["", "这条候选的说明："]
+        lines += ["  %-12s %s" % (k, str(v)[:160]) for k, v in spec.items()]
+    lines += ["", _status_line(plan)]
+    return "\n".join(lines)
