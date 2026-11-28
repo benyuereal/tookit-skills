@@ -34,6 +34,12 @@ CARDS = ATLAS / "cards"
 GAPS = ATLAS / "gaps.md"
 STATE = ATLAS / ".gaps-state.json"     # 记录「连续几批 missing」，供 E25 降级用
 
+# `python3 -I` 不会把脚本目录放进 sys.path（-P 语义），模板渲染器是
+# scripts/ 下的同级模块，这里显式补上，保证直接跑脚本也能导入。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
 # 已知未覆盖：人工维护，每条必须写「为什么」与「补的前提」。
 # 不手写生成的理由：这些判断不是从卡里推出来的，是取舍。
 UNCOVERED = [
@@ -126,98 +132,70 @@ def compute_state(cards):
 
 
 def render(cards, missing, mismatched, streak):
+    from template_render import render as render_template
+
     fams = {}
     for c in cards:
         fams.setdefault(c.get("family") or "?", []).append(c)
     measured = [c for c in cards if (c.get("last_verdict") or {}).get("status")
                 in ("measured", "tuned")]
 
-    L = []
-    L.append("# GAPS —— 已知未覆盖与证据缺口（生成物，勿手改）")
-    L.append("")
-    L.append("> 由 `scripts/gen_gaps.py` 生成。改这张表请改脚本或卡片，不要直接编辑本文件。")
-    L.append("> 生成时间：%s" % __import__("time").strftime("%Y-%m-%d %H:%M"))
-    L.append(">")
     # 卡数与缺登记家族数都必须**现算**。第一版把 46 写死，卡从 46 涨到 53 后
     # 这句话就在说谎，而没有任何测试会报错——生成物里的常量同样要能被机检。
     n_zero = sum(1 for f in fams
                  if not any((c.get("last_verdict") or {}).get("status")
                             in ("measured", "tuned") for c in fams[f]))
-    L.append("> **它防的是「用覆盖数掩盖深度不足」。** %d 张卡容易被当成全覆盖，" % len(cards))
-    L.append("> 实际有 %d 张挂不上可复跑证据、%d 个家族零实测。" % (len(missing), n_zero))
-    L.append("")
 
     # ---- 一、证据缺口（业主裁决要求：机读列出卡片名）
-    L.append("## 一、证据缺口（`missing_evidence`）")
-    L.append("")
-    L.append("`measured` 的本义是「有数**且可追**」。下列 %d 张卡有结论但挂不上可复跑的"
-             " results 文件（E25 判 missing）。" % len(missing))
-    L.append("")
-    L.append("| 卡片 | 连续缺证据批数 | 处置 |")
-    L.append("|---|---|---|")
-    for cid in sorted(missing):
-        n = streak.get(cid, 1)
-        action = "**降级 draft**（连续 ≥2 批）" if n >= 2 else "本批 warning，下批仍缺则降级"
-        L.append("| `%s` | %d | %s |" % (cid, n, action))
-    L.append("")
+    missing_rows = ""
+    if missing:
+        rows = []
+        for cid in sorted(missing):
+            n = streak.get(cid, 1)
+            action = "**降级 draft**（连续 ≥2 批）" if n >= 2 else "本批 warning，下批仍缺则降级"
+            rows.append("| `%s` | %d | %s |" % (cid, n, action))
+        missing_rows = "\n" + "\n".join(rows)
+
+    mismatched_block = ""
     if mismatched:
-        L.append("### 哈希不符（E25 判 error，必须修）")
-        L.append("")
+        block = ["### 哈希不符（E25 判 error，必须修）", ""]
         for cid, bad in mismatched:
-            L.append("- `%s`：%s" % (cid, "；".join(bad)))
-        L.append("")
+            block.append("- `%s`：%s" % (cid, "；".join(bad)))
+        mismatched_block = "\n".join(block) + "\n\n"
 
     # ---- 二、零实测家族
-    L.append("## 二、零实测家族")
-    L.append("")
-    L.append("| 家族 | 卡数 | 为什么零实测 |")
-    L.append("|---|---|---|")
+    zero_rows = []
     for fam in sorted(fams):
         cs = fams[fam]
         if any((c.get("last_verdict") or {}).get("status") in ("measured", "tuned") for c in cs):
             continue
-        L.append("| `%s` | %d | %s |"
-                 % (fam, len(cs), ZERO_MEASURED_REASON.get(fam, "原因未记录——需要补")))
-    L.append("")
+        zero_rows.append("| `%s` | %d | %s |"
+                         % (fam, len(cs), ZERO_MEASURED_REASON.get(fam, "原因未记录——需要补")))
+    zero_fam_rows = ("\n" + "\n".join(zero_rows)) if zero_rows else ""
     covered = [f for f in sorted(fams)
                if any((c.get("last_verdict") or {}).get("status") in ("measured", "tuned")
                       for c in fams[f])]
-    L.append("有实测的家族 %d / %d：%s" % (len(covered), len(fams),
-                                          "、".join("`%s`" % f for f in covered)))
-    L.append("")
-
-    # ---- 二b、分母未标定（业主 2026-11-23 要求）
-    L.append("## 二b、分母未标定")
-    L.append("")
-    L.append("下列常数被当作达成率的分母，但**全仓没有可复跑的测量记录**。")
-    L.append("在补上标定前，凡用它们算出的 utilization 必须与实测峰值并列双报。")
-    L.append("")
-    L.append("| 常数 | 值 | 现状 | 实测参考 | 补的前提 |")
-    L.append("|---|---|---|---|---|")
-    L.append("| ~~`memory.stream_read_peak`~~ | **已修** 1965 GB/s | "
-             "2026-11-23 标定：纯读 1965 / 纯写 1692 / 1:1 1680 / 2:1 1730"
-             "（2GB 张量 + triton 手写 + 16 组扫参，sclk 1350）。"
-             "旧值 1724 已作废，五张卡的 ratio 已按读写比换档重算 | 见 `op-atlas/bw-ladder.yaml` |")
-    L.append("")
-    L.append("> 这是「分母错了 10 倍」那类问题的第三次：1100 标称 → 185 反推 → 540 无来源。")
-    L.append("> 前三次都是「分母的来源不是本仓库能跑的测量」。现在补了 `bw_calibrate.py`，")
-    L.append("> 但 1724 这个数本身还没被替换——它需要先跑一次并确认时钟档位。")
-    L.append("")
 
     # ---- 三、已知未覆盖算子
-    L.append("## 三、已知未覆盖算子")
-    L.append("")
-    L.append("| 未覆盖 | 为什么没覆盖 | 补的前提 |")
-    L.append("|---|---|---|")
-    for name, why, pre in UNCOVERED:
-        L.append("| `%s` | %s | %s |" % (name, why, pre))
-    L.append("")
-    L.append("## 四、当前实测覆盖")
-    L.append("")
-    L.append("有数卡 %d / 全部 %d 张。其中证据齐全 %d 张、缺证据 %d 张。"
-             % (len(measured), len(cards), len(measured) - len(missing), len(missing)))
-    L.append("")
-    return "\n".join(L) + "\n"
+    uncovered_rows = "\n" + "\n".join("| `%s` | %s | %s |" % (name, why, pre)
+                                     for name, why, pre in UNCOVERED)
+
+    return render_template(
+        "gen_gaps",
+        gen_time=__import__("time").strftime("%Y-%m-%d %H:%M"),
+        n_cards=len(cards),
+        n_missing=len(missing),
+        n_zero_fams=n_zero,
+        missing_rows=missing_rows,
+        mismatched_block=mismatched_block,
+        zero_fam_rows=zero_fam_rows,
+        n_covered=len(covered),
+        n_fams=len(fams),
+        covered_list="、".join("`%s`" % f for f in covered),
+        uncovered_rows=uncovered_rows,
+        n_measured=len(measured),
+        n_ok=len(measured) - len(missing),
+    )
 
 
 def main(argv=None):

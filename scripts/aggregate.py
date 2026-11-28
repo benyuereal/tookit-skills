@@ -36,6 +36,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 CARDS = REPO / "Plugins/ops/op-atlas/cards"
 
+# `python3 -I` 不会把脚本目录放进 sys.path（-P 语义），模板渲染器是
+# scripts/ 下的同级模块，这里显式补上，保证直接跑脚本也能导入。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
 
 def _missing_evidence_cards(cards_dir=CARDS):
     """缺 evidence 的 measured/tuned 卡（它们不进聚合，但必须在输出里交代清楚）。"""
@@ -152,50 +158,56 @@ def aggregate(cards):
 
 
 def render(agg, only_family=None):
-    lines = []
+    from template_render import render as render_template
+
     fams = [only_family] if only_family else sorted(agg)
-    lines.append("%-14s %4s %8s %8s %6s %10s %s"
-                 % ("家族", "卡数", "加速几何均", "加速中位", ">1.2x", "达成率中位", "绝对吞吐"))
-    lines.append("-" * 96)
+    rows = []
     for fam in fams:
         if fam not in agg:
             continue
         a = agg[fam]
         sp, ut = a["speedup"], a["utilization"]
         tp = ", ".join("%s×%.1f" % (u, v["median"]) for u, v in a["throughput"].items()) or "-"
-        lines.append("%-14s %4d %8s %8s %6d %10s %s"
-                     % (fam, a["n_cards"],
-                        ("%.2fx" % sp["geomean"]) if sp["geomean"] is not None else "-",
-                        ("%.2fx" % sp["median"]) if sp["median"] is not None else "-",
-                        a["real_speedup_n"],
-                        ("%.3f" % ut["median"]) if ut["median"] is not None else "-",
-                        tp))
-    lines.append("")
+        rows.append("%-14s %4d %8s %8s %6d %10s %s"
+                    % (fam, a["n_cards"],
+                       ("%.2fx" % sp["geomean"]) if sp["geomean"] is not None else "-",
+                       ("%.2fx" % sp["median"]) if sp["median"] is not None else "-",
+                       a["real_speedup_n"],
+                       ("%.3f" % ut["median"]) if ut["median"] is not None else "-",
+                       tp))
     tot_sp = [c for c in _ALL if c["kind"] == "speedup"]
     tot_real = [c for c in tot_sp if c["value"] and c["value"] > 1.2]
     # ---- 完整账：只报「进聚合的」会让人以为覆盖掉了一半。
     # 24 张有数 = 11 张进聚合 + 13 张缺证据（E25 判 missing，按裁决不进聚合）。
     miss = _MISSING or []
     total_all = len(_ALL) + len(miss)
-    lines.append("")
-    lines.append("全仓：有数卡 %d 张 = 进聚合 %d + 缺证据(不进聚合) %d"
-                 % (total_all, len(_ALL), len(miss)))
+
+    missing_block = ""
     if miss:
-        lines.append("  缺证据的 %d 张（E25 missing_evidence，详见 op-atlas/gaps.md §一）："
-                     % len(miss))
+        block = ["  缺证据的 %d 张（E25 missing_evidence，详见 op-atlas/gaps.md §一）："
+                 % len(miss)]
         # 按名字排序打印，一行不超过 4 个
         for i in range(0, len(miss), 4):
-            lines.append("    " + "  ".join(miss[i:i + 4]))
-    lines.append("  进聚合的 %d 张：真实加速(>1.2x) %d 张 / 几何平均 %s"
-                 % (len(_ALL), len(tot_real),
-                    ("%.2fx" % geomean([c["value"] for c in tot_sp]))
-                    if tot_sp else "-"))
+            block.append("    " + "  ".join(miss[i:i + 4]))
+        missing_block = "\n" + "\n".join(block)
+
     # 按 layer 分开报，避免 engine 与 kernel 混算
+    layer_lines = ""
     for ly in sorted({c["layer"] for c in tot_sp}):
         vs = [c["value"] for c in tot_sp if c["layer"] == ly]
-        lines.append("  %-8s speedup %d 条，几何平均 %.2fx"
-                     % (ly, len(vs), geomean(vs)))
-    return "\n".join(lines)
+        layer_lines += "\n  %-8s speedup %d 条，几何平均 %.2fx" % (ly, len(vs), geomean(vs))
+
+    return render_template(
+        "aggregate",
+        rows=("\n" + "\n".join(rows)) if rows else "",
+        total_all=total_all,
+        n_all=len(_ALL),
+        n_missing=len(miss),
+        n_real=len(tot_real),
+        tot_geomean=("%.2fx" % geomean([c["value"] for c in tot_sp])) if tot_sp else "-",
+        missing_block=missing_block,
+        layer_lines=layer_lines,
+    )
 
 
 _ALL = []
