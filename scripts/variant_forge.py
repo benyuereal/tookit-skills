@@ -64,6 +64,14 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# 文本骨架放 scripts/templates/variant_forge.md；本文件只负责动态字段/列表。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
 SCAFFOLD = REPO / "scripts/kernel_scaffold.py"
 
@@ -580,29 +588,27 @@ def forge(source, patches, template=None, parent_name="parent"):
 
 
 def render_report(res, dry_run=False, out=None):
-    lines = []
     changed = [e for e in res.edits if e.old != e.new]
     if changed:
-        lines.append("改动 %d 行：" % len(changed))
-        for e in changed:
-            lines.append("  L%-4d %-10s %s → %s   [%s]"
-                         % (e.line, e.param,
-                            e.old.replace("\n", "\\n"),
-                            e.new.replace("\n", "\\n"), e.anchor))
+        changed_block = "\n".join(
+            ["改动 %d 行：" % len(changed)] + [
+                "  L%-4d %-10s %s → %s   [%s]"
+                % (e.line, e.param,
+                   e.old.replace("\n", "\\n"),
+                   e.new.replace("\n", "\\n"), e.anchor)
+                for e in changed])
     else:
-        lines.append("改动 0 行（目标值已等于 parent 的锚点值）")
-    lines.append("")
-    lines.append(res.diff.rstrip("\n") if res.diff
-                 else "（无 diff：生成物与 parent 内容相同）")
-    for w in res.warnings:
-        lines.append("⚠ " + w)
-    lines.append("")
-    lines.append("接线校验：" + ", ".join(
-        "%s=%s" % (k, v) for k, v in res.effective.items()))
-    if dry_run:
-        lines.append("[dry-run] 未写文件（目标 %s）"
-                     % (out if out else "<未指定 --out>"))
-    return "\n".join(lines)
+        changed_block = "改动 0 行（目标值已等于 parent 的锚点值）"
+    return render(
+        "variant_forge",
+        changed_block=changed_block,
+        diff_block=(res.diff.rstrip("\n") if res.diff
+                    else "（无 diff：生成物与 parent 内容相同）"),
+        warnings_block="".join("\n⚠ " + w for w in res.warnings),
+        effective_line="接线校验：" + ", ".join(
+            "%s=%s" % (k, v) for k, v in res.effective.items()),
+        dryrun_block=("\n[dry-run] 未写文件（目标 %s）"
+                      % (out if out else "<未指定 --out>")) if dry_run else "")
 
 
 # ---------------------------------------------------------------- 算子卡

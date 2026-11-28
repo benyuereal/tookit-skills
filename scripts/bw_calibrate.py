@@ -47,6 +47,14 @@ import sys
 import time
 from pathlib import Path
 
+# 文本骨架放 scripts/templates/*.md；本文件只负责动态字段/列表。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
 LADDER = REPO / "Plugins/ops/op-atlas/bw-ladder.yaml"
 
@@ -278,50 +286,30 @@ def render_yaml(ladder):
     （'>' 被当折叠标量起始符）。机器读的文件就用机器格式。
     """
     import yaml
-    head = (
-        "# 带宽阶梯（bw-ladder）—— 由 scripts/bw_calibrate.py 生成，勿手改。\n"
-        "#\n"
-        "# 跳层就是这个文件存在的原因：1724 被直接当「本卡地板」断言，造成五次分母错。\n"
-        "# 判「还能优化多少」必须走 ②→③→④（由 scripts/floor.py 算），不许跳。\n"
-        "#\n"
-        "# confidence: high=多 kernel 互证 / low=单样本 / none=未标定\n"
-    )
-    return head + yaml.dump(ladder, allow_unicode=True, sort_keys=False, width=100)
+    # 缩进/键序/折行全部由 yaml.dump 决定，模板只放静态头注释。
+    return render(
+        "bw_ladder_yaml",
+        body=yaml.dump(ladder, allow_unicode=True, sort_keys=False, width=100))
 
 
 def render_md(ladder):
-    L = ["# 带宽阶梯（bw-ladder）", "",
-         "> 由 `scripts/bw_calibrate.py` 生成，勿手改。日期 %s。"
-         % ladder["date"],
-         ">",
-         "> **跳层就是这个文件的由来。** 1724 的直接断言造成了五次分母错。",
-         "> 判「还能优化多少」必须走 ②→③→④，不许跳。", ""]
-    L.append("| 层 | 可达 GB/s | 方法 | 置信 |")
-    L.append("|---|---|---|---|")
     lay = ladder["layers"]
-    L.append("| ① 硬件标称 | %s | %s | %s |"
-             % (lay["1_nominal"]["achievable"], lay["1_nominal"]["method"],
-                lay["1_nominal"]["confidence"]))
+    nominal_row = ("| ① 硬件标称 | %s | %s | %s |"
+                   % (lay["1_nominal"]["achievable"],
+                      lay["1_nominal"]["method"],
+                      lay["1_nominal"]["confidence"]))
+    rows = []
     for k, name in (("2_read_only", "② 纯读"), ("2_write_only", "② 纯写"),
                     ("2_rw_1to1", "② 1:1 读写"), ("2_rw_2to1", "② 2:1 读写"),
-                    ("3_cross_row", "③ 跨行归约"), ("3_scatter_gather", "③ gather/permute")):
+                    ("3_cross_row", "③ 跨行归约"),
+                    ("3_scatter_gather", "③ gather/permute")):
         v = lay[k]
-        L.append("| %s | %s | %s | %s |"
-                 % (name, v.get("achievable") if v.get("achievable") else "未标定",
-                    v.get("method") or v.get("reason", "")[:60],
-                    v.get("confidence", "-")))
-    L.append("| ④ 本卡地板 | 由 floor.py 算 | 流量 ÷ ③ | — |")
-    L.append("")
-    L.append("## 用法")
-    L.append("")
-    L.append("```bash")
-    L.append("python3 -I scripts/bw_calibrate.py                 # 重新标定")
-    L.append("python3 -I scripts/floor.py --card <卡> --shape <档>  # 算本卡地板")
-    L.append("```")
-    L.append("")
-    L.append("**confidence 说明**：`high` = 三个独立 kernel 互相印证；")
-    L.append("`low` = 单样本观测，不能当定律；`none` = 未标定。")
-    return "\n".join(L) + "\n"
+        rows.append("| %s | %s | %s | %s |"
+                    % (name, v.get("achievable") if v.get("achievable") else "未标定",
+                       v.get("method") or v.get("reason", "")[:60],
+                       v.get("confidence", "-")))
+    return render("bw_ladder", date=ladder["date"],
+                  nominal_row=nominal_row, mode_rows="\n".join(rows))
 
 
 def main(argv=None):
