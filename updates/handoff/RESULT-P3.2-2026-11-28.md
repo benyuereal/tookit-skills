@@ -188,3 +188,52 @@ r1  KEEP  cand=0.1441590040922165 base=0.24991999566555023 claim=PASS  stop=roun
   用 1800–2400s/轮，或把 prompt 收窄到"只做这一件事"。
 - 真 claude 的会话里没有 bench 执行，但这仍是**靠 prompt 约束**；P4 的 sandbox/deny
   落地前，不能声称"物理上不可能自己测"。
+
+---
+
+## 七、复审 P3.2c 修复
+
+### ① 记录落库（阻断项）
+
+`--out` 不传时默认写到本次 run 的 artifact 账本目录：
+`<artifact>/runs/loop/iterate-<ts>.jsonl`（仓库内、gitignored）。
+
+实测（noop 轮，不传 --out）：
+
+```
+r1 INVALID_NOOP ... stop=noop
+→ .artifacts/driver/op-fused-add-rmsnorm_p32/runs/loop/iterate-20261128_170447.jsonl
+```
+
+真 claude 那一轮的 KEEP 记录也从 `/tmp` 挪进了
+`.artifacts/driver/records/iterate-20261128_real-mr4.jsonl`（内容未改）。
+删除了修复前产生假阳性的 `fused_iter.jsonl`（已在 §五 记录）。
+
+验收 R1/R2/R3：
+```
+R1  find .artifacts -name 'iterate-*.jsonl' | wc -l        → 2
+R2  KEEP 且 changed_files 含 Plugins/ops/skills            → 1
+R3  change=noop 且 verdict=KEEP                            → 0
+```
+
+### ② 这一轮 KEEP 的含金量（写进口径，不夸大）
+
+1. **变体是预声明的**：`fa-rms-mr4` 本来就在
+   `_common.HIP_VARIANTS = {"fa-rms-mr2": (...), "fa-rms-mr4": ("mr4.so", ...)}`。
+   agent 做的是**把已声明的变体编译出来**（`mr4.so` + `build.sh`），
+   **不是提出/实现一个新优化**。这是实打实的工作，但证据强度低于"新变体"。
+2. **agent 超时**：1200s 在回报"改了什么"之前被切；正式跑建议 1800–2400s/轮。
+3. **基线偏慢**：本轮 `base=0.2499`，而这张卡 lightop 历史实测是 `0.2030`（差 23%）。
+   `vs_base=0.5768` 是**同一 job 内 back-to-back** 的比值，但 base 选的是本卡
+   `defaults.bench_args` 里的 lightop；正式报告要同时给出 lightop 的独立复测值。
+
+### ③ 测试
+
+`test_claim_gate`（8 条）与 `test_loop`（7 条）的失败根因是**夹具记录没有
+`evidence_kind`**（P1 之后 claim 第五项按证据种类判）。修法是给夹具补
+`evidence_kind="vendor_library"`，**没有放宽判据**。
+
+```
+pytest test_claim_gate.py test_loop.py -q  → 96 passed
+```
+全量仍在跑；目标回到 13 failed（剩余为 loop_uniqueness 等既有问题）。

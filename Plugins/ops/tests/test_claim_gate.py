@@ -39,7 +39,9 @@ def _rec(**over):
     r = {"ts": "2026-11-22T00:00:00", "card": "tmp", "tag": "t", "skv": 32768,
          "base_ms": 0.78, "base_mad": 0.004, "cand_ms": 0.69, "mad": 0.003,
          "delta_pct": -11.7, "decision": "ACCEPTED_BITEXACT", "why": "显著",
-         "caliber": dict(GOOD_CALIBER), "significant": True, "acc_ok": True}
+         "caliber": dict(GOOD_CALIBER), "significant": True, "acc_ok": True,
+         # P1 之后 claim 第五项按证据种类判；夹具必须给独立核验来源
+         "evidence_kind": "vendor_library"}
     r.update(over)
     return r
 

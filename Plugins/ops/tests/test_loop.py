@@ -102,6 +102,8 @@ def _record(tag="maxn32", skv=32768, cand_ms=0.69, base_ms=0.78, decision="ACCEP
         "delta_pct": -11.7, "ratio_vs_base": cand_ms / base_ms,
         "maxdiff": 0.0, "rel": 0.0, "acc": {}, "tolerance": 2e-3,
         "decision": decision, "why": "显著", "forced": False,
+        # P1 之后 verify/report 也要求证据种类；夹具给独立核验
+        "evidence_kind": "vendor_library",
     }
 
 

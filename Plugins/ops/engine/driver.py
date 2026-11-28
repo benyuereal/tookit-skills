@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Protocol
@@ -559,10 +560,15 @@ def main(argv=None) -> int:
             print("r%-2d %-7s cand=%s base=%s claim=%s%s"
                   % (r.iter, r.verdict, r.cand_ms, r.base_ms, r.claim,
                      ("  stop=" + r.stop_reason) if r.stop_reason else ""))
-        if a.out:
-            Path(a.out).write_text("\n".join(r.to_json() for r in recs) + "\n",
-                                   encoding="utf-8")
-            print("→ %s（%d 条）" % (a.out, len(recs)))
+        # 默认落库到本次 run 的 artifact 账本目录（仓库内、gitignored），
+        # 不再默认写 /tmp —— 临时目录一清，证据就没了（lead 2026-11-28 阻断项）。
+        out = Path(a.out) if a.out else (
+            be.artifacts / "driver"
+            / ("%s_%s" % (be.card.name, be.run_id)) / "runs" / "loop"
+            / ("iterate-%s.jsonl" % time.strftime("%Y%m%d_%H%M%S")))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("\n".join(r.to_json() for r in recs) + "\n", encoding="utf-8")
+        print("→ %s（%d 条）" % (out, len(recs)))
         return 0
     if a.demo:
         be = FakeBackend(flat=a.fake_flat, fail_every=a.fake_fail_every)
