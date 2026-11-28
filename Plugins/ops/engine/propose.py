@@ -20,6 +20,13 @@ probe 取事实、propose 消费事实。混在一起时，「这张卡为什么
 """
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from instrument import render as _render_template  # noqa: E402
+
 # 通用信号的达成率阈值。**这些是经验值，写在这里是为了可被审阅和改写**，
 # 不是物理常数——所以每条规则输出里都带上用的哪个阈值。
 BW_LOW = 0.60        # 低于这个：多半是多趟 HBM / 向量宽度不够
@@ -211,45 +218,69 @@ def propose(sig):
     return out, skipped
 
 
+def _roof_block(sig):
+    """roof 三行（地板 / 几何 / 达成）；没有 derive 模型时整块为空。"""
+    if not (sig.get("roof") or {}):
+        return ""
+    fl = sig.get("floors_us") or {}
+    return ("地板  内存 %.1fµs / 算力 %.1fµs / 重叠 %.1fµs / 串行 %.1fµs  支配项=%s\n"
+            "几何  CTAs=%s  cta/cu=%s  rounds=%s  lds=%.2f  serial_chain=%s\n"
+            "达成  实测 %s  天花板 %.1fµs  达成率 %s\n"
+            % (fl.get("memory", 0), fl.get("compute", 0),
+               fl.get("overlap", 0), fl.get("serial", 0), sig.get("bound"),
+               sig.get("ctas"), sig.get("cta_per_cu"), sig.get("rounds"),
+               sig.get("lds_ratio") or 0, sig.get("serial_chain"),
+               "%.1fµs" % sig["achieved_us"] if sig.get("achieved_us") else "（无）",
+               sig.get("ceiling_us") or 0,
+               "%.0f%%" % (sig["efficiency"] * 100) if sig.get("efficiency") else "（算不出）"))
+
+
+def _floor_block(sig):
+    if sig.get("floor_src") != "floor.py":
+        return ""
+    return "地板来源 floor.py：%s\n" % (sig.get("floor_basis") or "")
+
+
+def _missing_block(sig):
+    return "".join("缺  %s\n" % m for m in sig.get("missing") or [])
+
+
+def _props_block(props):
+    if not props:
+        return "拟做 0 条。\n"
+    out = ["拟做 %d 条（**不是**待做：变体还没实现，loop.py run 会拒绝，这是对的）："
+           % len(props)]
+    for p in props:
+        out.append("  [%d] %-24s direction=%-20s action=%s"
+                   % (p["priority"], p["id"], p["direction"], p["action_class"]))
+        out.append("      %s" % p["hypothesis"])
+        out.append("      basis: %s" % p["expect_basis"])
+        out.append("      todo : %s" % "；".join(p.get("todo") or []))
+    return "\n".join(out) + "\n"
+
+
+def _skipped_block(skipped):
+    if not skipped:
+        return ""
+    return ("\n没出的原因：\n"
+            + "".join("  - %s\n" % s for s in skipped))
+
+
 def render(sig, props, skipped):
-    """人读输出。**这是对外文本契约**：字段顺序与措辞被测试和文档引用，别顺手改。"""
-    L = []
-    L.append("=" * 78)
-    L.append("explore — 从通用信号出题")
-    L.append("=" * 78)
-    roof = sig.get("roof") or {}
-    L.append("卡片 %s   档位 %s" % (sig.get("card"), sig.get("shape")))
-    if roof:
-        fl = sig.get("floors_us") or {}
-        L.append("地板  内存 %.1fµs / 算力 %.1fµs / 重叠 %.1fµs / 串行 %.1fµs  支配项=%s"
-                 % (fl.get("memory", 0), fl.get("compute", 0),
-                    fl.get("overlap", 0), fl.get("serial", 0), sig.get("bound")))
-        L.append("几何  CTAs=%s  cta/cu=%s  rounds=%s  lds=%.2f  serial_chain=%s"
-                 % (sig.get("ctas"), sig.get("cta_per_cu"), sig.get("rounds"),
-                    sig.get("lds_ratio") or 0, sig.get("serial_chain")))
-        L.append("达成  实测 %s  天花板 %.1fµs  达成率 %s"
-                 % ("%.1fµs" % sig["achieved_us"] if sig.get("achieved_us") else "（无）",
-                    sig.get("ceiling_us") or 0,
-                    "%.0f%%" % (sig["efficiency"] * 100) if sig.get("efficiency") else "（算不出）"))
-    if sig.get("floor_src") == "floor.py":
-        L.append("地板来源 floor.py：%s" % (sig.get("floor_basis") or ""))
-    for m in sig.get("missing") or []:
-        L.append("缺  %s" % m)
-    L.append("")
-    if props:
-        L.append("拟做 %d 条（**不是**待做：变体还没实现，loop.py run 会拒绝，这是对的）："
-                 % len(props))
-        for p in props:
-            L.append("  [%d] %-24s direction=%-20s action=%s"
-                     % (p["priority"], p["id"], p["direction"], p["action_class"]))
-            L.append("      %s" % p["hypothesis"])
-            L.append("      basis: %s" % p["expect_basis"])
-            L.append("      todo : %s" % "；".join(p.get("todo") or []))
-    else:
-        L.append("拟做 0 条。")
-    if skipped:
-        L.append("")
-        L.append("没出的原因：")
-        for s in skipped:
-            L.append("  - %s" % s)
-    return "\n".join(L)
+    """人读输出。**这是对外文本契约**：字段顺序与措辞被测试和文档引用，别顺手改。
+
+    文本骨架在 `instrument/prompts/explore.md`；本函数只把各段拼成 block 交给
+    模板。block 一律以换行收尾，模板末行不带换行 —— 故最后去掉一个尾换行，
+    与既有输出（`"\\n".join(...)`，无尾换行）逐字节一致。
+    """
+    text = _render_template(
+        "explore",
+        card=sig.get("card"),
+        shape=sig.get("shape"),
+        roof_block=_roof_block(sig),
+        floor_block=_floor_block(sig),
+        missing_block=_missing_block(sig),
+        props_block=_props_block(props),
+        skipped_block=_skipped_block(skipped),
+    )
+    return text[:-1] if text.endswith("\n") else text
