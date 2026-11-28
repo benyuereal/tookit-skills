@@ -37,7 +37,11 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from instrument import command as _command  # noqa: E402
 
 # 建议命令里的脚本一律用绝对路径：调用者的 cwd 可能是题目工作目录，
 # 不是仓库根 —— 相对路径会给出**一条跑不起来的命令**（实测 2026-11-28）。
@@ -321,7 +325,7 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
                 return mk("stop",
                           "剩余空间 %.3f < %.2f（地板来源 %s）：继续抠的收益低于测量噪声"
                           % (remaining, FLOOR_STOP, src),
-                          "python3 -I %s -C %s status" % (_LOOP_PY, card))
+                          _command("status", loop=_LOOP_PY, card=card))
 
     # ② 有可跑候选 → 直接跑。**跑出来的第一条记录本身就是基线**，
     #    不需要先"补一条 calibration 再跑"（那会把能跑的东西降级成准备工作）。
@@ -362,8 +366,8 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
                       tag=c.get("id"), variant=c.get("variant"),
                       problems=_pf["problems"])
         return mk("run", _why,
-                  "python3 -I %s -C %s run %s%s"
-                  % (_LOOP_PY, card, c.get("id"), deliverable_args()),
+                  _command("run", loop=_LOOP_PY, card=card,
+                           tag=c.get("id"), extra=deliverable_args()),
                   tag=c.get("id"), variant=c.get("variant"), also=more,
                   expect_seconds="约 %d-%d 秒（%d 轮 × event 计时；"
                                  "若这张卡的变体要现场编译 HIP，首次可能 2-5 分钟）"
@@ -409,7 +413,7 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
     return mk("explore",
               "队列空了（待做 0、拟做 0）。从通用信号（roofline/带宽/占用率/LDS）出题，"
               "生成的是「拟做」——还要你实现才能跑，这不是死胡同",
-              "python3 -I %s --card %s --apply" % (_REPO / "scripts/explore.py", card))
+              _command("explore", repo=_REPO, card=card))
 
 
 _TEMPLATE = (Path(__file__).resolve().parent
