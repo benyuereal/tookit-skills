@@ -1,65 +1,70 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""给 agent 的 prompt：只给结构化反馈与硬约束，不给数字。"""
+"""给 agent 的 prompt：**模板在 `instrument/prompts/student.md`**，本文件只填上下文。
+
+这样 prompt 的文本改动（对外契约）不再散落在 if/else 里；缺哪一段，对应的
+block 就是空串，模板里自然消失。
+"""
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
-from contract import IterationRecord
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from contract import IterationRecord  # noqa: E402
+from instrument import render          # noqa: E402
+
+_CAND_KEYS = ("id", "variant", "direction", "expect", "hypothesis", "expect_basis")
+
+
+def _candidate_block(candidate: dict | None) -> str:
+    if not candidate:
+        return ("## 本轮目标（candidates.yaml 里没有登记，按下面的最小目标做）\n"
+                "- 实现并注册 `--tag` 对应的变体：写进 `<卡>/_common.py` 的 "
+                "`VARIANTS`/`HIP_VARIANTS`，并让 `get_runner` 返回可运行实现。\n")
+    body = {k: candidate.get(k) for k in _CAND_KEYS if candidate.get(k) is not None}
+    return ("## 本轮要实现的候选\n"
+            "```json\n%s\n```\n" % json.dumps(body, ensure_ascii=False, indent=2))
+
+
+def _feedback_block(records: list[IterationRecord]) -> str:
+    if not records:
+        return "## 上一轮（结构化记录）\n\n（无：这是第 1 轮。）\n"
+    r = records[-1]
+    payload = {
+        "round": r.iter, "verdict": r.verdict, "change": r.change,
+        "changed_files": r.changed_files, "vs_base": r.vs_base,
+        "cand_ms": r.cand_ms, "base_ms": r.base_ms,
+        "utilization": r.utilization, "claim": r.claim, "acc": r.acc,
+    }
+    return ("## 上一轮（结构化记录）\n"
+            "```json\n%s\n```\n" % json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+def _refuted_block(records: list[IterationRecord]) -> str:
+    got = sorted({d for r in records for d in (r.refuted_directions or [])})
+    return ("## 已证伪方向（refuted_directions，不要重复试）\n"
+            + ("\n".join("- `%s`" % x for x in got) if got else "（无）") + "\n")
 
 
 def render_student_prompt(records: list[IterationRecord], card: str = "",
-                          candidate: dict | None = None) -> str:
-    """下一轮 prompt：上一轮结构化记录 + 死路清单 + 自己改过什么。"""
-    lines = [
-        "# 算子实现任务%s" % (("：" + card) if card else ""),
-        "",
-        "你只负责**写实现**。测量、判定、记账全部由引擎完成；"
-        "不要在会话里自己跑 bench 或计时。",
-        "",
-        "## 时间预算与停止条件",
-        "- 本轮到点即停（默认 20 分钟），**只做本候选的实现**。",
-        "- 不要读仓库其他文件、不要翻账本/历史记录、不要自己对比变体——",
-        "  测量、判定、记账都是引擎的事。时间到就把已完成的部分写进卡里收工。",
-        "",
-        "## 落卡硬约束（违反即判 INVALID_NOOP）",
-        "- **所有实现必须写进 `<卡>/_common.py`**（`VARIANTS` / `HIP_VARIANTS` + `get_runner` 分支）；"
-        "需要新 kernel 就加 `<卡>/kernels/*.hip` 并登记。",
-        "- **每完成一段就落卡**，不要等「最后一次性写回」。引擎只认工作区里的改动。",
-        "- `/tmp` 只允许临时验证；临时文件请放 `<工作区>/.scratch/`（引擎看得见）。",
-        "",
-        "## 上一轮（结构化，不是总结）",
-    ]
-    if not records:
-        lines.append("（第一轮，无历史）")
-    else:
-        r = records[-1]
-        lines.append(json.dumps({
-            "round": r.iter,
-            "verdict": r.verdict,
-            "change": r.change,
-            "changed_files": r.changed_files,
-            "vs_base": r.vs_base,
-            "cand_ms": r.cand_ms,
-            "base_ms": r.base_ms,
-            "utilization": r.utilization,
-            "claim": r.claim,
-            "acc": r.acc,
-        }, ensure_ascii=False, indent=2))
-    refuted: list[str] = []
-    for r in records:
-        refuted.extend(r.refuted_directions or [])
-    if candidate:
-        lines += ["", "## 本轮要实现的候选",
-                  json.dumps({k: candidate.get(k) for k in
-                              ("id", "variant", "direction", "expect",
-                               "hypothesis", "expect_basis") if candidate.get(k) is not None},
-                             ensure_ascii=False, indent=2)]
-    else:
-        # 不让 agent 拿到"没有目标"的任务：至少给出要实现的变体名
-        lines += ["", "## 本轮目标（candidates.yaml 里没有登记，按下面的最小目标做）",
-                  "- 实现并注册 `--tag` 对应的变体：写进 `<卡>/_common.py` 的 "
-                  "`VARIANTS`/`HIP_VARIANTS`，并让 `get_runner` 返回可运行实现。"]
-    lines += ["", "## 已证伪方向（refuted_directions，不要重复试）",
-              json.dumps(sorted(set(refuted)), ensure_ascii=False)]
-    return "\n".join(lines) + "\n"
+                          candidate: dict | None = None,
+                          extra_task_lines: list[str] | None = None,
+                          round_instruction: str | None = None) -> str:
+    """下一轮 prompt。段落由 block 生成；文本在 student.md 模板里。"""
+    task_lines = ["- 卡目录：`%s`" % card] if card else []
+    task_lines += [str(x) for x in (extra_task_lines or [])]
+    tag = (candidate or {}).get("id") or "<见 --tag>"
+    return render(
+        "student",
+        card_suffix=("：" + Path(card).name) if card else "",
+        task_lines="\n".join(task_lines),
+        candidate_block=_candidate_block(candidate),
+        feedback_block=_feedback_block(records),
+        refuted_block=_refuted_block(records),
+        round_block=(round_instruction
+                     or "## 本轮\n实现候选 `%s` 的一个改动，然后退出。"
+                        "标准输出写「改了什么」。" % tag) + "\n",
+    )

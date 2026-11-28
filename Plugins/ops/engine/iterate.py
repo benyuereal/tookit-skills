@@ -38,6 +38,7 @@ import json
 import shlex
 import subprocess
 import sys
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))
 import time
 from pathlib import Path
 
@@ -227,64 +228,37 @@ def _placeholder_feedback(round_no):
 
 
 def render_prompt(card, cand, run_root, round_no, fb, refuted, what_changed=None):
-    """渲染本轮 prompt。fb=None 表示初始 prompt（没有上一条记录）。"""
+    """渲染本轮 prompt。**文本在 instrument/prompts/student.md**，这里只填上下文。"""
+    from instrument import render
+    from prompt import _candidate_block
     tag = (cand or {}).get("id")
-    variant = (cand or {}).get("variant")
-    direction = (cand or {}).get("direction")
-    L = []
-    L.append("# 算子实现任务：%s" % Path(card).name)
-    L.append("")
-    L.append("你只负责**写实现**。测量、判定、记账全部由引擎完成，"
-             "你既不需要、也不能在会话里自己测。")
-    L.append("")
-    L.append("## 硬性约束")
-    L.append("")
-    L.append("- 不要运行任何 bench（`bench/ab.py`、`time`、`cuda.Event`、任何 `*bench*`）；"
-             "引擎会跑并判定。")
-    L.append("- 不要修改 `contract.yaml` / `tolerance.json` 里的容差，"
-             "不要写 `runs/` 或 `.artifacts/`。")
-    L.append("- 每轮只做一个可解释的改动（便于定位是哪一个改动起作用）。")
-    L.append("- 标准输出只写「你改了什么」（自然语言）。**不要贴任何耗时/达成率数字** ——"
-             "引擎不解析你的输出，只做留痕。")
-    L.append("")
-    L.append("## 任务")
-    L.append("")
-    L.append("- 卡目录：`%s`" % Path(card))
-    L.append("- 候选：`%s`（变体 `%s`，方向 `%s`）" % (tag, variant, direction))
-    L.append("- 工作目录（run 根）：`%s`" % Path(run_root))
-    L.append("- 形状档位：见 `%s/shapes.yaml`" % Path(card))
+    task_lines = [
+        "- 卡目录：`%s`" % Path(card),
+        "- 工作目录（run 根）：`%s`" % Path(run_root),
+        "- 形状档位：见 `%s/shapes.yaml`" % Path(card),
+    ]
     if (cand or {}).get("means"):
-        L.append("- 候选说明：%s" % str(cand["means"]).strip())
-    L.append("")
-    L.append("## 上一轮（结构化记录）")
-    L.append("")
+        task_lines.append("- 候选说明：%s" % str(cand["means"]).strip())
     if fb is None:
-        L.append("（无：这是第 1 轮，没有上一轮记录。）")
+        fb_block = "## 上一轮（结构化记录）\n\n（无：这是第 1 轮。）\n"
     else:
-        L.append("```json")
-        L.append(json.dumps(fb, ensure_ascii=False, indent=2, sort_keys=False))
-        L.append("```")
+        fb_block = ("## 上一轮（结构化记录）\n```json\n%s\n```\n"
+                    % json.dumps(fb, ensure_ascii=False, indent=2))
         if what_changed:
-            L.append("")
-            L.append("上一轮你报告的改动（未解析、仅作参考）：")
-            L.append("")
-            L.append("> " + "\n> ".join(str(what_changed).splitlines()))
-    L.append("")
-    L.append("## 已证伪方向（不要再试）")
-    L.append("")
-    if refuted:
-        for x in refuted:
-            L.append("- `%s`" % x)
-    else:
-        L.append("（无）")
-    L.append("")
-    L.append("## 本轮")
-    L.append("")
-    L.append("实现候选 `%s` 的一个改动，然后退出。标准输出写「改了什么」。" % tag)
-    L.append("")
-    return "\n".join(L)
-
-
+            fb_block += ("\n上一轮你报告的改动（未解析、仅作参考）：\n\n> "
+                         + "\n> ".join(str(what_changed).splitlines()) + "\n")
+    ref_block = ("## 已证伪方向（refuted_directions，不要重复试）\n"
+                 + ("\n".join("- `%s`" % x for x in refuted) if refuted else "（无）") + "\n")
+    return render(
+        "student",
+        card_suffix=("：" + Path(card).name) if card else "",
+        task_lines="\n".join(task_lines),
+        candidate_block=_candidate_block(cand),
+        feedback_block=fb_block,
+        refuted_block=ref_block,
+        round_block=("## 本轮\n实现候选 `%s` 的一个改动，然后退出。"
+                     "标准输出写「改了什么」。" % tag) + "\n",
+    )
 def sha256_text(s):
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
