@@ -71,3 +71,20 @@ def test_prompt_contains_structured_feedback_and_refuted_directions():
     assert "fusion-boundary" in prompt
     # 第一轮 prompt 明确说只写实现、不要自己测
     assert "不要在会话里自己跑 bench" in D.render_student_prompt([], "fake")
+
+
+def test_noop_changes_are_invalid_and_never_keep():
+    """agent 没改任何 agent 路径 → INVALID_NOOP，不 KEEP、不晋升、立即停。"""
+    be = D.FakeBackend(noop=True)
+    recs = D.iterate(be, 3, card="fake")
+    assert recs[0].verdict == "INVALID_NOOP"
+    assert all(r.verdict != "KEEP" for r in recs)
+    assert len(recs) == 1 and recs[-1].stop_reason == "noop"
+    assert be.reset_calls == ["c1"]      # 空提交被丢弃
+
+
+def test_engine_outputs_do_not_count_as_agent_changes():
+    """memory/ results/ .artifacts/ 是引擎写的，不算 agent 改动。"""
+    assert D.agent_changes(["memory/ledger.jsonl", "results/bench_std.json"]) == []
+    assert D.agent_changes(["Plugins/ops/skills/op-x/_common.py"]) == [
+        "Plugins/ops/skills/op-x/_common.py"]

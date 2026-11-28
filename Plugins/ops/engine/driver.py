@@ -21,6 +21,10 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Protocol
 
+AGENT_PATHS = ("Plugins/ops/skills/",)   # 只认 agent 该改的地方
+ENGINE_PATHS = ("memory/", "results/", ".artifacts/", "Plugins/ops/op-atlas/")
+MAX_NOOP = 1
+
 NOISE_FLOOR = 0.015          # 1.5%：低于这个的增益不算提升
 MAX_PLATEAU = 3              # 连续这么多轮没有 KEEP → plateau
 MAX_IMPL_FAILS = 3           # 连续这么多轮正确性破坏 → 停
@@ -80,7 +84,8 @@ class Backend(Protocol):
 
 # ---------------------------------------------------------------- 渲染
 
-def render_student_prompt(records: list[IterationRecord], card: str = "") -> str:
+def render_student_prompt(records: list[IterationRecord], card: str = "",
+                          candidate: dict | None = None) -> str:
     """下一轮 prompt：上一轮结构化记录 + 死路清单 + 自己改过什么。"""
     lines = [
         "# 算子实现任务%s" % (("：" + card) if card else ""),
@@ -109,6 +114,12 @@ def render_student_prompt(records: list[IterationRecord], card: str = "") -> str
     refuted: list[str] = []
     for r in records:
         refuted.extend(r.refuted_directions or [])
+    if candidate:
+        lines += ["", "## 本轮要实现的候选",
+                  json.dumps({k: candidate.get(k) for k in
+                              ("id", "variant", "direction", "expect",
+                               "hypothesis", "expect_basis") if candidate.get(k) is not None},
+                             ensure_ascii=False, indent=2)]
     lines += ["", "## 已证伪方向（refuted_directions，不要重复试）",
               json.dumps(sorted(set(refuted)), ensure_ascii=False)]
     return "\n".join(lines) + "\n"
@@ -116,9 +127,21 @@ def render_student_prompt(records: list[IterationRecord], card: str = "") -> str
 
 # ---------------------------------------------------------------- P3.1 控制流
 
+def agent_changes(changed_files: list[str]) -> list[str]:
+    """只保留 agent 该改的路径。引擎自己写的一律不算。"""
+    return [f for f in (changed_files or [])
+            if any(f.startswith(p) for p in AGENT_PATHS)
+            and not any(f.startswith(q) for q in ENGINE_PATHS)]
+
+
 def _verdict(correctness: bool | None, delta: float | None, noise: float,
-             pre_green: bool, claim: str = "") -> str:
+             pre_green: bool, claim: str = "", changed_files=None) -> str:
     """relaxed-revert：**性能回退保留**，只有正确性破坏才 REVERT。"""
+    # **noop 守卫**：agent 什么都没改，绝不允许产生 KEEP（更不允许晋升）。
+    # 实测 2026-11-28：agent=noop、changed_files=[] 却判 KEEP，因为它把卡里
+    # 早有的实现与一个慢基线比了一次 —— KEEP 就失去了含义。
+    if not agent_changes(list(changed_files or [])):
+        return "INVALID_NOOP"
     if correctness is False:
         return "REVERT"
     # claim 的失败项是精度/证据 → 不是"白跑一趟"，是"这个实现不能声称正确"
@@ -133,18 +156,24 @@ def _verdict(correctness: bool | None, delta: float | None, noise: float,
 
 def iterate(backend: Backend, rounds: int, card: str = "",
             noise_floor: float = NOISE_FLOOR, max_plateau: int = MAX_PLATEAU,
-            max_impl_fails: int = MAX_IMPL_FAILS) -> list[IterationRecord]:
+            max_impl_fails: int = MAX_IMPL_FAILS,
+            candidate: dict | None = None) -> list[IterationRecord]:
     """跑 N 轮。**纯控制流**：所有副作用都经 backend，因此可用 fake 单测。"""
     records: list[IterationRecord] = []
     head = backend.commit("baseline")
     plateau = 0
     impl_fails = 0
+    noops = 0
     green = False
 
     for i in range(1, rounds + 1):
-        prompt = render_student_prompt(records, card)
+        prompt = render_student_prompt(records, card, candidate)
         change = backend.run_agent(prompt, role="student")
         commit = backend.commit(change or ("round %d" % i))
+        files = list(getattr(backend, "changed_files", []) or [])
+        noop = not agent_changes(files)
+        if hasattr(backend, "no_promote"):
+            backend.no_promote = bool(noop)    # noop 轮禁止晋升
         ev = backend.eval(("r%d" % i))
 
         correctness = ev.get("correctness")
@@ -157,8 +186,11 @@ def iterate(backend: Backend, rounds: int, card: str = "",
             delta = cand_ms / base_ms - 1.0
 
         verdict = _verdict(correctness, delta, noise_floor, pre_green=not green,
-                           claim=str(ev.get("claim") or ""))
-        if correctness is False:
+                           claim=str(ev.get("claim") or ""), changed_files=files)
+        if verdict == "INVALID_NOOP":
+            backend.reset_to(head)          # 没有 agent 改动：丢弃空提交
+            noops += 1
+        elif correctness is False:
             backend.reset_to(head)          # 只有正确性破坏才回滚
             impl_fails += 1
         else:
@@ -186,6 +218,9 @@ def iterate(backend: Backend, rounds: int, card: str = "",
         )
         records.append(rec)
 
+        if noops >= MAX_NOOP:
+            rec.stop_reason = "noop"
+            break
         if impl_fails >= max_impl_fails:
             rec.stop_reason = "impl_fails"
             break
@@ -207,11 +242,14 @@ class FakeBackend:
     """
 
     def __init__(self, flat: bool = False, evidence: str = "vendor_library",
-                 fail_every: int = 0, times=None, green_from: int = 1):
+                 fail_every: int = 0, times=None, green_from: int = 1,
+                 noop: bool = False):
         self.flat = flat
         self.evidence = evidence
         self.fail_every = fail_every
         self.green_from = green_from
+        self.noop = noop
+        self._changed = [] if noop else ["Plugins/ops/skills/fake/_common.py"]
         self.n = 0
         self.commits: list[str] = ["c0"]
         self.reset_calls: list[str] = []
@@ -226,6 +264,10 @@ class FakeBackend:
         sha = "c%d" % len(self.commits)
         self.commits.append(sha)
         return sha
+
+    @property
+    def changed_files(self) -> list[str]:
+        return list(self._changed)
 
     def reset_to(self, commit: str) -> None:
         self.reset_calls.append(commit)
@@ -286,11 +328,19 @@ class RealBackend:
                         OPS_ARTIFACTS=str(self.artifacts))
         self._claim = ""
         self._changed: list[str] = []
+        self.no_promote = False
+
+    @property
+    def changed_files(self) -> list[str]:
+        return list(self._changed)
 
     # -- git
     def _git(self, *args, check=True):
         import subprocess
-        return subprocess.run(["git", "-C", str(self.ws), *args],
+        # safe.directory：工作区可能被 chown 给 agent 用户，root 跑 git 会因
+        # "dubious ownership" 拒绝（实测 2026-11-28）。
+        return subprocess.run(["git", "-c", "safe.directory=*",
+                               "-C", str(self.ws), *args],
                               capture_output=True, text=True, check=check)
 
     def init_workspace(self):
@@ -309,7 +359,8 @@ class RealBackend:
         out = self._git("rev-parse", "HEAD").stdout.strip()
         try:
             self._changed = [x for x in self._git(
-                "show", "--name-only", "--pretty=format:", "HEAD").stdout.splitlines() if x]
+                "show", "--name-only", "--pretty=format:", "HEAD").stdout.splitlines()
+                if x and not any(x.startswith(q) for q in ENGINE_PATHS)]
         except Exception:                                    # noqa: BLE001
             self._changed = []
         return out
@@ -330,10 +381,13 @@ class RealBackend:
     # -- eval
     def _loop(self, *args):
         import subprocess
+        env = dict(self.env)
+        if self.no_promote:
+            env["OPS_NO_PROMOTE"] = "1"
         return subprocess.run(
             [sys.executable, "-I", str(self.ws / "Plugins/ops/engine/loop.py"),
              "-C", str(self.card), *args],
-            capture_output=True, text=True, env=self.env, timeout=3600)
+            capture_output=True, text=True, env=env, timeout=3600)
 
     def _ensure_judge(self) -> None:
         """跑 run 之前确保 judge/冻结容差存在（幂等）。
@@ -485,7 +539,16 @@ def main(argv=None) -> int:
         be = RealBackend(Path(a.workspace), a.card_rel, a.tag, a.agent_cmd,
                          gpu=a.gpu, run_id="p32")
         be.init_workspace()
-        recs = iterate(be, a.demo or 2, card=a.card_rel)
+        cand = None
+        try:
+            import yaml
+            cd = yaml.safe_load((be.card / "candidates.yaml").read_text(
+                encoding="utf-8")) or {}
+            cand = next((x for x in (cd.get("candidates") or [])
+                         if str(x.get("id")) == str(a.tag)), None)
+        except Exception:                                    # noqa: BLE001
+            cand = None
+        recs = iterate(be, a.demo or 2, card=a.card_rel, candidate=cand)
         for r in recs:
             print("r%-2d %-7s cand=%s base=%s claim=%s%s"
                   % (r.iter, r.verdict, r.cand_ms, r.base_ms, r.claim,

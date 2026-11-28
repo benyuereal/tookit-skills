@@ -2100,6 +2100,9 @@ def cmd_run(a):
             append_record(card, _rec)
             _recs_by_tag[v["tag"]] = _rec
     print("\n合计判定：%s" % (worst or "CALIBRATION_ONLY（只有校准记录，没有可声称的收益）"))
+    if _best_tag and os.environ.get("OPS_NO_PROMOTE") == "1":
+        print(_c("不晋升 %s：本轮没有 agent 改动（OPS_NO_PROMOTE=1）" % _best_tag, WARN))
+        _best_tag = None
     if _best_tag:
         # P1：晋升必须过 claim 的**同一套**检查 —— 否则一个没过审计的结果
         # 被升成基线，后面每一代都建在它上面，整条自进化链就脏了。

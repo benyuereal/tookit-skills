@@ -128,3 +128,26 @@ counts: {'KEEP': 1, 'NEUTRAL': 1}
 1. 真 claude agent 仍未接（`--agent-cmd "echo noop"`），下步接。
 2. silu-mul / 新算子那两张卡仍会 REVERT —— 它们没有 vendor 变体，
    `claim` 按策略必须 FAIL:evidence；这是判据的正确行为，不是 bug。
+
+---
+
+## 五、复审修复（REVIEW-P3.2b：KEEP 是假阳性）
+
+**根因**：agent `change="noop"`、`changed_files=[]` 却判 KEEP —— 把卡里既有的
+`fa-rms-mr2` 与一个慢基线比了一次，还把它晋升成新基线。
+
+**修法**
+1. `INVALID_NOOP` 守卫：`changed_files` 里没有任何 `Plugins/ops/skills/**` 的改动
+   → 判 `INVALID_NOOP`，不 KEEP、不 REVERT、**不晋升**，连续 1 次即停（`stop_reason=noop`）。
+2. `changed_files` 过滤：`memory/`、`results/`、`.artifacts/`、`Plugins/ops/op-atlas/`
+   都是引擎产物，不计为 agent 改动。
+3. `loop.py` 增加 `OPS_NO_PROMOTE=1` 守卫；driver 在 noop 轮自动设置。
+
+**复验（echo noop，op-fused）**
+
+```
+r1  INVALID_NOOP cand=0.14368 base=0.252 claim=PASS  stop=noop
+→ 1 条记录；base.json 不存在（符合"Noop 不晋升"）
+```
+
+单测新增 2 条（noop / 引擎产物过滤），共 8 条全绿。
