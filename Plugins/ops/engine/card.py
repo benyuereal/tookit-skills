@@ -27,8 +27,9 @@
 done_when 外部裁决……），读卡层一旦参与判定，就会出现「读卡层和门禁各有一份
 口径」的老问题 —— 这正是本轮重构要消灭的东西。
 
-也不做缓存：卡片是活文档，人/agent 在循环中途改它是正常操作，
-缓存会让「改了没生效」变成最难查的一类 bug。
+缓存按 **(路径, mtime, size)** 失效：卡片是活文档，人/agent 在循环中途改它是
+正常操作 —— 只按路径缓存会让「改了没生效」变成最难查的一类 bug，而把
+mtime/size 放进 key 就能在文件真的变了时重新读（见 `load_candidates`）。
 """
 from __future__ import annotations
 
@@ -114,6 +115,21 @@ def normalize_candidates(d, path="<candidates>"):
     return d
 
 
+#: `load_candidates` 的缓存：{卡片绝对路径: (stamp, 归一化+overlay 后的 dict)}。
+#: stamp 同时覆盖 candidates.yaml 与 overlay.yaml 的 (mtime_ns, size) ——
+#: 任一文件变了就重读；没变就返回**同一个对象**（`plan_next` 一次要读 3–5 遍）。
+_CANDIDATES_CACHE: dict = {}
+
+
+def _yaml_stamp(p: Path):
+    """(mtime_ns, size) 或 None（文件不存在 / 读不到）。"""
+    try:
+        st = p.stat()
+    except OSError:
+        return None
+    return (st.st_mtime_ns, st.st_size)
+
+
 def load_candidates(card):
     """读卡片的候选队列（归一化后），**并合并 runs/advance/overlay.yaml**。
 
@@ -136,11 +152,21 @@ def load_candidates(card):
     """
     card = _as_path(card)
     p = card / CANDIDATES
+    ov = card / OVERLAY
+    try:
+        ckey = str(card.resolve())
+    except OSError:                                    # 极端情况下 resolve 也会抛
+        ckey = str(card)
+    stamp = (_yaml_stamp(p), _yaml_stamp(ov))
+    hit = _CANDIDATES_CACHE.get(ckey)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
     if not p.exists():
         d = normalize_candidates({}, p)
     else:
         d = normalize_candidates(read_yaml(p, {}), p)
-    _merge_overlay(d, card / OVERLAY)
+    _merge_overlay(d, ov)
+    _CANDIDATES_CACHE[ckey] = (stamp, d)
     return d
 
 

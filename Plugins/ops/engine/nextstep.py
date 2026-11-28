@@ -42,6 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from instrument import command as _command  # noqa: E402
+from _loader import load_module as _load_module  # noqa: E402
 
 # 建议命令里的脚本一律用绝对路径：调用者的 cwd 可能是题目工作目录，
 # 不是仓库根 —— 相对路径会给出**一条跑不起来的命令**（实测 2026-11-28）。
@@ -53,17 +54,8 @@ MAX_LISTED = 3
 
 
 def _load(name):
-    import importlib.util
-    import sys
-    key = "_ns_" + name
-    if key in sys.modules:
-        return sys.modules[key]
-    p = Path(__file__).resolve().parent / (name + ".py")
-    spec = importlib.util.spec_from_file_location(key, str(p))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[key] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    """加载 engine/ 下的兄弟模块（key `_ns_<name>`；失败不留缓存）。"""
+    return _load_module("_ns_" + name, Path(__file__).resolve().parent / (name + ".py"))
 
 
 def implementable_variants(card: Path) -> set:

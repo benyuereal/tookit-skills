@@ -41,6 +41,7 @@ GROUPS = [
         ("Plugins/ops/engine/cli.py", "explore / floor 的薄 CLI 层：只解析参数、打印、定退出码"),
         ("Plugins/ops/engine/judge.py", "从 description+shapes 生成 judge、GPU 校准并**冻结容差**（fail-closed）"),
         ("Plugins/ops/engine/ablate.py", "消融流水线：champion 逐项删方法 → 引擎测 → 自动生成 ablate spec（归因仍由 scripts/ablate.py 算）"),
+        ("Plugins/ops/engine/_loader.py", "按路径加载模块的唯一实现（sys.modules 缓存；失败清理缓存）"),
         ("Plugins/ops/engine/guard.py", "命令级守卫：测量只能走 loop.py run；只读查看放行（D1 的代码级强制）"),
         ("Plugins/ops/engine/nextstep.py", "唯一的策略实现：算出「下一步做什么」（run/implement/explore/fix/stop）"),
         ("Plugins/ops/engine/orchestrator.py", "**循环拥有者**：iterate 控制流 + CLI（可 fake 单测）"),

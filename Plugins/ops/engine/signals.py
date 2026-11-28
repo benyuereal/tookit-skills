@@ -28,18 +28,17 @@ REPO_ROOT = next((p for p in Path(__file__).resolve().parents if (p / ".git").ex
 
 _ENGINE_DIR = Path(__file__).resolve().parent
 
+# `python3 -I scripts/explore.py` 时脚本目录是 scripts/，engine/ 不在 sys.path 上，
+# 所以 `import _loader` 之前要先把 engine/ 放进去（按路径加载本模块时同理）。
+if str(_ENGINE_DIR) not in sys.path:
+    sys.path.insert(0, str(_ENGINE_DIR))
+
+from _loader import sibling as _sibling  # noqa: E402
+
 
 def _engine(name):
-    """按路径加载 engine/ 下的兄弟模块（见 engine/loop.py::_engine 的说明）。"""
-    key = "_ops_engine_" + name
-    if key in sys.modules:
-        return sys.modules[key]
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(key, str(_ENGINE_DIR / (name + ".py")))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[key] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    """按路径加载 engine/ 下的兄弟模块（key `_ops_engine_<name>`）。"""
+    return _sibling(name)
 
 
 card = _engine("card")

@@ -44,18 +44,20 @@ import sys
 from pathlib import Path
 
 CARD = Path(r"{card}")
+ENGINE = Path(r"{engine}")
 sys.path.insert(0, str(CARD))
+# engine/ 放在末尾：卡片自带的同名模块仍然优先，只在卡片没有 `_loader.py` 时
+# 才命中引擎那一份（正常情况下一定命中）。
+if str(ENGINE) not in sys.path:
+    sys.path.append(str(ENGINE))
 
 import torch  # noqa: E402
 
 
 def _load_common():
-    import importlib.util
-    p = CARD / "_common.py"
-    spec = importlib.util.spec_from_file_location("_judge_common", str(p))
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
+    """加载卡的 `_common.py`（key `_judge_common`，带 `sys.modules` 缓存）。"""
+    import _loader
+    return _loader.load_module("_judge_common", CARD / "_common.py")
 
 
 def _params(shape_key):
@@ -234,6 +236,7 @@ def generate(card: Path, out: Path) -> int:
     judge_py = out / "judge.py"
     judge_py.write_text(_JUDGE_TMPL.format(
         card=str(card), repo=str(Path(__file__).resolve().parents[3]),
+        engine=str(Path(__file__).resolve().parent),
         evidence=evidence), encoding="utf-8")
     judge_py.chmod(0o755)
 
