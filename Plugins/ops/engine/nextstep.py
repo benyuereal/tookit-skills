@@ -412,12 +412,41 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
               "python3 -I %s --card %s --apply" % (_REPO / "scripts/explore.py", card))
 
 
-def _block(title: str, items) -> list:
-    """一段「空行 + 标题 + 缩进条目」；items 为空就整段消失。"""
-    items = [str(x) for x in (items or []) if x]
+_TEMPLATE = (Path(__file__).resolve().parent
+             / "instrument" / "prompts" / "next_step.md")
+_FRAGMENT_RE = re.compile(r"^<!-- (\w+) -->\n(.*?)(?=^<!-- \w+ -->|\Z)",
+                          re.M | re.S)
+_PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+def _fragments() -> dict:
+    """`next_step.md` 的命名片段（`<!-- name -->` 分隔）。
+
+    可选段落（self_checks/problems/...）在没有条目时必须**整段消失**，而
+    `{{key}}` 替换只能把值换成空串、删不掉它周围的标题文字 —— 所以标题与
+    条目前缀也留在模板里，按名字取片段后再填动态条目。占位符语义与
+    `instrument.render` 相同（`{{key}}`，缺失渲染成空串）。
+    """
+    text = _TEMPLATE.read_text(encoding="utf-8")
+    return {m.group(1): m.group(2).strip("\n")
+            for m in _FRAGMENT_RE.finditer(text)}
+
+
+def _fill(tpl: str, **ctx) -> str:
+    return _PLACEHOLDER_RE.sub(lambda m: str(ctx.get(m.group(1), "")), tpl)
+
+
+def _block(frags: dict, title: str, item_tpl: str, items) -> str:
+    """一段「空行 + 标题 + 缩进条目」；items 为空就整段消失。
+
+    先套模板前缀再筛空串（与旧实现一致：前缀非空，所以原始空条目仍会
+    渲染成一行「  ✓ 」而不是被丢掉）。
+    """
+    items = [x for x in (_fill(frags[item_tpl], item=str(v))
+                         for v in (items or [])) if x]
     if not items:
-        return []
-    return [""] + ([title] if title else []) + items
+        return ""
+    return "\n\n" + _fill(frags[title], items="\n".join(items))
 
 
 def _status_line(plan: dict) -> str:
@@ -429,31 +458,38 @@ def _status_line(plan: dict) -> str:
 
 
 def render(plan: dict) -> str:
-    """人读渲染。**第一行必须是下一步**，因为 agent 常常只读一行就行动。"""
+    """人读渲染。**第一行必须是下一步**，因为 agent 常常只读一行就行动。
+
+    文本全在 `instrument/prompts/next_step.md`（按 `<!-- name -->` 分片段）；
+    这里只把动态条目拼成各段，空段传空串（模板里自然消失）。
+    """
     act = plan.get("action")
-    label = {"run": "跑实验", "implement": "实现变体", "explore": "出题",
-             "baseline": "先测基线", "stop": "停止"}.get(act, act)
+    frags = _fragments()
+    label = frags.get("label_" + str(act))
+    label = _fill(label) if label is not None else str(act)
     d = plan.get("detail") or {}
-    lines = [
-        "下一步：%s（%s）" % (label, act), "",
-        "为什么：%s" % plan.get("why", ""), "",
-        "照做（复制粘贴即可）：",
-        "    %s" % plan.get("cmd", ""),
-    ]
-    lines += _block("已自检（1 秒，未跑实验）——直接执行不会失败：",
-                    ["  ✓ %s" % x for x in d.get("self_checks") or []])
-    lines += _block("预检不通过（先修这些）：",
-                    ["  ✗ %s" % x for x in d.get("problems") or []])
-    if d.get("expect_seconds"):
-        lines += ["", "预计耗时：%s" % d["expect_seconds"]]
-    lines += _block("跑完之后你会得到：",
-                    ["  · %s" % x for x in d.get("produces") or []])
-    lines += _block("如果失败：", ["  · %s" % x for x in d.get("on_failure") or []])
-    if d.get("also"):
-        lines += ["", "之后还有：%s" % ", ".join(str(x) for x in d["also"])]
+    also = d.get("also")
     spec = {k: v for k, v in (d.get("spec") or {}).items() if v}
-    if spec:
-        lines += ["", "这条候选的说明："]
-        lines += ["  %-12s %s" % (k, str(v)[:160]) for k, v in spec.items()]
-    lines += ["", _status_line(plan)]
-    return "\n".join(lines)
+    spec_body = "\n".join(
+        _fill(frags["spec_item"], key="%-12s" % (k,), value=str(v)[:160])
+        for k, v in spec.items())
+    ctx = dict(
+        label=label,
+        action=act,
+        why=plan.get("why", ""),
+        cmd=plan.get("cmd", ""),
+        self_checks=_block(frags, "self_checks", "check_item",
+                           d.get("self_checks")),
+        problems=_block(frags, "problems", "problem_item", d.get("problems")),
+        expect=("\n\n" + _fill(frags["expect"], value=d["expect_seconds"])
+                if d.get("expect_seconds") else ""),
+        produces=_block(frags, "produces", "bullet_item", d.get("produces")),
+        on_failure=_block(frags, "on_failure", "bullet_item",
+                          d.get("on_failure")),
+        also=("\n\n" + _fill(frags["also"],
+                             items=", ".join(str(x) for x in also))
+              if also else ""),
+        spec=("\n\n" + _fill(frags["spec"], items=spec_body) if spec else ""),
+        status_line=_status_line(plan),
+    )
+    return _fill(frags["main"], **ctx)
