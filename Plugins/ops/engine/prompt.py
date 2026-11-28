@@ -17,6 +17,11 @@ def render_student_prompt(records: list[IterationRecord], card: str = "",
         "你只负责**写实现**。测量、判定、记账全部由引擎完成；"
         "不要在会话里自己跑 bench 或计时。",
         "",
+        "## 时间预算与停止条件",
+        "- 本轮到点即停（默认 20 分钟），**只做本候选的实现**。",
+        "- 不要读仓库其他文件、不要翻账本/历史记录、不要自己对比变体——",
+        "  测量、判定、记账都是引擎的事。时间到就把已完成的部分写进卡里收工。",
+        "",
         "## 落卡硬约束（违反即判 INVALID_NOOP）",
         "- **所有实现必须写进 `<卡>/_common.py`**（`VARIANTS` / `HIP_VARIANTS` + `get_runner` 分支）；"
         "需要新 kernel 就加 `<卡>/kernels/*.hip` 并登记。",
@@ -50,6 +55,11 @@ def render_student_prompt(records: list[IterationRecord], card: str = "",
                               ("id", "variant", "direction", "expect",
                                "hypothesis", "expect_basis") if candidate.get(k) is not None},
                              ensure_ascii=False, indent=2)]
+    else:
+        # 不让 agent 拿到"没有目标"的任务：至少给出要实现的变体名
+        lines += ["", "## 本轮目标（candidates.yaml 里没有登记，按下面的最小目标做）",
+                  "- 实现并注册 `--tag` 对应的变体：写进 `<卡>/_common.py` 的 "
+                  "`VARIANTS`/`HIP_VARIANTS`，并让 `get_runner` 返回可运行实现。"]
     lines += ["", "## 已证伪方向（refuted_directions，不要重复试）",
               json.dumps(sorted(set(refuted)), ensure_ascii=False)]
     return "\n".join(lines) + "\n"

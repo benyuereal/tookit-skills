@@ -50,7 +50,8 @@ def repo_records_dir(ws) -> Path:
 def iterate(backend: Backend, rounds: int, card: str = "",
             noise_floor: float = NOISE_FLOOR, max_plateau: int = MAX_PLATEAU,
             max_impl_fails: int | None = None,
-            candidate: dict | None = None) -> list[IterationRecord]:
+            candidate: dict | None = None,
+            on_round=None) -> list[IterationRecord]:
     """跑 N 轮。**纯控制流**：所有副作用都经 backend。"""
     if max_impl_fails is None:
         try:
@@ -118,6 +119,9 @@ def iterate(backend: Backend, rounds: int, card: str = "",
             agent_meta=dict(getattr(backend, "last_agent_meta", {}) or {}),
         )
         records.append(rec)
+        if on_round is not None:
+            # 每轮立即落盘：崩溃/超时最多丢当前这一轮，不会丢整次运行
+            on_round(rec)
         if delta is not None:
             ratios.append(1.0 + delta)
 
@@ -197,27 +201,45 @@ def main(argv=None) -> int:
             return 2
         be = RealBackend(Path(a.workspace), a.card_rel, a.tag, a.agent_cmd,
                          gpu=a.gpu, timeout_s=a.agent_timeout, run_id="p32")
-        be.init_workspace()
+        # 预检：--tag 必须能在 candidates.yaml 里找到候选，否则整轮 agent 会
+        # 收到一个"没有目标"的任务（实测：它会花满 20 分钟读仓库，0 次 Write）。
         cand = None
         try:
             import yaml
             cd = yaml.safe_load((be.card / "candidates.yaml").read_text(
                 encoding="utf-8")) or {}
-            cand = next((x for x in (cd.get("candidates") or [])
-                         if str(x.get("id")) == str(a.tag)), None)
-        except Exception:                                    # noqa: BLE001
-            cand = None
-        recs = iterate(be, a.demo or 2, card=a.card_rel, candidate=cand)
+            cands = [x for x in (cd.get("candidates") or []) if isinstance(x, dict)]
+            cand = next((x for x in cands if str(x.get("id")) == str(a.tag)), None)
+            if cand is None:
+                print("✗ --tag %r 不在 %s/candidates.yaml 里（现有：%s）。"
+                      "先补候选，别让 agent 空跑。"
+                      % (a.tag, be.card, ", ".join(str(x.get("id")) for x in cands)),
+                      file=sys.stderr)
+                return 2
+            if not cand.get("variant"):
+                print("✗ 候选 %r 没有声明 variant —— loop.py run 会拒绝" % a.tag,
+                      file=sys.stderr)
+                return 2
+        except FileNotFoundError:
+            print("✗ 缺少 %s/candidates.yaml" % be.card, file=sys.stderr)
+            return 2
+        be.init_workspace()
+        # 先把落盘路径定下来：每轮结束立刻追加（不再攒到最后）
+        out = Path(a.out) if a.out else (
+            repo_records_dir(be.ws) / ("iterate-%s.jsonl" % time.strftime("%Y%m%d_%H%M%S")))
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        def _append(rec):
+            with out.open("a", encoding="utf-8") as f:
+                f.write(rec.to_json() + "\n")
+
+        recs = iterate(be, a.demo or 2, card=a.card_rel, candidate=cand,
+                       on_round=_append)
         for r in recs:
             print("r%-2d %-12s cand=%s base=%s claim=%s%s"
                   % (r.iter, r.verdict, r.cand_ms, r.base_ms, r.claim,
                      ("  stop=" + r.stop_reason) if r.stop_reason else ""))
-        # R4：默认落仓库级 records（工作区会被清）
-        out = Path(a.out) if a.out else (
-            repo_records_dir(be.ws) / ("iterate-%s.jsonl" % time.strftime("%Y%m%d_%H%M%S")))
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("\n".join(r.to_json() for r in recs) + "\n", encoding="utf-8")
-        print("→ %s（%d 条）" % (out, len(recs)))
+        print("→ %s（%d 条，逐轮追加）" % (out, len(recs)))
         return 0
     if a.demo:
         be = FakeBackend(flat=a.fake_flat, fail_every=a.fake_fail_every)
