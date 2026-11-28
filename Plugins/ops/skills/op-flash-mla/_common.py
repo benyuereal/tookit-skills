@@ -13,6 +13,14 @@ import os
 import sys
 from pathlib import Path
 
+# 已实现变体清单（2026-11-28 补导出）。
+# 本卡原先**没有导出 VARIANTS**，靠 `get_runner` 里的 `if name == "..."` 分派；
+# 后果：任何想枚举"这张卡有哪些实现"的工具（engine/signals.available_variants）
+# 都只能靠正则猜。清单与 get_runner 的分支一一对应，新增分支时同步加这里。
+VARIANTS = ("tilelang", "tilelang-prefetch", "flash_mla", "hip-glm",
+            "fp8-bh64", "fp8-bh64-qonly")
+
+
 CARD_DIR = Path(__file__).resolve().parent
 # 默认形状 = DeepSeek DSA / V4.1 Flash：q/kv 576 宽（512 latent + 64 rope tail），out 512 宽。
 # GLM5.3 flash 是 d_qk == d_v == 512（tail_dim = 0），由档位 yaml 的 d_v / tail_dim 覆盖。

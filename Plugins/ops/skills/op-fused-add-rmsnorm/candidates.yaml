@@ -38,7 +38,9 @@ candidates:
   predicted_effect: -30%~-45%
   expected_bottleneck: memory-bound
   expect: -40%
-  expect_basis: 实测 2026-11-25：0.1210 vs 0.2030 = 快 40.5%（三轮中位，MAD<0.5%）
-  variant: fa-rms-reg
-  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape prefill-8k --variants fa-rms-reg
+  expect_basis: 实测 2026-11-25：0.1210 vs 0.2030 = 快 40.5%（三轮中位，MAD<0.5%）。
+    **注**：那次测的是 fa-rms-reg；本卡可跑的参数化变体是 fa-rms-mr2/mr4
+    （同一 kernel 源 fa-rms-reg-mr.hip，按 BLOCK_ROWS 编译），预期量级相同但需复测。
+  variant: fa-rms-mr2
+  done_when: python3 -I scripts/opcheck.py correctness --contract "$OPS_CARD/contract.yaml" --shape prefill-8k --variants fa-rms-mr2
 refuted: []

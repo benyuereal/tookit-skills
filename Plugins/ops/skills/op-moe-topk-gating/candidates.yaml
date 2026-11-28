@@ -1,0 +1,70 @@
+# op-moe-topk-gating 候选队列
+#
+# 为什么这份文件是补出来的（2026-11-28）：
+#   本卡原本**没有 candidates.yaml**，于是 `loop.py status` 报「待做 0」，
+#   agent 唯一一次执行 loop.py 就是读到这句然后放弃，转身自己写 bench。
+#   三臂测试里 C 臂因此拿不到任何 loop 证据（全仓 runs/loop 账本 0 条）。
+#
+# 本卡现状（必须写清，否则下一个人会重复撞墙）：
+#   _common.VARIANTS = ("ref-heavy", "fused-gate-topk", "aiter-topk")
+#   但只有 ref-heavy 的 adapter 实现了；另两个 raise RuntimeError。
+#   所以这里只放**跑得动**的那条（calibration），另两条显式写 blocked 而不是删除——
+#   删了等于假装这个方向不存在，留着才能看出"缺的是 adapter 不是想法"。
+defaults:
+  base: ref-heavy
+  rounds: 5
+  no_sweep: true
+  bench_args:
+  - --shape
+  - decode-m32
+  - --base
+  - ref-heavy
+bottleneck:
+  bound: memory
+  derive_evidence: "decode-m32 读 W_gate 主导（M=32 时权重加载远大于激活），按 rw_2to1 档估"
+directions:
+- id: baseline
+  statement: 先量参考实现基线，作为后续改动的比较口径
+  status: open
+  refutes: 0
+- id: fusion-boundary
+  statement: gate+topk+softmax 能否合成一次 launch，省掉中间张量
+  status: open
+  refutes: 0
+candidates:
+- id: baseline-ref
+  direction: baseline
+  status: pending
+  priority: 1
+  action_class: reduce-bytes
+  class: residency
+  purpose: calibration
+  variant: ref-heavy
+  expect: 仅取基线；不声称收益
+  expect_confidence: low
+  expect_basis: calibration-only：base=correctness_only 参考实现，loop.py 只作校准
+    （CALIBRATION_ONLY），不计收益；本卡尚未实测，给不出数值
+- id: fused-gate-topk
+  direction: fusion-boundary
+  status: blocked
+  priority: 2
+  action_class: reduce-bytes
+  blocked_by: '_common.VARIANTS 里有这个名字，但 get_runner 没有对应分支，
+    调用会 raise RuntimeError("adapter 尚未实现")。缺的是 adapter，不是想法。'
+  expect: -15%
+  expect_confidence: low
+  expect_basis: 预期融合省 2 趟往返（softmax 输出 + topk 输入），按 3 趟降到 1 趟
+    估；**未实测**，方向来自 fusion-boundary 而非测量
+- id: aiter-topk
+  direction: fusion-boundary
+  status: blocked
+  priority: 3
+  action_class: reduce-bytes
+  blocked_by: '_common.get_runner 对 aiter-topk 直接 raise（注释写着「lightop/aiter
+    实际已安装，缺的是 adapter」）。接 adapter 前不许把它当候选跑。'
+  expect: -30%
+  expect_confidence: low
+  expect_basis: 参照 moe-gating 三臂对照里 aiter.moe_c_topk_softmax 贴 launch 地板
+    （约 58.7µs vs 自写 Triton 134µs）的外推；**本卡未实测**
+refuted: []
+note: 2026-11-28 补建。真实候选需先实现 adapter，再把 status 从 blocked 改成 pending。
