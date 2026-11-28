@@ -54,12 +54,25 @@ def make_card(tmp_path, *, variants=("ref-heavy",), candidates=(),
         src += "HIP_VARIANTS = {%s}\n" % ", ".join('"%s": ("x.so", "f")' % v for v in hip)
     src += "\ndef get_runner(name, **kw):\n    return lambda *a, **k: None\n"
     _write(card / "_common.py", src)
+    # preflight 会检查 bench/ab.py 是否存在（3234226 之后）；夹具必须带上它，
+    # 否则所有用例都会被判成 action=fix（这是测试夹具过期，不是策略错）。
+    _write(card / "bench" / "ab.py", "# stub\n")
+    _write(card / "bench" / "acc_probe.py", "# stub\n")
 
     lines = []
     for c in candidates:
+        # 夹具补 direction：preflight 的方向预算门要求候选声明方向
+        # （否则 2 次封方向上限对它不生效）。用 surfaces.yaml 里存在的
+        # occupancy（class=residency，memory 允许）。
+        if isinstance(c, dict):
+            c = dict(c); c.setdefault("direction", "occupancy")
+        elif isinstance(c, str) and "direction" not in c and c.rstrip().endswith("}"):
+            c = c.rstrip()[:-1] + ", direction: occupancy}"
         lines.append("%s" % c)
     _write(card / "candidates.yaml",
-           "candidates:\n" + ("".join("  - %s\n" % c for c in candidates) or "  []\n")
+           "bottleneck:\n  bound: memory\n  derive_evidence: fixture\n"
+           "directions:\n  - {id: occupancy, statement: fixture, status: open, refutes: 0}\n"
+           "candidates:\n" + ("".join("  - %s\n" % c for c in lines) or "  []\n")
            + "refuted: []\n")
 
     if records:

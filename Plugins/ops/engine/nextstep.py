@@ -145,6 +145,88 @@ def deliverable_args() -> str:
     return ""
 
 
+def _smallest_shape(card: Path) -> tuple[str, dict]:
+    """取 shapes.yaml 里元素数最小的那档，smoke 用（不碰大形状）。"""
+    import re as _re
+    p = card / "shapes.yaml"
+    if not p.is_file():
+        return "", {}
+    try:
+        import sys as _sys
+        _sys.path.insert(0, str(_REPO / "scripts"))
+        from opverify import parse_yaml
+        data = parse_yaml(p.read_text(encoding="utf-8")) or {}
+    except Exception:                                        # noqa: BLE001
+        return "", {}
+    best, best_n = "", None
+    for k, v in data.items():
+        params = dict((v or {}).get("params") or {})
+        n = 1
+        for x in params.values():
+            if isinstance(x, int) and x > 0:
+                n *= x
+        if best_n is None or n < best_n:
+            best, best_n = k, n
+    return best, dict((data.get(best) or {}).get("params") or {})
+
+
+def smoke_adapter(card: Path, variant: str) -> tuple[list, list]:
+    """**真的把 adapter 跑一次**（CPU、最小形状），返回 (checks, problems)。
+
+    为什么必须真跑：`implementable_variants` 只看名字在不在 VARIANTS 里。
+    新建卡（op_bootstrap）的 `build_inputs()` / `reference()` 是按设计留的
+    NotImplementedError 占位符，于是 `next` 会给出"直接执行不会失败"的
+    自信结论，而第一次 `run` 必然炸在 build_inputs（实测 2026-11-28）。
+    模型据此会认为引擎坏了，转回手搓测量 —— 闭环就断在这里。
+    """
+    checks, problems = [], []
+    common = card / "_common.py"
+    if not common.is_file():
+        return checks, ["缺 _common.py"]
+    import importlib.util
+    import sys as _sys
+    tag = "_smoke_%s" % abs(hash(str(card)))
+    spec = importlib.util.spec_from_file_location(tag, str(common))
+    m = importlib.util.module_from_spec(spec)
+    _sys.path.insert(0, str(card))
+    try:
+        spec.loader.exec_module(m)
+    except Exception as e:                                   # noqa: BLE001
+        return checks, ["_common.py 都 import 不了：%s: %s" % (type(e).__name__, e)]
+    if not hasattr(m, "build_inputs"):
+        # 老卡/测试夹具可能只有 VARIANTS + get_runner，没有 build_inputs。
+        # 这时不做 smoke（没有可验证的输入构造），保持向后兼容。
+        return checks, []
+    _key, params = _smallest_shape(card)
+    try:
+        try:
+            inp = m.build_inputs(params, seed=0, device="cpu")
+        except TypeError:
+            inp = m.build_inputs(params, seed=0)
+        checks.append("build_inputs() 可执行（形状 %s，CPU）" % (_key or "?"))
+    except NotImplementedError:
+        return checks, ["`build_inputs()` 还是 bootstrap 的占位符 —— "
+                        "这是 op-optimize 六步的第 2 步，必须先按真实分布实现"]
+    except Exception as e:                                   # noqa: BLE001
+        return checks, ["build_inputs() 跑不起来：%s: %s" % (type(e).__name__, e)]
+    if not variant or variant == "ref-heavy":
+        try:
+            runner = m.get_runner(variant, **(m.runner_kwargs(params)
+                                             if hasattr(m, "runner_kwargs") else {}))
+            args = inp[:-1] if isinstance(inp[-1], dict) else inp
+            runner(*args)
+            checks.append("reference/get_runner(%r) 可执行" % variant)
+        except NotImplementedError:
+            problems.append("`reference()` 还是 bootstrap 的占位符 —— "
+                            "先补真实数学（正确性的唯一锚），再跑实验")
+        except Exception as e:                               # noqa: BLE001
+            problems.append("reference/get_runner(%r) 跑不起来：%s: %s"
+                            % (variant, type(e).__name__, e))
+    else:
+        checks.append("库变体 %r 未做 CPU smoke（需要 GPU/后端）" % variant)
+    return checks, problems
+
+
 def preflight(card: Path, cand: dict) -> dict:
     """这一条候选**能不能直接跑**。返回 {"ok": bool, "checks": [...], "problems": [...]}。
 
@@ -164,6 +246,14 @@ def preflight(card: Path, cand: dict) -> dict:
         checks.append("适配器 %s 存在" % bench.name)
     else:
         problems.append("缺适配器 %s" % bench)
+    # 真的把 adapter 跑一次：名字在 VARIANTS 里 ≠ 能跑（占位符 reference
+    # 会在这里被抓出来，而不是等第一次 run 炸掉）。
+    try:
+        _c, _p = smoke_adapter(card, str(v or ""))
+        checks.extend(_c)
+        problems.extend(_p)
+    except Exception as e:                                   # noqa: BLE001
+        problems.append("adapter smoke 自身失败：%s: %s" % (type(e).__name__, e))
     try:
         loop = _load("loop")
         cands = _load("card").load_candidates(card)
@@ -235,7 +325,12 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
 
     # ② 有可跑候选 → 直接跑。**跑出来的第一条记录本身就是基线**，
     #    不需要先"补一条 calibration 再跑"（那会把能跑的东西降级成准备工作）。
-    runnable = [c for c in pending if c.get("variant") in variants]
+    # 已经跑过（账本里有同一 variant 的记录）的候选不再重复跑 ——
+    # 否则校准候选永远 pending，`next` 会无限次让你 run 同一条（实测 2026-11-28）。
+    done_variants = {str(r.get("tag")) for r in recs if r.get("tag")}
+    runnable = [c for c in pending
+                if c.get("variant") in variants
+                and str(c.get("variant")) not in done_variants]
     if runnable:
         runnable.sort(key=lambda c: c.get("priority", 99))
         c = runnable[0]
@@ -248,7 +343,18 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
         _rounds = int((cands.get("defaults") or {}).get("rounds") or 3)
         _pf = preflight(card, c)
         if not _pf["ok"]:
-            # 预检不过就别让它去试 —— 直接把问题写出来，省一轮失败
+            # 预检不过就别让它去试 —— 直接把问题写出来，省一轮失败。
+            # 占位符 reference/build_inputs 是**第 2 步没做**，不是"跑之前
+            # 再检查一下"，必须单独说清楚，否则模型会以为引擎坏了。
+            if any("占位符" in p for p in _pf["problems"]):
+                return mk("implement",
+                          "这张卡还没完成 op-optimize 的**第 2 步**："
+                          "`build_inputs()` / `reference()` 还是 bootstrap 的占位符。"
+                          "把它们补成真实实现，引擎才有可信的测量与判据。",
+                          "编辑 %s/_common.py：实现 build_inputs() 与 reference()"
+                          % card,
+                          tag=c.get("id"), variant=c.get("variant"),
+                          problems=_pf["problems"])
             return mk("fix",
                       "这条候选还不能跑，预检发现 %d 个问题（见下）。先照修，"
                       "修完再 next" % len(_pf["problems"]),
