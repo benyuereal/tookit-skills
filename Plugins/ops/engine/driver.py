@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from orchestrator import (  # noqa: E402,F401
     Backend, IterationRecord, FakeBackend, RealBackend,
     NOISE_FLOOR, MAX_NOOP, MAX_PLATEAU,
-    agent_changes, decide_verdict, noise_floor_from,
+    agent_changes, correctness_of_decision, decide_verdict, noise_floor_from,
     render_student_prompt, iterate, repo_records_dir, main,
 )
 

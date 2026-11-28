@@ -127,3 +127,24 @@ def test_agent_touching_engine_is_tampering():
     assert recs[0].verdict == "TAMPERED"
     assert recs[0].stop_reason == "tampered"
     assert be.reset_calls == ["c1"]
+
+
+def test_no_gain_is_not_a_correctness_failure():
+    """relaxed-revert：没收益 ≠ 实现坏了；只有 REJECTED_ACCURACY 才回滚。"""
+    assert D.correctness_of_decision("REJECTED_NO_GAIN") is True
+    assert D.correctness_of_decision("INCONCLUSIVE") is True
+    assert D.correctness_of_decision("CALIBRATION_ONLY") is True
+    assert D.correctness_of_decision("ACCEPTED_BITEXACT") is True
+    assert D.correctness_of_decision("REJECTED_ACCURACY") is False
+    assert D.correctness_of_decision("ERROR") is False
+    assert D.correctness_of_decision(None) is False
+
+
+def test_queue_empty_is_no_work_without_spawning_agent():
+    """P0-2：没有未实现候选 → NO_WORK + queue_empty，且**不调 agent**。"""
+    be = D.FakeBackend(work=False)
+    recs = D.iterate(be, 3, card="fake")
+    assert len(recs) == 1
+    assert recs[0].verdict == "NO_WORK"
+    assert recs[0].stop_reason == "queue_empty"
+    assert be.agent_calls == [], "队列空时不许起 agent 子进程"

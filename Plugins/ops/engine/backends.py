@@ -19,7 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from contract import Backend, ENGINE_PATHS, NOISE_FLOOR  # noqa: F401
+from contract import (Backend, ENGINE_PATHS, NOISE_FLOOR,  # noqa: F401
+                      correctness_of_decision)
 
 
 class FakeBackend:
@@ -28,7 +29,7 @@ class FakeBackend:
     def __init__(self, flat: bool = False, evidence: str = "vendor_library",
                  fail_every: int = 0, times=None, green_from: int = 1,
                  noop: bool = False, noise: float | None = None,
-                 tamper: bool = False):
+                 tamper: bool = False, work: bool = True):
         self.flat = flat
         self.evidence = evidence
         self.fail_every = fail_every
@@ -36,6 +37,7 @@ class FakeBackend:
         self.noop = noop
         self.noise = noise
         self.tamper = tamper
+        self.work = work
         if tamper:
             self._changed = ["Plugins/ops/engine/loop.py"]
         else:
@@ -59,6 +61,10 @@ class FakeBackend:
     @property
     def changed_files(self) -> list[str]:
         return list(self._changed)
+
+    def next_candidate(self):
+        """P0-2：fake 里模拟"队列还有/没有未实现候选"。"""
+        return {"id": "fake", "variant": "fake-v"} if self.work else None
 
     def reset_to(self, commit: str) -> None:
         self.reset_calls.append(commit)
@@ -219,8 +225,8 @@ class EngineEvaluator:
                 continue
         return recs[-1] if recs else {}
 
-    def _claim_for(self, variant_hint: str) -> str:
-        c = self._loop("claim", "--tag", self.tag)
+    def _claim_for(self, variant_hint: str, tag: str | None = None) -> str:
+        c = self._loop("claim", "--tag", str(tag or self.tag))
         if "没有 tag=" in c.stdout and variant_hint:
             c = self._loop("claim", "--tag", variant_hint)
         if "结论：**PASS**" in c.stdout:
@@ -235,11 +241,12 @@ class EngineEvaluator:
             return "FAIL:caliber"
         return "FAIL:claim"
 
-    def evaluate(self) -> dict:
+    def evaluate(self, tag: str | None = None) -> dict:
+        tag = str(tag or self.tag)
         self.ensure_judge()
         bench = self.ws / "results" / "bench_std.json"
         rep = os.environ.get("OPS_REPEAT", "3")
-        r = self._loop("run", self.tag, "--bench-std", str(bench), "--repeat", str(rep))
+        r = self._loop("run", tag, "--bench-std", str(bench), "--repeat", str(rep))
         if r.returncode == 2:
             return {"correctness": False, "claim": "FAIL:run_rejected",
                     "cand_ms": None, "base_ms": None,
@@ -251,17 +258,16 @@ class EngineEvaluator:
             cd = yaml.safe_load((self.card / "candidates.yaml").read_text(
                 encoding="utf-8")) or {}
             for x in cd.get("candidates") or []:
-                if str(x.get("id")) == str(self.tag) and x.get("variant"):
+                if str(x.get("id")) == str(tag) and x.get("variant"):
                     variant = str(x["variant"])
                     break
         except Exception:                                    # noqa: BLE001
             pass
-        claim = self._claim_for(variant)
+        claim = self._claim_for(variant, tag)
         rec = self._rec
         return {
             "cand_ms": rec.get("cand_ms"), "base_ms": rec.get("base_ms"),
-            "correctness": (rec.get("decision") or "").startswith("ACCEPTED")
-                            or rec.get("decision") in ("INCONCLUSIVE", "CALIBRATION_ONLY"),
+            "correctness": correctness_of_decision(rec.get("decision")),
             "acc": rec.get("acc") or {}, "claim": claim,
             "utilization": None, "floor_us": None, "refuted_directions": [],
             "decision": rec.get("decision"), "noise": rec.get("repeat_spread"),
@@ -302,7 +308,47 @@ class RealBackend:
 
     def eval(self, tag: str) -> dict:
         self.evaluator.no_promote = self.no_promote
-        return self.evaluator.evaluate()
+        return self.evaluator.evaluate(tag)
+
+    def _implemented_variants(self) -> set:
+        """_common.py 里已登记（VARIANTS / HIP_VARIANTS）或 forged 的变体名。"""
+        import re as _re
+        got = set()
+        common = self.card / "_common.py"
+        if common.is_file():
+            src = common.read_text(encoding="utf-8", errors="replace")
+            m = _re.search(r"^VARIANTS\s*=\s*\(([^)]*)\)", src, _re.M)
+            if m:
+                got |= {x.strip().strip("'\"") for x in m.group(1).split(",") if x.strip()}
+            m2 = _re.search(r"^HIP_VARIANTS\s*=\s*\{(.*?)\}", src, _re.M | _re.S)
+            if m2:
+                got |= set(_re.findall(r'"([^"]+)"\s*:', m2.group(1)))
+        forged = self.card / "runs" / "forged"
+        if forged.is_dir():
+            got |= {p.stem for p in forged.glob("*.py")}
+        return got
+
+    def next_candidate(self):
+        """下一个**未实现**的 pending 候选；没有就返回 None（→ NO_WORK）。
+
+        这样队列耗尽时不再把 agent 叫起来空转 20 分钟（lead 2026-11-28）。
+        """
+        try:
+            import yaml
+            cd = yaml.safe_load((self.card / "candidates.yaml").read_text(
+                encoding="utf-8")) or {}
+        except Exception:                                    # noqa: BLE001
+            return None
+        impl = self._implemented_variants()
+        for c in cd.get("candidates") or []:
+            if not isinstance(c, dict):
+                continue
+            if str(c.get("status") or "") in ("done", "implemented"):
+                continue
+            v = str(c.get("variant") or "")
+            if v and v not in impl:
+                return c
+        return None
 
     @property
     def changed_files(self) -> list[str]:

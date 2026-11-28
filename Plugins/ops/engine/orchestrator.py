@@ -23,14 +23,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from contract import (  # noqa: E402
     Backend, IterationRecord, MAX_NOOP, MAX_PLATEAU, NOISE_FLOOR,
-    TAMPER_PATHS, agent_changes, decide_verdict, noise_floor_from,
+    TAMPER_PATHS, agent_changes, correctness_of_decision, decide_verdict,
+    noise_floor_from,
 )
 from prompt import render_student_prompt  # noqa: E402
 from backends import FakeBackend, RealBackend  # noqa: E402,F401  (re-export)
 
 __all__ = [
     "Backend", "IterationRecord", "FakeBackend", "RealBackend",
-    "agent_changes", "decide_verdict", "noise_floor_from",
+    "agent_changes", "correctness_of_decision", "decide_verdict", "noise_floor_from",
     "render_student_prompt", "iterate", "repo_records_dir", "main",
 ]
 
@@ -67,7 +68,23 @@ def iterate(backend: Backend, rounds: int, card: str = "",
     green = False
 
     for i in range(1, rounds + 1):
-        prompt = render_student_prompt(records, card, candidate)
+        # P0-2：队列里没有"未实现的 pending 候选"时，**不要叫 agent**（它会空转 20 分钟）。
+        # NO_WORK 不计入 noop/impl_fails，直接以 queue_empty 收口。
+        round_cand = candidate
+        if hasattr(backend, "next_candidate"):
+            round_cand = backend.next_candidate()
+            if round_cand is None:
+                rec = IterationRecord(
+                    iter=i, round_id="r%d" % i,
+                    change="无可派候选：队列里没有未实现的 pending 候选；"
+                           "已建议 explore 出题后再派",
+                    verdict="NO_WORK", stop_reason="queue_empty",
+                )
+                records.append(rec)
+                if on_round is not None:
+                    on_round(rec)
+                break
+        prompt = render_student_prompt(records, card, round_cand)
         change = backend.run_agent(prompt, role="student")
         commit = backend.commit(change or ("round %d" % i))
         files = list(getattr(backend, "changed_files", []) or [])
@@ -98,7 +115,7 @@ def iterate(backend: Backend, rounds: int, card: str = "",
                 change = (change + " | " + " ".join(diag))[:600]
         if hasattr(backend, "no_promote"):
             backend.no_promote = bool(noop)
-        ev = backend.eval(("r%d" % i))
+        ev = backend.eval(str((round_cand or {}).get("id") or ("r%d" % i)))
 
         correctness = ev.get("correctness")
         if correctness is True:

@@ -69,6 +69,21 @@ class Backend(Protocol):
     def eval(self, tag: str) -> dict: ...
 
 
+def correctness_of_decision(decision: str | None) -> bool:
+    """engine 的 decision → "实现是否仍然正确"。
+
+    **只有**正确性类失败才算 False（REJECTED_ACCURACY / ERROR / IMPL_BROKEN）。
+    REJECTED_NO_GAIN / INCONCLUSIVE / CALIBRATION_ONLY 都说明实现是**对的**，
+    只是没有收益 —— 按 relaxed-revert 必须保留，交 NEUTRAL，不许 REVERT。
+    （实测 2026-11-28：r2 -0.1% 被 REJECTED_NO_GAIN 判成 correctness=False → REVERT，
+     把 agent 的改动回滚了，语义反了。）
+    """
+    d = str(decision or "")
+    if not d:
+        return False              # 没有记录 = 这轮测量失败
+    return d not in ("REJECTED_ACCURACY", "ERROR", "IMPL_BROKEN")
+
+
 def agent_changes(changed_files: list[str]) -> list[str]:
     """只保留 agent 的**代码**改动（见 AGENT_CODE_RE）。"""
     return [f for f in (changed_files or [])
