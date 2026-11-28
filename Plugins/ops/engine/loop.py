@@ -499,6 +499,38 @@ def stalled_parent_problems(cands):
             for r in stalled if str(r.get("id")) not in used]
 
 
+def load_tolerance_json(card):
+    """读 judge 冻结容差：<card>/judge/tolerance.json 或 $JUDGE_TOLERANCE。
+
+    返回 dict（含 max_ulp/cosine/atol/evidence_kind/sha256）；没有就返回 {}。
+    **完整性**：除 sha256 字段外规范化后重算，对不上直接拒绝 ——
+    说明容差在 run 期间被改过（A4）。
+    """
+    import hashlib
+    p = Path(str(card)) / "judge" / "tolerance.json"
+    if not p.is_file():
+        env = os.environ.get("JUDGE_TOLERANCE")
+        if env and Path(env).is_file():
+            p = Path(env)
+        else:
+            return {}
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(d, dict):
+        return {}
+    want = d.get("sha256")
+    if want:
+        body = {k: v for k, v in d.items() if k != "sha256"}
+        blob = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        got = hashlib.sha256(blob.encode("utf-8")).hexdigest()
+        if got != want:
+            raise ValueError("tolerance.json 的 sha256 对不上（期望 %s，实际 %s）"
+                             "—— 容差在 run 期间被改过" % (want[:16], got[:16]))
+    return d
+
+
 def load_contract_tol(card, default=2e-3):
     """读 contract.yaml 的精度容差，缺就退回 default。
 
@@ -1902,7 +1934,8 @@ def cmd_run(a):
                 for row in node.get("rows", []):
                     acc.setdefault(row["tag"], {})[qs] = row
 
-    tol = a.tol or load_contract_tol(card)
+    _tol_meta = load_tolerance_json(card)
+    tol = a.tol or _tol_meta.get("atol") or load_contract_tol(card)
     primary = "%g" % float(a.primary_qscale or d.get("acc_primary_qscale") or 1.0)
     stress_mult = float(a.stress_mult or d.get("acc_stress_mult") or 1.5)
     # 校准记录不参与合计（否则全是 CALIBRATION_ONLY 时会显示初始值
@@ -1962,6 +1995,8 @@ def cmd_run(a):
                 "delta_pct": v.get("delta_pct"), "ratio_vs_base": v.get("ratio_vs_base"),
                 "maxdiff": v.get("maxdiff"), "rel": v.get("rel"),
                 "acc": acc.get(v["tag"], {}), "tolerance": tol,
+                "evidence_kind": _tol_meta.get("evidence_kind"),
+                "tolerance_sha256": _tol_meta.get("sha256"),
                 "decision": decision, "why": why,
                 "base_role": ("correctness_only" if _cal else None),
                 "forced": bool(a.force and v["tag"] in refuted),
@@ -2147,8 +2182,10 @@ CLAIM_CHECKS = (
     ("环境已冻结", lambda r: isinstance(r.get("env"), dict) and bool(r.get("env"))
      and r["env"].get("torch") not in (None, "unavailable"),
      "记录里有环境指纹（torch/hip/device）"),
-    ("有精度证据", lambda r: bool(r.get("acc_ok")) or bool(r.get("acc")),
-     "有精度探针或 ULP 证据（没有就不能声称数值正确）"),
+    ("有精度证据", lambda r: str(r.get("evidence_kind") or "") in
+     ("independent_reference", "vendor_library"),
+     "证据种类必须是 independent_reference / vendor_library；"
+     "self-consistent-only（只有模型自写 judge）判 FAIL：无独立核验，不能声称数值正确"),
 )
 
 
