@@ -1706,94 +1706,110 @@ def write_bench_std(out_path, card, ab, variants, denominator=None):
     return p
 
 
+# 报告模板：文本（标题 / 表格 / 说明）全在 `instrument/prompts/report.md`，
+# 本文件只把实测数字和行数据填进去。按 `<!-- name -->` 分片段；非最后一段去掉
+# 与下一标记之间的分隔换行，最后一段（wr_main）原样读到文件末尾。
+_REPORT_TPL = (Path(__file__).resolve().parent
+               / "instrument" / "prompts" / "report.md")
+_REPORT_MARK = re.compile(r"^<!-- (\w+) -->\n", re.M)
+_REPORT_PH = re.compile(r"\{\{(\w+)\}\}")
+
+
+def _report_fragments():
+    """`report.md` 的命名片段（`<!-- name -->` 分隔）。"""
+    text = _REPORT_TPL.read_text(encoding="utf-8")
+    marks = list(_REPORT_MARK.finditer(text))
+    frags = {}
+    for i, m in enumerate(marks):
+        start = m.end()
+        if i + 1 < len(marks):
+            body = text[start:marks[i + 1].start()]
+            if body.endswith("\n"):          # 片段之间的分隔换行
+                body = body[:-1]
+        else:
+            body = text[start:]              # 最后一段：保留文件末尾的原样
+        frags[m.group(1)] = body
+    return frags
+
+
+def _report_fill(tpl, **ctx):
+    return _REPORT_PH.sub(lambda m: str(ctx.get(m.group(1), "")), tpl)
+
+
 def write_report(out_path, card, rec, plan=None, floor=None, cmdline=""):
     """按 opbench 题面的六问，用**实测数据**填一份 report.md 骨架。
 
     为什么要引擎来写：题面要报告，`next` 驱动实验 —— 形状不同，agent 就会
     判定"跑实验答不了题"而去做调研（实测 mla 会话 24 条 Bash 里 0 条执行 run）。
     把报告和实测一起产出，走引擎才不比直接干活贵。
+
+    **文本在 `instrument/prompts/report.md`**（本条注释以上）：这里只负责把
+    记录里的数字格式化成模板占位符的值，以及把逐条数据拼成 block。
     """
     d = rec or {}
     nxt = (plan or {}).get("action")
-    L = []
-    L.append("# %s — 实测报告（由 loop.py 生成）" % card.name)
-    L.append("")
-    L.append("> 本文件由 `loop.py run` 用**实测数据**生成；判定与数字都可回溯到")
-    L.append("> `%s/runs/loop/*.jsonl`。" % card.name)
-    L.append("")
-    L.append("## 1. 落到的实现")
-    L.append("")
-    L.append("- 变体名：`%s`" % d.get("tag"))
-    L.append("- 适配器：`%s/bench/ab.py`（`_common.get_runner` 分派）" % card.name)
-    L.append("- 口径：`%s`（%s）" % (d.get("measure_mode"),
-                                    "可 claim" if d.get("measure_mode") == "event_isolated"
-                                    else "**不可 claim**"))
-    L.append("")
-    L.append("## 2. 实测耗时")
-    L.append("")
-    L.append("| 项 | 值 |")
-    L.append("|---|---|")
-    L.append("| 基线（base） | %.4f ms（MAD %.4f） |"
-             % (d.get("base_ms") or 0, d.get("base_mad") or 0))
-    L.append("| 本实现（cand） | %.4f ms（MAD %.4f） |"
-             % (d.get("cand_ms") or 0, d.get("mad") or 0))
-    L.append("| Δ | %+.2f%%（%s） |"
-             % (d.get("delta_pct") or 0,
-                "显著" if d.get("significant") else "在噪声内，不建议据此下结论"))
-    L.append("")
+    frags = _report_fragments()
+    claim_note = _report_fill(
+        frags["wr_claimable"] if d.get("measure_mode") == "event_isolated"
+        else frags["wr_unclaimable"])
+    sig_note = _report_fill(
+        frags["wr_significant"] if d.get("significant")
+        else frags["wr_insignificant"])
+    floor_section = ""
     if floor is not None and getattr(floor, "ok", False):
-        L.append("## 3. 有效流量与达成率")
-        L.append("")
-        L.append("| 项 | 值 |")
-        L.append("|---|---|")
-        L.append("| 地板 | %.1f µs（来源 `%s`） |"
-                 % (getattr(floor, "t_floor_us", 0) or 0, getattr(floor, "source", "?")))
-        L.append("| 实测 | %.1f µs |" % (getattr(floor, "t_actual_us", 0) or 0))
-        L.append("| 达成率 | %.1f%% |" % ((getattr(floor, "efficiency", 0) or 0) * 100))
-        L.append("| 判定 | `%s` |" % getattr(floor, "gate", "?"))
-        L.append("")
-        L.append("分母依据：%s" % (getattr(floor, "basis", "") or "（见 atlas 卡）"))
-        L.append("")
-    L.append("## 4. 正确性")
-    L.append("")
+        floor_section = _report_fill(
+            frags["wr_floor"],
+            floor_us="%.1f" % (getattr(floor, "t_floor_us", 0) or 0),
+            floor_source=getattr(floor, "source", "?"),
+            actual_us="%.1f" % (getattr(floor, "t_actual_us", 0) or 0),
+            eff_pct="%.1f" % ((getattr(floor, "efficiency", 0) or 0) * 100),
+            gate=getattr(floor, "gate", "?"),
+            basis=(getattr(floor, "basis", "") or "（见 atlas 卡）"))
     acc = d.get("acc") or {}
     if acc:
+        lines = []
         for qs, row in acc.items():
-            L.append("- qscale=%s：max_abs=%.3e，max_ulp=%.2f，cosine=%.7f，nonfinite=%d"
-                     % (qs, row.get("max_abs", 0), row.get("max_ulp", 0),
-                        row.get("cosine", 0), row.get("nonfinite", 0)))
-        L.append("- 容差：%s" % (d.get("tolerance")))
-        L.append("- **acc_ok=%s**" % d.get("acc_ok"))
+            lines.append(_report_fill(
+                frags["wr_acc_item"], qscale=qs,
+                max_abs="%.3e" % row.get("max_abs", 0),
+                max_ulp="%.2f" % row.get("max_ulp", 0),
+                cosine="%.7f" % row.get("cosine", 0),
+                nonfinite=row.get("nonfinite", 0)))
+        acc_block = "\n".join(lines) + "\n" + _report_fill(
+            frags["wr_acc_footer"], tolerance=d.get("tolerance"),
+            acc_ok=d.get("acc_ok"))
     else:
-        L.append("- ⚠ 没有精度探针结果（本卡缺 `bench/acc_probe.py`）—— "
-                 "结论只能标「未验证精度」")
-    L.append("")
-    L.append("## 5. 引擎判定")
-    L.append("")
-    L.append("- `decision` = **%s**" % d.get("decision"))
-    L.append("- 理由：%s" % d.get("why"))
-    L.append("")
-    L.append("## 6. 复跑")
-    L.append("")
-    L.append("```bash")
-    L.append(cmdline or ("python3 -I Plugins/ops/engine/loop.py -C %s run %s"
-                         % (card, d.get("tag"))))
-    L.append("```")
-    L.append("")
+        acc_block = _report_fill(frags["wr_acc_missing"])
+    next_section = ""
     if nxt:
-        L.append("## 7. 下一步")
-        L.append("")
-        L.append("引擎建议：`%s` —— %s" % (nxt, (plan or {}).get("why", "")))
-        L.append("")
-        L.append("```bash")
-        L.append((plan or {}).get("cmd", ""))
-        L.append("```")
-        L.append("")
+        next_section = _report_fill(
+            frags["wr_next"], next_action=nxt,
+            next_why=(plan or {}).get("why", ""),
+            next_cmd=(plan or {}).get("cmd", ""))
+    text = _report_fill(
+        frags["wr_main"],
+        card_name=card.name,
+        tag=d.get("tag"),
+        measure_mode=d.get("measure_mode"),
+        claim_note=claim_note,
+        base_ms="%.4f" % (d.get("base_ms") or 0),
+        base_mad="%.4f" % (d.get("base_mad") or 0),
+        cand_ms="%.4f" % (d.get("cand_ms") or 0),
+        mad="%.4f" % (d.get("mad") or 0),
+        delta="%+.2f%%" % (d.get("delta_pct") or 0),
+        sig_note=sig_note,
+        floor_section=floor_section,
+        acc_block=acc_block,
+        decision=d.get("decision"),
+        why=d.get("why"),
+        cmdline=(cmdline or ("python3 -I Plugins/ops/engine/loop.py -C %s run %s"
+                             % (card, d.get("tag")))),
+        next_section=next_section)
     p = Path(out_path)
     if not p.is_absolute():
         p = Path.cwd() / p
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text("\n".join(L), encoding="utf-8")
+    p.write_text(text, encoding="utf-8")
     return p
 
 
@@ -2324,8 +2340,9 @@ def cmd_claim(a):
 def cmd_report(a):
     # 只渲染性能实验记录：verify 记录没有 skv/cand_ms，混进来会把交付表打崩
     recs = [r for r in read_records(a.card) if "skv" in r and "cand_ms" in r]
+    frags = _report_fragments()
     if not recs:
-        print("还没有记录（先跑 loop.py run <tag>）")
+        print(_report_fill(frags["cr_empty"]))
         return 1
     best = {}
     for r in recs:
@@ -2338,25 +2355,25 @@ def cmd_report(a):
         (rows if ok or getattr(a, "all", False) else held).append((skv, tag, r, reasons))
 
     if rows:
-        print("| SKV | tag | base | cand | Δ | vs fm | maxdiff | 判定 |")
-        print("|---|---|---|---|---|---|---|---|")
+        print(_report_fill(frags["cr_table"]))
         for skv, tag, r, reasons in rows:
             tail = r["decision"] if not reasons else "%s (held: %s)" % (
                 r["decision"], ",".join(reasons))
-            print("| %d | %s | %.4f | %.4f | %+.1f%% | %s | %.2e | %s |" % (
-                skv, tag, r["base_ms"], r["cand_ms"], r["delta_pct"],
-                "%.2fx" % r["fm_ratio"] if r.get("fm_ratio") else "-",
-                r.get("maxdiff") or 0.0, tail))
+            print(_report_fill(
+                frags["cr_row"],
+                skv=skv, tag=tag,
+                base="%.4f" % r["base_ms"], cand="%.4f" % r["cand_ms"],
+                delta="%+.1f%%" % r["delta_pct"],
+                fm="%.2fx" % r["fm_ratio"] if r.get("fm_ratio") else "-",
+                maxdiff="%.2e" % (r.get("maxdiff") or 0.0),
+                tail=tail))
 
     if held:
-        print("\n### 未达主张门槛（不计入交付结论）%d 条" % len(held))
-        print("这些实验可以跑，但不能升级成「快了 x%%」。补齐后重跑 report。\n")
+        print(_report_fill(frags["cr_held"], n=len(held)))
         for skv, tag, r, reasons in held:
-            print("- %s @skv%d：%s" % (tag, skv, ", ".join(reasons)))
-        print("\n补齐方法：")
-        print("  caliber_incomplete → bench/ab.py 的 JSON 顶层加 caliber{what,alloc,thermal,device}")
-        print("  not_significant    → 加 --rounds（默认 3，建议 ≥5），让 MAD 收敛")
-        print("  accuracy_missing   → 去掉 --no-acc 并确认 bench/acc_probe.py 能跑")
+            print(_report_fill(frags["cr_held_item"],
+                               tag=tag, skv=skv, reasons=", ".join(reasons)))
+        print(_report_fill(frags["cr_help"]))
     return 0
 
 
