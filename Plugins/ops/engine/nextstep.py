@@ -124,6 +124,20 @@ def floor_state(card: Path):
     return None
 
 
+def deliverable_args() -> str:
+    """如果当前目录像"题目工作目录"（有 results/），返回 `--bench-std` 片段。
+
+    这条是为了让 agent **一条命令同时拿到账本和交付物**，不必回头研究
+    `loop.py` 源码才知道怎么交差（实测：它真的回头读了 120 行源码）。
+    """
+    try:
+        if (Path.cwd() / "results").is_dir():
+            return " --bench-std results/bench_std.json"
+    except OSError:
+        pass
+    return ""
+
+
 def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
     """算出下一步。返回 {action, why, cmd, detail}，action ∈
 
@@ -181,8 +195,8 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
             _why = ("还没有任何可 claim 的实测，而这条候选的变体已经实现 —— "
                     "直接跑它，第一条记录就是基线")
         return mk("run", _why,
-                  "python3 -I Plugins/ops/engine/loop.py -C %s run %s"
-                  % (card, c.get("id")),
+                  "python3 -I Plugins/ops/engine/loop.py -C %s run %s%s"
+                  % (card, c.get("id"), deliverable_args()),
                   tag=c.get("id"), variant=c.get("variant"), also=more)
 
     # ③ 候选在、变体没实现 → 实现它（唯一必须模型做的步骤）
