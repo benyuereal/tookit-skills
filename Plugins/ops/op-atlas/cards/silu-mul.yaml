@@ -1,0 +1,77 @@
+id: silu-mul
+title: SiLU 门控乘
+family: activation
+math: y[i,j] = silu(x1[i,j]) * x2[i,j]；silu(v)=v*sigmoid(v)，fp32 计算后转 bf16
+status: draft
+layer: kernel
+op_card: Plugins/ops/skills/op-silu-mul
+semantics:
+  formula: y[i,j] = silu(x1[i,j]) * x2[i,j]；silu(v)=v*sigmoid(v)，fp32 计算后转 bf16
+  inputs:
+  - x1 (M,H)
+  - x2 (M,H)
+  outputs:
+  - y (M,H)
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: bootstrap 按访问模式 elementwise-2in 推定（**未实测，须用 --actual 校正**）
+  mutates_inputs: []
+variants:
+- repo: in-house
+  library_profile_ref: null
+  file_hint: 本卡 _common.py 的 fp32 参考实现（变体名 ref-heavy）
+  tier: reference
+  role: correctness_only
+  best_for:
+  - 建立本算子的正确性锚与首个可运行基线（现成库没有同名入口）
+  not_for:
+  - 算收益：未优化的参考实现打赢了没有工程意义（baseline-policy 明令禁止）
+  pros:
+  - 与本卡 _common.py 同源，输入构造与语义口径不会漂
+  cons:
+  - 现成库不支持这个算子：要跑只能自研，参考实现的绝对值不代表库的上限
+  source: Plugins/ops/skills/op-silu-mul/_common.py
+  l1_exempt_reason: 自研参考实现，不是可 import 的库函数；真实入口是 op-silu-mul/_common.py 的 reference(x1,
+    x2) 与 get_runner("ref-heavy")
+ceiling:
+  kind: missing
+  ref: null
+  bound: memory
+  note: bootstrap 生成的空卡：尚无实测天花板，待补
+shapes:
+- s0
+floor_inputs:
+  bytes_mb: 201.327
+  pattern: rw_2to1
+  t_actual_us: 909.0
+  t_source: results
+  basis: bootstrap 按访问模式 elementwise-2in 算出：x1(read)=67108864B + x2(read)=67108864B
+    + y(write)=67108864B
+  t_variant: ref-heavy
+  t_measured_at: '2026-11-28T08:25:33'
+  t_measure_mode: event_isolated
+  evidence: Plugins/ops/skills/op-silu-mul/runs/loop/20261128.jsonl
+  t_previous_us:
+  - 913.8
+  - 912.8
+last_verdict:
+  status: none
+  kb_path: null
+  ratio: null
+  conclusion: bootstrap 新建，尚无实测
+  verified_on: null
+baseline_ref:
+  impl: null
+  role: unverified
+  traffic_passes:
+    reads: 2
+    writes: 1
+    passes: 3
+    source: 按 semantics 推定（**未实测，须用 --actual 校正**）
+  no_baseline_reason: 本卡目前只有一条实现 ref-heavy（本卡 _common.py 的 fp32 参考，role=correctness_only）。baseline-policy.yaml
+    既把 correctness_only 排除在性能基准之外，也把 ref-heavy 列进 forbidden_impl_patterns —— 拿它当基准算出的倍数没有工程意义。等有厂商/第三方实现（或本卡自研优化版）时回填
+    impl + role=competitor|best_known，并按实际测量校正 traffic_passes。
+  note: 在补上真基准之前，本卡不许写任何「快多少」
+updated: '2026-11-28'

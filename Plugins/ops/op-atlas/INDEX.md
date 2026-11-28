@@ -28,12 +28,13 @@
 | [`dequant-fp8-w4`](cards/dequant-fp8-w4.yaml) | quant | draft | — | bandwidth | 无实测：三条真入口已 import 验证，待 bench |
 | [`embedding-lookup`](cards/embedding-lookup.yaml) | memory | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
 | [`flash-attention-fwd`](cards/flash-attention-fwd.yaml) | attention | measured | — | mixed | causal 相对 non-causal 耗时比为 0.60；两条路… |
+| [`flash-mla`](cards/flash-mla.yaml) | attention | tuned | — | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REP… |
 | [`fused-add-rmsnorm`](cards/fused-add-rmsnorm.yaml) | norm | measured | — | bandwidth | 自研寄存器驻留实现相对 lightop 快 1.82x（event_… |
 | [`fusion-add-rmsnorm-quant`](cards/fusion-add-rmsnorm-quant.yaml) | norm | measured | — | bandwidth | 未实测跨库领先；本卡只测了单实现绝对耗时，同口径对比见 vs |
 | [`fusion-rmsnorm-rope`](cards/fusion-rmsnorm-rope.yaml) | rope | measured | — | bandwidth | 融合档比单做 2 次 norm 还快 1.86x(S=2048)/1… |
 | [`fusion-rope-kv-write`](cards/fusion-rope-kv-write.yaml) | kv | measured | — | bandwidth | 真融合比同入口的 bf16 split 分支快 2.18x；选 fp… |
 | [`fusion-silu-mul-quant`](cards/fusion-silu-mul-quant.yaml) | activation | measured | — | bandwidth | 比 silu_and_mul+quant 分步快 2.25x/2.3… |
-| [`gated-add`](cards/gated-add.yaml) | elementwise | draft | — | memory | bootstrap 新建，尚无实测；runs/loop 里只有一次 … |
+| [`gated-add`](cards/gated-add.yaml) | elementwise | draft | — | memory | bootstrap 新建，尚无实测；runs/loop 仅一次 CA… |
 | [`gated-linear-attn`](cards/gated-linear-attn.yaml) | linear-attn | draft | — | mixed | 无实测：索引卡，实现层待按证据推进 |
 | [`gemm-bf16`](cards/gemm-bf16.yaml) | gemm | measured | — | mixed | M>=2048 达峰值 0.83~0.90；torch.mm 比 F… |
 | [`gemm-fp8`](cards/gemm-fp8.yaml) | gemm | measured | — | compute | 用 aiter，不要自研；4 个变体里 3 个 adapter 空，… |
@@ -73,7 +74,7 @@
 | [`rope-mla`](cards/rope-mla.yaml) | rope | measured | — | bandwidth | MLA decode 为 360 GB/s，与纯 rope 的 33… |
 | [`rope`](cards/rope.yaml) | rope | measured | — | bandwidth | 两种 rotate_style 耗时比为 0.973（差异接近噪声边… |
 | [`sampling-topk-topp`](cards/sampling-topk-topp.yaml) | sampling | draft | — | bandwidth | 无实测：索引卡，实现层待按证据推进 |
-| [`flash-mla`](cards/flash-mla.yaml) | attention | tuned | — | mixed | 已收敛到指令数地板而非带宽地板；32k 档约 1.7 倍差是 REP… |
+| [`silu-mul`](cards/silu-mul.yaml) | activation | draft | — | memory | bootstrap 新建，尚无实测 |
 | [`topk-block-index`](cards/topk-block-index.yaml) | attention | measured | — | latency | 耗时约等于空 kernel（0.79×），已无优化空间；比 torc… |
 | [`verify-accept`](cards/verify-accept.yaml) | sampling | draft | — | compute | 无实测：索引卡，实现层待按证据推进 |
 | [`weight-prepack`](cards/weight-prepack.yaml) | quant | draft | — | bandwidth | 无实测：索引卡。核心价值是提醒「漏 prepack 是静默错误」 |

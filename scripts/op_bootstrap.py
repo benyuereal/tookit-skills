@@ -623,6 +623,12 @@ def build_candidates_yaml(name, pattern, bytes_mb):
             "rounds": 3,
             "bench_args": ["--base", "ref-heavy", "--measure-mode",
                            "event_isolated", "--rounds", "3"],
+            # 精度探针的参数**必须显式声明**。不声明时 loop.py 会退回
+            # sparse-mla 的 `--qscale 1 10 --skv 32768`（那是 logit 尺度，
+            # 逐元素/归约类算子没有这个概念），日志里还会打一句
+            # "未声明 defaults.acc_args，退回 sparse-mla 默认" —— 读的人会
+            # 误以为这张卡跟 sparse-mla 有关系。
+            "acc_args": ["--shape", "s0"],
         },
         "bottleneck": {
             "bound": bound,
@@ -730,6 +736,23 @@ def build_ab_py(template=None):
             "找不到 A/B 适配器模板 %s —— loop.py 会以「本卡没有 A/B 适配器」拒绝该卡；"
             "模板缺失时无法生成 bench/ab.py" % tpl)
     return _inject_preflight(tpl.read_text(encoding="utf-8"))
+
+
+def build_acc_probe(template=None):
+    """生成卡内 `bench/acc_probe.py`：通用精度适配器。
+
+    没有这个文件时 `loop.py` 会**静默跳过**精度检查（
+    `if not a.no_acc and (card / acc_adapter).exists():`），
+    于是新卡的 `acc_ok` 恒 False、永远给不出可 claim 的判定。
+    实测 2026-11-28：op-gated-add / op-silu-mul 两张新卡都卡在这。
+    """
+    tpl = Path(template) if template else (
+        REPO / "Plugins/ops/engine/templates/acc_probe_generic.py")
+    if not tpl.is_file():
+        raise RuntimeError(
+            "找不到精度适配器模板 %s —— 没有它生成的卡可以 `run` 但永远 "
+            "`acc_ok=False`，拿不出可 claim 的结论" % tpl)
+    return tpl.read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------- 登记（5 处一致）
@@ -961,6 +984,11 @@ def generate(name, title, family, math, shape_text, inputs_text,
         ab = bd / "ab.py"
         ab.write_text(build_ab_py(), encoding="utf-8")
         out["written"].append(str(ab))
+        # 精度适配器。少了它 loop.py 会静默跳过精度门（文件存在性判断），
+        # 新卡永远 acc_ok=False —— 能跑但拿不出结论。
+        ap = bd / "acc_probe.py"
+        ap.write_text(build_acc_probe().replace("__OP__", name), encoding="utf-8")
+        out["written"].append(str(ap))
 
         # ---- 登记进仓库（2026-11-27 补）----
         # 之前到这里就结束了：卡能进 `loop.py status`，但**仓库不认它** ——
@@ -1023,6 +1051,18 @@ def selftest():
                   "A:bf16[M,K], B:bf16[K,N]", "C:bf16[M,N]", "gemm", write=False)
     assert r2["bytes_mb"] is None, r2["bytes_mb"]
     print("[ok] 正向：gemm 不产出 bytes 分母（由 flops 约束）")
+
+    # ⑦ 反向：必须生成 bench/acc_probe.py。
+    # 没有它 loop.py 的 `(card / acc_adapter).exists()` 为假，整块精度检查
+    # **静默跳过**，新卡 acc_ok 恒 False —— 能跑但永远拿不出可 claim 的结论。
+    # 实测 2026-11-28：op-gated-add / op-silu-mul 两张卡都栽在这。
+    tpl = REPO / "Plugins/ops/engine/templates/acc_probe_generic.py"
+    assert tpl.is_file(), "缺少精度适配器模板 %s" % tpl
+    probe = build_acc_probe()
+    for must in ("qscale", "ref_absmax", "max_ulp", "nonfinite"):
+        assert must in probe, "模板缺字段 %r —— loop.py 的 ADAPTER_ACC 契约不满足" % must
+    compile(probe.replace("__OP__", "t"), "<acc_probe>", "exec")
+    print("[ok] 反向：生成的卡带 bench/acc_probe.py，且满足 ADAPTER_ACC 契约（可编译）")
 
     # ⑥ 反向：生成的卡必须过仓库级 schema —— 不是「能跑」就算数
     card = build_card("t-schema", "t", "elementwise", "y = x + gate * s",

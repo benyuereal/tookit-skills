@@ -320,6 +320,22 @@
       "last_verified": "2026-11-27",
       "evidence": null,
       "open_questions": []
+    },
+    {
+      "name": "silu-mul",
+      "path": "Plugins/ops/skills/op-silu-mul",
+      "status": "draft",
+      "shapes": [
+        "s0"
+      ],
+      "variants": [
+        "ref-heavy"
+      ],
+      "best_variant": null,
+      "floor_status": null,
+      "last_verified": "2026-11-28",
+      "evidence": null,
+      "open_questions": []
     }
   ]
 }

@@ -178,6 +178,7 @@ query 之间**没有复用** ⇒ K 被整份读 `ceil(S/q_per_ktile)` 遍 ⇒ `A
 | `op-gemm-bf16` | `measured` | BF16 GEMM（基础档） |
 | `op-mqa-logits` | `measured` | MQA logits（DSA indexer 打分；支持分组调度） |
 | `op-gated-add` | `draft` | 门控残差加 |
+| `op-silu-mul` | `draft` | SiLU 门控乘 |
 
 ## 六、数据分层（红线，必须遵守）
 

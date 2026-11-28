@@ -1,0 +1,52 @@
+# silu-mul 契约（bootstrap 生成，需人工核对）
+
+op: silu-mul
+version: 1
+math: "y[i,j] = silu(x1[i,j]) * x2[i,j]；silu(v)=v*sigmoid(v)，fp32 计算后转 bf16"
+
+shapes:
+  x1: [M, H]
+  x2: [M, H]
+  y: [M, H]
+
+dtypes:
+  x1: bf16
+  x2: bf16
+  y: bf16
+
+tolerance:
+  vs_fp32_ref:
+    mode: ulp_bound
+    max_ulp: 2
+    max_abs: 3.125e-2
+    cosine: 0.99999
+    note: "bf16 按量级判 ULP；max_abs 仅兜底"
+  variant_vs_variant:
+    mode: tolerance
+
+invariants:
+  - name: determinism
+    mode: bit_exact
+    repeats: 5
+
+gates:
+  - name: correctness
+    template: correctness
+    required: true
+  - name: invariants
+    template: invariants
+    required: true
+  - name: perf
+    script: bench/ab.py
+    required: false
+    skip_reason: "bootstrap 生成时还没有实测，bench 待接"
+
+floor:
+  metric: hbm_bandwidth
+  # peak 必须来自 bw-ladder 的 achievable，不是型号标称值（1100 是型号名）
+  peak: 1730
+  unit: GB/s
+  peak_source: Plugins/ops/op-atlas/bw-ladder.yaml
+  basis: "bootstrap 按访问模式算出的字节数，见 floor_inputs"
+  at_floor_threshold: 0.10
+  status: unmeasured
