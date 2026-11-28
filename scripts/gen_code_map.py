@@ -40,6 +40,7 @@ GROUPS = [
         ("Plugins/ops/engine/ledger.py", "记账：候选计划、判死/停滞流水、overlay、进度文件、judge 判定搬用"),
         ("Plugins/ops/engine/cli.py", "explore / floor 的薄 CLI 层：只解析参数、打印、定退出码"),
         ("Plugins/ops/engine/judge.py", "从 description+shapes 生成 judge、GPU 校准并**冻结容差**（fail-closed）"),
+        ("Plugins/ops/engine/ablate.py", "消融流水线：champion 逐项删方法 → 引擎测 → 自动生成 ablate spec（归因仍由 scripts/ablate.py 算）"),
         ("Plugins/ops/engine/guard.py", "命令级守卫：测量只能走 loop.py run；只读查看放行（D1 的代码级强制）"),
         ("Plugins/ops/engine/nextstep.py", "唯一的策略实现：算出「下一步做什么」（run/implement/explore/fix/stop）"),
         ("Plugins/ops/engine/orchestrator.py", "**循环拥有者**：iterate 控制流 + CLI（可 fake 单测）"),
@@ -126,6 +127,7 @@ GROUPS = [
         ("scripts/send_report.py", "把进展汇报发到邮箱"),
         ("scripts/hygon-upstream-sync.py", "HYGON-AI GitHub 开源上游同步工具（dcu skills 用）"),
         ("scripts/gen_code_map.py", "生成 docs/CODE_MAP.md 本身（按角色分组；由测试守护，不许腐烂）"),
+        ("scripts/template_render.py", "scripts 侧的模板渲染器（{{key}} 占位；与 engine/instrument 同语义）"),
     ]),
 ]
 
