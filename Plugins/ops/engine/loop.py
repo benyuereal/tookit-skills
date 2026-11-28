@@ -1443,6 +1443,72 @@ def load_allowed_actions(card):
     return set(allowed), canon
 
 
+BENCH_STD_NOTE = (
+    "本文件的数字来自 loop.py run 调起的 bench/ab.py（GPU event、event_isolated 口径）。"
+    "**由引擎生成** —— 手写的同形状文件不满足这条链路的可复现契约。")
+
+
+def write_bench_std(out_path, card, ab, variants, denominator=None):
+    """把一次 `loop.py run` 的实测写成 opbench 口径的 `results/bench_std.json`。
+
+    为什么要由引擎写而不是让 agent 自己拼：评分只读这个文件，而 `loop.py run`
+    原先只写 `runs/loop/*.jsonl` —— **交付物与引擎产出是两套**，agent 自然
+    先手搓一份能得分的，再把 loop.py 当打卡。见模块说明。
+
+    形状取自卡的 `shapes.yaml`（ab 里带 params 就用它），不猜 uuid：
+    opbench 的 `axes` 必须与题目逐项相同，多/少一个键都判无效，所以这里
+    只搬运卡里声明的参数，不添油加醋。
+    """
+    import json as _json
+    shape = (ab or {}).get("shape") or {}
+    params = dict(shape.get("params") or {})
+    rows = []
+    iters = int((ab or {}).get("rounds") or 0) or 1
+    for run in (ab or {}).get("runs") or []:
+        for v in run.get("variants") or []:
+            if v.get("tag") not in variants:
+                continue
+            ms = v.get("ms")
+            if not isinstance(ms, (int, float)):
+                continue
+            rows.append({
+                "uuid": str(shape.get("shape") or shape.get("_name") or "default"),
+                "axes": params,
+                "median_ms": float(ms),
+                # ab.py 目前只报中位数与 MAD。**不假装采过 min**：写明来源。
+                "min_ms": float(ms),
+                "iters": iters,
+                "warmup": 10,
+                "l2_flush_bytes": int((ab or {}).get("l2_flush_bytes") or 33554432),
+            })
+            break
+    if not rows:
+        return None
+    doc = {
+        "task": card.name,
+        "shapes": rows,
+        "impl": "%s/bench/ab.py:_measure  —  变体 %s（由 loop.py run 调起，"
+                "同一进程内 event 计时）" % (card.name, ",".join(sorted(variants))),
+        "detail": {
+            "generated_by": "Plugins/ops/engine/loop.py::write_bench_std",
+            "card": card.name,
+            "measure_mode": (ab or {}).get("measure_mode"),
+            "min_ms_source": "ab.py 未单独采集 min，此处与 median 相同",
+            "note": BENCH_STD_NOTE,
+        },
+    }
+    if denominator:
+        doc["denominator"] = denominator
+    p = Path(out_path)
+    if not p.is_absolute():
+        # 相对路径按**调用者的 cwd** 解析：agent 在题目工作目录里跑 loop.py，
+        # `--bench-std results/bench_std.json` 就该落到题目的 results/ 下。
+        p = Path.cwd() / p
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(_json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+    return p
+
+
 def cmd_run(a):
     card = a.card
     cands = load_candidates(card)
@@ -1608,6 +1674,34 @@ def cmd_run(a):
         print(_c("A/B 失败（rc=%d），没有记录" % rc, WARN))
         return 1
     ab = json.loads(ab_json.read_text())
+
+    # ---- 交付物落盘（--bench-std）----
+    # 放在判定之前：一个变体被拒不代表这次测量无效，已测到的数仍应成为交付物。
+    # 这是「引擎在主路上」的关键一环：评分只读 results/bench_std.json，
+    # 而 loop.py 原先只写 runs/loop/*.jsonl，两者是两套 —— agent 自然先手搓
+    # 一份能得分的，再把 loop.py 当打卡（2026-11-28 读 C 臂对话实证）。
+    if getattr(a, "bench_std", None):
+        _den = None
+        try:
+            _roof = card / "roofline.json"
+            if _roof.is_file():
+                _r = json.loads(_roof.read_text())
+                _pb = (_r.get("ridge") or {}).get("peak_bw") or {}
+                if _pb.get("id") and _pb.get("value") is not None:
+                    _den = {"peak_id": _pb["id"], "value_gbs": _pb["value"]}
+        except (OSError, json.JSONDecodeError, TypeError):
+            _den = None
+        # rounds 是本次实际测量轮数，交给交付物当 iters；
+        # 不传的话 write_bench_std 只能写 1，读的人会以为是单次测的。
+        ab["rounds"] = int(getattr(a, "rounds", 0) or 1)
+        _p = write_bench_std(a.bench_std, card, ab,
+                             {vmap[t] for t in tags}, denominator=_den)
+        if _p:
+            print("[bench_std] 交付物已生成：%s（%d 个形状档）"
+                  % (_p, len(json.loads(_p.read_text()).get("shapes") or [])), flush=True)
+        else:
+            print(_c("[bench_std] 没写出来：ab 结果里没有可用的实测耗时"
+                     "（所有变体都被跳过？）—— 交付物缺失，本轮不算完成", WARN), flush=True)
 
     acc = {}
     # 精度门是**可选适配器**。它的参数同样由卡片声明（acc_args），
@@ -2243,6 +2337,10 @@ def main():
     r.add_argument("--primary-qscale", type=float, help="主口径 logit 尺度（默认 1；压力档只报退化倍数）")
     r.add_argument("--stress-mult", type=float, help="压力档允许的相对退化倍数（默认 1.5）")
     r.add_argument("--no-acc", action="store_true", help="跳过精度探针（只在你确定逐位一致时用）")
+    r.add_argument("--bench-std", default=None, metavar="PATH",
+                   help="把本次实测写成 opbench 口径的 results/bench_std.json。"
+                        "**这是交付物的唯一合法来源**：手写的同形状文件不满足"
+                        "「由引擎驱动」的可复现契约")
     r.add_argument("--force", action="store_true", help="允许重跑已证伪的变体")
 
     i = sub.add_parser("impl-broken", help="实现级失败：修实现，不耗方向预算")
