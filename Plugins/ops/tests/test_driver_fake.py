@@ -47,10 +47,10 @@ def test_pre_green_is_neutral_until_first_correctness_pass():
     assert recs[2].verdict == "KEEP"
 
 
-def test_plateau_stops_at_noise_floor():
+def test_plateau_stops_after_three_flat_rounds():
     be = D.FakeBackend(flat=True)          # 每轮只有 0.5% 改善 < 1.5% 噪声底
     recs = D.iterate(be, 10, card="fake")
-    assert len(recs) <= 4, "plateau 应在 MAX_PLATEAU=3 轮内停"
+    assert len(recs) == 3, "P3.3：连续 3 轮无提升必须停"
     assert recs[-1].stop_reason == "plateau"
     assert all(r.verdict == "NEUTRAL" for r in recs)
 
@@ -88,3 +88,19 @@ def test_engine_outputs_do_not_count_as_agent_changes():
     assert D.agent_changes(["memory/ledger.jsonl", "results/bench_std.json"]) == []
     assert D.agent_changes(["Plugins/ops/skills/op-x/_common.py"]) == [
         "Plugins/ops/skills/op-x/_common.py"]
+
+
+def test_noise_floor_uses_same_generation_spread():
+    assert D.noise_floor_from([0.99]) == D.NOISE_FLOOR          # 只有一个值 → 地板
+    assert abs(D.noise_floor_from([0.99, 0.94]) - 0.05) < 1e-9  # spread 0.05 > 1.5%
+    assert D.noise_floor_from([0.99, 0.985]) == D.NOISE_FLOOR   # spread 0.5% → 地板
+
+
+def test_wide_spread_turns_a_gain_into_neutral():
+    """同代 spread 5% 时，下一轮 2.5% 的"提升"不能算 KEEP。"""
+    be = D.FakeBackend(times=[0.200, 0.190, 0.1915])
+    recs = D.iterate(be, 3, card="fake")
+    assert recs[1].verdict == "KEEP"        # 第一轮 ratio=1.0，第二轮 -5%
+    # 此时 ratios=[1.0, 0.95]，spread=5% ⇒ 第三轮 -2.5% 落在噪声内
+    assert recs[2].noise_floor >= 0.05
+    assert recs[2].verdict == "NEUTRAL"

@@ -128,6 +128,18 @@ def render_student_prompt(records: list[IterationRecord], card: str = "",
 
 # ---------------------------------------------------------------- P3.1 控制流
 
+def noise_floor_from(ratios, floor: float = NOISE_FLOOR) -> float:
+    """同代 ratio 的 spread 作为噪声底，**不低于 1.5%**（P3.3）。
+
+    "同代" = 本代已产生的 cand/base 比值。spread 大说明测量本身在抖，
+    低于它的增益不应被当成提升。
+    """
+    vals = [float(r) for r in (ratios or []) if isinstance(r, (int, float))]
+    if len(vals) < 2:
+        return floor
+    return max(floor, max(vals) - min(vals))
+
+
 def agent_changes(changed_files: list[str]) -> list[str]:
     """只保留 agent 该改的路径。引擎自己写的一律不算。"""
     return [f for f in (changed_files or [])
@@ -166,6 +178,7 @@ def iterate(backend: Backend, rounds: int, card: str = "",
         except Exception:                                    # noqa: BLE001
             max_impl_fails = 3
     records: list[IterationRecord] = []
+    ratios: list[float] = []          # 本代 cand/base 比值，用于动态噪声底
     head = backend.commit("baseline")
     plateau = 0
     impl_fails = 0
@@ -191,7 +204,8 @@ def iterate(backend: Backend, rounds: int, card: str = "",
         if base_ms and cand_ms:
             delta = cand_ms / base_ms - 1.0
 
-        verdict = _verdict(correctness, delta, noise_floor, pre_green=not green,
+        noise = noise_floor_from(ratios, floor=noise_floor)
+        verdict = _verdict(correctness, delta, noise, pre_green=not green,
                            claim=str(ev.get("claim") or ""), changed_files=files)
         if verdict == "INVALID_NOOP":
             backend.reset_to(head)          # 没有 agent 改动：丢弃空提交
@@ -220,9 +234,11 @@ def iterate(backend: Backend, rounds: int, card: str = "",
             acc=dict(ev.get("acc") or {}),
             claim=str(ev.get("claim") or ""),
             refuted_directions=list(ev.get("refuted_directions") or []),
-            noise_floor=noise_floor,
+            noise_floor=noise,
         )
         records.append(rec)
+        if delta is not None:
+            ratios.append(1.0 + delta)
 
         if noops >= MAX_NOOP:
             rec.stop_reason = "noop"
