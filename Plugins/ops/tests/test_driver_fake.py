@@ -79,8 +79,8 @@ def test_noop_changes_are_invalid_and_never_keep():
     recs = D.iterate(be, 3, card="fake")
     assert recs[0].verdict == "INVALID_NOOP"
     assert all(r.verdict != "KEEP" for r in recs)
-    assert len(recs) == 1 and recs[-1].stop_reason == "noop"
-    assert be.reset_calls == ["c1"]      # 空提交被丢弃
+    assert len(recs) == D.MAX_NOOP and recs[-1].stop_reason == "noop"
+    assert be.reset_calls == ["c1", "c1"]      # 空提交被丢弃
 
 
 def test_engine_outputs_do_not_count_as_agent_changes():
@@ -96,11 +96,13 @@ def test_noise_floor_uses_same_generation_spread():
     assert D.noise_floor_from([0.99, 0.985]) == D.NOISE_FLOOR   # spread 0.5% → 地板
 
 
-def test_wide_spread_turns_a_gain_into_neutral():
-    """同代 spread 5% 时，下一轮 2.5% 的"提升"不能算 KEEP。"""
-    be = D.FakeBackend(times=[0.200, 0.190, 0.1915])
-    recs = D.iterate(be, 3, card="fake")
-    assert recs[1].verdict == "KEEP"        # 第一轮 ratio=1.0，第二轮 -5%
-    # 此时 ratios=[1.0, 0.95]，spread=5% ⇒ 第三轮 -2.5% 落在噪声内
-    assert recs[2].noise_floor >= 0.05
-    assert recs[2].verdict == "NEUTRAL"
+def test_repeat_spread_raises_noise_floor():
+    """R1：噪声底来自**同 job 重复测量**的 spread，不是跨轮比值。"""
+    # 同一次 job 重复 3 次，spread=5% ⇒ 2.5% 的改善判 NEUTRAL
+    be = D.FakeBackend(times=[0.192, 0.192, 0.192], noise=0.05)
+    recs = D.iterate(be, 2, card="fake")
+    assert recs[0].noise_floor == 0.05
+    assert recs[0].verdict == "NEUTRAL"
+    # 对照：噪声 0 → 5% 改善判 KEEP
+    be2 = D.FakeBackend(times=[0.190], noise=0.0)
+    assert D.iterate(be2, 1, card="fake")[0].verdict == "KEEP"

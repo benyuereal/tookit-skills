@@ -1921,11 +1921,33 @@ def cmd_run(a):
     gpu = _req
     env = dict(os.environ, HIP_VISIBLE_DEVICES=gpu)
     print("$ HIP_VISIBLE_DEVICES=%s %s" % (gpu, " ".join(cmd)), flush=True)
-    rc = subprocess.call(cmd, env=env)
-    if rc != 0 or not ab_json.exists():
-        print(_c("A/B 失败（rc=%d），没有记录" % rc, WARN))
-        return 1
-    ab = json.loads(ab_json.read_text())
+    # ---- 同一 job 重复测量（R1）----
+    # 噪声底必须是**同一次测量的重复 spread**，不是跨轮比值的 max-min：
+    # 后者在出现一次大改善后会把噪声底抬到几十个百分点，真实收益被 NEUTRAL。
+    reps = max(1, int(getattr(a, "repeat", 1) or 1))
+    ab_list = []
+    for _r in range(reps):
+        _out = ab_json if _r == 0 else db_dir(card) / ("_ab_r%d.json" % _r)
+        _cmd = [x if x != str(ab_json) else str(_out) for x in cmd]
+        rc = subprocess.call(_cmd, env=env)
+        if rc != 0 or not _out.exists():
+            print(_c("A/B 失败（rc=%d，第 %d/%d 次），没有记录" % (rc, _r + 1, reps), WARN))
+            return 1
+        ab_list.append(json.loads(_out.read_text()))
+    ab = ab_list[0]
+    _rep = {}
+    for _x in ab_list:
+        for _run in _x.get("runs") or []:
+            for _v in _run.get("variants") or []:
+                if _v.get("ms") is not None:
+                    _rep.setdefault(_v["tag"], []).append(float(_v["ms"]))
+    for _run in ab.get("runs") or []:
+        _base = _run.get("base_ms")
+        for _v in _run.get("variants") or []:
+            _ms = _rep.get(_v["tag"]) or []
+            _v["repeat_ms"] = _ms
+            _v["repeat_spread"] = ((max(_ms) - min(_ms)) / _base
+                                   if len(_ms) > 1 and _base else None)
 
     # ---- 交付物落盘（--bench-std）----
     # 放在判定之前：一个变体被拒不代表这次测量无效，已测到的数仍应成为交付物。
@@ -2046,6 +2068,8 @@ def cmd_run(a):
                 "cand_ms": v.get("ms"), "mad": v.get("mad"),
                 "delta_pct": v.get("delta_pct"), "ratio_vs_base": v.get("ratio_vs_base"),
                 "maxdiff": v.get("maxdiff"), "rel": v.get("rel"),
+                "repeat_ms": v.get("repeat_ms"),
+                "repeat_spread": v.get("repeat_spread"),
                 "acc": acc.get(v["tag"], {}), "tolerance": tol,
                 "evidence_kind": _tol_meta.get("evidence_kind"),
                 "tolerance_sha256": _tol_meta.get("sha256"),
@@ -2804,6 +2828,8 @@ def main():
     r.add_argument("--heads", type=int)
     r.add_argument("--qscale", type=float, nargs="+")
     r.add_argument("--rounds", type=int, default=3)
+    r.add_argument("--repeat", type=int, default=1,
+                   help="同一 job 重复测量几次；噪声底取这几次的 spread（R1）")
     r.add_argument("--tol", type=float, help="对 fp32 参考的 max_abs 容差（默认读 contract.yaml）")
     r.add_argument("--primary-qscale", type=float, help="主口径 logit 尺度（默认 1；压力档只报退化倍数）")
     r.add_argument("--stress-mult", type=float, help="压力档允许的相对退化倍数（默认 1.5）")

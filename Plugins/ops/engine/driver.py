@@ -24,7 +24,7 @@ from typing import Protocol
 
 AGENT_PATHS = ("Plugins/ops/skills/",)   # 只认 agent 该改的地方
 ENGINE_PATHS = ("memory/", "results/", ".artifacts/", "Plugins/ops/op-atlas/")
-MAX_NOOP = 1
+MAX_NOOP = 2
 
 NOISE_FLOOR = 0.015          # 1.5%：低于这个的增益不算提升
 MAX_PLATEAU = 3              # 连续这么多轮没有 KEEP → plateau
@@ -134,6 +134,23 @@ def render_student_prompt(records: list[IterationRecord], card: str = "",
 
 # ---------------------------------------------------------------- P3.1 控制流
 
+def repo_records_dir(ws) -> Path:
+    """记录默认落到**仓库级** .artifacts/driver/records/（R4）。
+
+    工作区是 disposable 的；记录落在 workspace/.artifacts 里会随工作区一起被清。
+    从工作区向上找第一个"含 Plugins/ops/engine/loop.py 且自身不在 .artifacts 里"
+    的目录，即仓库根。$OPS_RECORDS_DIR 可覆盖。
+    """
+    env = os.environ.get("OPS_RECORDS_DIR")
+    if env:
+        return Path(env)
+    p = Path(ws).resolve()
+    for q in [p, *p.parents]:
+        if (q / "Plugins/ops/engine/loop.py").is_file() and ".artifacts" not in q.parts:
+            return q / ".artifacts" / "driver" / "records"
+    return Path(__file__).resolve().parents[3] / ".artifacts" / "driver" / "records"
+
+
 def noise_floor_from(ratios, floor: float = NOISE_FLOOR) -> float:
     """同代 ratio 的 spread 作为噪声底，**不低于 1.5%**（P3.3）。
 
@@ -218,7 +235,10 @@ def iterate(backend: Backend, rounds: int, card: str = "",
         if base_ms and cand_ms:
             delta = cand_ms / base_ms - 1.0
 
-        noise = noise_floor_from(ratios, floor=noise_floor)
+        # R1：噪声底 = 同一次 job 重复测量的 spread（loop.py --repeat），
+        # 下限 1.5%；不再用跨轮 ratio 的 max-min（大改善会把噪声底抬到几十个点）。
+        _rep = ev.get("noise")
+        noise = max(noise_floor, float(_rep)) if _rep else noise_floor
         verdict = _verdict(correctness, delta, noise, pre_green=not green,
                            claim=str(ev.get("claim") or ""), changed_files=files)
         if verdict == "INVALID_NOOP":
@@ -236,7 +256,7 @@ def iterate(backend: Backend, rounds: int, card: str = "",
             iter=i,
             round_id="r%d" % i,
             change=change or "",
-            changed_files=list(ev.get("changed_files") or []),
+            changed_files=list(files),      # R2：backend 是唯一来源
             workspace_commit=commit,
             correctness=correctness,
             verdict=verdict,
@@ -255,7 +275,8 @@ def iterate(backend: Backend, rounds: int, card: str = "",
             ratios.append(1.0 + delta)
 
         if noops >= MAX_NOOP:
-            rec.stop_reason = "noop"
+            rec.stop_reason = ("agent_timeout"
+                               if str(change).startswith("[agent-timeout") else "noop")
             break
         if impl_fails >= max_impl_fails:
             rec.stop_reason = "impl_fails"
@@ -279,12 +300,13 @@ class FakeBackend:
 
     def __init__(self, flat: bool = False, evidence: str = "vendor_library",
                  fail_every: int = 0, times=None, green_from: int = 1,
-                 noop: bool = False):
+                 noop: bool = False, noise: float | None = None):
         self.flat = flat
         self.evidence = evidence
         self.fail_every = fail_every
         self.green_from = green_from
         self.noop = noop
+        self.noise = noise
         self._changed = [] if noop else ["Plugins/ops/skills/fake/_common.py"]
         self.n = 0
         self.commits: list[str] = ["c0"]
@@ -334,6 +356,7 @@ class FakeBackend:
             "utilization": 0.82,
             "floor_us": 116.4,
             "refuted_directions": ["fusion-boundary"] if i >= 2 else [],
+            "noise": self.noise,
         }
 
 
@@ -464,7 +487,9 @@ class RealBackend:
         self._ensure_judge()
         bench = self.ws / "results" / "bench_std.json"
         before = set(glob.glob(str(self.artifacts / "**/runs/loop/*.jsonl"), recursive=True))
-        r = self._loop("run", self.tag, "--bench-std", str(bench))
+        _rep = os.environ.get("OPS_REPEAT", "3")
+        r = self._loop("run", self.tag, "--bench-std", str(bench),
+                       "--repeat", str(_rep))
         self._claim = ""
         if r.returncode == 2:
             return {"correctness": False, "claim": "FAIL:run_rejected",
@@ -525,6 +550,7 @@ class RealBackend:
             "refuted_directions": [],
             "changed_files": self._changed,
             "decision": rec.get("decision"),
+            "noise": rec.get("repeat_spread"),
         }
 
 
@@ -610,10 +636,9 @@ def main(argv=None) -> int:
                      ("  stop=" + r.stop_reason) if r.stop_reason else ""))
         # 默认落库到本次 run 的 artifact 账本目录（仓库内、gitignored），
         # 不再默认写 /tmp —— 临时目录一清，证据就没了（lead 2026-11-28 阻断项）。
+        # R4：默认落到仓库级 .artifacts/driver/records/（工作区会被清掉）
         out = Path(a.out) if a.out else (
-            be.artifacts / "driver"
-            / ("%s_%s" % (be.card.name, be.run_id)) / "runs" / "loop"
-            / ("iterate-%s.jsonl" % time.strftime("%Y%m%d_%H%M%S")))
+            repo_records_dir(be.ws) / ("iterate-%s.jsonl" % time.strftime("%Y%m%d_%H%M%S")))
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text("\n".join(r.to_json() for r in recs) + "\n", encoding="utf-8")
         print("→ %s（%d 条）" % (out, len(recs)))
