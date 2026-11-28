@@ -194,10 +194,24 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
         if not calib:
             _why = ("还没有任何可 claim 的实测，而这条候选的变体已经实现 —— "
                     "直接跑它，第一条记录就是基线")
+        _rounds = int((cands.get("defaults") or {}).get("rounds") or 3)
         return mk("run", _why,
                   "python3 -I Plugins/ops/engine/loop.py -C %s run %s%s"
                   % (card, c.get("id"), deliverable_args()),
-                  tag=c.get("id"), variant=c.get("variant"), also=more)
+                  tag=c.get("id"), variant=c.get("variant"), also=more,
+                  expect_seconds="约 %d-%d 秒（%d 轮 × event 计时；"
+                                 "若这张卡的变体要现场编译 HIP，首次可能 2-5 分钟）"
+                                 % (5 * _rounds, 30 * _rounds, _rounds),
+                  produces=["`%s/runs/loop/<日期>.jsonl` 追加一条记录"
+                            "（含判定：ACCEPTED_*/REJECTED_*/CALIBRATION_ONLY）" % card.name,
+                            "`results/bench_std.json`（命令里带了 --bench-std 时）",
+                            "`op-atlas/cards/<id>.yaml` 的 t_actual_us 被写回"],
+                  on_failure=["rc=2：六道门拒绝了 —— 看输出最后三行，它会说"
+                              "是哪道门（方向预算/瓶颈归因/done_when/天花板）",
+                              "rc=1：A/B 失败 —— 通常是变体缺编译产物或库 import 失败，"
+                              "看 `variant=... 跳过: ...` 那行",
+                              "任何失败都**不要自己手搓测量**：跑完再 `next` 一次，"
+                              "它会给出新的下一步"])
 
     # ③ 候选在、变体没实现 → 实现它（唯一必须模型做的步骤）
     todo = [c for c in pending if c.get("variant") not in variants]
@@ -242,6 +256,19 @@ def render(plan: dict) -> str:
     L.append("照做（复制粘贴即可）：")
     L.append("    %s" % plan.get("cmd", ""))
     d = plan.get("detail") or {}
+    if d.get("expect_seconds"):
+        L.append("")
+        L.append("预计耗时：%s" % d["expect_seconds"])
+    if d.get("produces"):
+        L.append("")
+        L.append("跑完之后你会得到：")
+        for x in d["produces"]:
+            L.append("  · %s" % x)
+    if d.get("on_failure"):
+        L.append("")
+        L.append("如果失败：")
+        for x in d["on_failure"]:
+            L.append("  · %s" % x)
     if d.get("also"):
         L.append("")
         L.append("之后还有：%s" % ", ".join(str(x) for x in d["also"]))
