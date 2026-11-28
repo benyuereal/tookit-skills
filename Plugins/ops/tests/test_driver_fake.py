@@ -148,3 +148,11 @@ def test_queue_empty_is_no_work_without_spawning_agent():
     assert recs[0].verdict == "NO_WORK"
     assert recs[0].stop_reason == "queue_empty"
     assert be.agent_calls == [], "队列空时不许起 agent 子进程"
+
+
+def test_realbackend_exposes_system_prompt_contract(tmp_path):
+    """全局角色契约必须通过 env 传给 agent wrapper。"""
+    be = D.RealBackend(tmp_path, "Plugins/ops/skills/x", "tag", "true", gpu=0)
+    assert be.env["OPS_WS"] == str(tmp_path.resolve())
+    assert be.env["OPS_SYSTEM_PROMPT_FILE"].endswith("system_student.md")
+    assert be.env["OPS_ENV_FILE"]

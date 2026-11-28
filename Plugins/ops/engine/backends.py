@@ -278,15 +278,24 @@ class RealBackend:
     """门面：组合 git / agent / evaluator，实现 contract.Backend。"""
 
     def __init__(self, workspace: Path, card_rel: str, tag: str, agent_cmd: str,
-                 gpu: int = 0, timeout_s: int = 1200, run_id: str = "p32"):
+                 gpu: int = 0, timeout_s: int = 1200, run_id: str = "p32",
+                 system_prompt_file: str | None = None):
         self.ws = Path(workspace).resolve()
         self.card = self.ws / card_rel
         self.run_id = run_id
         (self.ws / ".scratch").mkdir(exist_ok=True)
+        # 全局「实现者契约」：由库存 wrapper 通过 --append-system-prompt 注入
+        _sys = (system_prompt_file
+                or os.environ.get("OPS_SYSTEM_PROMPT_FILE")
+                or str(Path(__file__).resolve().parent
+                       / "instrument" / "prompts" / "system_student.md"))
         self.env = dict(os.environ,
                         OPS_GPU=str(gpu), HIP_VISIBLE_DEVICES=str(gpu),
                         CUDA_VISIBLE_DEVICES=str(gpu), OPS_ARM="driver",
-                        OPS_RUN_ID=run_id,
+                        OPS_RUN_ID=run_id, OPS_WS=str(self.ws),
+                        OPS_ENV_FILE=os.environ.get("OPS_ENV_FILE",
+                                                    "/workspace/tsoc.env"),
+                        OPS_SYSTEM_PROMPT_FILE=_sys,
                         OPS_ARTIFACTS=str(self.ws / ".artifacts"))
         self.git = WorkspaceGit(self.ws)
         self.agent = ClaudeAgent(agent_cmd, self.ws, self.env, timeout_s)

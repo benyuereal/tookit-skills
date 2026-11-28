@@ -208,6 +208,8 @@ def main(argv=None) -> int:
     p.add_argument("--tag", default=None)
     p.add_argument("--agent-cmd", default=None)
     p.add_argument("--gpu", type=int, default=0)
+    p.add_argument("--system-prompt-file", default=None,
+                   help="全局角色契约（默认 instrument/prompts/system_student.md）")
     p.add_argument("--agent-timeout", type=int, default=1200,
                    help="单轮 agent 的 wall-clock 上限（秒）；默认 20 分钟")
     a = p.parse_args(argv)
@@ -233,7 +235,8 @@ def main(argv=None) -> int:
             print("✗ --real 需要 --workspace --card-rel --tag --agent-cmd", file=sys.stderr)
             return 2
         be = RealBackend(Path(a.workspace), a.card_rel, a.tag, a.agent_cmd,
-                         gpu=a.gpu, timeout_s=a.agent_timeout, run_id="p32")
+                         gpu=a.gpu, timeout_s=a.agent_timeout, run_id="p32",
+                         system_prompt_file=a.system_prompt_file)
         # 预检：--tag 必须能在 candidates.yaml 里找到候选，否则整轮 agent 会
         # 收到一个"没有目标"的任务（实测：它会花满 20 分钟读仓库，0 次 Write）。
         cand = None
