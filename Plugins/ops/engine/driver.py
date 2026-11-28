@@ -371,11 +371,15 @@ class RealBackend:
     # -- agent
     def run_agent(self, prompt: str, role: str = "student") -> str:
         import subprocess
-        r = subprocess.run(self.agent_cmd, shell=True, cwd=str(self.ws),
-                           input=prompt, text=True, timeout=self.timeout_s,
-                           env=self.env, capture_output=True)
+        try:
+            r = subprocess.run(self.agent_cmd, shell=True, cwd=str(self.ws),
+                               input=prompt, text=True, timeout=self.timeout_s,
+                               env=self.env, capture_output=True)
+        except subprocess.TimeoutExpired:
+            # 超时不炸整个 driver：记一轮 REVERT 的素材，让循环继续/按 noop 停下
+            return "[agent-timeout after %ss]" % self.timeout_s
         if r.returncode != 0:
-            raise RuntimeError("agent rc=%d: %s" % (r.returncode, r.stderr[-500:]))
+            return "[agent-rc=%d] %s" % (r.returncode, (r.stderr or "")[-300:])
         return r.stdout.strip()
 
     # -- eval
@@ -515,6 +519,8 @@ def main(argv=None) -> int:
     p.add_argument("--tag", default=None, help="要跑的候选 id")
     p.add_argument("--agent-cmd", default=None)
     p.add_argument("--gpu", type=int, default=0)
+    p.add_argument("--agent-timeout", type=int, default=1800,
+                   help="单轮 agent 的 wall-clock 上限（秒）")
     a = p.parse_args(argv)
 
     if a.selfcheck:
@@ -537,7 +543,7 @@ def main(argv=None) -> int:
             print("✗ --real 需要 --workspace --card-rel --tag --agent-cmd", file=sys.stderr)
             return 2
         be = RealBackend(Path(a.workspace), a.card_rel, a.tag, a.agent_cmd,
-                         gpu=a.gpu, run_id="p32")
+                         gpu=a.gpu, timeout_s=a.agent_timeout, run_id="p32")
         be.init_workspace()
         cand = None
         try:

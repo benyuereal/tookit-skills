@@ -151,3 +151,40 @@ r1  INVALID_NOOP cand=0.14368 base=0.252 claim=PASS  stop=noop
 ```
 
 单测新增 2 条（noop / 引擎产物过滤），共 8 条全绿。
+
+---
+
+## 六、真 claude agent 的一轮（回应 REVIEW-P3.2b 的 (c)）
+
+**做法**：`su - opb_c -c 'bash /tmp/agent_claude.sh'`（DTK + tsoc 环境 +
+`claude -p --dangerously-skip-permissions`），在 `op-fused-add-rmsnorm` 上实现
+候选 `fused-mr4`（编译 `kernels/mr4.so`）。
+
+**结果**
+
+```
+r1  KEEP  cand=0.1441590040922165 base=0.24991999566555023 claim=PASS  stop=rounds_done
+记录：change="[agent-timeout after 1200s]"
+      changed_files=["Plugins/ops/skills/op-fused-add-rmsnorm/kernels/build.sh"]
+```
+
+- agent 在超时前**确实完成了实现**：`mr4.so` 已编译（22.8KB），并写下 `kernels/build.sh`；
+  引擎随后用新变体测量 → `-42.3%` → claim PASS → KEEP。
+- **D1 检查**：agent 会话 38 次工具调用，命中的 3 条 "bench" 全是 `ls`/`cat`
+  （列目录、读文件），**没有任何 `python ... ab.py` / `acc_probe` / `cuda.Event` 执行**。
+- 该轮 `change` 是 `[agent-timeout ...]`，因为 claude 在 1200s 上限被切、没来得及返回
+  自述；但文件改动与测量都在账本里，判定不依赖自述。
+
+### 新增的两个健壮性修复
+
+1. `run_agent` 捕获 `TimeoutExpired`，返回 `[agent-timeout ...]` 而不是炸掉 driver；
+2. 工作区权限：仓库根 751（opb_c 可穿行；`engine/` 仍 750，实测读不到），
+   git 全部加 `-c safe.directory=*`（工作区 chown 给 agent 后 root 跑 git 会报
+   dubious ownership）。
+
+### 仍存在的限制
+
+- **agent 慢**：1200s 只够它编译 + 写 build.sh，没进入"回报改了什么"。建议正式跑
+  用 1800–2400s/轮，或把 prompt 收窄到"只做这一件事"。
+- 真 claude 的会话里没有 bench 执行，但这仍是**靠 prompt 约束**；P4 的 sandbox/deny
+  落地前，不能声称"物理上不可能自己测"。
