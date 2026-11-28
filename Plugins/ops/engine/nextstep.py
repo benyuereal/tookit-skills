@@ -145,6 +145,50 @@ def deliverable_args() -> str:
     return ""
 
 
+def preflight(card: Path, cand: dict) -> dict:
+    """这一条候选**能不能直接跑**。返回 {"ok": bool, "checks": [...], "problems": [...]}。
+
+    复用 loop.py 自己的六道门函数 —— 不在这里另写一套判据（那正是本仓反复
+    在消灭的"两份口径"）。跑在 1 秒内，不碰 GPU。
+    """
+    checks, problems = [], []
+    v = cand.get("variant")
+    vs = implementable_variants(card)
+    if v and v in vs:
+        checks.append("变体 %r 已实现（VARIANTS / HIP_VARIANTS / forged 三处之一）" % v)
+    else:
+        problems.append("变体 %r 不在可跑清单里（当前可跑：%s）"
+                        % (v, ", ".join(sorted(vs)[:6]) or "无"))
+    bench = card / (cand.get("_bench") or "bench/ab.py")
+    if bench.is_file():
+        checks.append("适配器 %s 存在" % bench.name)
+    else:
+        problems.append("缺适配器 %s" % bench)
+    try:
+        loop = _load("loop")
+        cands = _load("card").load_candidates(card)
+        for fn, label in (("bottleneck_problems", "瓶颈归因"),
+                          ("done_when_problems", "done_when"),
+                          ("budget_problems", "方向预算")):
+            f = getattr(loop, fn, None)
+            if f is None:
+                continue
+            try:
+                kw = {"tags": {cand.get("id")}}
+                if fn == "bottleneck_problems":
+                    kw["card"] = card
+                probs = f(cands, **kw)
+            except TypeError:
+                probs = f(cands)
+            if probs:
+                problems.extend("%s：%s" % (label, p) for p in probs[:2])
+            else:
+                checks.append("六道门·%s 通过" % label)
+    except Exception as e:                       # noqa: BLE001
+        problems.append("门禁自检跑不起来（%s: %s）—— 不能保证会跑通" % (type(e).__name__, e))
+    return {"ok": not problems, "checks": checks, "problems": problems}
+
+
 def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
     """算出下一步。返回 {action, why, cmd, detail}，action ∈
 
@@ -202,6 +246,15 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
             _why = ("还没有任何可 claim 的实测，而这条候选的变体已经实现 —— "
                     "直接跑它，第一条记录就是基线")
         _rounds = int((cands.get("defaults") or {}).get("rounds") or 3)
+        _pf = preflight(card, c)
+        if not _pf["ok"]:
+            # 预检不过就别让它去试 —— 直接把问题写出来，省一轮失败
+            return mk("fix",
+                      "这条候选还不能跑，预检发现 %d 个问题（见下）。先照修，"
+                      "修完再 next" % len(_pf["problems"]),
+                      "看下面的 problems 逐条修",
+                      tag=c.get("id"), variant=c.get("variant"),
+                      problems=_pf["problems"])
         return mk("run", _why,
                   "python3 -I %s -C %s run %s%s"
                   % (_LOOP_PY, card, c.get("id"), deliverable_args()),
@@ -213,6 +266,7 @@ def plan_next(card_dir, limit: int = MAX_LISTED) -> dict:
                             "（含判定：ACCEPTED_*/REJECTED_*/CALIBRATION_ONLY）" % card.name,
                             "`results/bench_std.json`（命令里带了 --bench-std 时）",
                             "`op-atlas/cards/<id>.yaml` 的 t_actual_us 被写回"],
+                  self_checks=_pf["checks"],
                   on_failure=["rc=2：六道门拒绝了 —— 看输出最后三行，它会说"
                               "是哪道门（方向预算/瓶颈归因/done_when/天花板）",
                               "rc=1：A/B 失败 —— 通常是变体缺编译产物或库 import 失败，"
@@ -263,6 +317,16 @@ def render(plan: dict) -> str:
     L.append("照做（复制粘贴即可）：")
     L.append("    %s" % plan.get("cmd", ""))
     d = plan.get("detail") or {}
+    if d.get("self_checks"):
+        L.append("")
+        L.append("已自检（1 秒，未跑实验）——直接执行不会失败：")
+        for x in d["self_checks"]:
+            L.append("  ✓ %s" % x)
+    if d.get("problems"):
+        L.append("")
+        L.append("预检不通过（先修这些）：")
+        for x in d["problems"]:
+            L.append("  ✗ %s" % x)
     if d.get("expect_seconds"):
         L.append("")
         L.append("预计耗时：%s" % d["expect_seconds"])
