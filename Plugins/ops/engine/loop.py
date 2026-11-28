@@ -1289,11 +1289,48 @@ def next_step_hint(cands, runnable, card_name=""):
             "  run 仍然会拒，这是设计如此，不是故障。" % cmd), True
 
 
+def _nextstep():
+    """延迟加载 engine/nextstep.py（本仓没有 packaging，按路径加载）。"""
+    import importlib.util
+    key = "_engine_nextstep"
+    if key in sys.modules:
+        return sys.modules[key]
+    spec = importlib.util.spec_from_file_location(key, str(Path(__file__).parent / "nextstep.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[key] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def cmd_next(a):
+    """打印「下一步做什么」—— 给 agent 和人都只用读这几行。"""
+    ns = _nextstep()
+    plan = ns.plan_next(a.card)
+    if getattr(a, "json", False):
+        print(json.dumps(plan, ensure_ascii=False, indent=2))
+    else:
+        print(ns.render(plan))
+    # 退出码：能推进=0，已收敛/需收尾=1。脚本化调用靠它判断是否继续。
+    return 0 if plan.get("action") in ("run", "baseline", "implement", "explore") else 1
+
+
 def cmd_status(a):
     card, cands, recs = a.card, load_candidates(a.card), read_records(a.card)
     pend = [c for c in cands["candidates"]
             if isinstance(c, dict) and c.get("status", "pending") == "pending"]
     print("卡片      %s" % card)
+    # **第一行就说下一步**。实测（2026-11-28）：C 臂唯一一次执行 loop.py 就是
+    # `status`，读到「待做 0」就走了。它不会再读第二屏 —— 所以下一步必须在这儿。
+    try:
+        _ns = _nextstep()
+        _plan = _ns.plan_next(card)
+        _lbl = {"run": "跑实验", "implement": "实现变体", "explore": "出题",
+                "baseline": "先测基线", "stop": "停止"}.get(_plan.get("action"),
+                                                           _plan.get("action"))
+        print("下一步    %s —— %s" % (_lbl, str(_plan.get("why", ""))[:100]))
+        print("命令      %s" % _plan.get("cmd", ""))
+    except Exception as _e:                      # noqa: BLE001
+        print(_c("下一步    算不出来（%s: %s）" % (type(_e).__name__, _e), WARN))
     _rounds, _reruns = round_stats(recs)
     prop = [c for c in cands["candidates"]
             if isinstance(c, dict) and c.get("status") == "proposed"]
@@ -2324,6 +2361,9 @@ def main():
     rs = sub.add_parser("resume", help="上下文丢了以后：下一个该跑谁")
     rs.add_argument("--json", action="store_true", help="机器可读输出")
 
+    nx = sub.add_parser("next", help="下一步做什么（给 agent 的唯一决策入口）")
+    nx.add_argument("--json", action="store_true", help="机器可读输出")
+
     r = sub.add_parser("run", help="跑一个实验并判定")
     r.add_argument("tags", nargs="+")
     r.add_argument("--skv", type=int, nargs="+")
@@ -2375,7 +2415,7 @@ def main():
 
     a = ap.parse_args()
     a.card = Path(a.card).resolve()
-    return {"status": cmd_status, "queue": cmd_queue, "run": cmd_run,
+    return {"status": cmd_status, "next": cmd_next, "queue": cmd_queue, "run": cmd_run,
             "report": cmd_report, "enumerate": cmd_enumerate,
             "resume": cmd_resume,
             "impl-broken": cmd_impl_broken,
