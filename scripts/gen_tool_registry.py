@@ -31,6 +31,15 @@ REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "data/ops/tool-registry.yaml"
 TOOL_PROBE = REPO / "scripts/tool_probe.py"
 
+# 文本骨架放 scripts/templates/tool_registry.md；本文件只拼动态块。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+# 本文件已有同名 `render()`，所以模板渲染器用别名导入。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render as _render_text  # noqa: E402
+
 # 六个类别（业主指定）
 CATS = {
     "runtime": ("① 运行时", "这个 kernel 在运行时到底卡在哪（周期/指令/访存/停顿）？"),
@@ -154,52 +163,40 @@ def collect():
 
 
 def render(rows):
-    L = []
-    A = L.append
-    A("# 工具注册表 —— 六类排查定位能力")
-    A("#")
-    A("# **硬规则：没有 probe 证据不许写「实测可用」（status: available）。**")
-    A("# 本文件由 scripts/gen_tool_registry.py 从 tool_probe.py 的实跑结果生成，")
-    A("# 每条 status 都对应一次真实探测，证据在 probe 字段里。")
-    A("#")
-    A("# 复跑：python3 -I scripts/tool_probe.py --write-registry")
-    A("# 校验：python3 -I scripts/gen_tool_registry.py --check")
-    A("")
-    A("version: 1")
-    A("registered_on: 2026-11-24")
-    A("machine: gfx938 / BW1100 / DTK 26.04")
-    A("generated_by: scripts/tool_probe.py")
-    A("")
-    A("tools:")
+    """注册表文本走 scripts/templates/tool_registry.md，本函数只拼动态块。"""
+    tools = []
     for cat in ORDER:
         name, q = CATS[cat]
-        A("")
-        A("  # ===== %s =====" % name)
-        A("  # %s" % q)
+        tools.append("")
+        tools.append("  # ===== %s =====" % name)
+        tools.append("  # %s" % q)
         for r in sorted([x for x in rows if CLASSIFY.get(x["tool"]) == cat],
                         key=lambda x: x["tool"]):
             t = r["tool"]
-            A("  - id: %s" % t)
-            A("    category: %s" % cat)
-            A("    question: %s" % Y(q))
-            A("    command: %s" % Y(CMDS.get(t, "")).replace("\n", " "))
-            A("    probe: %s" % Y(r["detail"]))
-            A("    status: %s" % r["status"])
-            A("    fallback: %s" % Y(r["fallback"]))
-            A("    cost: %s" % Y(r["cost"]))
-            A("    stage: %s" % Y(r["stage"]))
-    A("")
-    A("# ===== playbooks：按顺序的工具链 =====")
-    A("# 规则：chain 里的每个 id 必须在上面的 tools 里存在（gen --check 会验）。")
-    A("playbooks:")
+            tools.append("  - id: %s" % t)
+            tools.append("    category: %s" % cat)
+            tools.append("    question: %s" % Y(q))
+            tools.append("    command: %s" % Y(CMDS.get(t, "")).replace("\n", " "))
+            tools.append("    probe: %s" % Y(r["detail"]))
+            tools.append("    status: %s" % r["status"])
+            tools.append("    fallback: %s" % Y(r["fallback"]))
+            tools.append("    cost: %s" % Y(r["cost"]))
+            tools.append("    stage: %s" % Y(r["stage"]))
+
+    playbooks = []
     for pb in PLAYBOOKS:
-        A("  - id: %s" % pb["id"])
-        A("    when: %s" % Y(pb["when"]))
-        A("    chain:")
+        playbooks.append("  - id: %s" % pb["id"])
+        playbooks.append("    when: %s" % Y(pb["when"]))
+        playbooks.append("    chain:")
         for c in pb["chain"]:
-            A("      - %s" % c)
-        A("    why: %s" % Y(pb["why"]))
-    return "\n".join(L) + "\n"
+            playbooks.append("      - %s" % c)
+        playbooks.append("    why: %s" % Y(pb["why"]))
+
+    return _render_text(
+        "tool_registry",
+        tools_body=("\n" + "\n".join(tools)) if tools else "",
+        playbooks_body=("\n" + "\n".join(playbooks)) if playbooks else "",
+    )
 
 
 def check_playbooks(doc_text, ids):

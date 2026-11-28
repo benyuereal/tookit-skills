@@ -66,6 +66,14 @@ REGISTRY = REPO / "data/ops/registry.json"
 OPS_ENTRY = REPO / "Plugins/ops/SKILL.md"
 SYNC_INDEX = ATLAS / "sync_index.py"
 
+# 文本骨架放 scripts/templates/contract.md；本文件只负责拼动态块。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render as _render_text  # noqa: E402
+
 
 def _today():
     import datetime
@@ -370,69 +378,45 @@ def build_contract(name, math, inputs, outputs):
 
 
 def render_contract(name, math, inputs, outputs):
-    """手写 contract 文本。
+    """contract 文本走 scripts/templates/contract.md，本函数只拼动态块。
 
     **不用 yaml.safe_dump**：它把 shapes 写成块列表（`- M`），而
     `opverify.parse_yaml` 是极简解析器，会报「map/list 混用」。
     实测踩过 —— bootstrap 生成的第一张卡就因为这个让 test_ops_gate 失败。
     其他卡（如 op-fused-add-rmsnorm）用的是行内 `[M, H]`，照做。
+
+    动态块（shapes/dtypes/tolerance）每条自带换行；为空时为空串，
+    由模板里的单个换行保持原来的空行/无空行布局。
     """
     def inline(dims):
         return "[" + ", ".join(dims) + "]"
-    ref = {"bf16": {"mode": "ulp_bound", "max_ulp": 2, "max_abs": 3.125e-2,
-                    "cosine": 0.99999}}
+
+    def block(items):
+        return "\n".join(items) + "\n" if items else ""
+
     bf16_out = any(t["dtype"] == "bf16" for t in outputs)
-    lines = [
-        "# %s 契约（bootstrap 生成，需人工核对）" % name,
-        "",
-        "op: %s" % name,
-        "version: 1",
-        'math: "%s"' % str(math).replace('"', "'"),
-        "",
-        "shapes:",
-    ]
-    for t in inputs + outputs:
-        lines.append("  %s: %s" % (t["name"], inline(t["dims"])))
-    lines += ["", "dtypes:"]
-    for t in inputs + outputs:
-        lines.append("  %s: %s" % (t["name"], t["dtype"]))
-    lines += ["", "tolerance:", "  vs_fp32_ref:"]
+    shapes_body = block(["  %s: %s" % (t["name"], inline(t["dims"]))
+                         for t in inputs + outputs])
+    dtypes_body = block(["  %s: %s" % (t["name"], t["dtype"])
+                         for t in inputs + outputs])
     if bf16_out:
-        lines += ["    mode: ulp_bound", "    max_ulp: 2",
-                  "    max_abs: 3.125e-2", "    cosine: 0.99999",
-                  '    note: "bf16 按量级判 ULP；max_abs 仅兜底"']
+        tol_lines = ["    mode: ulp_bound", "    max_ulp: 2",
+                     "    max_abs: 3.125e-2", "    cosine: 0.99999",
+                     '    note: "bf16 按量级判 ULP；max_abs 仅兜底"']
     else:
-        lines += ["    max_abs: 1.0e-5", "    cosine: 0.999999"]
-    lines += ["  variant_vs_variant:", "    mode: tolerance", "",
-              "invariants:", "  - name: determinism",
-              "    mode: bit_exact", "    repeats: 5", ""]
-    # **gates 与 floor 是 opverify 的必填项**（REQUIRED_TOP）。
-    # 第一版 bootstrap 漏了它们，生成的卡跑 test_ops_gate 直接失败。
-    lines += [
-        "gates:",
-        "  - name: correctness",
-        "    template: correctness",
-        "    required: true",
-        "  - name: invariants",
-        "    template: invariants",
-        "    required: true",
-        "  - name: perf",
-        "    script: bench/ab.py",
-        "    required: false",
-        '    skip_reason: "bootstrap 生成时还没有实测，bench 待接"',
-        "",
-        "floor:",
-        "  metric: hbm_bandwidth",
-        "  # peak 必须来自 bw-ladder 的 achievable，不是型号标称值（1100 是型号名）",
-        "  peak: 1730",
-        "  unit: GB/s",
-        "  peak_source: Plugins/ops/op-atlas/bw-ladder.yaml",
-        '  basis: "bootstrap 按访问模式算出的字节数，见 floor_inputs"',
-        "  at_floor_threshold: 0.10",
-        "  status: unmeasured",
-        "",
-    ]
-    return "\n".join(lines)
+        tol_lines = ["    max_abs: 1.0e-5", "    cosine: 0.999999"]
+
+    # **gates 与 floor 是 opverify 的必填项**（REQUIRED_TOP），
+    # 模板里已固定；第一版 bootstrap 漏了它们，新卡跑 test_ops_gate 直接失败。
+    return _render_text(
+        "contract",
+        op_name=name,
+        math=str(math).replace('"', "'"),
+        shapes_body=shapes_body,
+        dtypes_body=dtypes_body,
+        # tolerance 块后面没有空行：模板占位符行自带换行，这里不再补。
+        tolerance_body="\n".join(tol_lines),
+    )
 
 
 def build_common(name, inputs, reference_expr):
