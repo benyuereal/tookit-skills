@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""P3 driver：一轮的定义 + 可注入 backend（P3.0 契约 / P3.1 控制流）。
+
+设计见 `updates/handoff/HANDOFF-2026-11-28-P3-driver-plan.md` 与
+`updates/handoff/P3-CONTRACT.md`。
+
+**本文件只做两件事**：
+  1. 定义一轮的产物 `IterationRecord` 和副作用接缝 `Backend`（P3.0）；
+  2. 用 `FakeBackend` 把控制流跑通并单测（P3.1）——**不碰 GPU、不调 claude**。
+
+真正的 backend（Claude 子进程 / GPU / git）是 P3.2，不在本文件里。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from dataclasses import dataclass, asdict, field
+from pathlib import Path
+from typing import Protocol
+
+NOISE_FLOOR = 0.015          # 1.5%：低于这个的增益不算提升
+MAX_PLATEAU = 3              # 连续这么多轮没有 KEEP → plateau
+MAX_IMPL_FAILS = 3           # 连续这么多轮正确性破坏 → 停
+
+
+# ---------------------------------------------------------------- P3.0 契约
+
+@dataclass
+class IterationRecord:
+    """一轮的产物。字段先少后加（P3.4 再补渲染需要的）。"""
+
+    iter: int
+    round_id: str
+    change: str                       # agent 自述「改了什么」，不含数字
+    changed_files: list[str] = field(default_factory=list)
+    workspace_commit: str = ""        # 有了它才能 revert
+    correctness: bool | None = None   # None = pre-green，尚未评估
+    verdict: str = "NEUTRAL"          # KEEP | REVERT | NEUTRAL | REFUTED
+    base_ms: float | None = None
+    cand_ms: float | None = None
+    vs_base: float | None = None      # 同 job back-to-back 比值
+    utilization: float | None = None
+    floor_us: float | None = None
+    acc: dict = field(default_factory=dict)
+    claim: str = ""                   # PASS | FAIL:<reason>
+    refuted_directions: list[str] = field(default_factory=list)
+    noise_floor: float = NOISE_FLOOR
+    stop_reason: str | None = None    # plateau | impl_fails | rounds_done
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self), ensure_ascii=False)
+
+
+class Backend(Protocol):
+    """副作用接缝（G2 + G9）。控制流只依赖这四个方法，所以可以 fake。"""
+
+    def run_agent(self, prompt: str, role: str = "student") -> str:
+        """调 agent；返回它自述的「改了什么」。**不得从返回值解析数字**。"""
+        ...
+
+    def commit(self, message: str) -> str:
+        """提交当前工作区；返回 commit hash。"""
+        ...
+
+    def reset_to(self, commit: str) -> None:
+        """把工作区回滚到指定 commit（只在正确性破坏时调用）。"""
+        ...
+
+    def eval(self, tag: str) -> dict:
+        """跑测量，返回
+        {"cand_ms", "base_ms", "correctness": bool, "acc": {...},
+         "claim": "PASS"|"FAIL:...", "utilization", "floor_us",
+         "refuted_directions": [...]}
+        """
+        ...
+
+
+# ---------------------------------------------------------------- 渲染
+
+def render_student_prompt(records: list[IterationRecord], card: str = "") -> str:
+    """下一轮 prompt：上一轮结构化记录 + 死路清单 + 自己改过什么。"""
+    lines = [
+        "# 算子实现任务%s" % (("：" + card) if card else ""),
+        "",
+        "你只负责**写实现**。测量、判定、记账全部由引擎完成；"
+        "不要在会话里自己跑 bench 或计时。",
+        "",
+        "## 上一轮（结构化，不是总结）",
+    ]
+    if not records:
+        lines.append("（第一轮，无历史）")
+    else:
+        r = records[-1]
+        lines.append(json.dumps({
+            "round": r.iter,
+            "verdict": r.verdict,
+            "change": r.change,
+            "changed_files": r.changed_files,
+            "vs_base": r.vs_base,
+            "cand_ms": r.cand_ms,
+            "base_ms": r.base_ms,
+            "utilization": r.utilization,
+            "claim": r.claim,
+            "acc": r.acc,
+        }, ensure_ascii=False, indent=2))
+    refuted: list[str] = []
+    for r in records:
+        refuted.extend(r.refuted_directions or [])
+    lines += ["", "## 已证伪方向（refuted_directions，不要重复试）",
+              json.dumps(sorted(set(refuted)), ensure_ascii=False)]
+    return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------- P3.1 控制流
+
+def _verdict(correctness: bool | None, delta: float | None, noise: float,
+             pre_green: bool) -> str:
+    """relaxed-revert：**性能回退保留**，只有正确性破坏才 REVERT。"""
+    if correctness is False:
+        return "REVERT"
+    if pre_green or correctness is None:
+        return "NEUTRAL"          # pre-green 语义：还没通过正确性，不评估性能
+    if delta is not None and delta < -noise:
+        return "KEEP"
+    return "NEUTRAL"
+
+
+def iterate(backend: Backend, rounds: int, card: str = "",
+            noise_floor: float = NOISE_FLOOR, max_plateau: int = MAX_PLATEAU,
+            max_impl_fails: int = MAX_IMPL_FAILS) -> list[IterationRecord]:
+    """跑 N 轮。**纯控制流**：所有副作用都经 backend，因此可用 fake 单测。"""
+    records: list[IterationRecord] = []
+    head = backend.commit("baseline")
+    plateau = 0
+    impl_fails = 0
+    green = False
+
+    for i in range(1, rounds + 1):
+        prompt = render_student_prompt(records, card)
+        change = backend.run_agent(prompt, role="student")
+        commit = backend.commit(change or ("round %d" % i))
+        ev = backend.eval(("r%d" % i))
+
+        correctness = ev.get("correctness")
+        if correctness is True:
+            green = True
+        base_ms = ev.get("base_ms")
+        cand_ms = ev.get("cand_ms")
+        delta = None
+        if base_ms and cand_ms:
+            delta = cand_ms / base_ms - 1.0
+
+        verdict = _verdict(correctness, delta, noise_floor, pre_green=not green)
+        if correctness is False:
+            backend.reset_to(head)          # 只有正确性破坏才回滚
+            impl_fails += 1
+        else:
+            head = commit
+            impl_fails = 0
+
+        plateau = plateau + 1 if verdict != "KEEP" else 0
+        rec = IterationRecord(
+            iter=i,
+            round_id="r%d" % i,
+            change=change or "",
+            changed_files=list(ev.get("changed_files") or []),
+            workspace_commit=commit,
+            correctness=correctness,
+            verdict=verdict,
+            base_ms=base_ms,
+            cand_ms=cand_ms,
+            vs_base=(1.0 + delta) if delta is not None else None,
+            utilization=ev.get("utilization"),
+            floor_us=ev.get("floor_us"),
+            acc=dict(ev.get("acc") or {}),
+            claim=str(ev.get("claim") or ""),
+            refuted_directions=list(ev.get("refuted_directions") or []),
+            noise_floor=noise_floor,
+        )
+        records.append(rec)
+
+        if impl_fails >= max_impl_fails:
+            rec.stop_reason = "impl_fails"
+            break
+        if plateau >= max_plateau:
+            rec.stop_reason = "plateau"
+            break
+        if i == rounds:
+            rec.stop_reason = "rounds_done"
+    return records
+
+
+# ---------------------------------------------------------------- fake backend
+
+class FakeBackend:
+    """确定性 fake：不跑 GPU、不调 agent、不做 git。
+
+    `flat=True` 时每轮都只有 0.5% 的改善（低于噪声底），用来验收 plateau。
+    `evidence="self-consistent-only"` 时 claim FAIL，用来验收 REVERT 门。
+    """
+
+    def __init__(self, flat: bool = False, evidence: str = "vendor_library",
+                 fail_every: int = 0, times=None, green_from: int = 1):
+        self.flat = flat
+        self.evidence = evidence
+        self.fail_every = fail_every
+        self.green_from = green_from
+        self.n = 0
+        self.commits: list[str] = ["c0"]
+        self.reset_calls: list[str] = []
+        self.agent_calls: list[str] = []
+        self.times = list(times or [])
+
+    def run_agent(self, prompt: str, role: str = "student") -> str:
+        self.agent_calls.append(prompt)
+        return "candidate change #%d" % (len(self.agent_calls))
+
+    def commit(self, message: str) -> str:
+        sha = "c%d" % len(self.commits)
+        self.commits.append(sha)
+        return sha
+
+    def reset_to(self, commit: str) -> None:
+        self.reset_calls.append(commit)
+
+    def eval(self, tag: str) -> dict:
+        self.n += 1
+        i = self.n
+        base = 0.200
+        if self.times:
+            cand = self.times[min(i - 1, len(self.times) - 1)]
+        elif self.flat:
+            cand = base * 0.995
+        else:
+            cand = base * (0.80 ** i)      # 每轮 -20%
+        if i < self.green_from:
+            correctness = None          # pre-green：还没通过正确性
+        else:
+            correctness = not (self.fail_every and i % self.fail_every == 0)
+        claim = "PASS" if self.evidence in ("vendor_library", "independent_reference") \
+            else "FAIL:evidence_unverified"
+        return {
+            "cand_ms": cand,
+            "base_ms": base,
+            "correctness": correctness,
+            "acc": {"max_ulp": 0.5, "cosine": 0.999998,
+                    "evidence_kind": self.evidence},
+            "claim": claim,
+            "utilization": 0.82,
+            "floor_us": 116.4,
+            "refuted_directions": ["fusion-boundary"] if i >= 2 else [],
+        }
+
+
+# ---------------------------------------------------------------- CLI
+
+def _selfcheck() -> int:
+    problems = []
+    fields = set(IterationRecord.__dataclass_fields__)
+    need = {"iter", "round_id", "change", "changed_files", "workspace_commit",
+            "correctness", "verdict", "base_ms", "cand_ms", "vs_base",
+            "utilization", "floor_us", "acc", "claim", "refuted_directions",
+            "noise_floor"}
+    missing = need - fields
+    if missing:
+        problems.append("IterationRecord 缺字段: %s" % sorted(missing))
+    for m in ("run_agent", "commit", "reset_to", "eval"):
+        if not hasattr(Backend, m):
+            problems.append("Backend 缺方法 %s" % m)
+    if problems:
+        print("✗ selfcheck: %s" % "; ".join(problems))
+        return 1
+    print("✓ selfcheck: IterationRecord(%d 字段) + Backend(4 方法) 自洽"
+          % len(fields))
+    return 0
+
+
+def main(argv=None) -> int:
+    p = argparse.ArgumentParser(prog="driver", description="P3 driver（控制流 + fake）")
+    p.add_argument("--selfcheck", action="store_true")
+    p.add_argument("--demo", type=int, default=0, help="用 FakeBackend 跑 N 轮")
+    p.add_argument("--fake-flat", action="store_true", help="每轮只有噪声内改善")
+    p.add_argument("--fake-fail-every", type=int, default=0,
+                   help="每 N 轮制造一次正确性破坏")
+    p.add_argument("--out", default=None, help="把 IterationRecord 写成 jsonl")
+    p.add_argument("--render-demo", action="store_true", help="打印一次学生 prompt")
+    a = p.parse_args(argv)
+
+    if a.selfcheck:
+        return _selfcheck()
+    if a.render_demo:
+        print(render_student_prompt([], "demo"))
+        return 0
+    if a.demo:
+        be = FakeBackend(flat=a.fake_flat, fail_every=a.fake_fail_every)
+        recs = iterate(be, a.demo, card="demo")
+        for r in recs:
+            print("r%-2d %-7s cand=%.3f base=%.3f claim=%s%s"
+                  % (r.iter, r.verdict, r.cand_ms or 0, r.base_ms or 0, r.claim,
+                     ("  stop=" + r.stop_reason) if r.stop_reason else ""))
+        if a.out:
+            Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+            Path(a.out).write_text(
+                "\n".join(r.to_json() for r in recs) + "\n", encoding="utf-8")
+            print("→ %s（%d 条）" % (a.out, len(recs)))
+        return 0
+    p.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

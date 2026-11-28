@@ -565,6 +565,13 @@ def artifact_dir(card):
         m = re.search(r"arm-([A-Za-z0-9]+)", str(cwd))
         arm = arm or (m.group(1) if m else "local")
         run = run or (cwd.name or "default")
+        # 测试/临时目录（tmpXXXX）和仓库根不配当 run id：否则每跑一次就新建
+        # 一个 .artifacts/local/<随机串>_...（lead 2026-11-28 遗留项 4）。
+        try:
+            if cwd.resolve() == REPO_ROOT.resolve() or run.startswith("tmp"):
+                run = "local"
+        except OSError:
+            pass
     # **出仓的卡（单测/临时卡）保持旧路径**：`.artifacts` 锚在 REPO_ROOT，
     # 只对仓库内的真实卡有意义。单测用 tmpdir 建卡，若也搬过去，30 个既有
     # 断言（账本在 <card>/runs/loop）会全红（实测 2026-11-28）。

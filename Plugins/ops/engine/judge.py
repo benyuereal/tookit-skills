@@ -244,6 +244,9 @@ def generate(card: Path, out: Path) -> int:
         "atol": ATOL_DEFAULT,
         "evidence_kind": evidence,
         "calibrated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        # 校准覆盖的形状：目前只对最小形状做参考自检，明确写出来，
+        # 避免下游误以为所有形状都校准过（lead 2026-11-28 遗留项 2）。
+        "shapes": [shape],
         "calibration_cmd": ("python3 -I %s generate --card %s --out %s"
                             % (Path(__file__).resolve(), card, out)),
     }
