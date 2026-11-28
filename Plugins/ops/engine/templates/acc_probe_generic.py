@@ -140,7 +140,11 @@ def main(argv=None):
     rows = []
     for tag in tags:
         try:
-            got = C.get_runner(tag, **kw)(*inp)
+            # build_inputs 约定返回 (…输入, meta)；meta 不能当位置参数传给
+            # reference（否则 `reference() got multiple values for 'params'`，
+            # 实测 2026-11-28 新卡精度探针就是这么挂的）。
+            _args = inp[:-1] if (inp and isinstance(inp[-1], dict)) else inp
+            got = C.get_runner(tag, **kw)(*_args)
         except Exception as e:                  # noqa: BLE001
             # 单个变体跑不起来不是整份探针的失败：记录 nonfinite=-1 让
             # loop.py 那边能看到"这个 tag 没测成"，而不是假装它过了。

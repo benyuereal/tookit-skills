@@ -859,6 +859,15 @@ def _check_base_role(card, defaults, calibration=False):
                 base = str(ba[i + 1])
                 break
     if base and roles.get(base) == "correctness_only":
+        # 新算子还没有 competitor 时，参考实现是**唯一**可用基线；
+        # 这时允许跑，但记录里必须标明"对比对象是参考实现"，不能当成
+        # "打赢了现成库"。ForgeKernel 的 target 就是"比参考快 x 倍"。
+        has_competitor = any(r in ("competitor", "primary", "fallback")
+                             for r in roles.values())
+        if not has_competitor:
+            print(_c("caveat：本卡没有 competitor 变体 —— 以参考实现作基线，"
+                     "结论只代表「比参考快」，不代表打赢现成库。", WARN))
+            return
         if calibration:
             # 新算子第一次跑：还没有 competitor 基线，先用参考实现**校准**，
             # 只取 t_actual，不声称收益（判定写 CALIBRATION_ONLY）。
@@ -1728,7 +1737,26 @@ def cmd_run(a):
     # variants.yaml 里 correctness_only 的变体写着「不得用于性能对比：
     # 它是未优化的参考实现，打赢它没有工程意义」，而 loop.py 一个字不读。
     # R0 是靠 candidates.yaml 手写 --base lightop-fused 才躲过这条。
-    d = cands["defaults"]
+    d = dict(cands["defaults"])
+    # ---- 基线晋升（自进化链）----
+    # ForgeKernel 的核心：被接受的 kernel 成为下一轮的参照。
+    # 我们把它落在 runs/loop/base.json（引擎状态，不改进用户文件），
+    # 下一轮 run 自动以它为 base —— 否则每轮都在跟最开始的基线比，
+    # 链条永远原地踏步。
+    _promo = card / "runs" / "loop" / "base.json"
+    if _promo.is_file():
+        try:
+            _pb = json.loads(_promo.read_text(encoding="utf-8")).get("base")
+        except Exception:                                    # noqa: BLE001
+            _pb = None
+        if _pb and _pb != d.get("base"):
+            d["base"] = _pb
+            _ba = list(d.get("bench_args") or [])
+            for _i, _x in enumerate(_ba):
+                if _x == "--base" and _i + 1 < len(_ba):
+                    _ba[_i + 1] = _pb
+            d["bench_args"] = _ba
+            print(_c("基线晋升：本轮以 %s 为参照（runs/loop/base.json）" % _pb, WARN))
     _calib = bool(a.tags) and all(
         (declared.get(t) or {}).get("purpose") == "calibration" for t in a.tags)
     _check_base_role(card, d, calibration=_calib)
@@ -1877,7 +1905,9 @@ def cmd_run(a):
     tol = a.tol or load_contract_tol(card)
     primary = "%g" % float(a.primary_qscale or d.get("acc_primary_qscale") or 1.0)
     stress_mult = float(a.stress_mult or d.get("acc_stress_mult") or 1.5)
-    worst = "ACCEPTED_BITEXACT"
+    # 校准记录不参与合计（否则全是 CALIBRATION_ONLY 时会显示初始值
+    # ACCEPTED_BITEXACT —— 实测 2026-11-28 新卡第一条记录就是这样，误导性极强）。
+    worst = None
     # 判定的"好坏"排序。ACCEPTED_NO_NUMERICS 必须排在 ACCEPTED_NUMERICS 之前
     # （没测精度 ≠ 精度合格，更不能和逐位一致同级）。
     order = ["ERROR", "REJECTED_ACCURACY", "REJECTED_NO_GAIN", "INCONCLUSIVE",
@@ -1885,6 +1915,7 @@ def cmd_run(a):
              "ACCEPTED_BITEXACT"]
 
     print("\n%-14s %-9s %-8s %s" % ("tag", "skv", "Δ%", "判定"))
+    _best_tag, _best_ms = None, None
     for run in ab["runs"]:
         for v in run["variants"]:
             decision, why = decide(
@@ -1909,8 +1940,13 @@ def cmd_run(a):
                        "（原判定 %s，Δ=%.1f%%）"
                        % (decision, v.get("delta_pct") or 0.0))
                 decision = "CALIBRATION_ONLY"
-            if not _cal and order.index(decision) < order.index(worst):
+            if not _cal and (worst is None or order.index(decision) < order.index(worst)):
                 worst = decision
+            # 记录本轮最好的可接受实现，跑完后晋升为下一轮基线
+            if (not _cal and str(decision).startswith("ACCEPTED")
+                    and decision != "ACCEPTED_NO_NUMERICS"):
+                if _best_ms is None or (v.get("ms") or 1e9) < _best_ms:
+                    _best_tag, _best_ms = v["tag"], v.get("ms")
             _skv_disp = run.get("skv")
             print("%-14s %-9s %+8.1f %s  %s" % (v["tag"],
                   _skv_disp if _skv_disp is not None else "-", v.get("delta_pct", 0.0),
@@ -1927,6 +1963,7 @@ def cmd_run(a):
                 "maxdiff": v.get("maxdiff"), "rel": v.get("rel"),
                 "acc": acc.get(v["tag"], {}), "tolerance": tol,
                 "decision": decision, "why": why,
+                "base_role": ("correctness_only" if _cal else None),
                 "forced": bool(a.force and v["tag"] in refuted),
                 # 完成判定的裁决码：run 不跑 done_when（那是 verify 的事），记 None 让
                 # 流水里字段恒在，消费方不必按记录类型分叉。
@@ -1973,7 +2010,14 @@ def cmd_run(a):
                 # 从这里回落取 gfx/device，避免位置不同就误判口径不全。
                 "env": {**(ab.get("env") or {}), **_env_fingerprint()},
             })
-    print("\n合计判定：%s" % worst)
+    print("\n合计判定：%s" % (worst or "CALIBRATION_ONLY（只有校准记录，没有可声称的收益）"))
+    if _best_tag:
+        _pp = card / "runs" / "loop" / "base.json"
+        _pp.parent.mkdir(parents=True, exist_ok=True)
+        _pp.write_text(json.dumps({"base": _best_tag, "ms": _best_ms,
+                                   "ts": time.strftime("%Y-%m-%dT%H:%M:%S")},
+                                  ensure_ascii=False), encoding="utf-8")
+        print("基线晋升：下一轮以 %s 为参照（%s）" % (_best_tag, _pp))
     # ---- 报告（--report）：用最后一条记录 + 地板 + 下一步填成题面六问 ----
     if getattr(a, "report", None):
         _last = None
@@ -2007,7 +2051,11 @@ def cmd_run(a):
             except Exception as _e:              # noqa: BLE001
                 print(_c("[report] 写失败：%s: %s" % (type(_e).__name__, _e), WARN),
                       flush=True)
-    if worst.startswith("ACCEPTED_NUMERICS"):
+    if worst is None:
+        # 全是校准记录：没有可声称的收益，下一步是补一条真实候选
+        print("下一步：这只是校准。按瓶颈与方向补一条**真实候选**"
+              "（期望收益 > 噪声），再 loop.py run。")
+    elif worst.startswith("ACCEPTED_NUMERICS"):
         print("下一步：这个改动不是逐位一致的，必须补端到端质量门（GPQA/HumanEval 一档）才能进生产。")
     elif worst == "ACCEPTED_BITEXACT":
         print("下一步：先给候选补 done_when，再 loop.py verify --tag <tag>（rc=0 才算完成），"
