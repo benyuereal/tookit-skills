@@ -750,6 +750,12 @@ def claim_gate(rec):
         reasons.append("not_significant")
     if not rec.get("acc_ok"):
         reasons.append("accuracy_missing")
+    # 与 cmd_claim 的第五项同源：只有独立核验（第二实现/厂商库）才能声称
+    # 数值正确；self-consistent-only 或缺证据一律不过。
+    # 之前 claim_gate 只查三项，导致"evidence 不过也能晋升基线"（实测 2026-11-28）。
+    if str(rec.get("evidence_kind") or "") not in ("independent_reference",
+                                                   "vendor_library"):
+        reasons.append("evidence_unverified")
     return (not reasons), reasons
 
 
@@ -1949,6 +1955,7 @@ def cmd_run(a):
 
     print("\n%-14s %-9s %-8s %s" % ("tag", "skv", "Δ%", "判定"))
     _best_tag, _best_ms = None, None
+    _recs_by_tag = {}
     for run in ab["runs"]:
         for v in run["variants"]:
             decision, why = decide(
@@ -1984,7 +1991,7 @@ def cmd_run(a):
             print("%-14s %-9s %+8.1f %s  %s" % (v["tag"],
                   _skv_disp if _skv_disp is not None else "-", v.get("delta_pct", 0.0),
                                                 decision, why))
-            append_record(card, {
+            _rec = {
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "card": card.name,
                 "tag": v["tag"], "skv": run.get("skv"),
                 "direction": (declared.get(_cid_of(v["tag"])) or {}).get("direction"),
@@ -2044,15 +2051,28 @@ def cmd_run(a):
                 # adapter 的环境指纹原样保留：claim_gate 在 caliber 缺 device 时
                 # 从这里回落取 gfx/device，避免位置不同就误判口径不全。
                 "env": {**(ab.get("env") or {}), **_env_fingerprint()},
-            })
+            }
+            append_record(card, _rec)
+            _recs_by_tag[v["tag"]] = _rec
     print("\n合计判定：%s" % (worst or "CALIBRATION_ONLY（只有校准记录，没有可声称的收益）"))
     if _best_tag:
-        _pp = card / "runs" / "loop" / "base.json"
-        _pp.parent.mkdir(parents=True, exist_ok=True)
-        _pp.write_text(json.dumps({"base": _best_tag, "ms": _best_ms,
-                                   "ts": time.strftime("%Y-%m-%dT%H:%M:%S")},
-                                  ensure_ascii=False), encoding="utf-8")
-        print("基线晋升：下一轮以 %s 为参照（%s）" % (_best_tag, _pp))
+        # P1：晋升必须过 claim 的**同一套**检查 —— 否则一个没过审计的结果
+        # 被升成基线，后面每一代都建在它上面，整条自进化链就脏了。
+        _rec = _recs_by_tag.get(_best_tag) or {}
+        _ok, _reasons = claim_gate(_rec)
+        if not _ok:
+            print(_c("不晋升 %s：claim 未通过（%s）—— 先把这几项补齐再晋升"
+                     % (_best_tag, ", ".join(_reasons)), WARN))
+        else:
+            _pp = card / "runs" / "loop" / "base.json"
+            _pp.parent.mkdir(parents=True, exist_ok=True)
+            _pp.write_text(json.dumps({
+                "base": _best_tag, "ms": _best_ms,
+                "source_tag": _best_tag,
+                "evidence_kind": _rec.get("evidence_kind"),
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            }, ensure_ascii=False), encoding="utf-8")
+            print("基线晋升：下一轮以 %s 为参照（%s；claim PASS）" % (_best_tag, _pp))
     # ---- 报告（--report）：用最后一条记录 + 地板 + 下一步填成题面六问 ----
     if getattr(a, "report", None):
         _last = None

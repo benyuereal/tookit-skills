@@ -59,10 +59,14 @@ def _load_common():
 
 
 def _params(shape_key):
-    import sys as _s
-    _s.path.insert(0, str(Path(r"{repo}") / "scripts"))
-    from opverify import parse_yaml
-    data = parse_yaml((CARD / "shapes.yaml").read_text(encoding="utf-8")) or {{}}
+    try:
+        import yaml
+        data = yaml.safe_load((CARD / "shapes.yaml").read_text(encoding="utf-8")) or {{}}
+    except Exception:
+        import sys as _s
+        _s.path.insert(0, str(Path(r"{repo}") / "scripts"))
+        from opverify import parse_yaml
+        data = parse_yaml((CARD / "shapes.yaml").read_text(encoding="utf-8")) or {{}}
     key = shape_key if shape_key in data else next(iter(data))
     return key, dict((data.get(key) or {{}}).get("params") or {{}})
 
@@ -135,6 +139,23 @@ def _sha256_normalized(obj: dict) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
+def _read_yaml(path: Path) -> dict:
+    """优先 PyYAML；并发 YAML 有 map/list 混用，opverify.parse_yaml 会报错
+    （实测 2026-11-28：op-fused 的 variants.yaml 解析失败 → evidence_kind
+    被误判成 self-consistent-only）。"""
+    try:
+        import yaml
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:                                        # noqa: BLE001
+        try:
+            import sys as _s
+            _s.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+            from opverify import parse_yaml
+            return parse_yaml(path.read_text(encoding="utf-8")) or {}
+        except Exception:                                    # noqa: BLE001
+            return {}
+
+
 def _evidence_kind(card: Path) -> str:
     """按 variants 的角色判证据种类。
 
@@ -144,13 +165,7 @@ def _evidence_kind(card: Path) -> str:
     p = card / "variants.yaml"
     if not p.is_file():
         return "self-consistent-only"
-    try:
-        import sys as _s
-        _s.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
-        from opverify import parse_yaml
-        d = parse_yaml(p.read_text(encoding="utf-8")) or {}
-    except Exception:                                        # noqa: BLE001
-        return "self-consistent-only"
+    d = _read_yaml(p)
     for v in d.get("variants") or []:
         if isinstance(v, dict) and str(v.get("role") or "") in VENDOR_ROLES:
             return "vendor_library"
@@ -158,13 +173,7 @@ def _evidence_kind(card: Path) -> str:
 
 
 def _smallest_shape(card: Path) -> str:
-    try:
-        import sys as _s
-        _s.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
-        from opverify import parse_yaml
-        d = parse_yaml((card / "shapes.yaml").read_text(encoding="utf-8")) or {}
-    except Exception:                                        # noqa: BLE001
-        return "s0"
+    d = _read_yaml(card / "shapes.yaml")
     best, best_n = "s0", None
     for k, v in d.items():
         params = dict((v or {}).get("params") or {})
