@@ -32,6 +32,14 @@ import statistics
 import sys
 from pathlib import Path
 
+# 文本骨架放 scripts/templates/calibrate.md；本文件只负责拼动态块。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render as _render_text  # noqa: E402
+
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
 MIN_SAMPLES = 2
 
@@ -304,48 +312,67 @@ def render(results, min_samples):
         "unparsable": len(all_unparsable),
     }
 
+    # 表格（表头 + 行）作为一个块；空数据时不输出任何表格行。
+    table = []
     if all_rows:
         multi = len({r["skill"] for r in results}) > 1
         if multi:
-            print("%-20s %-22s %3s %14s %13s %7s" %
-                  ("skill", "surface", "n", "predicted_med", "realized_med", "ratio"))
+            table.append("%-20s %-22s %3s %14s %13s %7s" %
+                         ("skill", "surface", "n", "predicted_med", "realized_med", "ratio"))
         else:
-            print("%-22s %3s %14s %13s %7s" %
-                  ("surface", "n", "predicted_med", "realized_med", "ratio"))
+            table.append("%-22s %3s %14s %13s %7s" %
+                         ("surface", "n", "predicted_med", "realized_med", "ratio"))
         for skill, row in sorted(all_rows, key=lambda x: (x[0], x[1]["surface"])):
             real = "未兑现" if row["realized_med"] is None else _fmt_pct(row["realized_med"])
             ratio = "—" if row["ratio"] is None else "%.2f" % row["ratio"]
             suffix = ("   ← %s" % row["note"]) if row.get("note") else ""
             if multi:
-                print("%-20s %-22s %3d %14s %13s %7s%s" %
-                      (skill or "?", row["surface"], row["n"],
-                       _fmt_pct(row["predicted_med"]), real, ratio, suffix))
+                table.append("%-20s %-22s %3d %14s %13s %7s%s" %
+                             (skill or "?", row["surface"], row["n"],
+                              _fmt_pct(row["predicted_med"]), real, ratio, suffix))
             else:
-                print("%-22s %3d %14s %13s %7s%s" %
-                      (row["surface"], row["n"], _fmt_pct(row["predicted_med"]),
-                       real, ratio, suffix))
-    else:
-        print("无记录：0 条可校准记录（读取 %d 条；排除 %d 条；unparsable %d 条）"
-              % (totals["records"], totals["excluded"], totals["unparsable"]))
+                table.append("%-22s %3d %14s %13s %7s%s" %
+                             (row["surface"], row["n"], _fmt_pct(row["predicted_med"]),
+                              real, ratio, suffix))
 
+    empty_block = ""
+    if not all_rows:
+        empty_block = ("无记录：0 条可校准记录（读取 %d 条；排除 %d 条；unparsable %d 条）"
+                       % (totals["records"], totals["excluded"], totals["unparsable"]))
+
+    # 每块自带前置空行；块内为空时整块不出现（模板只做占位替换，不做条件）。
+    skipped_block = ""
     if all_skipped:
-        print("\n排除原因：")
         by_reason = {}
         for s in all_skipped:
             by_reason[s["reason"]] = by_reason.get(s["reason"], 0) + 1
+        lines = ["\n\n排除原因："]
         for reason, cnt in sorted(by_reason.items()):
-            print("  %-24s %d" % (_REASON_LABEL.get(reason, reason), cnt))
+            lines.append("  %-24s %d" % (_REASON_LABEL.get(reason, reason), cnt))
+        skipped_block = "\n".join(lines)
 
+    unparsable_block = ""
     if all_unparsable:
-        print("\nunparsable（%d 条，不计入中位数）：" % len(all_unparsable))
+        lines = ["\n\nunparsable（%d 条，不计入中位数）：" % len(all_unparsable)]
         for u in all_unparsable:
-            print("  [%s] %-22s tag=%-20s expected_effect=%r"
-                  % (u["skill"] or "?", u["surface"], u["tag"], u["expected_effect"]))
+            lines.append("  [%s] %-22s tag=%-20s expected_effect=%r"
+                         % (u["skill"] or "?", u["surface"], u["tag"], u["expected_effect"]))
+        unparsable_block = "\n".join(lines)
 
+    totals_block = ""
     if all_rows:
-        print("\n合计：读取 %d 条，可校准 %d 条，排除 %d 条，unparsable %d 条"
-              % (totals["records"], totals["counted"], totals["excluded"],
-                 totals["unparsable"]))
+        totals_block = ("\n\n合计：读取 %d 条，可校准 %d 条，排除 %d 条，unparsable %d 条"
+                        % (totals["records"], totals["counted"], totals["excluded"],
+                           totals["unparsable"]))
+
+    print(_render_text(
+        "calibrate",
+        table="\n".join(table),
+        empty_block=empty_block,
+        skipped_block=skipped_block,
+        unparsable_block=unparsable_block,
+        totals_block=totals_block,
+    ))
     return (not all_rows), totals
 
 

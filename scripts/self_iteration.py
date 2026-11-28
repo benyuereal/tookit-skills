@@ -56,6 +56,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+# 文本骨架放 scripts/templates/self_iteration.md；本文件只负责动态字段。
+# `-I` 不把脚本目录放进 sys.path（测试还按路径 importlib 加载），这里补一次。
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.append(str(_SCRIPTS))
+
+from template_render import render as _render_text  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
 
 # 六步权重。和必须是 1.0（selftest 断言）。
@@ -441,14 +449,17 @@ def collect(root=None):
 
 
 def render(result):
-    lines = ["自我迭代能力     %.1f / 10" % result["score"]]
+    lines = []
     for key, _ in STEPS:
         s = result["steps"][key]
         mark = "✓" if s["passed"] else "✗"
         lines.append("  [%s] %-6s %s" % (mark, s["label"], s["detail"]))
-    lines.append("")
-    lines.append("六步全通的卡   %d 张" % result["coverage"]["all_six"])
-    return "\n".join(lines)
+    return _render_text(
+        "self_iteration",
+        score="%.1f" % result["score"],
+        steps="\n".join(lines),
+        all_six=result["coverage"]["all_six"],
+    )
 
 
 # ---------------------------------------------------------------- selftest
