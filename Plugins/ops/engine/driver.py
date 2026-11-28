@@ -594,8 +594,8 @@ def main(argv=None) -> int:
     p.add_argument("--tag", default=None, help="要跑的候选 id")
     p.add_argument("--agent-cmd", default=None)
     p.add_argument("--gpu", type=int, default=0)
-    p.add_argument("--agent-timeout", type=int, default=1800,
-                   help="单轮 agent 的 wall-clock 上限（秒）")
+    p.add_argument("--agent-timeout", type=int, default=1200,
+                   help="单轮 agent 的 wall-clock 上限（秒）；默认 20 分钟")
     a = p.parse_args(argv)
 
     if a.selfcheck:
