@@ -537,85 +537,129 @@ def resolve(card, shape=None, sources=SOURCES):
 
 # ------------------------------------------------------------------ 自检
 
-def selftest():
-    """不依赖真实卡片与 GPU 的口径自检（`floor.py --selftest` 跑的就是它）。
+@dataclass(frozen=True)
+class CaliberCase:
+    """一条 floor 口径回归用例：输入 + 期望字段（+ 可选的人读输出）。"""
 
-    这些断言是 floor 判据的**回归测试**：它们守的不是"代码能跑"，
-    而是「两个地板取慢的」「launch 是加性项」「归约要打折」这些已经被
-    真实事故验证过的口径。搬到 engine/ 时一个字没改 —— 改了就说明我在
-    顺手调判据，那不属于重构该干的事。
-    """
-    fake = {"layers": {
+    name: str
+    given: dict
+    expect: dict = field(default_factory=dict)
+    report: object = None          # callable(r) -> str
+
+
+def _fake_ladder():
+    """selftest 用的假阶梯：值固定，避免依赖真实标定。"""
+    return {"layers": {
         "2_rw_1to1": {"achievable": 1200, "confidence": "high"},
         "2_read_only": {"achievable": 2000, "confidence": "high"},
         "2_rw_2to1": {"achievable": 1730, "confidence": "high"},
         "3_cross_row": {"achievable": None, "reason": "未标定"},
         "3_scatter_gather": {"achievable": None, "reason": "未标定"},
     }}
-    # 刚好在地板：268.4MB / 1200 GB/s = 223.7 µs
-    r = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 223.7}, fake)
-    assert abs(r["remaining"]) < 0.001, r
-    assert r["gate"] == "at_floor", r
-    print("[ok] 贴地板 → at_floor（remaining=%.3f）" % r["remaining"])
 
-    r = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 223.7 * 1.15}, fake)
-    assert r["gate"] == "structural", r
-    print("[ok] 15%% 空间 → 结构变换（remaining=%.3f）" % r["remaining"])
 
-    r = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 223.7 * 1.40}, fake)
-    assert r["gate"] == "headroom", r
-    assert "先怀疑" in r["advice"], r
-    print("[ok] 40%% 空间 → 先怀疑基线/天花板（remaining=%.3f）" % r["remaining"])
+def _fake_ladder_with_reduction():
+    lad = _fake_ladder()
+    lad["layers"]["3_row_reduction"] = {"penalty_ratio": 0.79}
+    return lad
 
-    r = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 200.0}, fake)
-    assert r["gate"] == "below_floor", r
-    print("[ok] 快过地板 → below_floor（remaining=%.3f）" % r["remaining"])
 
-    r = analyze({"bytes_mb": 268.4, "pattern": "scatter_gather", "t_actual_us": 100.0}, fake)
-    assert "error" in r, r
-    print("[ok] 未标定模式 → 拒绝出数：%s" % r["error"])
+# 268.4 MB / 1200 GB/s = 223.7 µs —— 地板本身，用算式而不是魔数
+_FLOOR_US = 268.4 / 1200 * 1000
 
-    # 算力绑定：GEMM 4096³ 理想 2*4096^3/279e12 = 492 µs；
-    # 只用带宽地板会得到 58 µs（假空间 8x），binding 必须选算力那条。
-    r = analyze({"bytes_mb": 100.7, "pattern": "rw_2to1", "flops": 2 * 4096 ** 3,
-                 "peak_tf": 279.0, "t_actual_us": 505.0}, fake)
-    assert r["binding"] == "compute", r
-    assert r["gate"] == "at_floor", r
-    print("[ok] 算力绑定 → binding=compute（remaining=%.3f，带宽腿松 %.1fx）"
-          % (r["remaining"], r["t_floor_us"] / 58.2))
 
-    # 反过来：带宽绑定的算子不能因为算了 flops 就变成算力绑定
-    r = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1",
-                 "flops": 1.0e9, "peak_tf": 279.0, "t_actual_us": 242.2}, fake)
-    assert r["binding"] == "memory", r
-    print("[ok] 带宽绑定 → binding=memory（remaining=%.3f）" % r["remaining"])
+def caliber_cases():
+    """10 条口径用例里可单跑的 7 条；launch/归约是对比型，见 selftest。"""
+    return [
+        CaliberCase("贴地板", dict(bytes_mb=268.4, pattern="rw_1to1",
+                                   t_actual_us=_FLOOR_US),
+                    dict(gate="at_floor"),
+                    lambda r: "贴地板 → at_floor（remaining=%.3f）" % r["remaining"]),
+        CaliberCase("15%空间", dict(bytes_mb=268.4, pattern="rw_1to1",
+                                    t_actual_us=_FLOOR_US * 1.15),
+                    dict(gate="structural"),
+                    lambda r: "15%% 空间 → 结构变换（remaining=%.3f）" % r["remaining"]),
+        CaliberCase("40%空间", dict(bytes_mb=268.4, pattern="rw_1to1",
+                                    t_actual_us=_FLOOR_US * 1.40),
+                    dict(gate="headroom", advice_contains="先怀疑"),
+                    lambda r: "40%% 空间 → 先怀疑基线/天花板（remaining=%.3f）" % r["remaining"]),
+        CaliberCase("快过地板", dict(bytes_mb=268.4, pattern="rw_1to1",
+                                     t_actual_us=200.0),
+                    dict(gate="below_floor"),
+                    lambda r: "快过地板 → below_floor（remaining=%.3f）" % r["remaining"]),
+        CaliberCase("未标定模式", dict(bytes_mb=268.4, pattern="scatter_gather",
+                                       t_actual_us=100.0),
+                    dict(has_error=True),
+                    lambda r: "未标定模式 → 拒绝出数：%s" % r["error"]),
+        CaliberCase("算力绑定", dict(bytes_mb=100.7, pattern="rw_2to1",
+                                     flops=2 * 4096 ** 3, peak_tf=279.0,
+                                     t_actual_us=505.0),
+                    dict(binding="compute", gate="at_floor"),
+                    lambda r: ("算力绑定 → binding=compute（remaining=%.3f，"
+                               "带宽腿松 %.1fx）" % (r["remaining"], r["t_floor_us"] / 58.2))),
+        CaliberCase("带宽绑定", dict(bytes_mb=268.4, pattern="rw_1to1",
+                                     flops=1.0e9, peak_tf=279.0, t_actual_us=242.2),
+                    dict(binding="memory"),
+                    lambda r: "带宽绑定 → binding=memory（remaining=%.3f）" % r["remaining"]),
+    ]
 
-    # launch 地板是加性项：小 kernel 的地板是「搬运 + 43 µs」，不是只算搬运。
-    # 不加它，MB 级数据会算出几百个百分点的假空间。
-    r_fl = {"layers": dict(fake["layers"])}
-    r_fl["layers"]["3_row_reduction"] = {"penalty_ratio": 0.79}
-    no_l = analyze({"bytes_mb": 0.5, "pattern": "rw_1to1", "t_actual_us": 50.0}, r_fl)
+
+def _check_launch_additive(fake) -> None:
+    """launch 地板是加性项：小 kernel 的地板 = 搬运 + 43 µs，不是只算搬运。"""
+    no_l = analyze({"bytes_mb": 0.5, "pattern": "rw_1to1", "t_actual_us": 50.0}, fake)
     w_l = analyze({"bytes_mb": 0.5, "pattern": "rw_1to1", "t_actual_us": 50.0,
-                   "launch_us": 43.0}, r_fl)
+                   "launch_us": 43.0}, fake)
     assert no_l["remaining"] > 50, "0.5MB/1200GB/s 的地板极小，remaining 必然爆表"
     assert w_l["remaining"] < 1.0, "带 launch 后 remaining 应落回可用区间"
     print("[ok] launch 加性项 → remaining %.0f%% → %.1f%%（不加会给出假空间）"
           % (no_l["remaining"] * 100, w_l["remaining"] * 100))
 
-    # topk 那类「已低于空 kernel 地板」必须老实判 below_floor，不许掩盖
+
+def _check_below_launch(fake) -> None:
+    """topk 那类「已低于空 kernel 地板」必须老实判 below_floor。"""
     r = analyze({"bytes_mb": 0.05, "pattern": "rw_1to1", "t_actual_us": 34.2,
-                 "launch_us": 43.0}, r_fl)
+                 "launch_us": 43.0}, fake)
     assert r["gate"] == "below_floor", r
     print("[ok] 低于 launch 地板 → 老实报 below_floor（topk 34.2us < 43us）")
 
-    # 归约折扣必须真的放宽地板，否则成熟实现会算出 +50% 假空间
-    a_no = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 242.2}, r_fl)
+
+def _check_reduction_discount(fake) -> None:
+    """归约折扣必须真的放宽地板，否则成熟实现会算出 +50% 假空间。"""
+    a_no = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 242.2}, fake)
     a_red = analyze({"bytes_mb": 268.4, "pattern": "rw_1to1", "t_actual_us": 242.2,
-                     "is_reduction": True}, r_fl)
+                     "is_reduction": True}, fake)
     assert a_red["t_floor_us"] > a_no["t_floor_us"], "归约折扣应把地板放宽"
     assert a_red["remaining"] < a_no["remaining"], "归约折扣应让 remaining 变小"
     print("[ok] 归约折扣 0.79 → 地板 %.1f → %.1f us，remaining %+.1f%% → %+.1f%%"
           % (a_no["t_floor_us"], a_red["t_floor_us"],
              a_no["remaining"] * 100, a_red["remaining"] * 100))
+
+
+def selftest():
+    """不依赖真实卡片与 GPU 的口径自检（`floor.py --selftest`）。
+
+    守的是「两个地板取慢的」「launch 是加性项」「归约要打折」这些被真实事故
+    验证过的口径。**`assert` 在 `python -O` 下会被剥掉**——那时自检会静默
+    通过，所以先挡住这种运行方式（真 bug，不是风格问题）。
+    """
+    if not __debug__:
+        raise SystemExit("✗ `python -O` 会剥掉 assert，selftest 将失效；请用默认模式运行")
+
+    fake = _fake_ladder()
+    for c in caliber_cases():
+        r = analyze(c.given, fake)
+        for key, want in c.expect.items():
+            if key == "has_error":
+                assert "error" in r, r
+            elif key == "advice_contains":
+                assert want in r.get("advice", ""), r
+            else:
+                assert r[key] == want, (c.name, key, r)
+        print("[ok] %s" % (c.report(r) if c.report else c.name))
+
+    red = _fake_ladder_with_reduction()
+    _check_launch_additive(red)
+    _check_below_launch(red)
+    _check_reduction_discount(red)
     print("\nselftest PASS")
     return 0
