@@ -1962,9 +1962,16 @@ def cmd_run(a):
                 "significant": bool(sig),
                 # --no-acc 时 acc_ok 恒为 False：比较可以跑，主张不许下
                 "acc_ok": bool(acc.get(v["tag"])) and not a.no_acc,
+                # ---- 五项审计需要的三个字段（claim 会用）----
+                # 实测 2026-11-28：`claim` 一上来就判引擎自己的记录 FAIL ——
+                # 缺复跑命令 / 实现定位 / 环境指纹。我们要求 agent 留痕，
+                # 自己的账本先得可审计。
+                "impl": "%s/bench/ab.py:_measure  —  变体 %s"
+                        % (card.name, v["tag"]),
+                "command": " ".join(cmd),
                 # adapter 的环境指纹原样保留：claim_gate 在 caliber 缺 device 时
                 # 从这里回落取 gfx/device，避免位置不同就误判口径不全。
-                "env": ab.get("env") or {},
+                "env": {**(ab.get("env") or {}), **_env_fingerprint()},
             })
     print("\n合计判定：%s" % worst)
     # ---- 报告（--report）：用最后一条记录 + 地板 + 下一步填成题面六问 ----
@@ -2006,6 +2013,120 @@ def cmd_run(a):
         print("下一步：先给候选补 done_when，再 loop.py verify --tag <tag>（rc=0 才算完成），"
               "然后把它落进生产文件并复测。")
     return 0
+
+
+def _env_fingerprint():
+    """环境指纹：复现的前提。取不到就写 unknown，不编。"""
+    import json as _json
+    import platform
+    fp = {"python": platform.python_version(), "host": platform.node()}
+    try:
+        import torch
+        fp["torch"] = torch.__version__
+        fp["hip"] = getattr(torch.version, "hip", None)
+        fp["device"] = torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+    except Exception:                            # noqa: BLE001
+        fp["torch"] = "unavailable"
+    try:
+        import subprocess as _sp
+        r = _sp.run(["hy-smi"], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            fp["hy_smi_head"] = " ".join(r.stdout.split())[:200]
+    except Exception:                            # noqa: BLE001
+        pass
+    return fp
+
+
+def cmd_record(a):
+    """把**agent 自己做的**实验记进账本。不判定快慢，只保证可审计。
+
+    这是"自由迭代 + 强制留痕"：agent 用自己喜欢的方式测，
+    但要想让结论成立，必须能通过 `claim` 的五项审计。
+    """
+    card = a.card
+    if not a.command:
+        print(_c("拒绝记录：缺 --command（复跑命令）。没有复跑方式的结果不可复现，"
+                 "不能进账本。", WARN))
+        return 2
+    if not a.impl:
+        print(_c("拒绝记录：缺 --impl（`<文件>:<入口>`）。复测方靠它找到实现。", WARN))
+        return 2
+    if a.mode not in ("event_isolated", "end_to_end", "back_to_back"):
+        print(_c("拒绝记录：--mode 必须是 event_isolated / end_to_end / back_to_back。", WARN))
+        return 2
+    if a.ms is None or a.ms <= 0:
+        print(_c("拒绝记录：缺 --ms（实测中位耗时，毫秒）。", WARN))
+        return 2
+    delta = None
+    if a.base_ms:
+        delta = (a.ms - a.base_ms) / a.base_ms * 100.0
+    rec = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "card": card.name,
+        "tag": a.tag,
+        "skv": a.skv or 0,
+        "direction": a.direction,
+        "shape": {"shape": a.shape} if a.shape else {},
+        "base_ms": a.base_ms, "base_mad": 0.0,
+        "cand_ms": a.ms, "mad": a.mad or 0.0,
+        "delta_pct": delta,
+        "decision": "RECORDED_EXTERNAL",
+        "why": "由 agent 自行测量后经 `record` 记账；快慢与合理性由 `claim` 审计",
+        "measure_mode": a.mode,
+        "impl": a.impl,
+        "command": a.command,
+        "env": _env_fingerprint(),
+        "acc_ok": bool(a.max_ulp is not None and a.max_ulp <= (a.tol_ulp or 2)),
+        "acc": ({"1": {"tag": a.tag, "max_ulp": a.max_ulp,
+                       "cosine": a.cosine}} if a.max_ulp is not None else {}),
+        "notes": a.notes,
+        "recorded_by": "agent",
+    }
+    append_record(card, rec)
+    print("已记账：%s / %s  %.4f ms（口径 %s）" % (card.name, a.tag, a.ms, a.mode))
+    print("下一步：`loop.py -C %s claim --tag %s` 审计五项性质" % (card, a.tag))
+    return 0
+
+
+# claim 审计的五项（业主点名的五件事）
+CLAIM_CHECKS = (
+    ("口径可 claim", lambda r: str(r.get("measure_mode")) == "event_isolated",
+     "measure_mode=event_isolated（back_to_back 永远不可 claim）"),
+    ("可复现", lambda r: bool(r.get("command")),
+     "记录里有完整复跑命令（--command）"),
+    ("实现可定位", lambda r: bool(r.get("impl")),
+     "记录里有 `<文件>:<入口>`（--impl），复测方不必猜"),
+    ("环境已冻结", lambda r: isinstance(r.get("env"), dict) and bool(r.get("env"))
+     and r["env"].get("torch") not in (None, "unavailable"),
+     "记录里有环境指纹（torch/hip/device）"),
+    ("有精度证据", lambda r: bool(r.get("acc_ok")) or bool(r.get("acc")),
+     "有精度探针或 ULP 证据（没有就不能声称数值正确）"),
+)
+
+
+def cmd_claim(a):
+    """审计一条记录是否满足五项性质。**任一项不过就 FAIL。**"""
+    recs = [r for r in read_records(a.card) if r.get("tag") == a.tag]
+    if not recs:
+        print(_c("没有 tag=%r 的记录 —— 先 run 或 record" % a.tag, WARN))
+        return 1
+    rec = recs[-1]
+    print("审计 %s / %s（记录时间 %s）" % (a.card.name, a.tag, rec.get("ts")))
+    print("")
+    ok = True
+    for name, fn, why in CLAIM_CHECKS:
+        try:
+            passed = bool(fn(rec))
+        except Exception:                        # noqa: BLE001
+            passed = False
+        print("  %s %-12s %s" % ("✓" if passed else "✗", name, why))
+        ok = ok and passed
+    print("")
+    if ok:
+        print("结论：**PASS** —— 这条结论可以进报告（五项性质齐全）")
+        return 0
+    print(_c("结论：**FAIL** —— 缺项不能靠文字补，补完重新 record", WARN))
+    return 1
 
 
 def cmd_report(a):
@@ -2498,7 +2619,27 @@ def main():
     rs = sub.add_parser("resume", help="上下文丢了以后：下一个该跑谁")
     rs.add_argument("--json", action="store_true", help="机器可读输出")
 
-    nx = sub.add_parser("next", help="下一步做什么（给 agent 的唯一决策入口）")
+    rd = sub.add_parser("record", help="把 agent 自己测的实验记进账本（带口径/命令/环境）")
+    rd.add_argument("--tag", required=True)
+    rd.add_argument("--impl", required=True, help="`<文件>:<入口>`")
+    rd.add_argument("--ms", type=float, required=True, help="实测中位耗时（毫秒）")
+    rd.add_argument("--base-ms", type=float, default=None, dest="base_ms")
+    rd.add_argument("--mad", type=float, default=None)
+    rd.add_argument("--mode", default="event_isolated",
+                    choices=["event_isolated", "end_to_end", "back_to_back"])
+    rd.add_argument("--command", required=True, help="完整复跑命令")
+    rd.add_argument("--max-ulp", type=float, default=None, dest="max_ulp")
+    rd.add_argument("--tol-ulp", type=float, default=2.0, dest="tol_ulp")
+    rd.add_argument("--cosine", type=float, default=None)
+    rd.add_argument("--shape", default=None)
+    rd.add_argument("--skv", type=int, default=None)
+    rd.add_argument("--direction", default=None)
+    rd.add_argument("--notes", default=None)
+
+    cl = sub.add_parser("claim", help="审计一条记录是否满足五项性质")
+    cl.add_argument("--tag", required=True)
+
+    nx = sub.add_parser("next", help="下一步做什么（给 agent 的决策参考，不是命令）")
     nx.add_argument("--json", action="store_true", help="机器可读输出")
 
     r = sub.add_parser("run", help="跑一个实验并判定")
@@ -2554,7 +2695,8 @@ def main():
 
     a = ap.parse_args()
     a.card = Path(a.card).resolve()
-    return {"status": cmd_status, "next": cmd_next, "queue": cmd_queue, "run": cmd_run,
+    return {"status": cmd_status, "next": cmd_next, "record": cmd_record,
+            "claim": cmd_claim, "queue": cmd_queue, "run": cmd_run,
             "report": cmd_report, "enumerate": cmd_enumerate,
             "resume": cmd_resume,
             "impl-broken": cmd_impl_broken,
