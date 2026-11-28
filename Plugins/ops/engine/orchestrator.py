@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from contract import (  # noqa: E402
     Backend, IterationRecord, MAX_NOOP, MAX_PLATEAU, NOISE_FLOOR,
-    agent_changes, decide_verdict, noise_floor_from,
+    TAMPER_PATHS, agent_changes, decide_verdict, noise_floor_from,
 )
 from prompt import render_student_prompt  # noqa: E402
 from backends import FakeBackend, RealBackend  # noqa: E402,F401  (re-export)
@@ -71,6 +71,22 @@ def iterate(backend: Backend, rounds: int, card: str = "",
         change = backend.run_agent(prompt, role="student")
         commit = backend.commit(change or ("round %d" % i))
         files = list(getattr(backend, "changed_files", []) or [])
+        # P1-4：agent 能改掉"用来测它的尺子"（工作区里的 engine/loop.py）。
+        # 命中即回滚 + TAMPERED + 停，不测量被改过的引擎。
+        tampered = [f for f in files if str(f).startswith(TAMPER_PATHS)]
+        if tampered:
+            backend.reset_to(head)
+            rec = IterationRecord(
+                iter=i, round_id="r%d" % i, change=change or "",
+                changed_files=list(files), workspace_commit=commit,
+                verdict="TAMPERED", claim="",
+                stop_reason="tampered",
+                agent_meta=dict(getattr(backend, "last_agent_meta", {}) or {}),
+            )
+            records.append(rec)
+            if on_round is not None:
+                on_round(rec)
+            break
         noop = not agent_changes(files)
         if noop:
             diag = []
@@ -219,6 +235,10 @@ def main(argv=None) -> int:
             if not cand.get("variant"):
                 print("✗ 候选 %r 没有声明 variant —— loop.py run 会拒绝" % a.tag,
                       file=sys.stderr)
+                return 2
+            if str(cand.get("status") or "") in ("done", "implemented"):
+                print("✗ 候选 %r 已实现（status=%s）—— 派给 agent 只会空转"
+                      % (a.tag, cand.get("status")), file=sys.stderr)
                 return 2
         except FileNotFoundError:
             print("✗ 缺少 %s/candidates.yaml" % be.card, file=sys.stderr)

@@ -27,14 +27,19 @@ class FakeBackend:
 
     def __init__(self, flat: bool = False, evidence: str = "vendor_library",
                  fail_every: int = 0, times=None, green_from: int = 1,
-                 noop: bool = False, noise: float | None = None):
+                 noop: bool = False, noise: float | None = None,
+                 tamper: bool = False):
         self.flat = flat
         self.evidence = evidence
         self.fail_every = fail_every
         self.green_from = green_from
         self.noop = noop
         self.noise = noise
-        self._changed = [] if noop else ["Plugins/ops/skills/fake/_common.py"]
+        self.tamper = tamper
+        if tamper:
+            self._changed = ["Plugins/ops/engine/loop.py"]
+        else:
+            self._changed = [] if noop else ["Plugins/ops/skills/fake/_common.py"]
         self.n = 0
         self.commits: list[str] = ["c0"]
         self.reset_calls: list[str] = []

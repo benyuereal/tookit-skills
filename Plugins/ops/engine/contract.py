@@ -25,6 +25,8 @@ AGENT_CODE_RE = re.compile(
 
 # 引擎自己写的路径：永远不算 agent 改动
 ENGINE_PATHS = ("memory/", "results/", ".artifacts/", "Plugins/ops/op-atlas/")
+# agent 绝不该改的路径：改了就回滚并判 TAMPERED（它改的是"用来测它的尺子"）
+TAMPER_PATHS = ("Plugins/ops/engine/", "scripts/")
 
 NOISE_FLOOR = 0.015          # 1.5%：低于这个的增益不算提升
 MAX_PLATEAU = 3              # 连续这么多轮没有 KEEP → plateau

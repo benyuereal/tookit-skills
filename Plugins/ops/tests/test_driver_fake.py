@@ -117,3 +117,13 @@ def test_docs_and_config_are_not_agent_changes():
         "Plugins/ops/skills/op-x/_common.py"]
     assert D.agent_changes(["Plugins/ops/skills/op-x/kernels/a.hip",
                             "Plugins/ops/skills/op-x/bench/ab.py"]) != []
+
+
+def test_agent_touching_engine_is_tampering():
+    """P1-4：agent 改 engine/ 下的文件 = 改"用来测它的尺子" → TAMPERED + 回滚 + 停。"""
+    be = D.FakeBackend(tamper=True)
+    recs = D.iterate(be, 3, card="fake")
+    assert len(recs) == 1
+    assert recs[0].verdict == "TAMPERED"
+    assert recs[0].stop_reason == "tampered"
+    assert be.reset_calls == ["c1"]
